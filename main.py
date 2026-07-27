@@ -195,11 +195,6 @@ def fractional_kelly(win_prob, reward_risk_ratio=1.5, k=0.5):
 
     fractional = f_star * k
     fractional = min(fractional, 0.05)  # safety cap: max 5% account risk
-import os
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
 
     return round(fractional * 100, 2)
 
@@ -284,3 +279,9 @@ def available_coins():
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+    
+import os
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)    
