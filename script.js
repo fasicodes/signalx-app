@@ -58,12 +58,10 @@ getSignalBtn.addEventListener("click", async () => {
 function updateUI(data) {
   resultBox.classList.remove("hidden");
 
-  // Price + base indicators
   priceValue.textContent = `$${data.last_price.toLocaleString()}`;
   rsiValue.textContent = data.rsi;
   macdValue.textContent = data.macd;
 
-  // Final verdict
   verdictText.textContent = data.final_verdict;
   confidenceValue.textContent = `${data.confidence_pct}%`;
   verdictBlock.classList.remove("long", "short", "wait");
@@ -71,22 +69,18 @@ function updateUI(data) {
   else if (data.final_verdict === "SHORT") verdictBlock.classList.add("short");
   else verdictBlock.classList.add("wait");
 
-  // Bayesian bias meter
   biasFill.style.width = `${data.bullish_pct}%`;
   bullishLabel.textContent = `${data.bullish_pct}% BULLISH`;
   bearishLabel.textContent = `BEARISH ${data.bearish_pct}%`;
 
-  // Hawkes pressure gauges (0-10 scale -> % width)
   buyPressureFill.style.width = `${(data.buying_pressure / 10) * 100}%`;
   sellPressureFill.style.width = `${(data.selling_pressure / 10) * 100}%`;
   buyPressureValue.textContent = `${data.buying_pressure} / 10`;
   sellPressureValue.textContent = `${data.selling_pressure} / 10`;
 
-  // SL / TP (quantile volatility)
   slValue.textContent = data.stop_loss ? `$${data.stop_loss.toLocaleString()}` : "N/A — WAIT";
   tpValue.textContent = data.take_profit ? `$${data.take_profit.toLocaleString()}` : "N/A — WAIT";
 
-  // Footer metrics
   expectedVolValue.textContent = `${data.expected_volatility_pct}%`;
   extremeVolValue.textContent = `${data.extreme_volatility_95_pct}%`;
   riskValue.textContent = `${data.suggested_risk_pct}%`;
