@@ -37,7 +37,7 @@ import ccxt
 app = Flask(__name__)
 CORS(app)
 
-exchange = ccxt.binance()
+exchange = ccxt.okx()
 
 
 def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200):
