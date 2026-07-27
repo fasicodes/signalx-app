@@ -1,5 +1,5 @@
-// Backend URL - deploy karte waqt change kar dena
-const API_BASE_URL = "http://localhost:5000";
+// Backend URL - khali chhod dein, kyunke HTML aur API ab same server se serve ho rahe hain
+const API_BASE_URL = "";
 
 const coinSelect = document.getElementById("coin-select");
 const getSignalBtn = document.getElementById("get-signal-btn");
