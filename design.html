@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SignalX Terminal</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="/static/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -12,7 +12,6 @@
 
 <div class="terminal">
 
-  <!-- TOP BAR -->
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark">◎</span>
@@ -38,7 +37,6 @@
 
   <main id="result-box" class="result-box hidden">
 
-    <!-- PRICE + VERDICT ROW -->
     <section class="hero-row">
       <div class="price-block">
         <span class="eyebrow">MARK PRICE</span>
@@ -61,7 +59,6 @@
       </div>
     </section>
 
-    <!-- BIAS METER -->
     <section class="panel">
       <span class="panel-title">MARKET BIAS <span class="panel-sub">bayesian classifier</span></span>
       <div class="bias-meter">
@@ -73,7 +70,6 @@
       </div>
     </section>
 
-    <!-- PRESSURE GAUGES -->
     <section class="panel two-col">
       <div class="pressure-card">
         <span class="panel-title">BUYING PRESSURE <span class="panel-sub">hawkes process</span></span>
@@ -91,7 +87,6 @@
       </div>
     </section>
 
-    <!-- TRADE LEVELS -->
     <section class="panel two-col">
       <div class="level-card">
         <span class="panel-title">STOP LOSS <span class="panel-sub">quantile volatility · 95%</span></span>
@@ -103,7 +98,6 @@
       </div>
     </section>
 
-    <!-- FOOTER METRICS -->
     <section class="panel metrics-row">
       <div class="metric">
         <span class="metric-label">Expected Move</span>
@@ -127,6 +121,6 @@
 
 </div>
 
-<script src="script.js"></script>
+<script src="/static/script.js"></script>
 </body>
 </html>
