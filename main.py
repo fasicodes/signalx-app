@@ -8,12 +8,14 @@ Ye Flask app 5 concepts real formulas se calculate karta hai:
   4. Conformal Prediction  -> Confidence%, Trade/Skip (WAIT)
   5. Fractional Kelly      -> Suggested Risk%
 
-Chalane ka tareeqa:
+Chalane ka tareeqa (local):
     pip install flask flask-cors pandas pandas-ta ccxt numpy --break-system-packages
-    python app.py
+    python main.py
 
 URL: http://localhost:5000/signal?coin=BTC/USDT
 """
+
+import os
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -170,7 +172,6 @@ def conformal_confidence(bullish_pct, buying_pressure, selling_pressure):
     confidence = (agreement * 0.6) + (bayesian_strength * 0.4)
     confidence = min(max(confidence, 0), 1)
 
-    epsilon = 1 - confidence
     decision = "SKIP" if confidence < 0.55 else "TRADE"  # threshold
 
     return round(confidence * 100, 1), decision
@@ -257,6 +258,15 @@ def generate_signal(df):
     return result
 
 
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "status": "ok",
+        "message": "Trading Signal Backend chal raha hai.",
+        "endpoints": ["/signal?coin=BTC/USDT", "/coins"],
+    })
+
+
 @app.route("/signal", methods=["GET"])
 def signal_endpoint():
     coin = request.args.get("coin", "BTC/USDT")
@@ -278,10 +288,5 @@ def available_coins():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
-    
-import os
-
-if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)    
+    app.run(host="0.0.0.0", port=port, debug=True)
