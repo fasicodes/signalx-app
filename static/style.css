@@ -1,1 +1,327 @@
 
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #08090b;
+  color: #e8e9ec;
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  padding: 24px 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.terminal {
+  width: 100%;
+  max-width: 480px;
+}
+
+.topbar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.brand-mark { color: #16d97a; font-size: 18px; }
+
+.brand-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+}
+
+.brand-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #6b7280;
+  letter-spacing: 2px;
+}
+
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coin-select {
+  flex: 1;
+  background: #101216;
+  border: 1px solid #1e2128;
+  color: #e8e9ec;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 6px;
+}
+
+.scan-btn {
+  background: #16d97a;
+  color: #08090b;
+  border: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  padding: 11px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.scan-btn:hover { opacity: 0.85; }
+.scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.live-dot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #6b7280;
+  letter-spacing: 1px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16d97a;
+  box-shadow: 0 0 6px #16d97a;
+  animation: pulse 1.6s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.hidden { display: none; }
+
+.panel {
+  background: #101216;
+  border: 1px solid #1e2128;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.panel-title {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #9099a6;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.panel-sub {
+  color: #4b5262;
+  font-weight: 400;
+  text-transform: lowercase;
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.two-col .pressure-card,
+.two-col .level-card {
+  background: #101216;
+  border: 1px solid #1e2128;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.hero-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.price-block, .verdict-block {
+  background: #101216;
+  border: 1px solid #1e2128;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.eyebrow {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.price-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 26px;
+  font-weight: 700;
+  color: #e8e9ec;
+}
+
+.price-sub {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.price-sub b { color: #e8e9ec; font-weight: 600; }
+
+.verdict-block { display: flex; flex-direction: column; }
+
+.verdict-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.verdict-block.long .verdict-text { color: #16d97a; }
+.verdict-block.short .verdict-text { color: #ff4d5e; }
+.verdict-block.wait .verdict-text { color: #f2b93d; }
+
+.confidence-line {
+  margin-top: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+#confidence-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.confidence-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: #6b7280;
+  letter-spacing: 1px;
+}
+
+.bias-meter {
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: #ff4d5e;
+  overflow: hidden;
+  position: relative;
+}
+
+.bias-fill {
+  height: 100%;
+  background: #16d97a;
+  width: 50%;
+  transition: width 0.4s ease;
+}
+
+.bias-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bull-label { color: #16d97a; }
+.bear-label { color: #ff4d5e; }
+
+.pressure-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: #1e2128;
+  overflow: hidden;
+}
+
+.pressure-fill { height: 100%; width: 0%; transition: width 0.4s ease; }
+.pressure-fill.buy { background: #16d97a; }
+.pressure-fill.sell { background: #ff4d5e; }
+
+.pressure-value {
+  display: block;
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e8e9ec;
+}
+
+.level-value {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.level-value.sl { color: #ff4d5e; }
+.level-value.tp { color: #16d97a; }
+
+.metrics-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric { display: flex; flex-direction: column; gap: 4px; }
+
+.metric-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: #6b7280;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: #e8e9ec;
+}
+
+.metric-value.risk { color: #f2b93d; }
+
+.error-text {
+  color: #ff4d5e;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.disclaimer {
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #4b5262;
+  margin-top: 8px;
+}
+
+@media (max-width: 380px) {
+  .hero-row, .two-col { grid-template-columns: 1fr; }
+}
