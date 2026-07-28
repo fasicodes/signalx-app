@@ -15,6 +15,17 @@ const tier3El      = document.getElementById("tier-3");
 
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 48; // r=48
 
+/* If any of these are missing, design.html doesn't match this script.js —
+   make sure both files were replaced together and the browser isn't serving
+   a cached copy. */
+{
+  const required = { coinSelect, runBtn, errorText, resultBox, alertStack, emptyState, clockText, tier1El, tier2El, tier3El };
+  const missing = Object.keys(required).filter((k) => !required[k]);
+  if (missing.length) {
+    console.error("SIGNAL/FM: design.html is missing element(s) for:", missing.join(", "), "— check that templates/design.html matches this static/script.js and clear the browser cache.");
+  }
+}
+
 /* ---------------------------- utils ---------------------------- */
 
 const na = (v) => v === null || v === undefined || Number.isNaN(v);
@@ -87,6 +98,7 @@ function badge(text, tone) {
 /* ---------------------------- clock ---------------------------- */
 
 function tickClock() {
+  if (!clockText) return;
   const now = new Date();
   clockText.textContent = now.toLocaleTimeString("en-GB", { hour12: false });
 }
