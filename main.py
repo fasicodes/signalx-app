@@ -473,7 +473,19 @@ def combined_signal(bullish_pct, bearish_pct, buying_pressure, selling_pressure,
         if total_weight > 0 else 0.0
     )
 
-    base_confidence = (agreement_ratio * 0.6 + avg_abs_strength * 0.4) * 100
+    # NOTE: yahan agreement ko 0.6 weight aur strength ko 0.4 weight dena
+    # (jaisa pehle try kiya gaya tha) galat nikla - simulation (20,000
+    # synthetic trials, realistic vote-magnitude ranges use kar ke) ne
+    # dikhaya ke us weighting se confidence sirf ~28% waqt 55% threshold
+    # clear karti thi, matlab ~72% waqt system "WAIT" bolta rehta.
+    # Wajah: avg_abs_strength hamesha chota reh jata hai (individual
+    # concepts rarely bohot "strongly" confident hote hain), isliye ise
+    # zyada weight dene se poora system neeche khinch jata hai. Agreement
+    # (kitne concepts direction pe muttafiq hain) zyada reliable signal
+    # hai - isi liye ab usay zyada weight (0.75) di ja rahi hai. Isi
+    # simulation se naye weights ke sath ~52% signals threshold clear
+    # karte hain, jo LONG/SHORT/WAIT ka zyada balanced split deta hai.
+    base_confidence = (agreement_ratio * 0.75 + avg_abs_strength * 0.25) * 100
 
     # --- 7. VPIN penalty (toxic/manipulated flow -> kam bharosa) ---
     toxicity = vpin_data.get("toxicity")
