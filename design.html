@@ -1,125 +1,364 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signal FM </title>
-<link rel="stylesheet" href="/static/style.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SIGNAL/FM — 19-Channel Market Readout</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
 
 <div class="terminal">
 
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">◎</span>
-      <span class="brand-name">SIGNAL FM</span>
+    <!-- =========================================================
+         HEADER
+    ========================================================== -->
+
+    <header class="topbar">
+
+        <div class="brand">
+
+            <div class="brand-row">
+                <span class="brand-mark"></span>
+
+                <span class="brand-name">
+                    19-CHANNEL MARKET READOUT
+                </span>
+            </div>
+
+            <div class="brand-tagline">
+                SIGNAL/FM · QUANTITATIVE MARKET ANALYSIS
+            </div>
+
+        </div>
+
+
+        <div class="topbar-right">
+
+            <div class="live-clock">
+                <span class="dot"></span>
+
+                <span id="clock-text">
+                    00:00:00
+                </span>
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <!-- =========================================================
+         CONTROL BAR
+    ========================================================== -->
+
+    <section class="control-row">
+
+        <select id="coin-select" class="coin-select">
+
+            <option value="BTC/USDT">
+                BTC / USDT
+            </option>
+
+            <option value="ETH/USDT">
+                ETH / USDT
+            </option>
+
+            <option value="SOL/USDT">
+                SOL / USDT
+            </option>
+
+            <option value="BNB/USDT">
+                BNB / USDT
+            </option>
+
+            <option value="XRP/USDT">
+                XRP / USDT
+            </option>
+
+        </select>
+
+
+        <button
+            id="get-signal-btn"
+            class="scan-btn"
+            type="button"
+        >
+            RUN ANALYSIS
+        </button>
+
+    </section>
+
+
+    <!-- =========================================================
+         ERROR MESSAGE
+    ========================================================== -->
+
+    <p
+        id="error-text"
+        class="error-text hidden"
+    ></p>
+
+
+    <!-- =========================================================
+         ALERT STACK
+    ========================================================== -->
+
+    <div
+        id="alert-stack"
+        class="alert-stack"
+    ></div>
+
+
+    <!-- =========================================================
+         EMPTY STATE
+    ========================================================== -->
+
+    <div
+        id="empty-state"
+        class="empty-state"
+    >
+
+        <div class="empty-mark">
+            ◇
+        </div>
+
+        <div>
+            SELECT AN ASSET AND RUN ANALYSIS
+        </div>
+
+        <small>
+            19-channel quantitative market readout
+        </small>
+
     </div>
-    <div class="topbar-controls">
-      <select id="coin-select" class="coin-select">
-        <option value="BTC/USDT">BTC/USDT</option>
-        <option value="ETH/USDT">ETH/USDT</option>
-        <option value="SOL/USDT">SOL/USDT</option>
-        <option value="BNB/USDT">BNB/USDT</option>
-        <option value="XRP/USDT">XRP/USDT</option>
-      </select>
-      <button id="get-signal-btn" class="scan-btn">
-        <span class="scan-btn-text">RUN ANALYSIS</span>
-      </button>
-      <div class="live-dot"><span class="dot"></span>LIVE</div>
-    </div>
-  </header>
 
-  <p id="error-text" class="error-text hidden"></p>
 
-  <main id="result-box" class="result-box hidden">
+    <!-- =========================================================
+         MAIN RESULT
+    ========================================================== -->
 
-    <section class="hero-row">
-      <div class="price-block">
-        <span class="eyebrow">MARK PRICE</span>
-        <div class="price-line">
-          <span id="price-value" class="price-value">--</span>
+    <main
+        id="result-box"
+        class="hidden"
+    >
+
+
+        <!-- =====================================================
+             HERO / CORE VERDICT ENGINE
+        ====================================================== -->
+
+        <section class="hero">
+
+
+            <!-- VERDICT GAUGE -->
+
+            <div class="gauge-wrap">
+
+                <svg
+                    viewBox="0 0 112 112"
+                    aria-label="Confidence gauge"
+                >
+
+                    <circle
+                        class="gauge-track"
+                        cx="56"
+                        cy="56"
+                        r="48"
+                    ></circle>
+
+                    <circle
+                        id="gauge-fill"
+                        class="gauge-fill"
+                        cx="56"
+                        cy="56"
+                        r="48"
+                    ></circle>
+
+                </svg>
+
+
+                <div class="gauge-center">
+
+                    <div
+                        id="gauge-verdict"
+                        class="gauge-verdict"
+                    >
+                        --
+                    </div>
+
+                    <div
+                        id="gauge-confidence"
+                        class="gauge-confidence"
+                    >
+                        -- confidence
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- HERO DATA -->
+
+            <div class="hero-data">
+
+                <div class="hero-eyebrow">
+                    CORE VERDICT ENGINE · TIER 01
+                </div>
+
+
+                <div
+                    id="hero-price"
+                    class="hero-price"
+                >
+                    $--
+                </div>
+
+
+                <div class="hero-sub">
+
+                    <span>
+                        RSI
+                        <b id="hero-rsi">--</b>
+                    </span>
+
+                    <span>
+                        MACD
+                        <b id="hero-macd">--</b>
+                    </span>
+
+                </div>
+
+
+                <div
+                    id="hero-trend-tag"
+                    class="hero-trend-tag"
+                >
+                    -- · -- · --
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             TIER 01
+        ====================================================== -->
+
+        <div class="tier-divider">
+
+            <span class="tier-num">
+                TIER 01
+            </span>
+
+            <span class="tier-label">
+                Core Verdict Engine
+            </span>
+
         </div>
-        <div class="price-sub">
-          <span class="sub-item">RSI <b id="rsi-value">--</b></span>
-          <span class="sub-item">MACD <b id="macd-value">--</b></span>
+
+        <p class="tier-note">
+            Primary decision signals used for the final market verdict.
+        </p>
+
+
+        <section
+            id="tier-1"
+            class="channel-grid"
+        >
+        </section>
+
+
+        <!-- =====================================================
+             TIER 02
+        ====================================================== -->
+
+        <div class="tier-divider">
+
+            <span class="tier-num">
+                TIER 02
+            </span>
+
+            <span class="tier-label">
+                Microstructure
+            </span>
+
         </div>
-      </div>
 
-      <div class="verdict-block" id="verdict-block">
-        <span class="eyebrow">FINAL VERDICT</span>
-        <div id="verdict-text" class="verdict-text">--</div>
-        <div class="confidence-line">
-          <span id="confidence-value">--</span>
-          <span class="confidence-label">CONFIDENCE</span>
+        <p class="tier-note">
+            Order flow, liquidity and market microstructure signals.
+        </p>
+
+
+        <section
+            id="tier-2"
+            class="channel-grid"
+        >
+        </section>
+
+
+        <!-- =====================================================
+             TIER 03
+        ====================================================== -->
+
+        <div class="tier-divider">
+
+            <span class="tier-num">
+                TIER 03
+            </span>
+
+            <span class="tier-label">
+                Extended Signals
+            </span>
+
         </div>
-      </div>
-    </section>
 
-    <section class="panel">
-      <span class="panel-title">MARKET BIAS <span class="panel-sub">bayesian classifier</span></span>
-      <div class="bias-meter">
-        <div class="bias-fill" id="bias-fill"></div>
-      </div>
-      <div class="bias-labels">
-        <span id="bullish-label" class="bull-label">-- BULLISH</span>
-        <span id="bearish-label" class="bear-label">BEARISH --</span>
-      </div>
-    </section>
+        <p class="tier-note">
+            Additional quantitative signals for deeper market context.
+        </p>
 
-    <section class="panel two-col">
-      <div class="pressure-card">
-        <span class="panel-title">BUYING PRESSURE <span class="panel-sub">hawkes process</span></span>
-        <div class="pressure-track">
-          <div id="buy-pressure-fill" class="pressure-fill buy"></div>
-        </div>
-        <span id="buy-pressure-value" class="pressure-value">-- / 10</span>
-      </div>
-      <div class="pressure-card">
-        <span class="panel-title">SELLING PRESSURE <span class="panel-sub">hawkes process</span></span>
-        <div class="pressure-track">
-          <div id="sell-pressure-fill" class="pressure-fill sell"></div>
-        </div>
-        <span id="sell-pressure-value" class="pressure-value">-- / 10</span>
-      </div>
-    </section>
 
-    <section class="panel two-col">
-      <div class="level-card">
-        <span class="panel-title">STOP LOSS <span class="panel-sub">quantile volatility · 95%</span></span>
-        <span id="sl-value" class="level-value sl">--</span>
-      </div>
-      <div class="level-card">
-        <span class="panel-title">TAKE PROFIT <span class="panel-sub">quantile volatility · 95%</span></span>
-        <span id="tp-value" class="level-value tp">--</span>
-      </div>
-    </section>
+        <section
+            id="tier-3"
+            class="channel-grid"
+        >
+        </section>
 
-    <section class="panel metrics-row">
-      <div class="metric">
-        <span class="metric-label">Expected Move</span>
-        <span id="expected-vol-value" class="metric-value">--</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Extreme Move (95%)</span>
-        <span id="extreme-vol-value" class="metric-value">--</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Suggested Risk</span>
-        <span id="risk-value" class="metric-value risk">--</span>
-      </div>
-    </section>
 
-  </main>
+    </main>
 
-  <footer class="disclaimer">
-    ⚠ Probability estimates only — not financial advice.
-  </footer>
+
+    <!-- =========================================================
+         FOOTER
+    ========================================================== -->
+
+    <footer class="disclaimer">
+
+        ⚠ Probability estimates only — not financial advice.
+        In-sample calculations may not represent future performance.
+        Final verdict confidence is derived from the core signal engine.
+
+    </footer>
+
 
 </div>
 
-<script src="/static/script.js"></script>
+
+<!-- =============================================================
+     JAVASCRIPT
+============================================================== -->
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
 </body>
 </html>
