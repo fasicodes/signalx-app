@@ -5,3 +5,5 @@ pandas-ta
 ccxt
 numpy
 gunicorn
+hmmlearn
+scikit-learn
