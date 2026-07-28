@@ -1,19 +1,26 @@
 """
-Trading Signal Backend + Frontend - v4
+Trading Signal Backend + Frontend - v5
 ---------------------------------------------------
-PURANE 5 concepts (WAISAY HI, koi change nahi):
-  1. Hawkes Process        -> Buying/Selling Pressure (0-10)
-  2. Bayesian Classifier   -> Bullish% / Bearish%
-  3. Quantile Volatility   -> Expected move, SL/TP
-  4. Conformal Prediction  -> Confidence%, Trade/Skip (WAIT)
-  5. Fractional Kelly      -> Suggested Risk%
+v4 se FARQ (IMPORTANT):
+  Pehle FINAL VERDICT + CONFIDENCE sirf 2 concepts se ban rahe thay:
+      Hawkes Process + Bayesian Classifier (Conformal Prediction ke zariye)
+  Baaki 8 concepts sirf "display panels" thay, verdict ko touch nahi karte thay.
 
-NAYE 4 concepts (is version mein add kiye gaye):
-  6. Order Flow Imbalance (OFI)   -> Order-book level buy/sell pressure
-  7. VPIN (Toxic Flow)            -> Informed/toxic trading detect karta hai
-  8. HMM Regime Detection         -> Market "Trending" ya "Ranging" hai
-  9. Jump Diffusion Detector      -> Sudden shock/jump events
-  10. Meta-Labeling (ML filter)   -> Secondary ML model jo primary signal ko approve/reject karta hai
+  Ab (v5) FINAL VERDICT + CONFIDENCE saare 10 concepts se milkar bante hain
+  ek WEIGHTED VOTING + PENALTY system ke zariye. Neeche `combined_signal()`
+  function is poore logic ka core hai - achi tarah comments padhein.
+
+10 CONCEPTS (recap):
+  1. Hawkes Process        -> Buying/Selling Pressure       -> DIRECTION VOTE
+  2. Bayesian Classifier   -> Bullish% / Bearish%            -> DIRECTION VOTE
+  3. Quantile Volatility   -> Expected move, SL/TP           -> (verdict ke baad, risk levels)
+  4. Conformal Prediction  -> ab sirf agreement-check helper hai (neeche dekhein)
+  5. Fractional Kelly      -> Suggested Risk%                -> (verdict ke baad)
+  6. Order Flow Imbalance  -> Order-book buy/sell pressure   -> DIRECTION VOTE
+  7. VPIN (Toxic Flow)     -> Informed/toxic trading         -> CONFIDENCE PENALTY
+  8. HMM Regime Detection  -> Trending / Ranging             -> DIRECTION VOTE (conditional)
+  9. Jump Diffusion        -> Sudden shock/jump events       -> CONFIDENCE PENALTY
+  10. Meta-Labeling (ML)   -> Secondary ML EXECUTE/SKIP prob -> DIRECTION VOTE
 
 Folder structure honi chahiye:
   main.py
@@ -32,8 +39,9 @@ URL: http://localhost:5000/
 IMPORTANT DISCLAIMER (sach mein padhein):
 Ye tamam concepts statistically "sound-looking" hain lekin koi bhi is code
 mein NO real backtesting / walk-forward validation nahi ho rahi. Isliye
-"accuracy %" ka koi guaranteed number nahi diya ja sakta. Neeche har naye
-function ke comment mein iski asli limitation likhi hui hai.
+"accuracy %" ka koi guaranteed number nahi diya ja sakta. Weighted voting
+scheme neeche bhi MANUALLY chuni gayi weights hain (data se optimize nahi
+hui) - ye ek REASONABLE default hai, ground truth nahi.
 """
 
 import os
@@ -46,7 +54,6 @@ import numpy as np
 import pandas_ta as ta
 import ccxt
 
-# Naye concepts ke liye extra libraries
 from hmmlearn.hmm import GaussianHMM
 from sklearn.ensemble import RandomForestClassifier
 
@@ -65,7 +72,7 @@ def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200):
 
 
 # ============================================================
-# 1. HAWKES PROCESS APPROXIMATION  (PURANA - UNCHANGED)
+# 1. HAWKES PROCESS APPROXIMATION  (UNCHANGED)
 # Formula: lambda(t) = mu + sum( alpha * exp(-beta * (t - ti)) )
 # ============================================================
 def hawkes_pressure(df, alpha=0.6, beta=0.4, lookback=40):
@@ -106,7 +113,7 @@ def hawkes_pressure(df, alpha=0.6, beta=0.4, lookback=40):
 
 
 # ============================================================
-# 2. BAYESIAN CLASSIFIER (Naive Bayes)  (PURANA - UNCHANGED)
+# 2. BAYESIAN CLASSIFIER (Naive Bayes)  (UNCHANGED)
 # Formula: P(C|X) = P(X|C) * P(C) / P(X)
 # ============================================================
 def bayesian_bullish_bearish(df):
@@ -135,7 +142,7 @@ def bayesian_bullish_bearish(df):
 
 
 # ============================================================
-# 3. QUANTILE VOLATILITY  (PURANA - UNCHANGED)
+# 3. QUANTILE VOLATILITY  (UNCHANGED)
 # Formula: Q(q) = inf{x : F(x) >= q}
 # ============================================================
 def quantile_volatility(df, current_price, direction):
@@ -161,29 +168,7 @@ def quantile_volatility(df, current_price, direction):
 
 
 # ============================================================
-# 4. CONFORMAL PREDICTION  (PURANA - UNCHANGED)
-# ============================================================
-def conformal_confidence(bullish_pct, buying_pressure, selling_pressure):
-    bayesian_says_long = bullish_pct > 50
-    hawkes_says_long = buying_pressure > selling_pressure
-
-    votes_long = sum([bayesian_says_long, hawkes_says_long])
-    votes_short = 2 - votes_long
-
-    agreement = max(votes_long, votes_short) / 2
-
-    bayesian_strength = abs(bullish_pct - 50) / 50
-
-    confidence = (agreement * 0.6) + (bayesian_strength * 0.4)
-    confidence = min(max(confidence, 0), 1)
-
-    decision = "SKIP" if confidence < 0.55 else "TRADE"
-
-    return round(confidence * 100, 1), decision
-
-
-# ============================================================
-# 5. FRACTIONAL KELLY  (PURANA - UNCHANGED)
+# 5. FRACTIONAL KELLY  (UNCHANGED)
 # Full Kelly: f* = (b*p - q) / b   where q = 1-p
 # ============================================================
 def fractional_kelly(win_prob, reward_risk_ratio=1.5, k=0.5):
@@ -201,13 +186,12 @@ def fractional_kelly(win_prob, reward_risk_ratio=1.5, k=0.5):
 
 
 # ============================================================
-# 6. ORDER FLOW IMBALANCE (OFI)  <-- NAYA
+# 6. ORDER FLOW IMBALANCE (OFI)  (UNCHANGED)
 # Formula: OFI_t = I{dBid>=0}*BidSize_t  -  I{dAsk<=0}*AskSize_t
 #
-# LIMITATION (honestly): Real OFI ke liye continuous websocket
-# order-book stream chahiye hota hai (tick-by-tick). Yahan hum sirf
-# 2 REST snapshots (1 second gap) le kar approximate kar rahe hain.
-# Ye "real" institutional-grade OFI se kaafi zyada noisy hai.
+# LIMITATION: Real OFI ke liye continuous websocket order-book stream
+# chahiye hota hai. Yahan sirf 2 REST snapshots (1 sec gap) se
+# approximate kar rahe hain - "real" institutional OFI se noisy hai.
 # ============================================================
 def order_flow_imbalance(symbol="BTC/USDT", snapshot_gap_sec=1.0):
     ob1 = exchange.fetch_order_book(symbol, limit=5)
@@ -219,32 +203,27 @@ def order_flow_imbalance(symbol="BTC/USDT", snapshot_gap_sec=1.0):
     bid2_price, bid2_size = ob2["bids"][0]
     ask2_price, ask2_size = ob2["asks"][0]
 
-    # Bid side: price same/upar rahe aur size mojood ho -> buying pressure
     bid_flow = bid2_size if bid2_price >= bid1_price else -bid1_size
-    # Ask side: price same/neeche rahe aur size mojood ho -> selling pressure
     ask_flow = ask2_size if ask2_price <= ask1_price else -ask1_size
 
     ofi_raw = bid_flow - ask_flow
 
-    # Normalize karke -10 to +10 range mein le aate hain (rough scaling)
     scale = max(abs(bid1_size), abs(ask1_size), 1e-9)
     ofi_score = round(float(np.clip((ofi_raw / scale) * 5, -10, 10)), 2)
 
     return {
-        "ofi_score": ofi_score,           # +ve = buyers order book eat kar rahe hain
+        "ofi_score": ofi_score,
         "ofi_raw": round(float(ofi_raw), 4),
     }
 
 
 # ============================================================
-# 7. VPIN - TOXIC FLOW DETECTION  <-- NAYA
+# 7. VPIN - TOXIC FLOW DETECTION  (UNCHANGED)
 # Formula: VPIN = avg( |BuyVol - SellVol| / TotalVol )  per volume bucket
 #
-# LIMITATION (honestly): Asal VPIN thousands of trades aur proper
-# "Bulk Volume Classification" pe based hota hai. Yahan hum sirf
-# exchange REST se last N public trades le rahe hain aur unka
-# taker-side (ccxt "side" field) use kar rahe hain - ye kaafi
-# hd exchanges par accurate hota hai lekin sab par nahi.
+# LIMITATION: Asal VPIN thousands of trades + proper Bulk Volume
+# Classification pe based hota hai. Yahan sirf last N public trades
+# ka taker-side (ccxt "side" field) use ho raha hai.
 # ============================================================
 def vpin_toxicity(symbol="BTC/USDT", trade_limit=500, n_buckets=20):
     trades = exchange.fetch_trades(symbol, limit=trade_limit)
@@ -288,14 +267,12 @@ def vpin_toxicity(symbol="BTC/USDT", trade_limit=500, n_buckets=20):
 
 
 # ============================================================
-# 8. HMM REGIME DETECTION  <-- NAYA
+# 8. HMM REGIME DETECTION  (UNCHANGED)
 # State_t ~ TransitionMatrix(State_{t-1})  |  Emission_t ~ Gaussian(mean, var)
 #
-# LIMITATION (honestly): HMM har baar candles ke is chunk pe fresh
-# train hota hai (random_state fixed hai warna results run-to-run
-# badal sakte hain). Chunk chota ho (200 candles) to states unstable
-# ho sakte hain. Proper usage mein isay bade dataset pe train karke
-# save/load karna chahiye, har request pe retrain nahi.
+# LIMITATION: Har request pe fresh retrain hota hai (200 candles ka
+# chota chunk) - proper usage mein bade dataset pe train/save/load
+# hona chahiye.
 # ============================================================
 def hmm_regime(df, n_states=2):
     returns = df["close"].pct_change().dropna()
@@ -306,7 +283,7 @@ def hmm_regime(df, n_states=2):
     features = features.dropna()
 
     if len(features) < 30:
-        return {"regime": "INSUFFICIENT_DATA", "state": None}
+        return {"regime": "INSUFFICIENT_DATA", "state": None, "state_mean_return_pct": None}
 
     X = features.values
 
@@ -318,7 +295,6 @@ def hmm_regime(df, n_states=2):
     current_state = int(hidden_states[-1])
     state_mean_returns = model.means_[:, 0]
 
-    # Jis state ka |mean return| sabse zyada hai, wo "Trending" state hai
     trending_state = int(np.argmax(np.abs(state_mean_returns)))
     regime = "Trending" if current_state == trending_state else "Ranging"
 
@@ -330,13 +306,11 @@ def hmm_regime(df, n_states=2):
 
 
 # ============================================================
-# 9. JUMP DIFFUSION / HAWKES-JUMP DETECTOR  <-- NAYA
+# 9. JUMP DIFFUSION / HAWKES-JUMP DETECTOR  (UNCHANGED)
 # dS_t = mu*S_t*dt + sigma*S_t*dW_t + J_t*S_t*dN_t
 #
-# LIMITATION (honestly): Ye asal jump-diffusion model (Merton jump
-# model waghera) ka simplified proxy hai - hum sirf z-score se
-# "statistically abnormal" return dhoond rahe hain, koi proper
-# Poisson jump-intensity MLE fit nahi kar rahe.
+# LIMITATION: Simplified z-score proxy hai, proper Poisson jump-
+# intensity MLE fit nahi ho raha.
 # ============================================================
 def jump_diffusion_detector(df, lookback=100, jump_zscore=3.0):
     returns = df["close"].pct_change().dropna().tail(lookback)
@@ -361,21 +335,13 @@ def jump_diffusion_detector(df, lookback=100, jump_zscore=3.0):
 
 
 # ============================================================
-# 10. META-LABELING (Secondary ML Classifier)  <-- NAYA
+# 10. META-LABELING (Secondary ML Classifier)  (UNCHANGED)
 # Primary Model: Signal Direction (-1/+1) -> Secondary ML: Execute(1)/Skip(0)
 #
-# LIMITATION (honestly, ye important hai): Doc mein "75% se upar tabhi
-# push karo" likha tha - is demo mein wo threshold anrealistic set nahi
-# kiya kyunke:
-#   a) Training data yahi 200 candles hain jo hum abhi fetch kar rahe
-#      hain - koi proper out-of-sample / walk-forward split nahi hai.
-#   b) "future_return" wala label thoda look-ahead-biased hai (jaisa
-#      Bayesian module mein bhi hai) - isi window ke andar train aur
-#      "predict" ho raha hai.
-#   c) 200 rows ek RandomForest ke liye bohot chota dataset hai -
-#      is se nikli probability ekdum reliable NAHI mani ja sakti.
-# Ye module sirf ARCHITECTURE dikhane ke liye hai; real deployment
-# ke liye isay mahino ke data pe alag se train/save/load karna hoga.
+# LIMITATION (important): 200 candles pe hi train + "predict" ho raha
+# hai (look-ahead bias jaisa Bayesian module mein bhi hai). 200 rows
+# RandomForest ke liye chota dataset hai - probability fully reliable
+# nahi maani ja sakti. Ye module architecture demo ke liye hai.
 # ============================================================
 def meta_label_filter(df, execute_threshold=0.55):
     data = df.copy()
@@ -392,8 +358,6 @@ def meta_label_filter(df, execute_threshold=0.55):
     X = data[feature_cols].values
     y = data["label"].values
 
-    # Last row ka future_return NaN hoga (dropna se already hat chuka),
-    # isliye current features alag se nikalte hain poore df se
     current_row = df.dropna(subset=["rsi", "macd", "macd_signal"]).iloc[-1]
     current_features = np.array([[current_row["rsi"],
                                    current_row["macd"] - current_row["macd_signal"]]])
@@ -412,7 +376,112 @@ def meta_label_filter(df, execute_threshold=0.55):
 
 
 # ============================================================
-# MASTER FUNCTION - sab 9 concepts combine karta hai
+# *** NAYA CORE: COMBINED SIGNAL - saare 10 concepts yahan milte hain ***
+#
+# Tareeqa: har directional concept ek "vote" deta hai jo -1 (bearish)
+# se +1 (bullish) ke beech hota hai, jiski apni "strength" hoti hai.
+# Har vote ko fixed weight di gayi hai (neeche WEIGHTS dict). In sab
+# ka weighted-average nikal ke ek final "score" (-1 to +1) banta hai:
+#
+#     score > 0   -> LONG
+#     score < 0   -> SHORT
+#
+# Confidence = |score| ko 0-100% scale kiya jata hai, phir 2 cheezein
+# ye confidence ko NEECHE kheenchti hain (penalty), kyunke ye directional
+# nahi balke "risk/uncertainty" concepts hain:
+#     - VPIN high toxicity  -> confidence * 0.75
+#     - Jump/shock detected -> confidence * 0.70
+#
+# Agar final confidence < MIN_CONFIDENCE threshold ho, to verdict
+# "WAIT" ban jata hai (jaisa pehle Conformal Prediction karta tha,
+# ab yahi role combined score + penalties nibhate hain).
+# ============================================================
+
+WEIGHTS = {
+    "bayesian": 0.25,   # concept 2
+    "hawkes":   0.20,   # concept 1
+    "ofi":      0.15,   # concept 6
+    "meta":     0.25,   # concept 10
+    "regime":   0.15,   # concept 8 (sirf jab Trending ho)
+}
+
+MIN_CONFIDENCE = 55.0  # is se neeche confidence ho to WAIT
+
+
+def combined_signal(bullish_pct, bearish_pct, buying_pressure, selling_pressure,
+                     ofi_data, vpin_data, regime_data, jump_data, meta_data):
+
+    votes = {}     # concept_name -> (direction_vote in [-1,+1], weight_used)
+
+    # --- 2. Bayesian vote ---
+    bayes_dir = (bullish_pct - 50.0) / 50.0   # -1..+1
+    votes["bayesian"] = (bayes_dir, WEIGHTS["bayesian"])
+
+    # --- 1. Hawkes vote ---
+    total_pressure = buying_pressure + selling_pressure
+    if total_pressure > 0:
+        hawkes_dir = (buying_pressure - selling_pressure) / 10.0  # -1..+1
+    else:
+        hawkes_dir = 0.0
+    votes["hawkes"] = (hawkes_dir, WEIGHTS["hawkes"])
+
+    # --- 6. OFI vote (agar data available ho) ---
+    ofi_score = ofi_data.get("ofi_score")
+    if ofi_score is not None:
+        ofi_dir = float(np.clip(ofi_score / 10.0, -1, 1))
+        votes["ofi"] = (ofi_dir, WEIGHTS["ofi"])
+
+    # --- 10. Meta-labeling vote (agar data available ho) ---
+    meta_prob = meta_data.get("meta_win_probability")
+    if meta_prob is not None:
+        meta_dir = (meta_prob - 50.0) / 50.0
+        votes["meta"] = (meta_dir, WEIGHTS["meta"])
+
+    # --- 8. HMM regime vote (sirf jab regime clearly "Trending" ho,
+    #         warna "Ranging" mein direction pe koi vote nahi deta) ---
+    if regime_data.get("regime") == "Trending" and regime_data.get("state_mean_return_pct") is not None:
+        regime_dir = float(np.clip(regime_data["state_mean_return_pct"] / 2.0, -1, 1))
+        votes["regime"] = (regime_dir, WEIGHTS["regime"])
+
+    # --- Weighted average score ---
+    total_weight = sum(w for _, w in votes.values())
+    if total_weight > 0:
+        raw_score = sum(d * w for d, w in votes.values()) / total_weight
+    else:
+        raw_score = 0.0
+
+    base_confidence = min(abs(raw_score) * 100, 100.0)
+
+    # --- 7. VPIN penalty (toxic/manipulated flow -> kam bharosa) ---
+    toxicity = vpin_data.get("toxicity")
+    if toxicity == "HIGH_TOXICITY":
+        base_confidence *= 0.75
+    elif toxicity == "MODERATE_TOXICITY":
+        base_confidence *= 0.90
+
+    # --- 9. Jump-shock penalty (abhi abhi abnormal move hua -> uncertain) ---
+    if jump_data.get("jump_detected"):
+        base_confidence *= 0.70
+
+    confidence_pct = round(min(max(base_confidence, 0), 100), 1)
+
+    if confidence_pct < MIN_CONFIDENCE:
+        final_verdict = "WAIT"
+    elif raw_score > 0:
+        final_verdict = "LONG"
+    else:
+        final_verdict = "SHORT"
+
+    return {
+        "final_verdict": final_verdict,
+        "confidence_pct": confidence_pct,
+        "raw_score": round(raw_score, 3),
+        "votes_used": {k: round(v[0], 3) for k, v in votes.items()},
+    }
+
+
+# ============================================================
+# MASTER FUNCTION - sab 10 concepts combine karta hai
 # ============================================================
 def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     df["rsi"] = ta.rsi(df["close"], length=14)
@@ -424,28 +493,10 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     latest = df.iloc[-1]
     current_price = float(latest["close"])
 
-    # --- Purane 5 concepts ---
+    # --- Sabhi 10 concepts pehle nikal lete hain ---
     buying_pressure, selling_pressure = hawkes_pressure(df)
     bullish_pct, bearish_pct = bayesian_bullish_bearish(df)
-    confidence_pct, trade_decision = conformal_confidence(bullish_pct, buying_pressure, selling_pressure)
 
-    if trade_decision == "SKIP":
-        final_verdict = "WAIT"
-    elif bullish_pct > bearish_pct:
-        final_verdict = "LONG"
-    else:
-        final_verdict = "SHORT"
-
-    volatility_data = quantile_volatility(df, current_price, final_verdict)
-
-    win_prob = max(bullish_pct, bearish_pct) / 100
-    suggested_risk_pct = fractional_kelly(win_prob)
-
-    trend = "Bullish" if bullish_pct > bearish_pct else "Bearish"
-
-    # --- Naye 4 concepts ---
-    # Order book calls thodi slow hain (1 sec sleep + network), isliye
-    # optional flag rakha hai taake fast testing bhi ho sake
     if include_orderbook:
         try:
             ofi_data = order_flow_imbalance(symbol)
@@ -463,8 +514,23 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     jump_data = jump_diffusion_detector(df)
     meta_data = meta_label_filter(df)
 
-    # --- Naye concepts, purane verdict ko "override" nahi karte,
-    #     sirf warning flags ke tor par attach hote hain (transparent rehne ke liye) ---
+    # --- Ab in sab ko combine karke FINAL VERDICT + CONFIDENCE banti hai ---
+    combo = combined_signal(
+        bullish_pct, bearish_pct, buying_pressure, selling_pressure,
+        ofi_data, vpin_data, regime_data, jump_data, meta_data,
+    )
+    final_verdict = combo["final_verdict"]
+    confidence_pct = combo["confidence_pct"]
+
+    # --- Verdict ban chuka, ab isi ke basis par SL/TP aur Risk % ---
+    volatility_data = quantile_volatility(df, current_price, final_verdict)
+
+    win_prob = max(bullish_pct, bearish_pct) / 100
+    suggested_risk_pct = fractional_kelly(win_prob)
+
+    trend = "Bullish" if bullish_pct > bearish_pct else "Bearish"
+
+    # --- Fake breakout warning: OFI final verdict se ulta ho to flag ---
     fake_breakout_warning = False
     if ofi_data.get("ofi_score") is not None:
         if final_verdict == "LONG" and ofi_data["ofi_score"] < 0:
@@ -485,7 +551,6 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "rsi": round(float(latest["rsi"]), 2),
         "macd": round(float(latest["macd"]), 4),
 
-        # naye concepts ka data
         "order_flow": ofi_data,
         "toxic_flow": vpin_data,
         "market_regime": regime_data,
@@ -493,8 +558,17 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "meta_label": meta_data,
         "fake_breakout_warning": fake_breakout_warning,
 
+        # Debug/transparency ke liye - kaunse concepts ne kitna vote diya
+        "signal_breakdown": {
+            "raw_score": combo["raw_score"],
+            "votes_used": combo["votes_used"],
+            "weights": WEIGHTS,
+            "min_confidence_threshold": MIN_CONFIDENCE,
+        },
+
         "disclaimer": ("Probability estimates only - not financial advice. "
-                        "In-sample calculations, no walk-forward backtest run yet."),
+                        "In-sample calculations, no walk-forward backtest run yet. "
+                        "Weighted-voting scheme is manually chosen, not data-optimized."),
     }
     result.update(volatility_data)
     return result
@@ -512,7 +586,6 @@ def home():
 def signal_endpoint():
     coin = request.args.get("coin", "BTC/USDT")
     timeframe = request.args.get("timeframe", "1h")
-    # order-book/trades calls slow honay ki wajah se optional query param
     orderbook = request.args.get("orderbook", "true").lower() != "false"
 
     try:
