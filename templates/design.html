@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signal FM </title>
+<title>Signal FM</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -35,6 +35,9 @@
   <p id="error-text" class="error-text hidden"></p>
 
   <main id="result-box" class="result-box hidden">
+
+    <!-- Dynamic warning banners (jump shock / fake breakout) get injected here -->
+    <section id="alert-stack" class="alert-stack"></section>
 
     <section class="hero-row">
       <div class="price-block">
@@ -112,10 +115,46 @@
       </div>
     </section>
 
+    <div class="section-divider"><span>ADVANCED SIGNALS</span></div>
+
+    <section class="panel two-col">
+      <div class="flow-card">
+        <span class="panel-title">ORDER FLOW <span class="panel-sub">bid/ask imbalance</span></span>
+        <div class="ofi-track">
+          <div class="ofi-center-tick"></div>
+          <div id="ofi-fill" class="ofi-fill"></div>
+        </div>
+        <span id="ofi-value" class="pressure-value">--</span>
+      </div>
+      <div class="flow-card">
+        <span class="panel-title">TOXIC FLOW <span class="panel-sub">vpin</span></span>
+        <div class="pressure-track">
+          <div id="vpin-fill" class="pressure-fill vpin"></div>
+        </div>
+        <span id="vpin-value" class="pressure-value">--</span>
+      </div>
+    </section>
+
+    <section class="panel two-col">
+      <div class="badge-card">
+        <span class="panel-title">MARKET REGIME <span class="panel-sub">hmm</span></span>
+        <div id="regime-badge" class="state-badge">--</div>
+        <span id="regime-detail" class="badge-detail">--</span>
+      </div>
+      <div class="badge-card">
+        <span class="panel-title">ML FILTER <span class="panel-sub">meta-labeling</span></span>
+        <div id="meta-badge" class="state-badge">--</div>
+        <div class="pressure-track meta-track">
+          <div id="meta-fill" class="pressure-fill meta"></div>
+        </div>
+        <span id="meta-value" class="pressure-value">--</span>
+      </div>
+    </section>
+
   </main>
 
   <footer class="disclaimer">
-    ⚠ Probability estimates only — not financial advice.
+    ⚠ Probability estimates only — not financial advice. In-sample calculations, no walk-forward backtest run yet.
   </footer>
 
 </div>
