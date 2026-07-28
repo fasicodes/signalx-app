@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signal FM</title>
+<title>SIGNAL/FM — Multi-Channel Market Readout</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -14,147 +14,88 @@
 
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">◎</span>
-      <span class="brand-name">SIGNAL FM</span>
+      <div class="brand-row">
+        <span class="brand-mark"></span>
+        <span class="brand-name">SIGNAL/FM</span>
+      </div>
+      <span class="brand-tagline">19-Channel Market Readout</span>
     </div>
-    <div class="topbar-controls">
-      <select id="coin-select" class="coin-select">
-        <option value="BTC/USDT">BTC/USDT</option>
-        <option value="ETH/USDT">ETH/USDT</option>
-        <option value="SOL/USDT">SOL/USDT</option>
-        <option value="BNB/USDT">BNB/USDT</option>
-        <option value="XRP/USDT">XRP/USDT</option>
-      </select>
-      <button id="get-signal-btn" class="scan-btn">
-        <span class="scan-btn-text">RUN ANALYSIS</span>
-      </button>
-      <div class="live-dot"><span class="dot"></span>LIVE</div>
+    <div class="topbar-right">
+      <div class="live-clock"><span class="dot"></span><span id="clock-text">--:--:--</span></div>
     </div>
   </header>
 
+  <div class="control-row">
+    <select id="coin-select" class="coin-select">
+      <option value="BTC/USDT">BTC / USDT</option>
+      <option value="ETH/USDT">ETH / USDT</option>
+      <option value="SOL/USDT">SOL / USDT</option>
+      <option value="BNB/USDT">BNB / USDT</option>
+      <option value="XRP/USDT">XRP / USDT</option>
+    </select>
+    <button id="get-signal-btn" class="scan-btn">
+      <span class="scan-btn-text">RUN ANALYSIS</span>
+    </button>
+  </div>
+
   <p id="error-text" class="error-text hidden"></p>
+  <div id="alert-stack" class="alert-stack"></div>
 
-  <main id="result-box" class="result-box hidden">
+  <main id="result-box" class="hidden">
 
-    <!-- Dynamic warning banners (jump shock / fake breakout) get injected here -->
-    <section id="alert-stack" class="alert-stack"></section>
-
-    <section class="hero-row">
-      <div class="price-block">
-        <span class="eyebrow">MARK PRICE</span>
-        <div class="price-line">
-          <span id="price-value" class="price-value">--</span>
-        </div>
-        <div class="price-sub">
-          <span class="sub-item">RSI <b id="rsi-value">--</b></span>
-          <span class="sub-item">MACD <b id="macd-value">--</b></span>
+    <!-- HERO: verdict gauge -->
+    <section class="hero">
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 108 108">
+          <circle class="gauge-track" cx="54" cy="54" r="48"></circle>
+          <circle id="gauge-fill" class="gauge-fill" cx="54" cy="54" r="48"></circle>
+        </svg>
+        <div class="gauge-center">
+          <span id="gauge-verdict" class="gauge-verdict">--</span>
+          <span id="gauge-confidence" class="gauge-confidence">-- confidence</span>
         </div>
       </div>
-
-      <div class="verdict-block" id="verdict-block">
-        <span class="eyebrow">FINAL VERDICT</span>
-        <div id="verdict-text" class="verdict-text">--</div>
-        <div class="confidence-line">
-          <span id="confidence-value">--</span>
-          <span class="confidence-label">CONFIDENCE</span>
+      <div class="hero-data">
+        <span class="hero-eyebrow">Mark Price</span>
+        <div id="hero-price" class="hero-price">--</div>
+        <div class="hero-sub">
+          <span>RSI <b id="hero-rsi">--</b></span>
+          <span>MACD <b id="hero-macd">--</b></span>
         </div>
+        <span id="hero-trend-tag" class="hero-trend-tag">--</span>
       </div>
     </section>
 
-    <section class="panel">
-      <span class="panel-title">MARKET BIAS <span class="panel-sub">bayesian classifier</span></span>
-      <div class="bias-meter">
-        <div class="bias-fill" id="bias-fill"></div>
-      </div>
-      <div class="bias-labels">
-        <span id="bullish-label" class="bull-label">-- BULLISH</span>
-        <span id="bearish-label" class="bear-label">BEARISH --</span>
-      </div>
-    </section>
+    <div class="tier-divider">
+      <span class="tier-num">TIER&nbsp;01</span>
+      <span class="tier-label">Core Verdict Engine</span>
+    </div>
+    <p class="tier-note">Ch.01–05 — Hawkes Process, Bayesian Classifier &amp; Conformal Prediction. This is the only tier that produces the final verdict and confidence score.</p>
+    <div id="tier-1" class="channel-grid"></div>
 
-    <section class="panel two-col">
-      <div class="pressure-card">
-        <span class="panel-title">BUYING PRESSURE <span class="panel-sub">hawkes process</span></span>
-        <div class="pressure-track">
-          <div id="buy-pressure-fill" class="pressure-fill buy"></div>
-        </div>
-        <span id="buy-pressure-value" class="pressure-value">-- / 10</span>
-      </div>
-      <div class="pressure-card">
-        <span class="panel-title">SELLING PRESSURE <span class="panel-sub">hawkes process</span></span>
-        <div class="pressure-track">
-          <div id="sell-pressure-fill" class="pressure-fill sell"></div>
-        </div>
-        <span id="sell-pressure-value" class="pressure-value">-- / 10</span>
-      </div>
-    </section>
+    <div class="tier-divider">
+      <span class="tier-num">TIER&nbsp;02</span>
+      <span class="tier-label">Microstructure</span>
+    </div>
+    <p class="tier-note">Ch.06–10 — order-book &amp; regime diagnostics. Display-only: does not alter the verdict above.</p>
+    <div id="tier-2" class="channel-grid"></div>
 
-    <section class="panel two-col">
-      <div class="level-card">
-        <span class="panel-title">STOP LOSS <span class="panel-sub">quantile volatility · 95%</span></span>
-        <span id="sl-value" class="level-value sl">--</span>
-      </div>
-      <div class="level-card">
-        <span class="panel-title">TAKE PROFIT <span class="panel-sub">quantile volatility · 95%</span></span>
-        <span id="tp-value" class="level-value tp">--</span>
-      </div>
-    </section>
-
-    <section class="panel metrics-row">
-      <div class="metric">
-        <span class="metric-label">Expected Move</span>
-        <span id="expected-vol-value" class="metric-value">--</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Extreme Move (95%)</span>
-        <span id="extreme-vol-value" class="metric-value">--</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Suggested Risk</span>
-        <span id="risk-value" class="metric-value risk">--</span>
-      </div>
-    </section>
-
-    <div class="section-divider"><span>ADVANCED SIGNALS</span></div>
-
-    <section class="panel two-col">
-      <div class="flow-card">
-        <span class="panel-title">ORDER FLOW <span class="panel-sub">bid/ask imbalance</span></span>
-        <div class="ofi-track">
-          <div class="ofi-center-tick"></div>
-          <div id="ofi-fill" class="ofi-fill"></div>
-        </div>
-        <span id="ofi-value" class="pressure-value">--</span>
-      </div>
-      <div class="flow-card">
-        <span class="panel-title">TOXIC FLOW <span class="panel-sub">vpin</span></span>
-        <div class="pressure-track">
-          <div id="vpin-fill" class="pressure-fill vpin"></div>
-        </div>
-        <span id="vpin-value" class="pressure-value">--</span>
-      </div>
-    </section>
-
-    <section class="panel two-col">
-      <div class="badge-card">
-        <span class="panel-title">MARKET REGIME <span class="panel-sub">hmm</span></span>
-        <div id="regime-badge" class="state-badge">--</div>
-        <span id="regime-detail" class="badge-detail">--</span>
-      </div>
-      <div class="badge-card">
-        <span class="panel-title">ML FILTER <span class="panel-sub">meta-labeling</span></span>
-        <div id="meta-badge" class="state-badge">--</div>
-        <div class="pressure-track meta-track">
-          <div id="meta-fill" class="pressure-fill meta"></div>
-        </div>
-        <span id="meta-value" class="pressure-value">--</span>
-      </div>
-    </section>
+    <div class="tier-divider">
+      <span class="tier-num">TIER&nbsp;03</span>
+      <span class="tier-label">Extended Signals</span>
+    </div>
+    <p class="tier-note">Ch.11–19 — cross-asset, entropy, wavelet &amp; risk-agent panels. Display-only, exploratory.</p>
+    <div id="tier-3" class="channel-grid"></div>
 
   </main>
 
+  <div id="empty-state" class="empty-state">
+    <div class="empty-mark">◎</div>
+    <div>SELECT A PAIR AND RUN ANALYSIS TO BRING ALL 19 CHANNELS ONLINE</div>
+  </div>
+
   <footer class="disclaimer">
-    ⚠ Probability estimates only — not financial advice. In-sample calculations, no walk-forward backtest run yet.
+    <span id="disclaimer-text">⚠ Probability estimates only — not financial advice. In-sample calculations, no walk-forward backtest run. Final verdict/confidence come only from Tier 01 (Hawkes + Bayesian via Conformal Prediction); Tiers 02–03 are display-only.</span>
   </footer>
 
 </div>
