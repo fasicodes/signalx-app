@@ -443,14 +443,37 @@ def combined_signal(bullish_pct, bearish_pct, buying_pressure, selling_pressure,
         regime_dir = float(np.clip(regime_data["state_mean_return_pct"] / 2.0, -1, 1))
         votes["regime"] = (regime_dir, WEIGHTS["regime"])
 
-    # --- Weighted average score ---
+    # --- Weighted average score (DIRECTION decide karne ke liye) ---
     total_weight = sum(w for _, w in votes.values())
     if total_weight > 0:
         raw_score = sum(d * w for d, w in votes.values()) / total_weight
     else:
         raw_score = 0.0
 
-    base_confidence = min(abs(raw_score) * 100, 100.0)
+    # --- CONFIDENCE: sirf raw_score ki magnitude se nahi (wo hamesha
+    # chhoti reh jati hai jab weak votes average hote hain aur ek dusre
+    # ko "dilute" kar dete hain). Iski jagah 2 cheezein combine karte hain:
+    #
+    #   1) AGREEMENT: kitne % weight un concepts ka hai jo majority
+    #      direction ke sath agree karte hain (chahe unki apni strength
+    #      kam ho, agreement khud ek strong signal hai)
+    #   2) STRENGTH: un concepts ki average absolute vote-strength
+    #
+    # Ye purane Conformal Prediction (agreement*0.6 + strength*0.4) wale
+    # idea ko hi ab 5 concepts tak extend kar raha hai.
+    majority_sign = 1 if raw_score >= 0 else -1
+
+    agreeing_weight = sum(
+        w for d, w in votes.values() if (1 if d >= 0 else -1) == majority_sign
+    )
+    agreement_ratio = (agreeing_weight / total_weight) if total_weight > 0 else 0.0
+
+    avg_abs_strength = (
+        sum(abs(d) * w for d, w in votes.values()) / total_weight
+        if total_weight > 0 else 0.0
+    )
+
+    base_confidence = (agreement_ratio * 0.6 + avg_abs_strength * 0.4) * 100
 
     # --- 7. VPIN penalty (toxic/manipulated flow -> kam bharosa) ---
     toxicity = vpin_data.get("toxicity")
@@ -476,6 +499,8 @@ def combined_signal(bullish_pct, bearish_pct, buying_pressure, selling_pressure,
         "final_verdict": final_verdict,
         "confidence_pct": confidence_pct,
         "raw_score": round(raw_score, 3),
+        "agreement_ratio": round(agreement_ratio, 3),
+        "avg_strength": round(avg_abs_strength, 3),
         "votes_used": {k: round(v[0], 3) for k, v in votes.items()},
     }
 
