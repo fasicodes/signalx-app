@@ -73,6 +73,25 @@ CORS(app)
 
 exchange = ccxt.okx()
 
+# NOTE: exchange OKX hai. Neeche wali AVAILABLE_COINS list frontend (design.html)
+# ke coin-select dropdown se match karti hai. Agar koi coin OKX par USDT pair
+# ke sath list nahi hai to /signal us coin ke liye error return karega
+# (fetch_ohlcv exception -> already try/except mein handled hai neeche).
+# LEO (UNUS SED LEO) is list mein NAHI hai kyunke wo Bitfinex ka apna token
+# hai aur OKX par generally available nahi hota - iski jagah DOT (Polkadot)
+# rakha gaya hai.
+AVAILABLE_COINS = [
+    # TOP 1-10
+    "BTC/USDT", "ETH/USDT", "BNB/USDT", "XRP/USDT", "SOL/USDT",
+    "TRX/USDT", "HYPE/USDT", "DOGE/USDT", "ZEC/USDT", "DOT/USDT",
+    # TOP 11-20
+    "XLM/USDT", "XMR/USDT", "LINK/USDT", "ADA/USDT", "BCH/USDT",
+    "TON/USDT", "LTC/USDT", "SUI/USDT", "HBAR/USDT", "DEXE/USDT",
+    # TOP 21-30
+    "AVAX/USDT", "CRO/USDT", "NEAR/USDT", "SHIB/USDT", "UNI/USDT",
+    "TAO/USDT", "ONDO/USDT", "OKB/USDT", "ASTER/USDT", "MNT/USDT",
+]
+
 
 def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200):
     """Exchange se OHLCV candles fetch karta hai."""
@@ -885,7 +904,7 @@ def signal_endpoint():
 
 @app.route("/coins", methods=["GET"])
 def available_coins():
-    return jsonify(["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"])
+    return jsonify(AVAILABLE_COINS)
 
 
 if __name__ == "__main__":
