@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 
@@ -29,7 +30,20 @@
   </header>
 
   <div class="control-row">
-    <select id="coin-select" class="coin-select">
+
+    <!-- Custom coin picker: shows each coin's logo. Built on top of the
+         native <select> below, which script.js keeps in sync and still
+         reads via coinSelect.value for the /signal + /candles calls. -->
+    <div class="coin-picker" id="coin-picker">
+      <button type="button" class="coin-picker-trigger" id="coin-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
+        <img id="coin-picker-icon" class="coin-picker-icon" alt="" src="" />
+        <span id="coin-picker-label" class="coin-picker-label">BTC / USDT</span>
+        <span class="coin-picker-caret">▾</span>
+      </button>
+      <div class="coin-picker-menu" id="coin-picker-menu" role="listbox"></div>
+    </div>
+
+    <select id="coin-select" class="coin-select coin-select-native">
       <optgroup label="TOP 1–10">
         <option value="BTC/USDT">BTC / USDT</option>
         <option value="ETH/USDT">ETH / USDT</option>
@@ -67,6 +81,7 @@
         <option value="ATOM/USDT">ATOM / USDT</option>
       </optgroup>
     </select>
+
     <button id="get-signal-btn" class="scan-btn">
       <span class="scan-btn-text">RUN ANALYSIS</span>
     </button>
@@ -109,20 +124,23 @@
 
     <div class="tier-divider">
       <span class="tier-num">TIER&nbsp;02–03</span>
-      <span class="tier-label">Microstructure · Extended Signals · Liquidity Scanner</span>
+      <span class="tier-label">Microstructure · Extended Signals · Liquidity · Live Chart</span>
     </div>
-    <p class="tier-note">Ch.06–19 — order-book, regime, cross-asset &amp; liquidity diagnostics. Display-only: does not alter the verdict above.</p>
+    <p class="tier-note">Ch.06–19 — order-book, regime, cross-asset &amp; liquidity diagnostics, plus a live price chart. Display-only: does not alter the verdict above.</p>
 
     <!-- TAB NAVIGATION -->
     <div class="panel-tabs">
       <button class="panel-tab active" data-panel="microstructure" type="button">
-        <span class="panel-tab-num">02</span> MICROSTRUCTURE
+        <span class="panel-tab-num">01</span> DASHBOARD
       </button>
       <button class="panel-tab" data-panel="extended" type="button">
-        <span class="panel-tab-num">03</span> EXTENDED SIGNALS
+        <span class="panel-tab-num">02</span> EXTENDED SIGNALS
       </button>
       <button class="panel-tab" data-panel="liquidity" type="button">
-        <span class="panel-tab-num">19</span> LIQUIDITY SCANNER
+        <span class="panel-tab-num">03</span> LIQUIDITY SCANNER
+      </button>
+      <button class="panel-tab" data-panel="livechart" type="button">
+        <span class="panel-tab-num">04</span> LIVE CHART
       </button>
     </div>
 
@@ -139,6 +157,37 @@
     <div id="panel-liquidity" class="tab-panel">
       <p class="tier-note">Ch.19 — swing high/low liquidity sweep detector. Display-only, exploratory.</p>
       <div id="liquidity-scanner"></div>
+    </div>
+
+    <div id="panel-livechart" class="tab-panel">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div class="chart-header-left">
+            <span class="chart-icon">◉</span>
+            <div>
+              <div class="chart-title" id="chart-title">BTC / USDT · 1H</div>
+              <div class="chart-subtitle">live candlestick feed — polled from the exchange</div>
+            </div>
+          </div>
+          <div class="chart-price-block">
+            <span id="chart-live-dot" class="live-clock-dot"></span>
+            <span id="chart-price" class="chart-price">--</span>
+            <span id="chart-change" class="chart-change">--</span>
+          </div>
+        </div>
+        <div class="chart-tf-row" id="chart-tf-row">
+          <button class="chart-tf-btn" data-tf="1m">1m</button>
+          <button class="chart-tf-btn" data-tf="5m">5m</button>
+          <button class="chart-tf-btn" data-tf="15m">15m</button>
+          <button class="chart-tf-btn active" data-tf="1h">1h</button>
+          <button class="chart-tf-btn" data-tf="4h">4h</button>
+          <button class="chart-tf-btn" data-tf="1d">1d</button>
+        </div>
+        <div id="candle-chart" class="candle-chart"></div>
+        <div class="chart-footer">
+          <span id="chart-status">connecting…</span>
+        </div>
+      </div>
     </div>
 
   </main>
