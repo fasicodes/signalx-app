@@ -1,17 +1,26 @@
 """
-Trading Signal Backend + Frontend - v7
+Trading Signal Backend + Frontend - v8
 ---------------------------------------------------
 IMPORTANT: FINAL VERDICT + CONFIDENCE ka logic v4 jaisa hi hai
 (sirf Hawkes Process + Bayesian Classifier, Conformal Prediction ke
-zariye combine hote hain). Neeche wale 9 NAYE concepts verdict ko
+zariye combine hote hain). Neeche wale naye concepts verdict ko
 BILKUL touch nahi karte - ye sirf extra "display panels" hain, jaisa
 v4 mein OFI/VPIN/HMM/Jump/Meta add hue thay.
 
-v7 mein sirf ye add hua hai:
-  - /candles endpoint -> naye "LIVE CHART" tab (frontend) ke liye
-    OHLCV candle series return karta hai, taake ek live candlestick
-    chart bana ja sake. Verdict/confidence logic ko bilkul touch
-    nahi kiya gaya.
+v7 mein ye add hua tha:
+  - /candles endpoint -> "LIVE CHART" tab (frontend) ke liye OHLCV
+    candle series return karta hai, taake ek live candlestick chart
+    bana ja sake. Verdict/confidence logic ko bilkul touch nahi
+    kiya gaya.
+
+v8 mein ye add hua hai:
+  - /liquidity endpoint -> naya "LIQUIDITY SCANNER" tab (CH.19) ke
+    liye LIVE data Binance USD-M Futures public REST API se fetch
+    karta hai (koi API key nahi chahiye): price/24h stats, mark
+    price, funding rate, open interest, order-book buy/sell bias,
+    liquidity walls (magnet/target zones) aur ek illustrative
+    spoofing heuristic. Ye bhi sirf DISPLAY-ONLY hai - /signal ke
+    verdict/confidence logic ko bilkul touch nahi karta.
 
 PURANE 5 concepts (WAISAY HI, koi change nahi):
   1. Hawkes Process        -> Buying/Selling Pressure (0-10)
@@ -36,7 +45,12 @@ v6 ke 9 concepts (display-only, verdict ko touch nahi karte):
   16. Adaptive Hurst Exponent
   17. Wavelet Transform Noise Filtering
   18. Structural Break Detection (CUSUM)
-  19. Liquidity Sweep / Stop-Cluster Detection
+  19. Liquidity Sweep / Stop-Cluster Detection (swing high/low - legacy,
+      still computed inside /signal for backwards-compat, but the
+      Liquidity Scanner TAB now shows the richer /liquidity data below)
+
+v8 ke naye concept (frontend Liquidity Scanner tab is powered by this):
+  20. Live Liquidity Scanner (Binance Futures) - bias/walls/spoof/funding/OI
 
 Folder structure honi chahiye:
   main.py
@@ -47,7 +61,7 @@ Folder structure honi chahiye:
   requirements.txt
 
 Chalane ka tareeqa (local):
-    pip install flask flask-cors pandas pandas-ta ccxt numpy hmmlearn scikit-learn PyWavelets --break-system-packages
+    pip install flask flask-cors pandas pandas-ta ccxt numpy hmmlearn scikit-learn PyWavelets requests --break-system-packages
     python main.py
 
 URL: http://localhost:5000/
@@ -61,6 +75,7 @@ function ke comment mein iski asli limitation likhi hui hai.
 
 import os
 import time
+from collections import deque, defaultdict
 
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
@@ -68,6 +83,7 @@ import pandas as pd
 import numpy as np
 import pandas_ta as ta
 import ccxt
+import requests
 
 # v4 ke naye concepts ke liye extra libraries
 from hmmlearn.hmm import GaussianHMM
@@ -77,6 +93,19 @@ app = Flask(__name__)
 CORS(app)
 
 exchange = ccxt.okx()
+
+# ------------------------------------------------------------------
+# v8: LIQUIDITY SCANNER (CH.19 tab) — LIVE data straight from Binance
+# USD-M Futures public REST API. No API key needed for this data.
+# Kept completely separate from the OKX-based /signal + /candles flow
+# above, so it can never break the Tier 01-03 verdict engine.
+# ------------------------------------------------------------------
+BINANCE_FUTURES_BASE = "https://fapi.binance.com"
+
+# In-memory history of the largest bid/ask wall seen per symbol, used
+# only by the illustrative spoofing heuristic below (mirrors the
+# standalone liquidity_scanner.py script's wall_history deque).
+LIQUIDITY_WALL_HISTORY = defaultdict(lambda: deque(maxlen=6))
 
 # NOTE: exchange OKX hai. Neeche wali AVAILABLE_COINS list frontend (design.html)
 # ke coin-select dropdown se match karti hai. Agar koi coin OKX par USDT pair
@@ -686,7 +715,7 @@ def cusum_structural_break(df, lookback=100, threshold_k=0.5):
 
 
 # ============================================================
-# 19. LIQUIDITY SWEEP / STOP-CLUSTER DETECTION  <-- (v6)
+# 19. LIQUIDITY SWEEP / STOP-CLUSTER DETECTION  (legacy, swing-based)
 # Formula: LiquidityPoolScore = sum( Volume_orders / |P_current - P_level| )
 #
 # LIMITATION (honestly): "Historical highs/lows" sirf isi fetch kiye
@@ -695,6 +724,10 @@ def cusum_structural_break(df, lookback=100, threshold_k=0.5):
 # highs-lows par hote hain jo yahan capture nahi ho rahe. Order-book
 # cluster wala hissa is function mein duplicate nahi kiya - wo pehle
 # se hi concept #13 (Depth Profiling) mein cover ho raha hai.
+#
+# NOTE (v8): Ye function ab bhi /signal ke response mein maujood hai
+# (backwards-compat), lekin frontend "LIQUIDITY SCANNER" tab ab is ki
+# jagah /liquidity endpoint (live Binance Futures data) dikhata hai.
 # ============================================================
 def liquidity_sweep_detector(df, lookback=50):
     recent = df.tail(lookback)
@@ -733,7 +766,7 @@ def liquidity_sweep_detector(df, lookback=50):
 
 
 # ============================================================
-# MASTER FUNCTION - sab 19 concepts combine karta hai
+# MASTER FUNCTION - sab concepts combine karta hai
 # *** FINAL VERDICT + CONFIDENCE ab bhi SIRF Hawkes + Bayesian se
 #     bante hain (Conformal Prediction), v4 jaisa hi - ISE CHANGE
 #     NAHI KIYA GAYA. Baaqi concepts sirf extra info hain. ***
@@ -884,6 +917,87 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
 
 
 # ============================================================
+# 20. LIVE LIQUIDITY SCANNER (Binance USD-M Futures)  <-- (v8)
+#
+# Powers the "LIQUIDITY SCANNER" tab (CH.19) in the UI. Pulls the
+# same style of metrics as the standalone liquidity_scanner.py
+# terminal script: 24h ticker, mark price + funding rate, open
+# interest, order-book buy/sell bias, the single largest bid/ask
+# "wall" (liquidity magnet / target), and a simple spoofing
+# heuristic (a big wall that vanished between snapshots).
+#
+# LIMITATION (honestly, same as the standalone script): the spoofing
+# check is illustrative only, not a real market-surveillance-grade
+# detector, and it only has memory of the last few requests made to
+# THIS server process (resets on restart). Display-only — never
+# touches the /signal verdict/confidence logic above.
+# ============================================================
+def _binance_futures_get(path, params=None, timeout=8):
+    try:
+        r = requests.get(BINANCE_FUTURES_BASE + path, params=params, timeout=timeout)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as e:
+        raise RuntimeError(f"Binance Futures request failed for {path}: {e}")
+
+
+def fetch_binance_ticker(symbol):
+    return _binance_futures_get("/fapi/v1/ticker/24hr", {"symbol": symbol})
+
+
+def fetch_binance_mark_price(symbol):
+    return _binance_futures_get("/fapi/v1/premiumIndex", {"symbol": symbol})
+
+
+def fetch_binance_open_interest(symbol):
+    return _binance_futures_get("/fapi/v1/openInterest", {"symbol": symbol})
+
+
+def fetch_binance_depth(symbol, limit=100):
+    return _binance_futures_get("/fapi/v1/depth", {"symbol": symbol, "limit": limit})
+
+
+def compute_liquidity_bias(bids, asks, levels=50):
+    """Buy vs sell pressure from order book depth (qty-weighted)."""
+    buy_qty = sum(float(q) for _, q in bids[:levels])
+    sell_qty = sum(float(q) for _, q in asks[:levels])
+    total = buy_qty + sell_qty
+    if total == 0:
+        return 50.0, 50.0
+    buy_pct = (buy_qty / total) * 100
+    return round(buy_pct, 2), round(100 - buy_pct, 2)
+
+
+def largest_liquidity_wall(levels, side_label):
+    """Find the single price level with the largest resting quantity."""
+    if not levels:
+        return None
+    best = max(levels, key=lambda lv: float(lv[1]))
+    price, qty = float(best[0]), float(best[1])
+    return {"side": side_label, "price": round(price, 6), "qty": round(qty, 4), "notional": round(price * qty, 2)}
+
+
+def detect_liquidity_spoof(history, current_walls, threshold_notional=1_000_000):
+    """
+    Very simple spoofing heuristic: a big wall (>threshold) that was
+    present in a recent snapshot but is now gone or drastically reduced.
+    Not a real spoofing detector -- illustrative only.
+    """
+    flags = []
+    for prev_wall in history:
+        if prev_wall is None:
+            continue
+        still_there = False
+        for cur in current_walls:
+            if cur and abs(cur["price"] - prev_wall["price"]) < prev_wall["price"] * 0.0005:
+                if cur["qty"] >= prev_wall["qty"] * 0.5:
+                    still_there = True
+        if not still_there and prev_wall["notional"] >= threshold_notional:
+            flags.append(prev_wall)
+    return flags
+
+
+# ============================================================
 # ROUTES
 # ============================================================
 @app.route("/", methods=["GET"])
@@ -956,6 +1070,89 @@ def candles_endpoint():
             "change_pct": change_pct,
             "server_time": int(time.time()),
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ============================================================
+# NEW (v8): /liquidity  -->  "LIQUIDITY SCANNER" tab (CH.19) ke liye
+# LIVE data Binance USD-M Futures se.
+#
+# coin frontend se "BTC/USDT" (OKX-style) format mein aata hai, isko
+# Binance futures symbol format "BTCUSDT" mein convert kiya jata hai.
+# Agar wo pair Binance Futures par listed nahi hai to error return
+# hoga aur frontend panel graceful error dikhayega.
+# ============================================================
+@app.route("/liquidity", methods=["GET"])
+def liquidity_endpoint():
+    coin = request.args.get("coin", "BTC/USDT")
+    symbol = coin.replace("/", "").upper()
+
+    try:
+        ticker = fetch_binance_ticker(symbol)
+        mark = fetch_binance_mark_price(symbol)
+        oi = fetch_binance_open_interest(symbol)
+        depth = fetch_binance_depth(symbol, limit=100)
+
+        if not ticker or "lastPrice" not in ticker:
+            return jsonify({"error": f"No live Binance Futures data for {symbol}."}), 400
+        if not depth or not depth.get("bids") or not depth.get("asks"):
+            return jsonify({"error": f"No live order-book data for {symbol}."}), 400
+
+        price = float(ticker["lastPrice"])
+        high_24h = float(ticker["highPrice"])
+        low_24h = float(ticker["lowPrice"])
+        vol_usd_24h = float(ticker["quoteVolume"])
+        change_pct_24h = float(ticker["priceChangePercent"])
+
+        mark_price = float(mark["markPrice"]) if mark and "markPrice" in mark else None
+        funding_rate_pct = float(mark["lastFundingRate"]) * 100 if mark and "lastFundingRate" in mark else None
+        open_interest_usd = (
+            float(oi["openInterest"]) * price if oi and "openInterest" in oi else None
+        )
+
+        bids = depth.get("bids", [])
+        asks = depth.get("asks", [])
+        buy_pct, sell_pct = compute_liquidity_bias(bids, asks)
+        bid_wall = largest_liquidity_wall(bids, "BID")
+        ask_wall = largest_liquidity_wall(asks, "ASK")
+
+        history = LIQUIDITY_WALL_HISTORY[symbol]
+        spoof_flags = detect_liquidity_spoof(list(history), [bid_wall, ask_wall])
+        history.append(bid_wall)
+        history.append(ask_wall)
+
+        if buy_pct > 55:
+            bias_tag = "BULLISH"
+        elif sell_pct > 55:
+            bias_tag = "BEARISH"
+        else:
+            bias_tag = "NEUTRAL"
+
+        return jsonify({
+            "symbol": symbol,
+            "coin": coin,
+            "price": round(price, 6),
+            "high_24h": round(high_24h, 6),
+            "low_24h": round(low_24h, 6),
+            "volume_usd_24h": round(vol_usd_24h, 2),
+            "change_pct_24h": round(change_pct_24h, 2),
+            "mark_price": round(mark_price, 6) if mark_price is not None else None,
+            "funding_rate_pct": round(funding_rate_pct, 4) if funding_rate_pct is not None else None,
+            "open_interest_usd": round(open_interest_usd, 2) if open_interest_usd is not None else None,
+            "buy_pct": buy_pct,
+            "sell_pct": sell_pct,
+            "bias_tag": bias_tag,
+            "bid_wall": bid_wall,
+            "ask_wall": ask_wall,
+            "spoof_flags": spoof_flags,
+            "server_time": int(time.time()),
+            "disclaimer": ("Live Binance USD-M Futures data. Bias/wall/spoof heuristics are "
+                           "illustrative only, not financial advice, and are independent of "
+                           "the Tier 01 verdict/confidence engine above."),
+        })
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
