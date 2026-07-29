@@ -894,6 +894,155 @@ select:focus-visible {
 
 
 /* ================================================================
+   PANEL TABS (Tier 02 / Tier 03 / Liquidity Scanner)
+================================================================ */
+
+.panel-tabs {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 4px;
+
+    margin: 4px 0 14px;
+
+    padding: 4px;
+
+    background: var(--panel);
+
+    border: 1px solid var(--line);
+
+    border-radius: 8px;
+}
+
+
+.panel-tab {
+
+    flex: 1;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 7px;
+
+    height: 36px;
+
+    background: transparent;
+
+    border: none;
+
+    border-radius: 6px;
+
+    color: var(--text-dim);
+
+    font-family: var(--mono);
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.5px;
+
+    cursor: pointer;
+
+    transition:
+
+        background 0.2s ease,
+
+        color 0.2s ease;
+}
+
+
+.panel-tab-num {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 17px;
+
+    height: 17px;
+
+    border-radius: 4px;
+
+    background: var(--line-soft);
+
+    color: var(--text-faint);
+
+    font-size: 9px;
+
+    font-weight: 800;
+
+    transition:
+
+        background 0.2s ease,
+
+        color 0.2s ease;
+}
+
+
+.panel-tab:hover {
+
+    color: var(--text);
+
+    background: var(--panel-hover);
+}
+
+
+.panel-tab.active {
+
+    color: var(--void);
+
+    background: var(--long);
+
+    box-shadow:
+        0 0 14px rgba(54, 224, 160, 0.2);
+}
+
+
+.panel-tab.active .panel-tab-num {
+
+    background: rgba(6, 17, 13, 0.25);
+
+    color: var(--void);
+}
+
+
+.tab-panel {
+
+    display: none;
+}
+
+
+.tab-panel.active {
+
+    display: block;
+
+    animation: fade-in 0.25s ease;
+}
+
+
+@keyframes fade-in {
+
+    from {
+        opacity: 0;
+        transform: translateY(3px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+/* ================================================================
    CHANNEL GRID
 ================================================================ */
 
@@ -1362,6 +1511,291 @@ select:focus-visible {
 
 
 /* ================================================================
+   LIQUIDITY SCANNER PANEL (Ch.19 — enhanced single-channel view)
+================================================================ */
+
+.liq-panel {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 20px;
+
+    padding: 22px 24px;
+
+    background:
+
+        radial-gradient(
+            circle at 85% 0%,
+            rgba(245, 166, 35, 0.08),
+            transparent 45%
+        ),
+
+        linear-gradient(
+            145deg,
+            rgba(255, 255, 255, 0.018),
+            transparent 55%
+        ),
+
+        var(--panel);
+
+    border: 1px solid var(--line);
+
+    border-radius: 9px;
+}
+
+
+.liq-header {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 12px;
+
+    flex-wrap: wrap;
+}
+
+
+.liq-header-left {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+}
+
+
+.liq-icon {
+
+    display: grid;
+
+    place-items: center;
+
+    width: 30px;
+
+    height: 30px;
+
+    flex-shrink: 0;
+
+    background: var(--accent-dim);
+
+    border: 1px solid rgba(245, 166, 35, 0.3);
+
+    border-radius: 7px;
+
+    color: var(--accent);
+
+    font-size: 14px;
+}
+
+
+.liq-title {
+
+    color: var(--text);
+
+    font-family: var(--sans);
+
+    font-size: 14px;
+
+    font-weight: 700;
+}
+
+
+.liq-subtitle {
+
+    margin-top: 2px;
+
+    color: var(--text-faint);
+
+    font-family: var(--mono);
+
+    font-size: 9px;
+
+    letter-spacing: 0.4px;
+}
+
+
+/* Range visualizer: swing low <-> current price <-> swing high */
+
+.liq-range {
+
+    position: relative;
+
+    padding: 26px 6px 6px;
+}
+
+.liq-range-track {
+
+    position: relative;
+
+    height: 5px;
+
+    background: #252c35;
+
+    border-radius: 3px;
+
+    overflow: visible;
+}
+
+.liq-range-fill {
+
+    position: absolute;
+
+    top: 0;
+
+    left: 0;
+
+    height: 100%;
+
+    border-radius: 3px;
+
+    background: linear-gradient(90deg, var(--short), var(--wait), var(--long));
+
+    opacity: 0.35;
+
+    width: 100%;
+}
+
+.liq-range-marker {
+
+    position: absolute;
+
+    top: 50%;
+
+    width: 13px;
+
+    height: 13px;
+
+    border-radius: 50%;
+
+    background: var(--accent);
+
+    border: 2px solid var(--void);
+
+    box-shadow: 0 0 10px rgba(245, 166, 35, 0.55);
+
+    transform: translate(-50%, -50%);
+
+    z-index: 2;
+}
+
+.liq-range-marker-label {
+
+    position: absolute;
+
+    top: -22px;
+
+    transform: translateX(-50%);
+
+    color: var(--accent);
+
+    font-family: var(--mono);
+
+    font-size: 9px;
+
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+.liq-range-endpoint {
+
+    position: absolute;
+
+    top: 50%;
+
+    width: 8px;
+
+    height: 8px;
+
+    border-radius: 50%;
+
+    background: var(--panel);
+
+    border: 2px solid var(--text-faint);
+
+    transform: translate(-50%, -50%);
+
+    z-index: 1;
+}
+
+.liq-range-endpoint-label {
+
+    position: absolute;
+
+    top: 14px;
+
+    transform: translateX(-50%);
+
+    color: var(--text-faint);
+
+    font-family: var(--mono);
+
+    font-size: 9px;
+
+    white-space: nowrap;
+}
+
+
+/* Stat grid below the range visualizer */
+
+.liq-stats-grid {
+
+    display: grid;
+
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+
+    gap: 14px;
+
+    padding-top: 14px;
+
+    border-top: 1px solid var(--line-soft);
+}
+
+.liq-stat {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 6px;
+
+    min-width: 0;
+}
+
+.liq-stat-label {
+
+    color: var(--text-faint);
+
+    font-family: var(--mono);
+
+    font-size: 8px;
+
+    font-weight: 600;
+
+    letter-spacing: 0.5px;
+}
+
+.liq-stat-value {
+
+    color: var(--text);
+
+    font-family: var(--mono);
+
+    font-size: 17px;
+
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+
+/* ================================================================
    FOOTER
 ================================================================ */
 
@@ -1576,6 +2010,38 @@ select:focus-visible {
         gap: 7px;
     }
 
+
+    .panel-tabs {
+
+        flex-direction: column;
+
+        gap: 4px;
+    }
+
+
+    .panel-tab {
+
+        width: 100%;
+
+        justify-content: flex-start;
+
+        padding-left: 10px;
+    }
+
+
+    .liq-panel {
+
+        padding: 16px;
+    }
+
+
+    .liq-stats-grid {
+
+        grid-template-columns: 1fr 1fr;
+
+        gap: 12px;
+    }
+
 }
 
 
@@ -1608,6 +2074,12 @@ select:focus-visible {
     .topbar-right {
 
         align-self: flex-end;
+    }
+
+
+    .liq-stats-grid {
+
+        grid-template-columns: 1fr;
     }
 
 }
