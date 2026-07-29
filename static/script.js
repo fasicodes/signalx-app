@@ -125,6 +125,10 @@ function activatePanel(name) {
     resizeChart();
     loadChartData();
   }
+  if (name === "liquidity") {
+    // Live Binance Futures data — (re)load the moment the tab becomes visible.
+    loadLiquidityData();
+  }
 }
 
 panelTabs.forEach((tab) => {
@@ -280,6 +284,11 @@ if (coinSelect) {
     const livePanel = document.getElementById("panel-livechart");
     if (livePanel && livePanel.classList.contains("active")) {
       loadChartData();
+    }
+    // Same for the liquidity scanner tab.
+    const liqPanel = document.getElementById("panel-liquidity");
+    if (liqPanel && liqPanel.classList.contains("active")) {
+      loadLiquidityData();
     }
   });
 }
@@ -521,24 +530,67 @@ function renderTier3(data) {
   tier3El.innerHTML = cards.join("");
 }
 
-/* ---------------------------- liquidity scanner: CH.19 ---------------------------- */
+/* ==========================================================================
+   LIQUIDITY SCANNER TAB — CH.19, LIVE data from Binance USD-M Futures via
+   the /liquidity endpoint. Independent poll loop, same pattern as the live
+   chart tab: (re)loads the moment the tab opens, then refreshes every few
+   seconds while it stays visible, and syncs to whichever coin is selected.
+   ========================================================================== */
+
+let liqPollTimer = null;
+
+function fmtUsdCompact(v) {
+  if (na(v)) return "--";
+  const n = Number(v);
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+  if (abs >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
+  if (abs >= 1e3) return "$" + (n / 1e3).toFixed(2) + "K";
+  return "$" + n.toFixed(2);
+}
+
+function liqWallCard(wall, label, toneClass) {
+  if (!wall) {
+    return `
+      <div class="liq-wall-card">
+        <div class="liq-wall-head"><span class="liq-wall-label">${label}</span></div>
+        <div class="liq-wall-price text-dim">--</div>
+        <div class="liq-wall-detail">No resting order-book wall found in this snapshot.</div>
+      </div>`;
+  }
+  return `
+    <div class="liq-wall-card">
+      <div class="liq-wall-head"><span class="liq-wall-label">${label}</span></div>
+      <div class="liq-wall-price ${toneClass}">${fmtPrice(wall.price)}</div>
+      <div class="liq-wall-detail">Size ${fmtNum(wall.qty, 3)} · notional ~${fmtUsdCompact(wall.notional)}</div>
+    </div>`;
+}
 
 function renderLiquidityScanner(data) {
   if (!liqScannerEl) return;
 
-  const sweep = data.liquidity_sweep || {};
-  const price = data.last_price;
-
-  const hasRange = !na(sweep.swing_high) && !na(sweep.swing_low) && !na(price) && sweep.swing_high > sweep.swing_low;
-  let markerPct = 50;
-  if (hasRange) {
-    const range = sweep.swing_high - sweep.swing_low;
-    markerPct = Math.max(2, Math.min(98, ((price - sweep.swing_low) / range) * 100));
+  if (data.error) {
+    liqScannerEl.innerHTML = `
+      <div class="liq-panel">
+        <div class="liq-header">
+          <div class="liq-header-left">
+            <span class="liq-icon">⌁</span>
+            <div>
+              <div class="liq-title">Liquidity Scanner</div>
+              <div class="liq-subtitle">CH.19 · Binance USD-M Futures · live</div>
+            </div>
+          </div>
+        </div>
+        <p class="error-text">⚠ ${data.error}</p>
+      </div>`;
+    return;
   }
 
-  const detected = !!sweep.liquidity_sweep_detected;
-  const tone = detected ? "wait" : "flat";
-  const statusLabel = detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "NO SWEEP DETECTED";
+  const biasTone = data.bias_tag === "BULLISH" ? "long" : data.bias_tag === "BEARISH" ? "short" : "wait";
+  const buyPct = na(data.buy_pct) ? 50 : data.buy_pct;
+  const changeTone = !na(data.change_pct_24h) && data.change_pct_24h < 0 ? "text-short" : "text-long";
+  const fundingTone = !na(data.funding_rate_pct) && data.funding_rate_pct < 0 ? "text-short" : "text-long";
+  const spoofFlags = data.spoof_flags || [];
 
   liqScannerEl.innerHTML = `
     <div class="liq-panel">
@@ -546,46 +598,125 @@ function renderLiquidityScanner(data) {
         <div class="liq-header-left">
           <span class="liq-icon">⌁</span>
           <div>
-            <div class="liq-title">Liquidity Sweep Scanner</div>
-            <div class="liq-subtitle">CH.19 · swing high/low · display-only</div>
+            <div class="liq-title">Liquidity Scanner</div>
+            <div class="liq-subtitle">CH.19 · ${data.symbol || "--"} PERP · Binance USD-M Futures</div>
           </div>
         </div>
-        ${badge(statusLabel, tone)}
+        <div class="liq-live-tag"><span class="live-clock-dot"></span>LIVE</div>
       </div>
 
-      <div class="liq-range">
-        <div class="liq-range-track">
-          <div class="liq-range-fill"></div>
-          <div class="liq-range-endpoint" style="left:0%;"></div>
-          <div class="liq-range-endpoint" style="left:100%;"></div>
-          <div class="liq-range-endpoint-label" style="left:0%;">${fmtPrice(sweep.swing_low)}</div>
-          <div class="liq-range-endpoint-label" style="left:100%;">${fmtPrice(sweep.swing_high)}</div>
-          ${hasRange ? `
-            <div class="liq-range-marker" style="left:${markerPct}%;"></div>
-            <div class="liq-range-marker-label" style="left:${markerPct}%;">${fmtPrice(price)}</div>
-          ` : ""}
+      <div class="liq-price-row">
+        <span class="liq-price">${fmtPrice(data.price)}</span>
+        <span class="badge on-${biasTone}">${data.bias_tag || "N/A"}</span>
+        <span class="chart-change ${!na(data.change_pct_24h) && data.change_pct_24h >= 0 ? "up" : "down"}">${fmtSigned(data.change_pct_24h, 2, "%")}</span>
+      </div>
+      <div class="liq-symbol">MARK ${fmtPrice(data.mark_price)}</div>
+
+      <div class="liq-stats-grid">
+        <div class="liq-stat">
+          <span class="liq-stat-label">24H HIGH</span>
+          <span class="liq-stat-value">${fmtPrice(data.high_24h)}</span>
+        </div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">24H LOW</span>
+          <span class="liq-stat-value">${fmtPrice(data.low_24h)}</span>
+        </div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">24H VOLUME</span>
+          <span class="liq-stat-value">${fmtUsdCompact(data.volume_usd_24h)}</span>
+        </div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">OPEN INTEREST</span>
+          <span class="liq-stat-value">${fmtUsdCompact(data.open_interest_usd)}</span>
         </div>
       </div>
 
       <div class="liq-stats-grid">
         <div class="liq-stat">
-          <span class="liq-stat-label">SWING HIGH</span>
-          <span class="liq-stat-value">${fmtPrice(sweep.swing_high)}</span>
+          <span class="liq-stat-label">FUNDING RATE</span>
+          <span class="liq-stat-value ${fundingTone}">${fmtSigned(data.funding_rate_pct, 4, "%")}</span>
         </div>
         <div class="liq-stat">
-          <span class="liq-stat-label">SWING LOW</span>
-          <span class="liq-stat-value">${fmtPrice(sweep.swing_low)}</span>
+          <span class="liq-stat-label">BUY SIDE</span>
+          <span class="liq-stat-value text-long">${fmtPct(data.buy_pct, 1)}</span>
         </div>
         <div class="liq-stat">
-          <span class="liq-stat-label">DIST → HIGH</span>
-          <span class="liq-stat-value text-long">${fmtPct(sweep.distance_to_high_pct, 2)}</span>
+          <span class="liq-stat-label">SELL SIDE</span>
+          <span class="liq-stat-value text-short">${fmtPct(data.sell_pct, 1)}</span>
         </div>
         <div class="liq-stat">
-          <span class="liq-stat-label">DIST → LOW</span>
-          <span class="liq-stat-value text-short">${fmtPct(sweep.distance_to_low_pct, 2)}</span>
+          <span class="liq-stat-label">24H CHANGE</span>
+          <span class="liq-stat-value ${changeTone}">${fmtSigned(data.change_pct_24h, 2, "%")}</span>
         </div>
       </div>
+
+      <div class="liq-bias-card">
+        <div class="liq-bias-heading"><span class="liq-bias-title">Order Book Bias</span></div>
+        <div class="liq-bias-track"><div class="liq-bias-marker" style="left:${Math.max(2, Math.min(98, buyPct))}%;"></div></div>
+        <div class="liq-bias-labels">
+          <span class="text-long">${fmtPct(data.buy_pct, 1)} BUY</span>
+          <span class="text-short">${fmtPct(data.sell_pct, 1)} SELL</span>
+        </div>
+      </div>
+
+      <div class="liq-walls-grid">
+        ${liqWallCard(data.bid_wall, "Liquidity Magnet (Bid Wall)", "text-long")}
+        ${liqWallCard(data.ask_wall, "Liquidity Target (Ask Wall)", "text-short")}
+      </div>
+
+      <div class="liq-spoof-card">
+        <div class="liq-spoof-heading">
+          <span class="liq-spoof-title">Possible Spoofing</span>
+          ${badge(spoofFlags.length ? "FLAGGED" : "CLEAR", spoofFlags.length ? "short" : "long")}
+        </div>
+        ${spoofFlags.length ? `
+          <div class="liq-spoof-list">
+            ${spoofFlags.map((f) => `
+              <div class="liq-spoof-item">
+                <span>${f.side} wall ${fmtPrice(f.price)} (~${fmtUsdCompact(f.notional)}) vanished</span>
+              </div>`).join("")}
+          </div>
+        ` : `<div class="liq-spoof-empty">No spoofing signals in this snapshot.</div>`}
+        <div class="liq-footnote">⚠ Illustrative heuristic only — not financial advice.</div>
+      </div>
     </div>`;
+}
+
+async function loadLiquidityData() {
+  if (!liqScannerEl || !coinSelect) return;
+  const coin = coinSelect.value;
+
+  try {
+    const res = await fetch(`/liquidity?coin=${encodeURIComponent(coin)}`);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      renderLiquidityScanner({ error: (data && data.error) || "Liquidity fetch failed" });
+      return;
+    }
+    renderLiquidityScanner(data);
+    restartLiquidityPolling(coin);
+  } catch (err) {
+    renderLiquidityScanner({ error: err.message });
+  }
+}
+
+function restartLiquidityPolling(coin) {
+  if (liqPollTimer) clearInterval(liqPollTimer);
+  liqPollTimer = setInterval(async () => {
+    const liqPanel = document.getElementById("panel-liquidity");
+    if (!liqPanel || !liqPanel.classList.contains("active")) return; // pause when tab hidden
+    try {
+      const res = await fetch(`/liquidity?coin=${encodeURIComponent(coin)}`);
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        renderLiquidityScanner({ error: (data && data.error) || "Liquidity fetch failed" });
+        return;
+      }
+      renderLiquidityScanner(data);
+    } catch (e) {
+      // Silent — a single missed poll shouldn't spam the UI; next tick retries.
+    }
+  }, 4000);
 }
 
 /* ==========================================================================
@@ -728,7 +859,11 @@ function renderResult(data) {
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
-  renderLiquidityScanner(data);
+
+  // The Liquidity Scanner tab (CH.19) now runs on its own independent
+  // poll loop against /liquidity (live Binance Futures data) — see
+  // loadLiquidityData() / restartLiquidityPolling() below — so it is
+  // no longer driven by this /signal response.
 
   if (data.disclaimer) {
     document.getElementById("disclaimer-text").textContent = "⚠ " + data.disclaimer;
