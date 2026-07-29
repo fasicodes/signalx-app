@@ -77,18 +77,38 @@
     <div id="tier-1" class="channel-grid"></div>
 
     <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;02</span>
-      <span class="tier-label">Microstructure</span>
+      <span class="tier-num">TIER&nbsp;02–03</span>
+      <span class="tier-label">Microstructure · Extended Signals · Liquidity Scanner</span>
     </div>
-    <p class="tier-note">Ch.06–10 — order-book &amp; regime diagnostics. Display-only: does not alter the verdict above.</p>
-    <div id="tier-2" class="channel-grid"></div>
+    <p class="tier-note">Ch.06–19 — order-book, regime, cross-asset &amp; liquidity diagnostics. Display-only: does not alter the verdict above.</p>
 
-    <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;03</span>
-      <span class="tier-label">Extended Signals</span>
+    <!-- TAB NAVIGATION -->
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-panel="microstructure" type="button">
+        <span class="panel-tab-num">02</span> MICROSTRUCTURE
+      </button>
+      <button class="panel-tab" data-panel="extended" type="button">
+        <span class="panel-tab-num">03</span> EXTENDED SIGNALS
+      </button>
+      <button class="panel-tab" data-panel="liquidity" type="button">
+        <span class="panel-tab-num">19</span> LIQUIDITY SCANNER
+      </button>
     </div>
-    <p class="tier-note">Ch.11–19 — cross-asset, entropy, wavelet &amp; risk-agent panels. Display-only, exploratory.</p>
-    <div id="tier-3" class="channel-grid"></div>
+
+    <div id="panel-microstructure" class="tab-panel active">
+      <p class="tier-note">Ch.06–10 — order-book &amp; regime diagnostics. Display-only: does not alter the verdict above.</p>
+      <div id="tier-2" class="channel-grid"></div>
+    </div>
+
+    <div id="panel-extended" class="tab-panel">
+      <p class="tier-note">Ch.11–18 — cross-asset, entropy, wavelet &amp; risk-agent panels. Display-only, exploratory.</p>
+      <div id="tier-3" class="channel-grid"></div>
+    </div>
+
+    <div id="panel-liquidity" class="tab-panel">
+      <p class="tier-note">Ch.19 — swing high/low liquidity sweep detector. Display-only, exploratory.</p>
+      <div id="liquidity-scanner"></div>
+    </div>
 
   </main>
 
