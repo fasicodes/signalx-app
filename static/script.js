@@ -12,6 +12,9 @@ const clockText    = document.getElementById("clock-text");
 const tier1El      = document.getElementById("tier-1");
 const tier2El      = document.getElementById("tier-2");
 const tier3El      = document.getElementById("tier-3");
+const liqScannerEl = document.getElementById("liquidity-scanner");
+const panelTabs    = document.querySelectorAll(".panel-tab");
+const tabPanels    = document.querySelectorAll(".tab-panel");
 
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 48; // r=48
 
@@ -19,7 +22,7 @@ const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 48; // r=48
    make sure both files were replaced together and the browser isn't serving
    a cached copy. */
 {
-  const required = { coinSelect, runBtn, errorText, resultBox, alertStack, emptyState, clockText, tier1El, tier2El, tier3El };
+  const required = { coinSelect, runBtn, errorText, resultBox, alertStack, emptyState, clockText, tier1El, tier2El, tier3El, liqScannerEl };
   const missing = Object.keys(required).filter((k) => !required[k]);
   if (missing.length) {
     console.error("SIGNAL/FM: design.html is missing element(s) for:", missing.join(", "), "— check that templates/design.html matches this static/script.js and clear the browser cache.");
@@ -94,6 +97,17 @@ function centeredMeter(value, max, colorClass) {
 function badge(text, tone) {
   return `<span class="badge on-${tone}">${text}</span>`;
 }
+
+/* ---------------------------- tabs ---------------------------- */
+
+function activatePanel(name) {
+  panelTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === name));
+  tabPanels.forEach((panel) => panel.classList.toggle("active", panel.id === "panel-" + name));
+}
+
+panelTabs.forEach((tab) => {
+  tab.addEventListener("click", () => activatePanel(tab.dataset.panel));
+});
 
 /* ---------------------------- clock ---------------------------- */
 
@@ -275,7 +289,7 @@ function renderTier2(data) {
   tier2El.innerHTML = cards.join("");
 }
 
-/* ---------------------------- tier 3: extended signals (v6) ---------------------------- */
+/* ---------------------------- tier 3: extended signals (Ch.11–18) ---------------------------- */
 
 function renderTier3(data) {
   const cards = [];
@@ -287,7 +301,6 @@ function renderTier3(data) {
   const hurst = data.hurst || {};
   const wave = data.wavelet_trend || {};
   const cusum = data.structural_break || {};
-  const sweep = data.liquidity_sweep || {};
 
   // CH.11 Cross-Asset Divergence
   const divTone = (div.interpretation || "").includes("OUTPERFORM") ? "long" : (div.interpretation || "").includes("UNDERPERFORM") ? "short" : "flat";
@@ -366,21 +379,76 @@ function renderTier3(data) {
       </div>`
   }));
 
-  // CH.19 Liquidity Sweep
-  cards.push(channelCard({
-    id: 19, title: "Liquidity Sweep", model: "swing high/low",
-    span2: true,
-    body: `
-      ${badge(sweep.liquidity_sweep_detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "NO SWEEP", sweep.liquidity_sweep_detected ? "wait" : "flat")}
-      <div class="dual-split">
-        <div class="dual-item"><span class="dual-label">SWING HIGH</span><span class="dual-value">${fmtPrice(sweep.swing_high)}</span></div>
-        <div class="dual-item"><span class="dual-label">SWING LOW</span><span class="dual-value">${fmtPrice(sweep.swing_low)}</span></div>
-        <div class="dual-item"><span class="dual-label">DIST → HIGH</span><span class="dual-value">${fmtPct(sweep.distance_to_high_pct, 2)}</span></div>
-        <div class="dual-item"><span class="dual-label">DIST → LOW</span><span class="dual-value">${fmtPct(sweep.distance_to_low_pct, 2)}</span></div>
-      </div>`
-  }));
-
   tier3El.innerHTML = cards.join("");
+}
+
+/* ---------------------------- liquidity scanner: CH.19 (standalone, enhanced) ---------------------------- */
+
+function renderLiquidityScanner(data) {
+  if (!liqScannerEl) return;
+
+  const sweep = data.liquidity_sweep || {};
+  const price = data.last_price;
+
+  const hasRange = !na(sweep.swing_high) && !na(sweep.swing_low) && !na(price) && sweep.swing_high > sweep.swing_low;
+  let markerPct = 50;
+  if (hasRange) {
+    const range = sweep.swing_high - sweep.swing_low;
+    markerPct = Math.max(2, Math.min(98, ((price - sweep.swing_low) / range) * 100));
+  }
+
+  const detected = !!sweep.liquidity_sweep_detected;
+  const tone = detected ? "wait" : "flat";
+  const statusLabel = detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "NO SWEEP DETECTED";
+
+  liqScannerEl.innerHTML = `
+    <div class="liq-panel">
+
+      <div class="liq-header">
+        <div class="liq-header-left">
+          <span class="liq-icon">⌁</span>
+          <div>
+            <div class="liq-title">Liquidity Sweep Scanner</div>
+            <div class="liq-subtitle">CH.19 · swing high/low · display-only</div>
+          </div>
+        </div>
+        ${badge(statusLabel, tone)}
+      </div>
+
+      <div class="liq-range">
+        <div class="liq-range-track">
+          <div class="liq-range-fill"></div>
+          <div class="liq-range-endpoint" style="left:0%;"></div>
+          <div class="liq-range-endpoint" style="left:100%;"></div>
+          <div class="liq-range-endpoint-label" style="left:0%;">${fmtPrice(sweep.swing_low)}</div>
+          <div class="liq-range-endpoint-label" style="left:100%;">${fmtPrice(sweep.swing_high)}</div>
+          ${hasRange ? `
+            <div class="liq-range-marker" style="left:${markerPct}%;"></div>
+            <div class="liq-range-marker-label" style="left:${markerPct}%;">${fmtPrice(price)}</div>
+          ` : ""}
+        </div>
+      </div>
+
+      <div class="liq-stats-grid">
+        <div class="liq-stat">
+          <span class="liq-stat-label">SWING HIGH</span>
+          <span class="liq-stat-value">${fmtPrice(sweep.swing_high)}</span>
+        </div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">SWING LOW</span>
+          <span class="liq-stat-value">${fmtPrice(sweep.swing_low)}</span>
+        </div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">DIST → HIGH</span>
+          <span class="liq-stat-value text-long">${fmtPct(sweep.distance_to_high_pct, 2)}</span>
+        </div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">DIST → LOW</span>
+          <span class="liq-stat-value text-short">${fmtPct(sweep.distance_to_low_pct, 2)}</span>
+        </div>
+      </div>
+
+    </div>`;
 }
 
 /* ---------------------------- main render ---------------------------- */
@@ -400,6 +468,7 @@ function renderResult(data) {
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
+  renderLiquidityScanner(data);
 
   if (data.disclaimer) {
     document.getElementById("disclaimer-text").textContent = "⚠ " + data.disclaimer;
