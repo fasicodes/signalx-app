@@ -2,7 +2,6 @@
 SIGNAL/FM — Complete Frontend JS
 Compatible with:
 
-* HTML provided by user
 * GET /signal
 * GET /coins
 * GET /candles
@@ -11,12 +10,6 @@ Compatible with:
 
 IMPORTANT:
 This file does NOT call POST /analyze.
-
-v9: renderLiquidity() extended with the concepts merged from
-liquidity_scanner.py + its HTML mockup (magnet/target zones, market
-strength gauge, trap & squeeze risk, live liquidity sweep, a
-decorative live-scan radar, and a richer spoofing panel with a
-probability score). Everything else in this file is unchanged.
 */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -178,7 +171,7 @@ updateClock();
 setInterval(updateClock, 1000);
 
 // ============================================================
-// GET SELECTED COIN
+// SELECTED COIN
 // ============================================================
 
 function getCoin() {
@@ -192,15 +185,7 @@ function getCoin() {
 }
 
 // ============================================================
-// GET TIMEFRAME
-// ============================================================
-
-function getTimeframe() {
-    return currentTimeframe;
-}
-
-// ============================================================
-// COIN LOGO
+// COIN ICON
 // ============================================================
 
 function getCoinSymbol(coin) {
@@ -258,7 +243,9 @@ function initializeCoinPicker() {
         }
 
         if (icon) {
-            icon.src = getCoinIcon(coin);
+
+            icon.src =
+                getCoinIcon(coin);
 
             icon.onerror = () => {
                 icon.style.display = "none";
@@ -270,10 +257,12 @@ function initializeCoinPicker() {
         menu
             .querySelectorAll(".coin-picker-option")
             .forEach(option => {
+
                 option.classList.toggle(
                     "active",
                     option.dataset.value === coin
                 );
+
             });
     }
 
@@ -509,8 +498,6 @@ async function loadCoins() {
             error
         );
 
-        // HTML already has coin options.
-        // So app can continue working.
         currentCoin =
             select.value ||
             "BTC/USDT";
@@ -537,9 +524,7 @@ async function runAnalysis() {
 
     const buttonText =
         button
-            ? button.querySelector(
-                ".scan-btn-text"
-            )
+            ? button.querySelector(".scan-btn-text")
             : null;
 
     if (button) {
@@ -561,12 +546,8 @@ async function runAnalysis() {
 
         const url =
             `${API_BASE}/signal` +
-            `?coin=${encodeURIComponent(
-                currentCoin
-            )}` +
-            `&timeframe=${encodeURIComponent(
-                currentTimeframe
-            )}` +
+            `?coin=${encodeURIComponent(currentCoin)}` +
+            `&timeframe=${encodeURIComponent(currentTimeframe)}` +
             `&orderbook=true`;
 
         console.log(
@@ -603,8 +584,6 @@ async function runAnalysis() {
 
         updateMainUI(data);
 
-        // Also load liquidity
-        // immediately after analysis.
         await loadLiquidity();
 
         await loadCandles();
@@ -646,48 +625,37 @@ function updateMainUI(data) {
     show("result-box");
     hide("empty-state");
 
-    // Hero
     setText(
         "hero-price",
-        formatPrice(
-            data.last_price
-        )
+        formatPrice(data.last_price)
     );
 
     setText(
         "hero-rsi",
-        formatNumber(
-            data.rsi,
-            2
-        )
+        formatNumber(data.rsi, 2)
     );
 
     setText(
         "hero-macd",
-        formatNumber(
-            data.macd,
-            4
-        )
+        formatNumber(data.macd, 4)
     );
 
     setText(
         "hero-trend-tag",
-        data.trend ||
-        "--"
+        data.trend || "--"
     );
 
-    // Verdict
     updateVerdict(
-        data.final_verdict
+        data.final_verdict,
+        data.confidence_pct ??
+        data.confidence ??
+        0
     );
 
-    // Tier 1
     renderTier1(data);
 
-    // Tier 2
     renderTier2(data);
 
-    // Tier 3
     renderTier3(data);
 }
 
@@ -695,7 +663,10 @@ function updateMainUI(data) {
 // VERDICT
 // ============================================================
 
-function updateVerdict(verdict) {
+function updateVerdict(
+    verdict,
+    confidenceValue = 0
+) {
 
     const gaugeVerdict =
         $("gauge-verdict");
@@ -707,9 +678,7 @@ function updateVerdict(verdict) {
         $("gauge-fill");
 
     const confidence =
-        Number(
-            dataSafeConfidence
-        );
+        Number(confidenceValue) || 0;
 
     const finalVerdict =
         verdict || "WAIT";
@@ -811,12 +780,6 @@ function updateVerdict(verdict) {
 }
 
 // ============================================================
-// GLOBAL CONFIDENCE VALUE
-// ============================================================
-
-let dataSafeConfidence = 0;
-
-// ============================================================
 // TIER 1
 // ============================================================
 
@@ -826,13 +789,6 @@ function renderTier1(data) {
         $("tier-1");
 
     if (!container) return;
-
-    dataSafeConfidence =
-        Number(
-            data.confidence_pct ??
-            data.confidence ??
-            0
-        );
 
     const cards = [
 
@@ -864,14 +820,16 @@ function renderTier1(data) {
             id: "CH.03",
             title: "Bayesian Classifier",
             model: "BAYES",
-            value: `${formatPercent(
-                data.bullish_pct,
-                1
-            )} BULLISH`,
-            detail: `${formatPercent(
-                data.bearish_pct,
-                1
-            )} bearish`,
+            value:
+                `${formatPercent(
+                    data.bullish_pct,
+                    1
+                )} BULLISH`,
+            detail:
+                `${formatPercent(
+                    data.bearish_pct,
+                    1
+                )} bearish`,
             cls: "text-long"
         },
 
@@ -879,10 +837,11 @@ function renderTier1(data) {
             id: "CH.04",
             title: "Quantile Volatility",
             model: "Q-VOL",
-            value: formatPercent(
-                data.expected_volatility_pct,
-                2
-            ),
+            value:
+                formatPercent(
+                    data.expected_volatility_pct,
+                    2
+                ),
             detail:
                 `95% extreme: ${formatPercent(
                     data.extreme_volatility_95_pct,
@@ -895,10 +854,12 @@ function renderTier1(data) {
             id: "CH.05",
             title: "Conformal Prediction",
             model: "CONFORMAL",
-            value: formatPercent(
-                data.confidence_pct,
-                1
-            ),
+            value:
+                formatPercent(
+                    data.confidence_pct ??
+                    data.confidence,
+                    1
+                ),
             detail:
                 data.final_verdict ||
                 "WAIT",
@@ -911,7 +872,9 @@ function renderTier1(data) {
             <div class="channel-card">
 
                 <div class="channel-head">
+
                     <div class="channel-id-group">
+
                         <div class="scope-ticks">
                             <span style="height:5px"></span>
                             <span style="height:8px"></span>
@@ -919,6 +882,7 @@ function renderTier1(data) {
                         </div>
 
                         <div>
+
                             <div class="channel-id">
                                 ${card.id}
                             </div>
@@ -926,12 +890,15 @@ function renderTier1(data) {
                             <div class="channel-title">
                                 ${card.title}
                             </div>
+
                         </div>
+
                     </div>
 
                     <div class="channel-model">
                         ${card.model}
                     </div>
+
                 </div>
 
                 <div class="channel-main ${card.cls}">
@@ -946,14 +913,15 @@ function renderTier1(data) {
         `)
         .join("");
 
-    // Risk card
     container.insertAdjacentHTML(
         "beforeend",
         `
         <div class="channel-card span-2">
 
             <div class="channel-head">
+
                 <div class="channel-id-group">
+
                     <div class="channel-id">
                         RISK
                     </div>
@@ -961,11 +929,13 @@ function renderTier1(data) {
                     <div class="channel-title">
                         Fractional Kelly Risk
                     </div>
+
                 </div>
 
                 <div class="channel-model">
                     KELLY
                 </div>
+
             </div>
 
             <div class="channel-main text-wait">
@@ -984,7 +954,9 @@ function renderTier1(data) {
         <div class="channel-card span-2">
 
             <div class="channel-head">
+
                 <div class="channel-id-group">
+
                     <div class="channel-id">
                         SL / TP
                     </div>
@@ -992,16 +964,19 @@ function renderTier1(data) {
                     <div class="channel-title">
                         Risk Levels
                     </div>
+
                 </div>
 
                 <div class="channel-model">
                     QUANTILE
                 </div>
+
             </div>
 
             <div class="dual-split">
 
                 <div class="dual-item">
+
                     <span class="dual-label">
                         STOP LOSS
                     </span>
@@ -1011,9 +986,11 @@ function renderTier1(data) {
                             data.stop_loss
                         )}
                     </span>
+
                 </div>
 
                 <div class="dual-item">
+
                     <span class="dual-label">
                         TAKE PROFIT
                     </span>
@@ -1023,6 +1000,7 @@ function renderTier1(data) {
                             data.take_profit
                         )}
                     </span>
+
                 </div>
 
             </div>
@@ -1032,7 +1010,10 @@ function renderTier1(data) {
     );
 
     updateVerdict(
-        data.final_verdict
+        data.final_verdict,
+        data.confidence_pct ??
+        data.confidence ??
+        0
     );
 }
 
@@ -1068,6 +1049,7 @@ function renderTier2(data) {
                     <div class="channel-id">
                         CH.06
                     </div>
+
                     <div class="channel-title">
                         Order Flow
                     </div>
@@ -1086,13 +1068,15 @@ function renderTier2(data) {
             </div>
 
             <div class="channel-detail">
-                Raw: ${formatNumber(
+                Raw:
+                ${formatNumber(
                     order.ofi_raw,
                     4
                 )}
             </div>
 
         </div>
+
 
         <div class="channel-card">
 
@@ -1101,6 +1085,7 @@ function renderTier2(data) {
                     <div class="channel-id">
                         CH.07
                     </div>
+
                     <div class="channel-title">
                         Toxic Flow
                     </div>
@@ -1124,6 +1109,7 @@ function renderTier2(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
@@ -1131,6 +1117,7 @@ function renderTier2(data) {
                     <div class="channel-id">
                         CH.08
                     </div>
+
                     <div class="channel-title">
                         Market Regime
                     </div>
@@ -1146,10 +1133,12 @@ function renderTier2(data) {
             </div>
 
             <div class="channel-detail">
-                State: ${regime.state ?? "--"}
+                State:
+                ${regime.state ?? "--"}
             </div>
 
         </div>
+
 
         <div class="channel-card">
 
@@ -1158,6 +1147,7 @@ function renderTier2(data) {
                     <div class="channel-id">
                         CH.09
                     </div>
+
                     <div class="channel-title">
                         Jump Shock
                     </div>
@@ -1173,11 +1163,13 @@ function renderTier2(data) {
                     ? "text-short"
                     : "text-long"
             }">
+
                 ${
                     jump.jump_detected
                         ? "DETECTED"
                         : "NONE"
                 }
+
             </div>
 
             <div class="channel-detail">
@@ -1190,6 +1182,7 @@ function renderTier2(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
@@ -1197,6 +1190,7 @@ function renderTier2(data) {
                     <div class="channel-id">
                         CH.10
                     </div>
+
                     <div class="channel-title">
                         Meta Decision
                     </div>
@@ -1224,6 +1218,7 @@ function renderTier2(data) {
             </div>
 
         </div>
+
     `;
 }
 
@@ -1270,14 +1265,17 @@ function renderTier3(data) {
         <div class="channel-card">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.11
                     </div>
+
                     <div class="channel-title">
                         Intermarket Divergence
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main">
@@ -1293,17 +1291,21 @@ function renderTier3(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.12
                     </div>
+
                     <div class="channel-title">
                         Entropy
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main">
@@ -1320,17 +1322,21 @@ function renderTier3(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.13
                     </div>
+
                     <div class="channel-title">
                         Depth Profile
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main">
@@ -1347,17 +1353,21 @@ function renderTier3(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.14
                     </div>
+
                     <div class="channel-title">
                         VWAP Deviation
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main">
@@ -1373,17 +1383,21 @@ function renderTier3(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.15
                     </div>
+
                     <div class="channel-title">
                         RL Risk Agent
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main">
@@ -1400,17 +1414,21 @@ function renderTier3(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.16
                     </div>
+
                     <div class="channel-title">
                         Hurst Memory
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main">
@@ -1426,17 +1444,21 @@ function renderTier3(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.17
                     </div>
+
                     <div class="channel-title">
                         Wavelet Trend
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main">
@@ -1456,17 +1478,21 @@ function renderTier3(data) {
 
         </div>
 
+
         <div class="channel-card">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.18
                     </div>
+
                     <div class="channel-title">
                         Structural Break
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main ${
@@ -1474,11 +1500,13 @@ function renderTier3(data) {
                     ? "text-short"
                     : "text-long"
             }">
+
                 ${
                     structural.structural_break
                         ? "DETECTED"
                         : "NO BREAK"
                 }
+
             </div>
 
             <div class="channel-detail">
@@ -1491,17 +1519,21 @@ function renderTier3(data) {
 
         </div>
 
+
         <div class="channel-card span-2">
 
             <div class="channel-head">
+
                 <div>
                     <div class="channel-id">
                         CH.19
                     </div>
+
                     <div class="channel-title">
                         Liquidity Sweep
                     </div>
                 </div>
+
             </div>
 
             <div class="channel-main">
@@ -1526,7 +1558,126 @@ function renderTier3(data) {
 }
 
 // ============================================================
-// LIQUIDITY SCANNER
+// LIQUIDITY HELPERS
+// ============================================================
+
+function trapColorVar(score) {
+
+    const value =
+        Number(score) || 0;
+
+    if (value >= 65) {
+        return "var(--short)";
+    }
+
+    if (value >= 35) {
+        return "var(--wait)";
+    }
+
+    return "var(--long)";
+}
+
+function strengthColor(score) {
+
+    const value =
+        Number(score) || 0;
+
+    if (value >= 65) {
+        return "var(--long)";
+    }
+
+    if (value >= 40) {
+        return "var(--wait)";
+    }
+
+    return "var(--short)";
+}
+
+function stopRadarBlips() {
+
+    if (radarBlipTimer) {
+
+        clearInterval(
+            radarBlipTimer
+        );
+
+        radarBlipTimer = null;
+    }
+}
+
+function startRadarBlips() {
+
+    stopRadarBlips();
+
+    const scope =
+        $("liq-radar-scope");
+
+    if (!scope) return;
+
+    radarBlipTimer =
+        setInterval(
+            () => {
+
+                const r =
+                    scope.clientWidth / 2;
+
+                if (!r) return;
+
+                const angle =
+                    Math.random() *
+                    Math.PI *
+                    2;
+
+                const dist =
+                    (
+                        0.15 +
+                        Math.random() *
+                        0.78
+                    ) *
+                    r;
+
+                const x =
+                    r +
+                    Math.cos(angle) *
+                    dist;
+
+                const y =
+                    r +
+                    Math.sin(angle) *
+                    dist;
+
+                const blip =
+                    document.createElement(
+                        "div"
+                    );
+
+                blip.className =
+                    "liq-radar-blip";
+
+                blip.style.left =
+                    `${x}px`;
+
+                blip.style.top =
+                    `${y}px`;
+
+                scope.appendChild(
+                    blip
+                );
+
+                setTimeout(
+                    () => {
+                        blip.remove();
+                    },
+                    2400
+                );
+
+            },
+            550
+        );
+}
+
+// ============================================================
+// LOAD LIQUIDITY
 // GET /liquidity
 // ============================================================
 
@@ -1539,9 +1690,6 @@ async function loadLiquidity() {
         $("liquidity-scanner");
 
     if (!scanner) {
-        console.warn(
-            "#liquidity-scanner not found"
-        );
         return;
     }
 
@@ -1559,13 +1707,16 @@ async function loadLiquidity() {
         );
 
         const response =
-            await fetch(url, {
-                method: "GET",
-                headers: {
-                    "Accept":
-                        "application/json"
+            await fetch(
+                url,
+                {
+                    method: "GET",
+                    headers: {
+                        "Accept":
+                            "application/json"
+                    }
                 }
-            });
+            );
 
         const data =
             await response.json();
@@ -1597,9 +1748,11 @@ async function loadLiquidity() {
         stopRadarBlips();
 
         scanner.innerHTML = `
+
             <div class="liq-panel">
 
                 <div class="liq-header">
+
                     <div class="liq-header-left">
 
                         <div class="liq-icon">
@@ -1607,6 +1760,7 @@ async function loadLiquidity() {
                         </div>
 
                         <div>
+
                             <div class="liq-title">
                                 Liquidity Scanner
                             </div>
@@ -1614,9 +1768,11 @@ async function loadLiquidity() {
                             <div class="liq-subtitle">
                                 ${coin} · Binance USD-M Futures
                             </div>
+
                         </div>
 
                     </div>
+
                 </div>
 
                 <div class="liq-spoof-empty">
@@ -1625,66 +1781,14 @@ async function loadLiquidity() {
                 </div>
 
             </div>
+
         `;
     }
 }
 
-// ------------------------------------------------------------
-// v9: small helpers for the new liquidity sub-panels
-// ------------------------------------------------------------
-
-function trapColorVar(score) {
-    const value = Number(score) || 0;
-    if (value >= 65) return "var(--short)";
-    if (value >= 35) return "var(--wait)";
-    return "var(--long)";
-}
-
-function strengthColor(score) {
-    const value = Number(score) || 0;
-    if (value >= 65) return "var(--long)";
-    if (value >= 40) return "var(--wait)";
-    return "var(--short)";
-}
-
-function stopRadarBlips() {
-    if (radarBlipTimer) {
-        clearInterval(radarBlipTimer);
-        radarBlipTimer = null;
-    }
-}
-
-function startRadarBlips() {
-
-    stopRadarBlips();
-
-    const scope = $("liq-radar-scope");
-
-    if (!scope) return;
-
-    radarBlipTimer = setInterval(() => {
-
-        const r = scope.clientWidth / 2;
-
-        if (!r) return;
-
-        const angle = Math.random() * Math.PI * 2;
-        const dist = (0.15 + Math.random() * 0.78) * r;
-        const x = r + Math.cos(angle) * dist;
-        const y = r + Math.sin(angle) * dist;
-
-        const blip = document.createElement("div");
-
-        blip.className = "liq-radar-blip";
-        blip.style.left = `${x}px`;
-        blip.style.top = `${y}px`;
-
-        scope.appendChild(blip);
-
-        setTimeout(() => blip.remove(), 2400);
-
-    }, 550);
-}
+// ============================================================
+// RENDER LIQUIDITY
+// ============================================================
 
 function renderLiquidity(data) {
 
@@ -1694,22 +1798,26 @@ function renderLiquidity(data) {
     if (!container) return;
 
     const buyPct =
-        Number(data.buy_pct ?? 50);
+        Number(
+            data.buy_pct ?? 50
+        );
 
     const sellPct =
-        Number(data.sell_pct ?? 50);
+        Number(
+            data.sell_pct ?? 50
+        );
 
-    // Convert buy/sell into 0-100
-    // position for the bias marker.
     const total =
-        buyPct + sellPct;
+        buyPct +
+        sellPct;
 
     const markerPosition =
         total > 0
             ? (
                 buyPct /
                 total
-            ) * 100
+            ) *
+            100
             : 50;
 
     const bias =
@@ -1725,233 +1833,573 @@ function renderLiquidity(data) {
 
     const spoofHtml =
         spoofFlags.length > 0
-            ? spoofFlags.map(
-                flag => `
-                    <div class="liq-spoof-item">
-                        <span>
-                            POSSIBLE SPOOFING
-                            ${
-                                flag.probability !== undefined
-                                    ? `(${flag.probability}%)`
-                                    : ""
-                            }
-                        </span>
+            ? spoofFlags
+                .map(
+                    flag => `
 
-                        <span>
-                            ${String(
-                                flag.side || ""
-                            )} wall
-                            ${formatPrice(flag.price)}
-                            vanished
-                        </span>
-                    </div>
-                `
-            ).join("")
+                        <div class="liq-spoof-item">
+
+                            <span>
+                                POSSIBLE SPOOFING
+
+                                ${
+                                    flag.probability !==
+                                    undefined
+                                        ? `(${flag.probability}%)`
+                                        : ""
+                                }
+
+                            </span>
+
+                            <span>
+
+                                ${String(
+                                    flag.side ||
+                                    ""
+                                )} wall
+
+                                ${formatPrice(
+                                    flag.price
+                                )}
+
+                                vanished
+
+                            </span>
+
+                        </div>
+
+                    `
+                )
+                .join("")
             : `
+
                 <div class="liq-spoof-empty">
                     No spoofing flags detected
                 </div>
+
             `;
 
-    // ------------------------------------------------------------
-    // v9 sections
-    // ------------------------------------------------------------
+    const magnet =
+        data.magnet ||
+        null;
 
-    const magnet = data.magnet || null;
-    const target = data.target || null;
-    const strength = data.market_strength || { score: 0, label: "--" };
-    const trap = data.trap_squeeze || {
-        bull_trap: 0, bear_trap: 0, short_squeeze: 0, long_squeeze: 0
-    };
-    const sweep = data.liquidity_sweep_live || null;
+    const target =
+        data.target ||
+        null;
 
-    const strengthCircumference = 276;
+    const strength =
+        data.market_strength ||
+        {
+            score: 0,
+            label: "--"
+        };
+
+    const trap =
+        data.trap_squeeze ||
+        {
+            bull_trap: 0,
+            bear_trap: 0,
+            short_squeeze: 0,
+            long_squeeze: 0
+        };
+
+    const sweep =
+        data.liquidity_sweep_live ||
+        null;
+
+    const strengthCircumference =
+        276;
+
+    const strengthScore =
+        Math.max(
+            0,
+            Math.min(
+                100,
+                Number(
+                    strength.score
+                ) ||
+                0
+            )
+        );
+
     const strengthOffset =
         strengthCircumference -
-        (strengthCircumference * Math.max(0, Math.min(100, Number(strength.score) || 0)) / 100);
+        (
+            strengthCircumference *
+            strengthScore /
+            100
+        );
 
     const magnetTargetHtml = `
+
         <div class="liq-row3">
 
             <div class="liq-subcard">
+
                 <div class="liq-subcard-title">
+
                     <span class="liq-subcard-dot c-long"></span>
+
                     LIQUIDITY MAGNET
+
                 </div>
 
                 ${
                     magnet
                         ? `
+
                             <div class="liq-big-val text-long">
-                                ${formatPrice(magnet.price)}
+                                ${formatPrice(
+                                    magnet.price
+                                )}
                             </div>
+
                             <div class="liq-small">
-                                Nearest large resting wall — price tends to
-                                drift toward it.
+                                Nearest large resting wall — price tends to drift toward it.
                             </div>
+
                             <div class="liq-kv">
-                                <span>Distance</span>
-                                <b>${
-                                    magnet.distance_pct > 0 ? "+" : ""
-                                }${formatNumber(magnet.distance_pct, 2)}%</b>
+
+                                <span>
+                                    Distance
+                                </span>
+
+                                <b>
+                                    ${
+                                        magnet.distance_pct > 0
+                                            ? "+"
+                                            : ""
+                                    }${formatNumber(
+                                        magnet.distance_pct,
+                                        2
+                                    )}%
+                                </b>
+
                             </div>
+
                             <div class="liq-kv">
-                                <span>Cluster $</span>
-                                <b>$${formatNumber(magnet.notional, 0)}</b>
+
+                                <span>
+                                    Cluster $
+                                </span>
+
+                                <b>
+                                    $${formatNumber(
+                                        magnet.notional,
+                                        0
+                                    )}
+                                </b>
+
                             </div>
+
                         `
-                        : `<div class="liq-small">No wall data available.</div>`
+                        : `
+
+                            <div class="liq-small">
+                                No wall data available.
+                            </div>
+
+                        `
                 }
+
             </div>
 
+
             <div class="liq-subcard">
+
                 <div class="liq-subcard-title">
+
                     <span class="liq-subcard-dot c-accent"></span>
+
                     LIKELY TARGET
+
                 </div>
 
                 ${
                     target
                         ? `
-                            <div class="liq-big-val" style="color:var(--accent);">
-                                ${formatPrice(target.price)}
+
+                            <div
+                                class="liq-big-val"
+                                style="color:var(--accent);"
+                            >
+                                ${formatPrice(
+                                    target.price
+                                )}
                             </div>
+
                             <div class="liq-small">
-                                Largest farther cluster from live order book
-                                depth.
+                                Largest farther cluster from live order book depth.
                             </div>
+
                             <div class="liq-kv">
-                                <span>Score</span>
-                                <b style="color:var(--accent);">${target.score ?? "--"} / 100</b>
+
+                                <span>
+                                    Score
+                                </span>
+
+                                <b
+                                    style="color:var(--accent);"
+                                >
+                                    ${target.score ?? "--"} / 100
+                                </b>
+
                             </div>
+
                             <div class="liq-kv">
-                                <span>Side</span>
-                                <b>${target.side || "--"}</b>
+
+                                <span>
+                                    Side
+                                </span>
+
+                                <b>
+                                    ${target.side || "--"}
+                                </b>
+
                             </div>
+
                         `
-                        : `<div class="liq-small">No wall data available.</div>`
+                        : `
+
+                            <div class="liq-small">
+                                No wall data available.
+                            </div>
+
+                        `
                 }
+
             </div>
 
-            <div class="liq-subcard" style="align-items:center;">
-                <div class="liq-subcard-title" style="align-self:flex-start;">
+
+            <div
+                class="liq-subcard"
+                style="align-items:center;"
+            >
+
+                <div
+                    class="liq-subcard-title"
+                    style="align-self:flex-start;"
+                >
                     MARKET STRENGTH
                 </div>
 
                 <div class="liq-gauge-wrap">
+
                     <div class="liq-gauge">
+
                         <svg viewBox="0 0 104 104">
-                            <circle class="liq-gauge-track" cx="52" cy="52" r="44"></circle>
-                            <circle class="liq-gauge-fill" cx="52" cy="52" r="44"
+
+                            <circle
+                                class="liq-gauge-track"
+                                cx="52"
+                                cy="52"
+                                r="44"
+                            ></circle>
+
+                            <circle
+                                class="liq-gauge-fill"
+                                cx="52"
+                                cy="52"
+                                r="44"
                                 stroke-dashoffset="${strengthOffset}"
-                                style="stroke:${strengthColor(strength.score)};"></circle>
+                                style="stroke:${strengthColor(
+                                    strength.score
+                                )};"
+                            ></circle>
+
                         </svg>
+
                         <div class="liq-gauge-center">
-                            <div class="liq-gauge-num">${strength.score ?? "--"}</div>
-                            <div class="liq-gauge-sub" style="color:${strengthColor(strength.score)};">
+
+                            <div class="liq-gauge-num">
+                                ${strength.score ?? "--"}
+                            </div>
+
+                            <div
+                                class="liq-gauge-sub"
+                                style="color:${strengthColor(
+                                    strength.score
+                                )};"
+                            >
                                 ${strength.label || "--"}
                             </div>
+
                         </div>
+
                     </div>
-                    <div class="liq-small" style="text-align:center;">
+
+                    <div
+                        class="liq-small"
+                        style="text-align:center;"
+                    >
                         Order-flow bias + funding lean + 24h momentum.
                     </div>
+
                 </div>
+
             </div>
 
         </div>
+
     `;
 
     const sweepHtml = `
+
         <div class="liq-subcard">
-            <div class="liq-subcard-title">LAST LIQUIDITY SWEEP</div>
+
+            <div class="liq-subcard-title">
+                LAST LIQUIDITY SWEEP
+            </div>
 
             ${
                 sweep
                     ? `
-                        <span class="liq-sweep-tag ${
-                            sweep.direction && sweep.direction.includes("DOWN")
-                                ? "bearish"
-                                : "bullish"
-                        }">
+
+                        <span
+                            class="liq-sweep-tag ${
+                                sweep.direction &&
+                                sweep.direction.includes(
+                                    "DOWN"
+                                )
+                                    ? "bearish"
+                                    : "bullish"
+                            }"
+                        >
                             ${sweep.tag}
                         </span>
+
                         <div class="liq-small">
-                            Price swept ${formatPrice(sweep.swept_price)}
+
+                            Price swept
+                            ${formatPrice(
+                                sweep.swept_price
+                            )}
                             on the last 1h candles.
+
                         </div>
+
                         <div class="liq-sweep-meta">
+
                             <div>
-                                <span>AT PRICE</span>
-                                <b>${formatPrice(sweep.swept_price)}</b>
+
+                                <span>
+                                    AT PRICE
+                                </span>
+
+                                <b>
+                                    ${formatPrice(
+                                        sweep.swept_price
+                                    )}
+                                </b>
+
                             </div>
+
                             <div>
-                                <span>CONFIDENCE</span>
-                                <b>${sweep.confidence} / 100</b>
+
+                                <span>
+                                    CONFIDENCE
+                                </span>
+
+                                <b>
+                                    ${sweep.confidence} / 100
+                                </b>
+
                             </div>
+
                             <div>
-                                <span>AGE</span>
-                                <b>${formatNumber(sweep.age_hours, 1)}h ago</b>
+
+                                <span>
+                                    AGE
+                                </span>
+
+                                <b>
+                                    ${formatNumber(
+                                        sweep.age_hours,
+                                        1
+                                    )}h ago
+                                </b>
+
                             </div>
+
                         </div>
+
                     `
-                    : `<div class="liq-small">No recent sweep detected in the last candles.</div>`
+                    : `
+
+                        <div class="liq-small">
+                            No recent sweep detected in the last candles.
+                        </div>
+
+                    `
             }
+
         </div>
+
     `;
 
     const trapHtml = `
+
         <div class="liq-subcard">
-            <div class="liq-subcard-title">TRAP &amp; SQUEEZE RISK</div>
 
-            <div class="liq-trap-row">
-                <span class="liq-trap-label">Bull Trap</span>
-                <div class="liq-trap-track">
-                    <div class="liq-trap-fill" style="width:${trap.bull_trap}%;background:${trapColorVar(trap.bull_trap)};"></div>
-                </div>
-                <span class="liq-trap-val">${trap.bull_trap}</span>
+            <div class="liq-subcard-title">
+                TRAP &amp; SQUEEZE RISK
             </div>
 
             <div class="liq-trap-row">
-                <span class="liq-trap-label">Bear Trap</span>
+
+                <span class="liq-trap-label">
+                    Bull Trap
+                </span>
+
                 <div class="liq-trap-track">
-                    <div class="liq-trap-fill" style="width:${trap.bear_trap}%;background:${trapColorVar(trap.bear_trap)};"></div>
+
+                    <div
+                        class="liq-trap-fill"
+                        style="
+                            width:${trap.bull_trap}%;
+                            background:${trapColorVar(
+                                trap.bull_trap
+                            )};
+                        "
+                    ></div>
+
                 </div>
-                <span class="liq-trap-val">${trap.bear_trap}</span>
+
+                <span class="liq-trap-val">
+                    ${trap.bull_trap}
+                </span>
+
             </div>
 
-            <div class="liq-trap-row">
-                <span class="liq-trap-label">Short Squeeze</span>
-                <div class="liq-trap-track">
-                    <div class="liq-trap-fill" style="width:${trap.short_squeeze}%;background:${trapColorVar(trap.short_squeeze)};"></div>
-                </div>
-                <span class="liq-trap-val">${trap.short_squeeze}</span>
-            </div>
 
             <div class="liq-trap-row">
-                <span class="liq-trap-label">Long Squeeze</span>
+
+                <span class="liq-trap-label">
+                    Bear Trap
+                </span>
+
                 <div class="liq-trap-track">
-                    <div class="liq-trap-fill" style="width:${trap.long_squeeze}%;background:${trapColorVar(trap.long_squeeze)};"></div>
+
+                    <div
+                        class="liq-trap-fill"
+                        style="
+                            width:${trap.bear_trap}%;
+                            background:${trapColorVar(
+                                trap.bear_trap
+                            )};
+                        "
+                    ></div>
+
                 </div>
-                <span class="liq-trap-val">${trap.long_squeeze}</span>
+
+                <span class="liq-trap-val">
+                    ${trap.bear_trap}
+                </span>
+
             </div>
+
+
+            <div class="liq-trap-row">
+
+                <span class="liq-trap-label">
+                    Short Squeeze
+                </span>
+
+                <div class="liq-trap-track">
+
+                    <div
+                        class="liq-trap-fill"
+                        style="
+                            width:${trap.short_squeeze}%;
+                            background:${trapColorVar(
+                                trap.short_squeeze
+                            )};
+                        "
+                    ></div>
+
+                </div>
+
+                <span class="liq-trap-val">
+                    ${trap.short_squeeze}
+                </span>
+
+            </div>
+
+
+            <div class="liq-trap-row">
+
+                <span class="liq-trap-label">
+                    Long Squeeze
+                </span>
+
+                <div class="liq-trap-track">
+
+                    <div
+                        class="liq-trap-fill"
+                        style="
+                            width:${trap.long_squeeze}%;
+                            background:${trapColorVar(
+                                trap.long_squeeze
+                            )};
+                        "
+                    ></div>
+
+                </div>
+
+                <span class="liq-trap-val">
+                    ${trap.long_squeeze}
+                </span>
+
+            </div>
+
         </div>
+
     `;
 
     const spoofProbability =
         spoofFlags.length > 0
-            ? Math.max(...spoofFlags.map(f => Number(f.probability) || 0))
+            ? Math.max(
+                ...spoofFlags.map(
+                    f =>
+                        Number(
+                            f.probability
+                        ) ||
+                        0
+                )
+            )
             : 0;
 
     let spoofBarsHtml = "";
-    for (let i = 0; i < 24; i++) {
-        const h = 14 + Math.round(Math.random() * 26);
-        const hi = spoofFlags.length > 0 && Math.random() < 0.2;
-        spoofBarsHtml += `<div style="height:${h}px;" class="${hi ? "hi" : ""}"></div>`;
+
+    for (
+        let i = 0;
+        i < 24;
+        i++
+    ) {
+
+        const h =
+            14 +
+            Math.round(
+                Math.random() *
+                26
+            );
+
+        const hi =
+            spoofFlags.length > 0 &&
+            Math.random() < 0.2;
+
+        spoofBarsHtml +=
+            `<div
+                style="height:${h}px;"
+                class="${hi ? "hi" : ""}"
+            ></div>`;
     }
 
     const longShare =
-        data.long_share_pct !== undefined && data.long_share_pct !== null
+        data.long_share_pct !==
+            undefined &&
+        data.long_share_pct !==
+            null
             ? data.long_share_pct
             : buyPct;
 
@@ -2047,11 +2495,12 @@ function renderLiquidity(data) {
                     </div>
 
                     <div class="liq-stat-value">
+
                         ${
                             data.volume_usd_24h !==
-                            null &&
+                                null &&
                             data.volume_usd_24h !==
-                            undefined
+                                undefined
                                 ? "$" +
                                   formatNumber(
                                       data.volume_usd_24h,
@@ -2059,6 +2508,7 @@ function renderLiquidity(data) {
                                   )
                                 : "--"
                         }
+
                     </div>
 
                 </div>
@@ -2118,11 +2568,12 @@ function renderLiquidity(data) {
                     </div>
 
                     <div class="liq-stat-value">
+
                         ${
                             data.open_interest_usd !==
-                            null &&
+                                null &&
                             data.open_interest_usd !==
-                            undefined
+                                undefined
                                 ? "$" +
                                   formatNumber(
                                       data.open_interest_usd,
@@ -2130,6 +2581,7 @@ function renderLiquidity(data) {
                                   )
                                 : "--"
                         }
+
                     </div>
 
                 </div>
@@ -2163,7 +2615,9 @@ function renderLiquidity(data) {
                             ? "on-long"
                             : "on-short"
                     }">
+
                         ${bias}
+
                     </span>
 
                 </div>
@@ -2174,8 +2628,7 @@ function renderLiquidity(data) {
                     <div
                         class="liq-bias-marker"
                         style="
-                            left:
-                            ${markerPosition}%;
+                            left:${markerPosition}%;
                         "
                     ></div>
 
@@ -2222,6 +2675,7 @@ function renderLiquidity(data) {
                     </div>
 
                     <div class="liq-wall-price text-long">
+
                         ${
                             data.bid_wall
                                 ? formatPrice(
@@ -2229,9 +2683,11 @@ function renderLiquidity(data) {
                                 )
                                 : "--"
                         }
+
                     </div>
 
                     <div class="liq-wall-detail">
+
                         Quantity:
                         ${
                             data.bid_wall
@@ -2254,6 +2710,7 @@ function renderLiquidity(data) {
                                   )
                                 : "--"
                         }
+
                     </div>
 
                 </div>
@@ -2274,6 +2731,7 @@ function renderLiquidity(data) {
                     </div>
 
                     <div class="liq-wall-price text-short">
+
                         ${
                             data.ask_wall
                                 ? formatPrice(
@@ -2281,9 +2739,11 @@ function renderLiquidity(data) {
                                 )
                                 : "--"
                         }
+
                     </div>
 
                     <div class="liq-wall-detail">
+
                         Quantity:
                         ${
                             data.ask_wall
@@ -2306,6 +2766,7 @@ function renderLiquidity(data) {
                                   )
                                 : "--"
                         }
+
                     </div>
 
                 </div>
@@ -2315,45 +2776,124 @@ function renderLiquidity(data) {
 
             ${magnetTargetHtml}
 
+
             <div class="liq-row2">
+
                 ${sweepHtml}
+
                 ${trapHtml}
+
             </div>
 
+
             <div class="liq-row2">
 
                 <div class="liq-subcard">
+
                     <div class="liq-subcard-title">
+
                         <span class="liq-subcard-dot c-long"></span>
+
                         LIVE SCAN
+
                     </div>
+
                     <div class="liq-radar-wrap">
-                        <div class="liq-radar-scope" id="liq-radar-scope">
+
+                        <div
+                            class="liq-radar-scope"
+                            id="liq-radar-scope"
+                        >
+
                             <div class="liq-radar-rings">
-                                <div class="ring" style="width:96%;height:96%;"></div>
-                                <div class="ring" style="width:72%;height:72%;"></div>
-                                <div class="ring" style="width:48%;height:48%;"></div>
-                                <div class="ring" style="width:24%;height:24%;"></div>
-                                <div class="cross" style="left:0;right:0;top:50%;height:1px;"></div>
-                                <div class="cross" style="top:0;bottom:0;left:50%;width:1px;"></div>
+
+                                <div
+                                    class="ring"
+                                    style="
+                                        width:96%;
+                                        height:96%;
+                                    "
+                                ></div>
+
+                                <div
+                                    class="ring"
+                                    style="
+                                        width:72%;
+                                        height:72%;
+                                    "
+                                ></div>
+
+                                <div
+                                    class="ring"
+                                    style="
+                                        width:48%;
+                                        height:48%;
+                                    "
+                                ></div>
+
+                                <div
+                                    class="ring"
+                                    style="
+                                        width:24%;
+                                        height:24%;
+                                    "
+                                ></div>
+
+                                <div
+                                    class="cross"
+                                    style="
+                                        left:0;
+                                        right:0;
+                                        top:50%;
+                                        height:1px;
+                                    "
+                                ></div>
+
+                                <div
+                                    class="cross"
+                                    style="
+                                        top:0;
+                                        bottom:0;
+                                        left:50%;
+                                        width:1px;
+                                    "
+                                ></div>
+
                             </div>
+
                             <div class="liq-radar-sweep"></div>
+
                             <div class="liq-radar-center"></div>
+
                         </div>
+
                     </div>
+
                 </div>
 
+
                 <div class="liq-subcard">
+
                     <div class="liq-subcard-title">
+
                         <span class="liq-subcard-dot c-short"></span>
+
                         POSSIBLE SPOOFING
+
                     </div>
-                    <div class="liq-spoof-prob">${spoofProbability} / 100</div>
+
+                    <div class="liq-spoof-prob">
+                        ${spoofProbability} / 100
+                    </div>
+
                     <div class="liq-small">
-                        PROBABILITY · based on large walls that vanished
-                        between recent snapshots.
+                        PROBABILITY · based on large walls that vanished between recent snapshots.
                     </div>
-                    <div class="liq-spoof-bars">${spoofBarsHtml}</div>
+
+                    <div class="liq-spoof-bars">
+                        ${spoofBarsHtml}
+                    </div>
+
                 </div>
 
             </div>
@@ -2372,65 +2912,128 @@ function renderLiquidity(data) {
                             ? "on-short"
                             : "on-flat"
                     }">
+
                         ${
                             spoofFlags.length > 0
                                 ? `${spoofFlags.length} FLAG(S)`
                                 : "NO FLAG"
                         }
+
                     </span>
 
                 </div>
 
                 <div class="liq-spoof-list">
+
                     ${spoofHtml}
+
                 </div>
 
             </div>
 
 
             <div class="liq-subcard">
-                <div class="liq-subcard-title">FUNDING RATE + OPEN INTEREST</div>
+
+                <div class="liq-subcard-title">
+                    FUNDING RATE + OPEN INTEREST
+                </div>
+
                 <div class="liq-fr-grid">
+
                     <div>
+
                         ${
-                            data.open_interest_usd !== null &&
-                            data.open_interest_usd !== undefined
-                                ? "$" + formatNumber(data.open_interest_usd, 0)
+                            data.open_interest_usd !==
+                                null &&
+                            data.open_interest_usd !==
+                                undefined
+                                ? "$" +
+                                  formatNumber(
+                                      data.open_interest_usd,
+                                      0
+                                  )
                                 : "--"
                         }
-                        <span>OPEN INTEREST</span>
+
+                        <span>
+                            OPEN INTEREST
+                        </span>
+
                     </div>
-                    <div style="color:${
-                        (data.funding_rate_pct || 0) >= 0 ? "var(--long)" : "var(--short)"
-                    };">
-                        ${formatPercent(data.funding_rate_pct, 4)}
-                        <span style="color:var(--text-faint);">FUNDING RATE</span>
+
+
+                    <div
+                        style="
+                            color:${
+                                (
+                                    data.funding_rate_pct ||
+                                    0
+                                ) >= 0
+                                    ? "var(--long)"
+                                    : "var(--short)"
+                            };
+                        "
+                    >
+
+                        ${formatPercent(
+                            data.funding_rate_pct,
+                            4
+                        )}
+
+                        <span
+                            style="
+                                color:var(--text-faint);
+                            "
+                        >
+                            FUNDING RATE
+                        </span>
+
                     </div>
-                    <div style="color:var(--accent);">
-                        ${formatPercent(longShare, 1)}
-                        <span style="color:var(--text-faint);">LONG SHARE (approx.)</span>
+
+
+                    <div
+                        style="
+                            color:var(--accent);
+                        "
+                    >
+
+                        ${formatPercent(
+                            longShare,
+                            1
+                        )}
+
+                        <span
+                            style="
+                                color:var(--text-faint);
+                            "
+                        >
+                            LONG SHARE (approx.)
+                        </span>
+
                     </div>
+
                 </div>
+
             </div>
 
 
             <div class="liq-footnote">
+
                 Exploratory display only — liquidity diagnostics
-                do not change the final Tier 01 verdict. Magnet/target,
-                market strength, trap &amp; squeeze and spoof-probability
-                figures are illustrative heuristics, not statistically
-                validated indicators.
+                do not change the final Tier 01 verdict.
+
             </div>
 
         </div>
+
     `;
 
     startRadarBlips();
 }
 
 // ============================================================
-// LIVE CANDLE CHART
-// Lightweight Charts
+// CANDLES
+// GET /candles
 // ============================================================
 
 async function loadCandles() {
@@ -2490,6 +3093,10 @@ async function loadCandles() {
         );
     }
 }
+
+// ============================================================
+// CHART
+// ============================================================
 
 function initializeChart() {
 
@@ -2629,7 +3236,9 @@ function updateLightweightChart(data) {
     }
 
     const candles =
-        Array.isArray(data.candles)
+        Array.isArray(
+            data.candles
+        )
             ? data.candles
             : [];
 
@@ -2656,6 +3265,7 @@ function updateLightweightChart(data) {
                 close: Number(
                     candle.close
                 )
+
             }))
             .filter(
                 candle =>
@@ -2676,7 +3286,9 @@ function updateLightweightChart(data) {
                     )
             );
 
-    if (formatted.length === 0) {
+    if (
+        formatted.length === 0
+    ) {
 
         setText(
             "chart-status",
@@ -2690,7 +3302,8 @@ function updateLightweightChart(data) {
         formatted
     );
 
-    candleChart.timeScale()
+    candleChart
+        .timeScale()
         .fitContent();
 
     const last =
@@ -2734,12 +3347,15 @@ function updateLightweightChart(data) {
             );
 
             if (change > 0) {
+
                 changeEl.classList.add(
                     "up"
                 );
+
             } else if (
                 change < 0
             ) {
+
                 changeEl.classList.add(
                     "down"
                 );
@@ -2882,20 +3498,27 @@ function initializeTabs() {
 
                     setTimeout(
                         () => {
+
                             if (
                                 candleChart
                             ) {
+
                                 const container =
                                     $("candle-chart");
 
-                                candleChart.resize(
-                                    container.clientWidth,
-                                    container.clientHeight
-                                );
+                                if (
+                                    container
+                                ) {
 
-                                candleChart
-                                    .timeScale()
-                                    .fitContent();
+                                    candleChart.resize(
+                                        container.clientWidth,
+                                        container.clientHeight
+                                    );
+
+                                    candleChart
+                                        .timeScale()
+                                        .fitContent();
+                                }
                             }
 
                             loadCandles();
@@ -3002,13 +3625,10 @@ async function initialize() {
 
     initializeAnalysisButton();
 
-    // Do NOT show result before analysis.
     hide("result-box");
+
     show("empty-state");
 
-    // Load background data.
-    // Liquidity and chart are available
-    // when their tabs are opened.
     loadLiquidity();
 
     loadCandles();
