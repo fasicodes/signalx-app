@@ -8,3 +8,4 @@ gunicorn
 hmmlearn
 scikit-learn
 PyWavelets
+requests
