@@ -14,7 +14,6 @@ This file does NOT call POST /analyze.
 
 document.addEventListener("DOMContentLoaded", () => {
 
-```
 // ============================================================
 // CONFIG
 // ============================================================
@@ -3667,6 +3666,5 @@ window.loadCandles =
 
 window.loadCoins =
     loadCoins;
-```
 
 });
