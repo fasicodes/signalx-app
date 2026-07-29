@@ -1,4 +1,3 @@
-
 /* ================================================================
    SIGNAL/FM — 19 CHANNEL MARKET READOUT
    Dark Quant Trading Terminal
@@ -90,6 +89,8 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 
 .control-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 
+/* Native <select> is kept in the DOM (script.js still reads
+   coinSelect.value), but visually replaced by .coin-picker below. */
 .coin-select-native {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -236,7 +237,7 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .tier-note { display: none; }
 
 /* ================================================================
-   PANEL TABS
+   PANEL TABS — left-aligned, not stretched full width
 ================================================================ */
 
 .panel-tabs {
@@ -345,173 +346,34 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .liq-title { color: var(--text); font-family: var(--sans); font-size: 14px; font-weight: 700; }
 .liq-subtitle { margin-top: 2px; color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px; }
 
-.liq-live-tag { display: flex; align-items: center; gap: 6px; color: var(--text-dim); font-family: var(--mono); font-size: 9px; letter-spacing: 0.5px; }
-
-.liq-price-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.liq-price { color: var(--text); font-family: var(--mono); font-size: 26px; font-weight: 800; letter-spacing: -0.3px; }
-.liq-symbol { color: var(--text-faint); font-family: var(--mono); font-size: 10px; letter-spacing: 0.6px; margin-top: 3px; }
-
+.liq-range { position: relative; padding: 26px 6px 6px; }
+.liq-range-track { position: relative; height: 5px; background: #252c35; border-radius: 3px; overflow: visible; }
+.liq-range-fill {
+    position: absolute; top: 0; left: 0; height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--short), var(--wait), var(--long)); opacity: 0.35; width: 100%;
+}
+.liq-range-marker {
+    position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--void);
+    box-shadow: 0 0 10px rgba(245, 166, 35, 0.55); transform: translate(-50%, -50%); z-index: 2;
+}
+.liq-range-marker-label {
+    position: absolute; top: -22px; transform: translateX(-50%);
+    color: var(--accent); font-family: var(--mono); font-size: 9px; font-weight: 700; white-space: nowrap;
+}
+.liq-range-endpoint {
+    position: absolute; top: 50%; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--panel); border: 2px solid var(--text-faint);
+    transform: translate(-50%, -50%); z-index: 1;
+}
+.liq-range-endpoint-label {
+    position: absolute; top: 14px; transform: translateX(-50%);
+    color: var(--text-faint); font-family: var(--mono); font-size: 9px; white-space: nowrap;
+}
 .liq-stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .liq-stat { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .liq-stat-label { color: var(--text-faint); font-family: var(--mono); font-size: 8px; font-weight: 600; letter-spacing: 0.5px; }
 .liq-stat-value { color: var(--text); font-family: var(--mono); font-size: 17px; font-weight: 700; white-space: nowrap; }
-
-/* market bias bar */
-.liq-bias-card { padding-top: 4px; }
-.liq-bias-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
-.liq-bias-title { color: var(--text-dim); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; }
-.liq-bias-track {
-    position: relative; height: 8px; border-radius: 4px; margin-bottom: 8px;
-    background: linear-gradient(90deg, var(--long), var(--wait), var(--short));
-    opacity: 0.9;
-}
-.liq-bias-marker {
-    position: absolute; top: -4px; width: 3px; height: 16px; border-radius: 2px;
-    background: var(--text); box-shadow: 0 0 6px rgba(233, 238, 245, 0.5); transform: translateX(-50%);
-}
-.liq-bias-labels { display: flex; align-items: center; justify-content: space-between; font-family: var(--mono); font-size: 11px; font-weight: 700; }
-
-/* liquidity magnet / target wall cards */
-.liq-walls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.liq-wall-card {
-    display: flex; flex-direction: column; gap: 6px; padding: 13px 15px;
-    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px;
-}
-.liq-wall-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.liq-wall-label { color: var(--text-faint); font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
-.liq-wall-price { font-family: var(--mono); font-size: 19px; font-weight: 800; }
-.liq-wall-detail { color: var(--text-dim); font-family: var(--mono); font-size: 10px; line-height: 1.5; }
-
-/* spoofing panel */
-.liq-spoof-card {
-    display: flex; flex-direction: column; gap: 9px; padding: 13px 15px;
-    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px;
-}
-.liq-spoof-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.liq-spoof-title { color: var(--text-dim); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; }
-.liq-spoof-empty { color: var(--text-faint); font-family: var(--mono); font-size: 10px; }
-.liq-spoof-list { display: flex; flex-direction: column; gap: 6px; }
-.liq-spoof-item {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 7px 10px; background: var(--short-dim); border: 1px solid rgba(255, 82, 107, 0.3);
-    border-radius: 5px; color: var(--short); font-family: var(--mono); font-size: 10px; font-weight: 600;
-}
-.liq-footnote { color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.3px; }
-
-/* ================================================================
-   v9 — LIQUIDITY SCANNER EXTRAS
-   (Magnet/Target, Market Strength gauge, Trap & Squeeze, Live Sweep,
-   Live Scan radar, richer spoof panel) — merged from
-   liquidity_scanner.py + its HTML mockup, restyled to the existing
-   SIGNAL/FM theme variables so nothing here looks "new"/mismatched.
-================================================================ */
-
-.liq-row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.liq-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-.liq-subcard {
-    display: flex; flex-direction: column; gap: 8px; padding: 14px 16px;
-    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px;
-}
-.liq-subcard-title {
-    display: flex; align-items: center; gap: 7px; color: var(--text-dim);
-    font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
-}
-.liq-subcard-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.liq-subcard-dot.c-long { background: var(--long); box-shadow: 0 0 6px var(--long); }
-.liq-subcard-dot.c-short { background: var(--short); box-shadow: 0 0 6px var(--short); }
-.liq-subcard-dot.c-wait { background: var(--wait); box-shadow: 0 0 6px var(--wait); }
-.liq-subcard-dot.c-accent { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-
-.liq-big-val { font-family: var(--mono); font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
-.liq-small { color: var(--text-dim); font-family: var(--mono); font-size: 10px; line-height: 1.5; }
-.liq-kv {
-    display: flex; align-items: center; justify-content: space-between;
-    font-family: var(--mono); font-size: 11px; margin-top: 8px;
-    border-top: 1px solid var(--line-soft); padding-top: 8px;
-}
-.liq-kv span { color: var(--text-faint); }
-.liq-kv b { color: var(--text); font-weight: 700; }
-
-/* market strength gauge (reuses same ring pattern as hero gauge) */
-.liq-gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.liq-gauge { position: relative; width: 88px; height: 88px; }
-.liq-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.liq-gauge-track { fill: none; stroke: var(--line); stroke-width: 8; }
-.liq-gauge-fill { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; stroke-dasharray: 276; transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease; }
-.liq-gauge-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.liq-gauge-num { font-family: var(--mono); font-size: 21px; font-weight: 800; color: var(--text); }
-.liq-gauge-sub { font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0.7px; margin-top: 2px; }
-
-/* trap & squeeze bars */
-.liq-trap-row { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; }
-.liq-trap-row .liq-trap-label { width: 96px; flex-shrink: 0; color: var(--text-dim); }
-.liq-trap-track { flex: 1; height: 6px; border-radius: 3px; background: #202834; position: relative; overflow: hidden; }
-.liq-trap-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
-.liq-trap-row .liq-trap-val { width: 28px; text-align: right; font-weight: 700; color: var(--text); }
-
-/* sweep tag */
-.liq-sweep-tag {
-    display: inline-block; width: fit-content; padding: 4px 10px; border-radius: 20px;
-    font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
-}
-.liq-sweep-tag.bullish { background: var(--long-dim); color: var(--long); border: 1px solid rgba(54, 224, 160, 0.3); }
-.liq-sweep-tag.bearish { background: var(--short-dim); color: var(--short); border: 1px solid rgba(255, 82, 107, 0.3); }
-.liq-sweep-meta { display: flex; gap: 20px; margin-top: 6px; font-family: var(--mono); font-size: 11px; }
-.liq-sweep-meta div { display: flex; flex-direction: column; gap: 3px; }
-.liq-sweep-meta span { color: var(--text-faint); font-size: 9px; letter-spacing: 0.4px; }
-.liq-sweep-meta b { color: var(--text); }
-
-/* live-scan radar (decorative) */
-.liq-radar-wrap { display: flex; align-items: center; justify-content: center; }
-.liq-radar-scope {
-    position: relative; width: 100%; max-width: 190px; aspect-ratio: 1 / 1; border-radius: 50%;
-    background: radial-gradient(circle, rgba(54, 224, 160, 0.08) 0%, var(--void) 75%);
-    border: 1px solid rgba(54, 224, 160, 0.25);
-    box-shadow: inset 0 0 24px rgba(54, 224, 160, 0.08);
-    overflow: hidden;
-}
-.liq-radar-rings { position: absolute; inset: 0; }
-.liq-radar-rings .ring {
-    position: absolute; border: 1px solid rgba(54, 224, 160, 0.2); border-radius: 50%;
-    top: 50%; left: 50%; transform: translate(-50%, -50%);
-}
-.liq-radar-rings .cross { position: absolute; background: rgba(54, 224, 160, 0.16); }
-.liq-radar-sweep {
-    position: absolute; inset: 0; border-radius: 50%;
-    background: conic-gradient(from 0deg,
-        rgba(54, 224, 160, 0) 0deg,
-        rgba(54, 224, 160, 0) 300deg,
-        rgba(54, 224, 160, 0.45) 345deg,
-        rgba(54, 224, 160, 0.05) 360deg);
-    animation: liq-sweepspin 3.2s linear infinite;
-}
-@keyframes liq-sweepspin { to { transform: rotate(360deg); } }
-.liq-radar-blip {
-    position: absolute; width: 6px; height: 6px; border-radius: 50%;
-    background: var(--long); box-shadow: 0 0 8px 2px rgba(54, 224, 160, 0.7);
-    animation: liq-blipfade 2.4s ease-out forwards;
-}
-@keyframes liq-blipfade {
-    0% { opacity: 0; transform: scale(0.4); }
-    15% { opacity: 1; transform: scale(1.1); }
-    100% { opacity: 0; transform: scale(0.6); }
-}
-.liq-radar-center {
-    position: absolute; top: 50%; left: 50%; width: 5px; height: 5px; border-radius: 50%;
-    background: var(--long); transform: translate(-50%, -50%); box-shadow: 0 0 10px var(--long);
-}
-
-/* spoof probability + mini bars */
-.liq-spoof-prob { font-family: var(--mono); font-size: 28px; font-weight: 800; color: var(--short); }
-.liq-spoof-bars { display: flex; align-items: flex-end; gap: 3px; height: 40px; margin-top: 8px; }
-.liq-spoof-bars div { flex: 1; background: var(--short); opacity: 0.45; border-radius: 2px; }
-.liq-spoof-bars div.hi { opacity: 1; background: var(--accent); }
-
-/* funding + OI grid with long-share */
-.liq-fr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; text-align: center; }
-.liq-fr-grid div { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--text); }
-.liq-fr-grid span { display: block; font-size: 8px; color: var(--text-faint); font-weight: 600; margin-top: 4px; letter-spacing: 0.4px; }
 
 /* ================================================================
    LIVE CHART PANEL (new tab)
@@ -577,7 +439,6 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     .channel-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .channel-card.span-2 { grid-column: span 2; }
     .hero { gap: 20px; padding: 16px; }
-    .liq-row3 { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 650px) {
@@ -604,10 +465,6 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     .panel-tab { flex: 1 1 calc(50% - 4px); justify-content: flex-start; padding-left: 10px; }
     .liq-panel, .chart-panel { padding: 16px; }
     .liq-stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-    .liq-walls-grid { grid-template-columns: 1fr; }
-    .liq-row3 { grid-template-columns: 1fr; }
-    .liq-row2 { grid-template-columns: 1fr; }
-    .liq-price { font-size: 22px; }
     .candle-chart { height: 300px; }
     .chart-tf-row { flex-wrap: wrap; }
 }
