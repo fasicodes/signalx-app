@@ -360,6 +360,32 @@ select:focus-visible {
 }
 
 
+.coin-select optgroup {
+
+    background: var(--panel-raised);
+
+    color: var(--text-faint);
+
+    font-family: var(--mono);
+
+    font-size: 10px;
+
+    font-weight: 700;
+
+    letter-spacing: 0.5px;
+}
+
+
+.coin-select option {
+
+    background: var(--panel-raised);
+
+    color: var(--text);
+
+    font-weight: 500;
+}
+
+
 .scan-btn {
 
     height: 34px;
