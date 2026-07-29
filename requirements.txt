@@ -7,3 +7,4 @@ numpy
 gunicorn
 hmmlearn
 scikit-learn
+PyWavelets
