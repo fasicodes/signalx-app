@@ -1,11 +1,17 @@
 """
-Trading Signal Backend + Frontend - v6
+Trading Signal Backend + Frontend - v7
 ---------------------------------------------------
 IMPORTANT: FINAL VERDICT + CONFIDENCE ka logic v4 jaisa hi hai
 (sirf Hawkes Process + Bayesian Classifier, Conformal Prediction ke
 zariye combine hote hain). Neeche wale 9 NAYE concepts verdict ko
 BILKUL touch nahi karte - ye sirf extra "display panels" hain, jaisa
 v4 mein OFI/VPIN/HMM/Jump/Meta add hue thay.
+
+v7 mein sirf ye add hua hai:
+  - /candles endpoint -> naye "LIVE CHART" tab (frontend) ke liye
+    OHLCV candle series return karta hai, taake ek live candlestick
+    chart bana ja sake. Verdict/confidence logic ko bilkul touch
+    nahi kiya gaya.
 
 PURANE 5 concepts (WAISAY HI, koi change nahi):
   1. Hawkes Process        -> Buying/Selling Pressure (0-10)
@@ -21,8 +27,7 @@ v4 ke 4 concepts (display-only, verdict ko touch nahi karte):
   9. Jump Diffusion Detector
   10. Meta-Labeling (ML filter)
 
-v6 ke 9 NAYE concepts (is version mein add kiye gaye - YE BHI
-display-only hain, verdict ko touch nahi karte):
+v6 ke 9 concepts (display-only, verdict ko touch nahi karte):
   11. Cross-Asset Flow & Intermarket Divergence
   12. Multi-Timeframe Permutation Entropy
   13. Order Book Depth Profiling (L2 Slope)
@@ -373,7 +378,7 @@ def meta_label_filter(df, execute_threshold=0.55):
 
 
 # ============================================================
-# 11. CROSS-ASSET FLOW & INTERMARKET DIVERGENCE  <-- NAYA (v6)
+# 11. CROSS-ASSET FLOW & INTERMARKET DIVERGENCE  <-- (v6)
 # Formula: Divergence_t = Z-Score(P_asset,t) - Z-Score(P_benchmark,t)
 #
 # LIMITATION (honestly): Doc mein "Total Crypto Market Cap" ya "DXY"
@@ -415,7 +420,7 @@ def cross_asset_divergence(df, symbol, lookback=50):
 
 
 # ============================================================
-# 12. MULTI-TIMEFRAME PERMUTATION ENTROPY  <-- NAYA (v6)
+# 12. MULTI-TIMEFRAME PERMUTATION ENTROPY  <-- (v6)
 # Formula: H(d) = - sum( P(pi) * log2(P(pi)) )
 #
 # LIMITATION (honestly): "Multi-Timeframe" naam hai lekin proper version
@@ -469,7 +474,7 @@ def multi_timeframe_entropy(df, orders=(3, 4, 5), lookback=100):
 
 
 # ============================================================
-# 13. ORDER BOOK DEPTH PROFILING (L2 SLOPE)  <-- NAYA (v6)
+# 13. ORDER BOOK DEPTH PROFILING (L2 SLOPE)  <-- (v6)
 # Formula: DepthSlope_t = sum( w_i * (BidVol_i - AskVol_i) / Distance_i )
 #
 # LIMITATION (honestly): Doc mein "L2/L3" likha tha - individual order-
@@ -511,7 +516,7 @@ def order_book_depth_profile(symbol="BTC/USDT", depth=10):
 
 
 # ============================================================
-# 14. VOLUME-SYNCHRONIZED VWAP DEVIATION & TOXICITY  <-- NAYA (v6)
+# 14. VOLUME-SYNCHRONIZED VWAP DEVIATION & TOXICITY  <-- (v6)
 # Formula: VWAP_Dev_t = (P_t - VWAP_t) / (sigma_VWAP * sqrt(t))
 #
 # LIMITATION (honestly): "Volume-synchronized" ka matlab hota hai VWAP
@@ -542,7 +547,7 @@ def vwap_deviation(df, vpin_score=None):
 
 
 # ============================================================
-# 15. RL-STYLE DYNAMIC RISK & ALLOCATION AGENT  <-- NAYA (v6)
+# 15. RL-STYLE DYNAMIC RISK & ALLOCATION AGENT  <-- (v6)
 # Formula (doc): Q(s,a) <- Q(s,a) + alpha[R + gamma*max_a' Q(s',a') - Q(s,a)]
 #
 # LIMITATION (honestly, IMPORTANT): Ye ASAL Q-Learning training loop
@@ -569,7 +574,7 @@ def rl_risk_agent(volatility_pct, base_risk_pct):
 
 
 # ============================================================
-# 16. ADAPTIVE HURST EXPONENT  <-- NAYA (v6)
+# 16. ADAPTIVE HURST EXPONENT  <-- (v6)
 # Formula: E[|R(t+tau) - R(t)|] proportional to tau^H
 #
 # LIMITATION (honestly): Chote lags (2-19) aur ek hi estimator (simple
@@ -610,7 +615,7 @@ def hurst_exponent(df, lookback=100):
 
 
 # ============================================================
-# 17. WAVELET TRANSFORM NOISE FILTERING  <-- NAYA (v6)
+# 17. WAVELET TRANSFORM NOISE FILTERING  <-- (v6)
 # Formula: W_f(a,b) = (1/sqrt(|a|)) * integral( f(t) * psi*((t-b)/a) dt )
 #
 # LIMITATION (honestly): Wavelet denoising boundary/edge-effects ka
@@ -645,7 +650,7 @@ def wavelet_denoise_trend(df, wavelet="db4", level=2):
 
 
 # ============================================================
-# 18. STRUCTURAL BREAK DETECTION (CUSUM TEST)  <-- NAYA (v6)
+# 18. STRUCTURAL BREAK DETECTION (CUSUM TEST)  <-- (v6)
 # Formula: S_t = max(0, S_{t-1} + (dy_t - mu0) - threshold)
 #
 # LIMITATION (honestly): threshold_k manually chuna gaya hai (data se
@@ -681,7 +686,7 @@ def cusum_structural_break(df, lookback=100, threshold_k=0.5):
 
 
 # ============================================================
-# 19. LIQUIDITY SWEEP / STOP-CLUSTER DETECTION  <-- NAYA (v6)
+# 19. LIQUIDITY SWEEP / STOP-CLUSTER DETECTION  <-- (v6)
 # Formula: LiquidityPoolScore = sum( Volume_orders / |P_current - P_level| )
 #
 # LIMITATION (honestly): "Historical highs/lows" sirf isi fetch kiye
@@ -731,7 +736,7 @@ def liquidity_sweep_detector(df, lookback=50):
 # MASTER FUNCTION - sab 19 concepts combine karta hai
 # *** FINAL VERDICT + CONFIDENCE ab bhi SIRF Hawkes + Bayesian se
 #     bante hain (Conformal Prediction), v4 jaisa hi - ISE CHANGE
-#     NAHI KIYA GAYA. Naye 9 concepts sirf extra info hain. ***
+#     NAHI KIYA GAYA. Baaqi concepts sirf extra info hain. ***
 # ============================================================
 def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     df["rsi"] = ta.rsi(df["close"], length=14)
@@ -785,7 +790,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         elif final_verdict == "SHORT" and ofi_data["ofi_score"] > 0:
             fake_breakout_warning = True
 
-    # --- v6 ke 9 NAYE concepts (display-only, verdict ko touch nahi karte) ---
+    # --- v6 ke 9 concepts (display-only, verdict ko touch nahi karte) ---
     try:
         divergence_data = cross_asset_divergence(df, symbol)
     except Exception as e:
@@ -858,7 +863,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "meta_label": meta_data,
         "fake_breakout_warning": fake_breakout_warning,
 
-        # v6 NAYE concepts (display-only)
+        # v6 concepts (display-only)
         "intermarket_divergence": divergence_data,
         "entropy": entropy_data,
         "depth_profile": depth_data,
@@ -905,6 +910,54 @@ def signal_endpoint():
 @app.route("/coins", methods=["GET"])
 def available_coins():
     return jsonify(AVAILABLE_COINS)
+
+
+# ============================================================
+# NEW (v7): /candles  -->  "LIVE CHART" tab ke liye OHLCV series
+#
+# Frontend har chand second baad (poll) chhote limit ke sath is
+# endpoint ko dobara call karta hai taake chart ka AAKHRI candle aur
+# current price update hote rahein - is tarah "live" feel milti hai.
+# Note: ye ek naya display-only endpoint hai, /signal ke verdict
+# logic ko bilkul touch nahi karta.
+# ============================================================
+@app.route("/candles", methods=["GET"])
+def candles_endpoint():
+    coin = request.args.get("coin", "BTC/USDT")
+    timeframe = request.args.get("timeframe", "1h")
+    try:
+        limit = int(request.args.get("limit", 200))
+    except ValueError:
+        limit = 200
+    limit = max(2, min(limit, 1000))
+
+    try:
+        df = get_candles(symbol=coin, timeframe=timeframe, limit=limit)
+        candles = [
+            {
+                "time": int(row.timestamp.timestamp()),
+                "open": round(float(row.open), 8),
+                "high": round(float(row.high), 8),
+                "low": round(float(row.low), 8),
+                "close": round(float(row.close), 8),
+                "volume": round(float(row.volume), 8),
+            }
+            for row in df.itertuples()
+        ]
+        last_price = float(df["close"].iloc[-1])
+        prev_price = float(df["close"].iloc[-2]) if len(df) > 1 else last_price
+        change_pct = round(((last_price - prev_price) / prev_price) * 100, 3) if prev_price else 0.0
+
+        return jsonify({
+            "coin": coin,
+            "timeframe": timeframe,
+            "candles": candles,
+            "last_price": round(last_price, 8),
+            "change_pct": change_pct,
+            "server_time": int(time.time()),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
 if __name__ == "__main__":
