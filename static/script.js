@@ -16,6 +16,21 @@ const liqScannerEl = document.getElementById("liquidity-scanner");
 const panelTabs    = document.querySelectorAll(".panel-tab");
 const tabPanels    = document.querySelectorAll(".tab-panel");
 
+// coin picker elements
+const coinPicker        = document.getElementById("coin-picker");
+const coinPickerTrigger = document.getElementById("coin-picker-trigger");
+const coinPickerIcon    = document.getElementById("coin-picker-icon");
+const coinPickerLabel   = document.getElementById("coin-picker-label");
+const coinPickerMenu    = document.getElementById("coin-picker-menu");
+
+// live chart elements
+const chartTitleEl  = document.getElementById("chart-title");
+const chartPriceEl  = document.getElementById("chart-price");
+const chartChangeEl = document.getElementById("chart-change");
+const chartStatusEl = document.getElementById("chart-status");
+const chartTfRow    = document.getElementById("chart-tf-row");
+const candleChartEl = document.getElementById("candle-chart");
+
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 48; // r=48
 
 /* If any of these are missing, design.html doesn't match this script.js —
@@ -103,6 +118,13 @@ function badge(text, tone) {
 function activatePanel(name) {
   panelTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === name));
   tabPanels.forEach((panel) => panel.classList.toggle("active", panel.id === "panel-" + name));
+  if (name === "livechart") {
+    // Chart needs real dimensions to size itself correctly — (re)initialize
+    // and refresh right when the tab becomes visible.
+    ensureChartInitialized();
+    resizeChart();
+    loadChartData();
+  }
 }
 
 panelTabs.forEach((tab) => {
@@ -128,6 +150,141 @@ function addAlert(type, text) {
   el.innerHTML = `<span class="alert-dot"></span><span>${text}</span>`;
   alertStack.appendChild(el);
 }
+
+/* ==========================================================================
+   COIN PICKER — custom dropdown with logos, built on top of the hidden
+   native <select id="coin-select">. script.js everywhere else keeps using
+   coinSelect.value, so nothing downstream needs to change.
+   ========================================================================== */
+
+// Known ticker -> CoinCap icon slug overrides (most tickers map 1:1 already).
+const COIN_ICON_OVERRIDES = {
+  HYPE: "hype",
+  GRAM: "gram",
+  ASTER: "aster",
+  ONDO: "ondo",
+  TAO: "tao",
+};
+
+function coinIconUrl(ticker) {
+  const slug = (COIN_ICON_OVERRIDES[ticker] || ticker).toLowerCase();
+  return `https://assets.coincap.io/assets/icons/${slug}@2x.png`;
+}
+
+// Tiny inline SVG fallback (colored ring + ticker initials) used when a
+// coin's logo can't be fetched from the icon CDN.
+function fallbackIconDataUrl(ticker) {
+  const initials = (ticker || "?").slice(0, 3).toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+    <circle cx="20" cy="20" r="19" fill="#151b24" stroke="#27303b" stroke-width="1.5"/>
+    <text x="20" y="25" font-family="monospace" font-size="11" font-weight="700"
+      fill="#8b96a5" text-anchor="middle">${initials}</text>
+  </svg>`;
+  return "data:image/svg+xml;base64," + btoa(svg);
+}
+
+function attachIconFallback(imgEl, ticker) {
+  imgEl.addEventListener("error", () => {
+    imgEl.onerror = null;
+    imgEl.src = fallbackIconDataUrl(ticker);
+  }, { once: true });
+}
+
+function buildCoinPicker() {
+  if (!coinPicker || !coinSelect) return;
+
+  coinPickerMenu.innerHTML = "";
+
+  Array.from(coinSelect.children).forEach((group) => {
+    if (group.tagName !== "OPTGROUP") return;
+
+    const groupLabel = document.createElement("div");
+    groupLabel.className = "coin-picker-group-label";
+    groupLabel.textContent = group.label;
+    coinPickerMenu.appendChild(groupLabel);
+
+    Array.from(group.children).forEach((option) => {
+      const value = option.value;
+      const ticker = value.split("/")[0];
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "coin-picker-option";
+      btn.dataset.value = value;
+      btn.setAttribute("role", "option");
+
+      const img = document.createElement("img");
+      img.className = "coin-picker-option-icon";
+      img.alt = "";
+      img.src = coinIconUrl(ticker);
+      attachIconFallback(img, ticker);
+
+      const label = document.createElement("span");
+      label.textContent = option.textContent;
+
+      btn.appendChild(img);
+      btn.appendChild(label);
+      btn.addEventListener("click", () => selectCoin(value));
+
+      coinPickerMenu.appendChild(btn);
+    });
+  });
+
+  syncCoinPickerTrigger();
+}
+
+function syncCoinPickerTrigger() {
+  const value = coinSelect.value;
+  const ticker = value.split("/")[0];
+  coinPickerLabel.textContent = value.replace("/", " / ");
+  coinPickerIcon.src = coinIconUrl(ticker);
+  attachIconFallback(coinPickerIcon, ticker);
+
+  coinPickerMenu.querySelectorAll(".coin-picker-option").forEach((opt) => {
+    opt.classList.toggle("active", opt.dataset.value === value);
+  });
+}
+
+function selectCoin(value) {
+  coinSelect.value = value;
+  coinSelect.dispatchEvent(new Event("change"));
+  syncCoinPickerTrigger();
+  closeCoinPicker();
+}
+
+function openCoinPicker() {
+  coinPicker.classList.add("open");
+  coinPickerTrigger.setAttribute("aria-expanded", "true");
+}
+function closeCoinPicker() {
+  coinPicker.classList.remove("open");
+  coinPickerTrigger.setAttribute("aria-expanded", "false");
+}
+
+if (coinPickerTrigger) {
+  coinPickerTrigger.addEventListener("click", () => {
+    coinPicker.classList.contains("open") ? closeCoinPicker() : openCoinPicker();
+  });
+  document.addEventListener("click", (e) => {
+    if (!coinPicker.contains(e.target)) closeCoinPicker();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeCoinPicker();
+  });
+}
+
+if (coinSelect) {
+  coinSelect.addEventListener("change", () => {
+    syncCoinPickerTrigger();
+    // Keep the live chart in sync if the coin changes while that tab is open.
+    const livePanel = document.getElementById("panel-livechart");
+    if (livePanel && livePanel.classList.contains("active")) {
+      loadChartData();
+    }
+  });
+}
+
+buildCoinPicker();
 
 /* ---------------------------- hero ---------------------------- */
 
@@ -164,7 +321,6 @@ function renderHero(data) {
 function renderTier1(data) {
   const cards = [];
 
-  // CH.01 Hawkes Process
   cards.push(channelCard({
     id: 1, title: "Buying / Selling Pressure", model: "hawkes process",
     span2: true,
@@ -183,7 +339,6 @@ function renderTier1(data) {
       </div>`
   }));
 
-  // CH.02 Bayesian Classifier
   cards.push(channelCard({
     id: 2, title: "Market Bias", model: "bayesian classifier",
     span2: true,
@@ -195,7 +350,6 @@ function renderTier1(data) {
       </div>`
   }));
 
-  // CH.03 Quantile Volatility
   cards.push(channelCard({
     id: 3, title: "Quantile Volatility", model: "95th pctile · SL/TP",
     span2: true,
@@ -208,7 +362,6 @@ function renderTier1(data) {
       </div>`
   }));
 
-  // CH.04 Conformal Prediction
   const decision = data.confidence_pct != null && data.confidence_pct < 55 ? "SKIP" : "TRADE";
   cards.push(channelCard({
     id: 4, title: "Conformal Decision", model: "conformal prediction",
@@ -218,7 +371,6 @@ function renderTier1(data) {
       <div class="channel-detail">confidence score</div>`
   }));
 
-  // CH.05 Fractional Kelly
   cards.push(channelCard({
     id: 5, title: "Suggested Risk", model: "fractional kelly",
     body: `
@@ -239,7 +391,6 @@ function renderTier2(data) {
   const jump = data.jump_shock || {};
   const meta = data.meta_label || {};
 
-  // CH.06 OFI
   cards.push(channelCard({
     id: 6, title: "Order Flow Imbalance", model: "L1 snapshot delta",
     body: `
@@ -248,7 +399,6 @@ function renderTier2(data) {
       <div class="channel-detail">${ofi.ofi_score == null ? "no data" : (ofi.ofi_score >= 0 ? "buyers aggressive" : "sellers aggressive")}</div>`
   }));
 
-  // CH.07 VPIN
   const toxTone = toxic.toxicity === "HIGH_TOXICITY" ? "short" : toxic.toxicity === "MODERATE_TOXICITY" ? "wait" : "long";
   cards.push(channelCard({
     id: 7, title: "Toxic Flow", model: "VPIN",
@@ -258,7 +408,6 @@ function renderTier2(data) {
       ${badge(toxic.toxicity || "N/A", toxic.toxicity ? toxTone : "flat")}`
   }));
 
-  // CH.08 HMM Regime
   const regTone = regime.regime === "Trending" ? "long" : regime.regime === "Ranging" ? "wait" : "flat";
   cards.push(channelCard({
     id: 8, title: "Market Regime", model: "gaussian HMM",
@@ -267,7 +416,6 @@ function renderTier2(data) {
       <div class="channel-detail">${regime.state_mean_return_pct != null ? `avg state return ${fmtSigned(regime.state_mean_return_pct, 3, "%")}` : "insufficient data"}</div>`
   }));
 
-  // CH.09 Jump Diffusion
   const jumpTone = jump.jump_detected ? "short" : "flat";
   cards.push(channelCard({
     id: 9, title: "Jump Diffusion", model: "z-score shock detector",
@@ -276,7 +424,6 @@ function renderTier2(data) {
       <div class="channel-detail">z-score ${fmtNum(jump.jump_zscore, 2)}</div>`
   }));
 
-  // CH.10 Meta-Labeling
   const metaTone = meta.meta_decision === "EXECUTE" ? "long" : meta.meta_decision === "SKIP" ? "flat" : "flat";
   cards.push(channelCard({
     id: 10, title: "Meta-Labeling Filter", model: "random forest",
@@ -302,7 +449,6 @@ function renderTier3(data) {
   const wave = data.wavelet_trend || {};
   const cusum = data.structural_break || {};
 
-  // CH.11 Cross-Asset Divergence
   const divTone = (div.interpretation || "").includes("OUTPERFORM") ? "long" : (div.interpretation || "").includes("UNDERPERFORM") ? "short" : "flat";
   cards.push(channelCard({
     id: 11, title: "Intermarket Divergence", model: `vs ${div.benchmark || "--"}`,
@@ -311,7 +457,6 @@ function renderTier3(data) {
       ${badge((div.interpretation || "N/A").replace(/_/g, " "), divTone)}`
   }));
 
-  // CH.12 Entropy
   const entTone = ent.regime === "LOW_ENTROPY_TRENDING" ? "long" : ent.regime === "HIGH_ENTROPY_CHOPPY" ? "short" : "wait";
   cards.push(channelCard({
     id: 12, title: "Permutation Entropy", model: "multi-order avg",
@@ -320,7 +465,6 @@ function renderTier3(data) {
       ${badge((ent.regime || "N/A").replace(/_/g, " "), entTone)}`
   }));
 
-  // CH.13 Depth Profile
   const wallTone = depth.wall_bias === "BID_WALL_HEAVIER" ? "long" : depth.wall_bias === "ASK_WALL_HEAVIER" ? "short" : "flat";
   cards.push(channelCard({
     id: 13, title: "Order Book Depth (L2)", model: "weighted slope",
@@ -329,7 +473,6 @@ function renderTier3(data) {
       ${badge((depth.wall_bias || "N/A").replace(/_/g, " "), wallTone)}`
   }));
 
-  // CH.14 VWAP Deviation
   const vwapTone = vwap.signal === "MEAN_REVERSION_LIKELY" ? "wait" : "flat";
   cards.push(channelCard({
     id: 14, title: "VWAP Deviation", model: "z-score",
@@ -339,7 +482,6 @@ function renderTier3(data) {
       ${vwap.toxic_reversion_flag ? `<div class="channel-detail text-short">toxic reversion flagged</div>` : ""}`
   }));
 
-  // CH.15 RL Risk Agent
   cards.push(channelCard({
     id: 15, title: "Dynamic Risk Agent", model: "RL-style heuristic",
     body: `
@@ -350,7 +492,6 @@ function renderTier3(data) {
       </div>`
   }));
 
-  // CH.16 Hurst Exponent
   const hurstTone = hurst.memory === "TRENDING_PERSISTENT" ? "long" : hurst.memory === "MEAN_REVERTING" ? "short" : "flat";
   cards.push(channelCard({
     id: 16, title: "Hurst Exponent", model: "variance scaling",
@@ -359,7 +500,6 @@ function renderTier3(data) {
       ${badge((hurst.memory || "N/A").replace(/_/g, " "), hurstTone)}`
   }));
 
-  // CH.17 Wavelet Trend
   const waveTone = wave.wavelet_trend_direction === "UP" ? "long" : wave.wavelet_trend_direction === "DOWN" ? "short" : "flat";
   cards.push(channelCard({
     id: 17, title: "Wavelet Denoised Trend", model: "db4 · level 2",
@@ -368,7 +508,6 @@ function renderTier3(data) {
       <div class="channel-detail">slope ${fmtSigned(wave.wavelet_trend_slope, 4)}</div>`
   }));
 
-  // CH.18 Structural Break
   cards.push(channelCard({
     id: 18, title: "Structural Break", model: "CUSUM test",
     body: `
@@ -382,7 +521,7 @@ function renderTier3(data) {
   tier3El.innerHTML = cards.join("");
 }
 
-/* ---------------------------- liquidity scanner: CH.19 (standalone, enhanced) ---------------------------- */
+/* ---------------------------- liquidity scanner: CH.19 ---------------------------- */
 
 function renderLiquidityScanner(data) {
   if (!liqScannerEl) return;
@@ -403,7 +542,6 @@ function renderLiquidityScanner(data) {
 
   liqScannerEl.innerHTML = `
     <div class="liq-panel">
-
       <div class="liq-header">
         <div class="liq-header-left">
           <span class="liq-icon">⌁</span>
@@ -447,8 +585,130 @@ function renderLiquidityScanner(data) {
           <span class="liq-stat-value text-short">${fmtPct(sweep.distance_to_low_pct, 2)}</span>
         </div>
       </div>
-
     </div>`;
+}
+
+/* ==========================================================================
+   LIVE CHART TAB — real candlesticks via TradingView's lightweight-charts,
+   fed from the /candles endpoint and polled every few seconds for live
+   price + last-candle updates.
+   ========================================================================== */
+
+let lwChart = null;
+let lwCandleSeries = null;
+let chartPollTimer = null;
+let currentChartTimeframe = "1h";
+
+function ensureChartInitialized() {
+  if (lwChart || !candleChartEl || typeof LightweightCharts === "undefined") return;
+
+  lwChart = LightweightCharts.createChart(candleChartEl, {
+    layout: {
+      background: { type: "solid", color: "transparent" },
+      textColor: "#8b96a5",
+      fontFamily: "IBM Plex Mono, monospace",
+      fontSize: 11,
+    },
+    grid: {
+      vertLines: { color: "rgba(39, 48, 59, 0.5)" },
+      horzLines: { color: "rgba(39, 48, 59, 0.5)" },
+    },
+    rightPriceScale: { borderColor: "#27303b" },
+    timeScale: { borderColor: "#27303b", timeVisible: true, secondsVisible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+
+  lwCandleSeries = lwChart.addCandlestickSeries({
+    upColor: "#36e0a0",
+    downColor: "#ff526b",
+    borderUpColor: "#28f3a5",
+    borderDownColor: "#ff6b7e",
+    wickUpColor: "#36e0a0",
+    wickDownColor: "#ff526b",
+  });
+
+  window.addEventListener("resize", resizeChart);
+}
+
+function resizeChart() {
+  if (!lwChart || !candleChartEl) return;
+  lwChart.resize(candleChartEl.clientWidth, candleChartEl.clientHeight);
+}
+
+if (chartTfRow) {
+  chartTfRow.querySelectorAll(".chart-tf-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      chartTfRow.querySelectorAll(".chart-tf-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentChartTimeframe = btn.dataset.tf;
+      loadChartData();
+    });
+  });
+}
+
+async function loadChartData() {
+  if (!candleChartEl) return;
+  ensureChartInitialized();
+  if (!lwChart) {
+    if (chartStatusEl) chartStatusEl.textContent = "chart library failed to load — check your connection";
+    return;
+  }
+
+  const coin = coinSelect.value;
+  if (chartTitleEl) chartTitleEl.textContent = `${coin} · ${currentChartTimeframe.toUpperCase()}`;
+  if (chartStatusEl) chartStatusEl.textContent = "loading candles…";
+
+  try {
+    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${currentChartTimeframe}&limit=300`);
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "candle fetch failed");
+
+    const bars = (data.candles || []).map((c) => ({
+      time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+    }));
+    lwCandleSeries.setData(bars);
+    lwChart.timeScale().fitContent();
+
+    updateChartPrice(data);
+    if (chartStatusEl) {
+      chartStatusEl.textContent = `live · ${coin} · ${currentChartTimeframe.toUpperCase()} · updates every 5s`;
+    }
+
+    restartChartPolling(coin);
+  } catch (err) {
+    if (chartStatusEl) chartStatusEl.textContent = "⚠ " + err.message;
+  }
+}
+
+function updateChartPrice(data) {
+  if (chartPriceEl) chartPriceEl.textContent = fmtPrice(data.last_price);
+  if (chartChangeEl) {
+    const chg = data.change_pct;
+    chartChangeEl.textContent = na(chg) ? "--" : (chg > 0 ? "+" : "") + chg.toFixed(2) + "%";
+    chartChangeEl.classList.remove("up", "down");
+    if (!na(chg)) chartChangeEl.classList.add(chg >= 0 ? "up" : "down");
+  }
+}
+
+function restartChartPolling(coin) {
+  if (chartPollTimer) clearInterval(chartPollTimer);
+  chartPollTimer = setInterval(async () => {
+    const livePanel = document.getElementById("panel-livechart");
+    if (!livePanel || !livePanel.classList.contains("active")) return; // pause when tab hidden
+    try {
+      const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${currentChartTimeframe}&limit=2`);
+      const data = await res.json();
+      if (!res.ok || data.error || !data.candles || !data.candles.length) return;
+
+      const last = data.candles[data.candles.length - 1];
+      lwCandleSeries.update({
+        time: last.time, open: last.open, high: last.high, low: last.low, close: last.close,
+      });
+      updateChartPrice(data);
+    } catch (e) {
+      // Silent — a single missed poll shouldn't spam the UI; next tick retries.
+    }
+  }, 5000);
 }
 
 /* ---------------------------- main render ---------------------------- */
@@ -473,6 +733,10 @@ function renderResult(data) {
   if (data.disclaimer) {
     document.getElementById("disclaimer-text").textContent = "⚠ " + data.disclaimer;
   }
+
+  // Keep the live chart's coin/title in sync even if the user hasn't opened
+  // that tab yet — it'll be correct the moment they click it.
+  if (chartTitleEl) chartTitleEl.textContent = `${data.coin || coinSelect.value} · ${currentChartTimeframe.toUpperCase()}`;
 }
 
 /* ---------------------------- fetch flow ---------------------------- */
