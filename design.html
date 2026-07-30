@@ -62,7 +62,7 @@
 
     <section class="control-row">
 
-        <select id="coin-select" class="coin-select">
+        <select id="coin-select" class="coin-select coin-select-native">
 
             <option value="BTC/USDT">
                 BTC / USDT
@@ -92,10 +92,24 @@
             class="scan-btn"
             type="button"
         >
-            RUN ANALYSIS
+            <span class="scan-btn-text">RUN ANALYSIS</span>
         </button>
 
     </section>
+
+
+    <!-- =========================================================
+         CUSTOM COIN PICKER (script.js builds this on top of the hidden <select>)
+    ========================================================== -->
+
+    <div id="coin-picker" class="coin-picker">
+        <button id="coin-picker-trigger" class="coin-picker-trigger" type="button" aria-expanded="false" aria-haspopup="listbox">
+            <img id="coin-picker-icon" class="coin-picker-icon" src="" alt="">
+            <span id="coin-picker-label" class="coin-picker-label">BTC / USDT</span>
+            <span class="coin-picker-caret">▼</span>
+        </button>
+        <div id="coin-picker-menu" class="coin-picker-menu" role="listbox"></div>
+    </div>
 
 
     <!-- =========================================================
@@ -252,87 +266,171 @@
 
 
         <!-- =====================================================
-             TIER 01
+             PANEL TABS
         ====================================================== -->
 
-        <div class="tier-divider">
-
-            <span class="tier-num">
+        <div class="panel-tabs" id="panel-tabs">
+            <button class="panel-tab active" data-panel="tiers">
+                <span class="panel-tab-num">01</span>
                 TIER 01
-            </span>
-
-            <span class="tier-label">
-                Core Verdict Engine
-            </span>
-
-        </div>
-
-        <p class="tier-note">
-            Primary decision signals used for the final market verdict.
-        </p>
-
-
-        <section
-            id="tier-1"
-            class="channel-grid"
-        >
-        </section>
-
-
-        <!-- =====================================================
-             TIER 02
-        ====================================================== -->
-
-        <div class="tier-divider">
-
-            <span class="tier-num">
+            </button>
+            <button class="panel-tab" data-panel="tier2">
+                <span class="panel-tab-num">02</span>
                 TIER 02
-            </span>
-
-            <span class="tier-label">
-                Microstructure
-            </span>
-
+            </button>
+            <button class="panel-tab" data-panel="tier3">
+                <span class="panel-tab-num">03</span>
+                TIER 03
+            </button>
+            <button class="panel-tab" data-panel="livechart">
+                <span class="panel-tab-num">04</span>
+                LIVE CHART
+            </button>
+            <button class="panel-tab" data-panel="liquidity">
+                <span class="panel-tab-num">05</span>
+                LIQUIDITY SCAN
+            </button>
         </div>
-
-        <p class="tier-note">
-            Order flow, liquidity and market microstructure signals.
-        </p>
-
-
-        <section
-            id="tier-2"
-            class="channel-grid"
-        >
-        </section>
 
 
         <!-- =====================================================
-             TIER 03
+             TAB PANEL: TIER 01 + 02 + 03 (default)
         ====================================================== -->
 
-        <div class="tier-divider">
+        <div id="panel-tiers" class="tab-panel active">
 
-            <span class="tier-num">
-                TIER 03
-            </span>
 
-            <span class="tier-label">
-                Extended Signals
-            </span>
+            <!-- =====================================================
+                 TIER 01
+            ====================================================== -->
+
+            <div class="tier-divider">
+
+                <span class="tier-num">
+                    TIER 01
+                </span>
+
+                <span class="tier-label">
+                    Core Verdict Engine
+                </span>
+
+            </div>
+
+            <p class="tier-note">
+                Primary decision signals used for the final market verdict.
+            </p>
+
+
+            <section
+                id="tier-1"
+                class="channel-grid"
+            >
+            </section>
+
+
+            <!-- =====================================================
+                 TIER 02
+            ====================================================== -->
+
+            <div class="tier-divider">
+
+                <span class="tier-num">
+                    TIER 02
+                </span>
+
+                <span class="tier-label">
+                    Microstructure
+                </span>
+
+            </div>
+
+            <p class="tier-note">
+                Order flow, liquidity and market microstructure signals.
+            </p>
+
+
+            <section
+                id="tier-2"
+                class="channel-grid"
+            >
+            </section>
+
+
+            <!-- =====================================================
+                 TIER 03
+            ====================================================== -->
+
+            <div class="tier-divider">
+
+                <span class="tier-num">
+                    TIER 03
+                </span>
+
+                <span class="tier-label">
+                    Extended Signals
+                </span>
+
+            </div>
+
+            <p class="tier-note">
+                Additional quantitative signals for deeper market context.
+            </p>
+
+
+            <section
+                id="tier-3"
+                class="channel-grid"
+            >
+            </section>
 
         </div>
 
-        <p class="tier-note">
-            Additional quantitative signals for deeper market context.
-        </p>
+
+        <!-- =========================================================
+             TAB PANEL: LIVE CHART
+        ========================================================== -->
+
+        <div id="panel-livechart" class="tab-panel">
+            <div class="chart-panel">
+                <div class="chart-header">
+                    <div class="chart-header-left">
+                        <div class="chart-icon">⬈</div>
+                        <div>
+                            <div class="chart-title" id="chart-title">BTC/USDT · 1H</div>
+                            <div class="chart-subtitle">Lightweight-charts · live OHLCV · polling every 5s</div>
+                        </div>
+                    </div>
+                    <div class="chart-price-block">
+                        <span class="live-clock-dot"></span>
+                        <span class="chart-price" id="chart-price">$--</span>
+                        <span class="chart-change" id="chart-change">--</span>
+                    </div>
+                </div>
+                <div class="chart-tf-row" id="chart-tf-row">
+                    <button class="chart-tf-btn active" data-tf="1h">1H</button>
+                    <button class="chart-tf-btn" data-tf="4h">4H</button>
+                    <button class="chart-tf-btn" data-tf="1d">1D</button>
+                </div>
+
+                <div class="candle-chart" id="candle-chart"></div>
+                <div class="chart-footer" id="chart-status">loading candles…</div>
+            </div>
+        </div>
 
 
-        <section
-            id="tier-3"
-            class="channel-grid"
-        >
-        </section>
+        <!-- =========================================================
+             TAB PANEL: LIQUIDITY SCANNER
+        ========================================================== -->
+
+        <div id="panel-liquidity" class="tab-panel">
+            <div id="liquidity-content" class="liquidity-panel">
+                <div class="empty-state">
+                    <div class="empty-mark">◆</div>
+                    <div>LOADING LIQUIDITY SCAN…</div>
+                    <small>Binance USD-M Futures · order book & flow analysis</small>
+                </div>
+            </div>
+        </div>
 
 
     </main>
