@@ -12,7 +12,7 @@ const clockText    = document.getElementById("clock-text");
 const tier1El      = document.getElementById("tier-1");
 const tier2El      = document.getElementById("tier-2");
 const tier3El      = document.getElementById("tier-3");
-const liqScannerEl = document.getElementById("liquidity-content");
+const liqScannerEl = document.getElementById("liquidity-scanner");
 const panelTabs    = document.querySelectorAll(".panel-tab");
 const tabPanels    = document.querySelectorAll(".tab-panel");
 
@@ -119,15 +119,11 @@ function activatePanel(name) {
   panelTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === name));
   tabPanels.forEach((panel) => panel.classList.toggle("active", panel.id === "panel-" + name));
   if (name === "livechart") {
+    // Chart needs real dimensions to size itself correctly — (re)initialize
+    // and refresh right when the tab becomes visible.
     ensureChartInitialized();
     resizeChart();
     loadChartData();
-  }
-  if (name === "liquidity") {
-    // Fetch liquidity data when tab is opened
-    const coin = coinSelect.value;
-    const symbol = coin.replace("/", "");
-    fetchLiquidityData(symbol);
   }
 }
 
@@ -525,226 +521,71 @@ function renderTier3(data) {
   tier3El.innerHTML = cards.join("");
 }
 
-/* ---------------------------- liquidity scanner: Binance Futures data ---------------------------- */
+/* ---------------------------- liquidity scanner: CH.19 ---------------------------- */
 
 function renderLiquidityScanner(data) {
   if (!liqScannerEl) return;
 
-  const price = data.price;
-  const change = data.change_24h_pct;
-  const buyPct = data.buy_pressure_pct || 50;
-  const sellPct = data.sell_pressure_pct || 50;
-  const bias = (data.bias || "NEUTRAL").toLowerCase();
-  const funding = data.funding_rate_pct;
-  const oiUsd = data.open_interest_usd;
-  const volume = data.volume_24h_usd;
-  const high24h = data.high_24h;
-  const low24h = data.low_24h;
-  const markPrice = data.mark_price;
-  const bidWall = data.bid_wall || {};
-  const askWall = data.ask_wall || {};
-  const spoofFlags = data.spoof_flags || [];
+  const sweep = data.liquidity_sweep || {};
+  const price = data.last_price;
 
-  // Market strength gauge: derived from buy/sell pressure
-  const strengthScore = Math.min(100, Math.round((buyPct / 100) * 100));
-  const strengthLabel = strengthScore > 60 ? "BULLISH" : strengthScore < 40 ? "BEARISH" : "MODERATE";
-  const strOffset = 276 - (276 * strengthScore / 100);
-
-  // Bias meter position
-  const biasPos = buyPct;
-
-  // Funding rate color
-  const frColor = funding != null && funding > 0.01 ? "var(--long)" : funding != null && funding < -0.01 ? "var(--short)" : "var(--text-dim)";
-
-  // Spoof bars
-  let spoofBarsHtml = "";
-  for (let i = 0; i < 24; i++) {
-    const h = 18 + Math.random() * 28;
-    const hiClass = Math.random() < 0.15 ? " hi" : "";
-    spoofBarsHtml += `<div style="height:${h}px" class="${hiClass}"></div>`;
+  const hasRange = !na(sweep.swing_high) && !na(sweep.swing_low) && !na(price) && sweep.swing_high > sweep.swing_low;
+  let markerPct = 50;
+  if (hasRange) {
+    const range = sweep.swing_high - sweep.swing_low;
+    markerPct = Math.max(2, Math.min(98, ((price - sweep.swing_low) / range) * 100));
   }
 
+  const detected = !!sweep.liquidity_sweep_detected;
+  const tone = detected ? "wait" : "flat";
+  const statusLabel = detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "NO SWEEP DETECTED";
+
   liqScannerEl.innerHTML = `
-    <div class="liq-scanner-row">
-
-      <!-- LEFT COLUMN -->
-      <div class="liq-scanner-col">
-
-        <!-- Price + Bias Section -->
-        <div class="liq-card" style="gap:8px;">
-          <div class="liq-price-section">
-            <div class="liq-price-group">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <div class="liq-price">${fmtPrice(price)}</div>
-                <div class="liq-badge ${bias}">${(bias).toUpperCase()}</div>
-                <span class="liq-change ${change >= 0 ? 'up' : 'down'}">${change >= 0 ? '+' : ''}${na(change) ? '--' : change.toFixed(2)}%</span>
-              </div>
-              <div class="liq-meta-row">
-                <div>24H HIGH <b>${fmtPrice(high24h)}</b></div>
-                <div>24H LOW <b>${fmtPrice(low24h)}</b></div>
-                <div>VOLUME <b>$${na(volume) ? '--' : Number(volume).toLocaleString(undefined, {maximumFractionDigits: 0})}</b></div>
-                <div>MARK <b>${fmtPrice(markPrice)}</b></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="liq-bias-section">
-            <h4 style="font-size:10px;letter-spacing:1px;color:var(--text-dim);text-transform:uppercase;font-weight:700;margin:0;">MARKET BIAS</h4>
-            <div class="liq-bias-bar"><div class="liq-bias-marker" style="left:${biasPos}%"></div></div>
-            <div class="liq-bias-labels">
-              <span class="buy">${buyPct.toFixed(1)}% BUY</span>
-              <span style="color:var(--text-dim)">${buyPct.toFixed(1)} / 100</span>
-              <span class="sell">${sellPct.toFixed(1)}% SELL</span>
-            </div>
+    <div class="liq-panel">
+      <div class="liq-header">
+        <div class="liq-header-left">
+          <span class="liq-icon">⌁</span>
+          <div>
+            <div class="liq-title">Liquidity Sweep Scanner</div>
+            <div class="liq-subtitle">CH.19 · swing high/low · display-only</div>
           </div>
         </div>
+        ${badge(statusLabel, tone)}
+      </div>
 
-        <!-- 3-card row: Liquidity Magnet, Likely Target, Market Strength -->
-        <div class="liq-row3">
-          <!-- LIQUIDITY MAGNET -->
-          <div class="liq-card">
-            <h4><span class="dot g"></span> LIQUIDITY MAGNET</h4>
-            <div class="liq-big-val liq-violet">${fmtPrice(bidWall.price || 0)}</div>
-            <div class="liq-small">Largest stop order and liquidation cluster. Price is pulled toward this level.</div>
-            <div class="liq-kv">
-              <span>Distance</span>
-              <b style="color:var(--long)">${price && bidWall.price ? ((bidWall.price - price) / price * 100).toFixed(2) + '%' : '--'}</b>
-            </div>
-            <div class="liq-kv">
-              <span>Cluster $</span>
-              <b>$${bidWall.notional ? Number(bidWall.notional).toLocaleString(undefined, {maximumFractionDigits: 0}) : '--'}</b>
-            </div>
-          </div>
-          <!-- LIKELY TARGET -->
-          <div class="liq-card">
-            <h4><span class="dot a"></span> LIKELY TARGET</h4>
-            <div class="liq-big-val liq-orange">${fmtPrice(askWall.price || 0)}</div>
-            <div class="liq-small">Highest-probability level based on OB density, OI clusters, and CVD direction.</div>
-            <div class="liq-kv">
-              <span>Score</span>
-              <b style="color:var(--accent)">${askWall.notional ? Math.min(100, Math.round(askWall.notional / 5000000 * 100)) : '--'} / 100</b>
-            </div>
-            <div class="liq-kv">
-              <span>Type</span>
-              <b style="color:var(--accent)">Resistance Wall ▴</b>
-            </div>
-          </div>
-          <!-- MARKET STRENGTH -->
-          <div class="liq-card" style="align-items:center;">
-            <h4 style="align-self:flex-start;">MARKET STRENGTH</h4>
-            <div class="liq-gauge-wrap">
-              <div class="liq-gauge">
-                <svg class="liq-gauge-graphic" viewBox="0 0 104 104" width="90" height="90">
-                  <circle cx="52" cy="52" r="44" fill="none" stroke="#242a44" stroke-width="8"/>
-                  <circle cx="52" cy="52" r="44" fill="none" stroke="#4ddbe0" stroke-width="8"
-                    stroke-dasharray="276" stroke-dashoffset="${strOffset}" stroke-linecap="round"/>
-                </svg>
-                <div style="text-align:center;">
-                  <div class="liq-gauge-num">${strengthScore}</div>
-                  <div class="liq-gauge-sub">${strengthLabel}</div>
-                </div>
-              </div>
-              <div class="liq-small" style="text-align:center;margin-top:6px;">Mixed signals — monitor closely.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Trap/Squeeze -->
-        <div class="liq-row3" style="grid-template-columns:1fr 1fr;">
-          <div class="liq-card">
-            <h4>TRAP AND SQUEEZE RISK</h4>
-            <div class="liq-trap-row"><span class="label">Bull Trap</span><div class="liq-trap-bar"><div class="liq-trap-fill" style="width:${(100 - buyPct) * 0.7}%;background:var(--short)"></div></div><span class="val">${Math.round((100 - buyPct) * 0.7)}</span></div>
-            <div class="liq-trap-row"><span class="label">Bear Trap</span><div class="liq-trap-bar"><div class="liq-trap-fill" style="width:${buyPct * 0.3}%;background:var(--short)"></div></div><span class="val">${Math.round(buyPct * 0.3)}</span></div>
-            <div class="liq-trap-row"><span class="label">Short Squeeze</span><div class="liq-trap-bar"><div class="liq-trap-fill" style="width:${sellPct * 0.35}%;background:var(--long)"></div></div><span class="val">${Math.round(sellPct * 0.35)}</span></div>
-            <div class="liq-trap-row"><span class="label">Long Squeeze</span><div class="liq-trap-bar"><div class="liq-trap-fill" style="width:${buyPct * 0.55}%;background:#a78bfa"></div></div><span class="val">${Math.round(buyPct * 0.55)}</span></div>
-          </div>
-          <!-- LIQUIDITY TARGET ZONES -->
-          <div class="liq-card">
-            <h4>LIQUIDITY TARGET ZONES</h4>
-            <div class="liq-small" style="margin-bottom:2px;">Largest order clusters from live order book.</div>
-            ${bidWall.price ? `
-            <div class="liq-zone-row">
-              <span class="px">▲ ${fmtPrice(bidWall.price)}</span>
-              <div class="liq-zone-bar"><div class="liq-zone-fill" style="width:${Math.min(100, Math.round((bidWall.notional || 0) / 1000000 * 5))}%"></div></div>
-              <span>Bid Wall</span>
-              <b style="color:var(--accent);flex-shrink:0;">${Math.min(100, Math.round((bidWall.notional || 0) / 1000000 * 5))}</b>
-            </div>` : ''}
-            ${askWall.price ? `
-            <div class="liq-zone-row">
-              <span class="px">▼ ${fmtPrice(askWall.price)}</span>
-              <div class="liq-zone-bar"><div class="liq-zone-fill" style="width:${Math.min(100, Math.round((askWall.notional || 0) / 1000000 * 5))}%"></div></div>
-              <span>Ask Wall</span>
-              <b style="color:var(--accent);flex-shrink:0;">${Math.min(100, Math.round((askWall.notional || 0) / 1000000 * 5))}</b>
-            </div>` : ''}
-            ${(!bidWall.price && !askWall.price) ? '<div class="liq-small">No significant walls detected.</div>' : ''}
-          </div>
+      <div class="liq-range">
+        <div class="liq-range-track">
+          <div class="liq-range-fill"></div>
+          <div class="liq-range-endpoint" style="left:0%;"></div>
+          <div class="liq-range-endpoint" style="left:100%;"></div>
+          <div class="liq-range-endpoint-label" style="left:0%;">${fmtPrice(sweep.swing_low)}</div>
+          <div class="liq-range-endpoint-label" style="left:100%;">${fmtPrice(sweep.swing_high)}</div>
+          ${hasRange ? `
+            <div class="liq-range-marker" style="left:${markerPct}%;"></div>
+            <div class="liq-range-marker-label" style="left:${markerPct}%;">${fmtPrice(price)}</div>
+          ` : ""}
         </div>
       </div>
 
-      <!-- RIGHT COLUMN -->
-      <div class="liq-scanner-col">
-
-        <!-- Radar / Live Scan -->
-        <div class="liq-card">
-          <h4><span class="dot g"></span> LIVE SCAN</h4>
-          <div class="liq-radar-scope" id="radarScope2">
-            <div class="liq-radar-rings">
-              <div class="ring" style="width:96%;height:96%;"></div>
-              <div class="ring" style="width:72%;height:72%;"></div>
-              <div class="ring" style="width:48%;height:48%;"></div>
-              <div class="ring" style="width:24%;height:24%;"></div>
-              <div class="cross" style="left:0;right:0;top:50%;height:1px;"></div>
-              <div class="cross" style="top:0;bottom:0;left:50%;width:1px;"></div>
-            </div>
-            <div class="liq-radar-sweep"></div>
-            <div class="liq-radar-center"></div>
-          </div>
+      <div class="liq-stats-grid">
+        <div class="liq-stat">
+          <span class="liq-stat-label">SWING HIGH</span>
+          <span class="liq-stat-value">${fmtPrice(sweep.swing_high)}</span>
         </div>
-
-        <!-- Spoofing -->
-        <div class="liq-card">
-          <h4><span class="dot r"></span> POSSIBLE SPOOFING</h4>
-          <div class="liq-spoof-num">${spoofFlags.length > 0 ? Math.min(100, 50 + spoofFlags.length * 25) : Math.round(Math.random() * 15 + 5)} / 100</div>
-          <div class="liq-small">${spoofFlags.length > 0 ? `${spoofFlags[0].side} wall at ${fmtPrice(spoofFlags[0].price)} vanished` : 'No spoofing signals in current snapshot.'}</div>
-          <div class="liq-spoof-bars">${spoofBarsHtml}</div>
-          <div class="liq-warn">⚠ Probability estimate only — not financial advice.</div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">SWING LOW</span>
+          <span class="liq-stat-value">${fmtPrice(sweep.swing_low)}</span>
         </div>
-
-        <!-- Funding + OI -->
-        <div class="liq-card">
-          <h4>FUNDING RATE + OPEN INTEREST</h4>
-          <div style="display:flex;align-items:baseline;gap:8px;">
-            <span style="font-size:22px;font-weight:800;color:${frColor};">${funding != null ? funding.toFixed(4) + '%' : '--'}</span>
-            <span class="liq-small">${funding != null && Math.abs(funding) < 0.01 ? 'Neutral funding rate. No extreme lean.' : funding > 0.01 ? 'Longs paying shorts — slight bullish skew' : 'Shorts paying longs — slight bearish skew'}</span>
-          </div>
-          <div class="liq-fr-grid">
-            <div>${oiUsd ? '$' + Number(oiUsd / 1e9).toFixed(2) + 'B' : '--'}<span>OI</span></div>
-            <div style="color:${frColor}">${funding >= 0 ? '+' : ''}${funding != null ? funding.toFixed(4) : '--'}%<span>8H RATE</span></div>
-            <div style="color:var(--accent)">${Math.round(buyPct)}%<span>LONG SHARE</span></div>
-          </div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">DIST → HIGH</span>
+          <span class="liq-stat-value text-long">${fmtPct(sweep.distance_to_high_pct, 2)}</span>
+        </div>
+        <div class="liq-stat">
+          <span class="liq-stat-label">DIST → LOW</span>
+          <span class="liq-stat-value text-short">${fmtPct(sweep.distance_to_low_pct, 2)}</span>
         </div>
       </div>
     </div>`;
-
-  // Start radar blips
-  const radar = document.getElementById("radarScope2");
-  if (radar) {
-    const spawnBlip = () => {
-      const r = radar.clientWidth / 2;
-      const angle = Math.random() * Math.PI * 2;
-      const dist = (0.15 + Math.random() * 0.78) * r;
-      const x = r + Math.cos(angle) * dist;
-      const y = r + Math.sin(angle) * dist;
-      const blip = document.createElement("div");
-      blip.className = "liq-radar-blip";
-      blip.style.left = x + "px";
-      blip.style.top = y + "px";
-      radar.appendChild(blip);
-      setTimeout(() => blip.remove(), 2400);
-    };
-    if (window._liqBlipInterval) clearInterval(window._liqBlipInterval);
-    window._liqBlipInterval = setInterval(spawnBlip, 600);
-  }
 }
 
 /* ==========================================================================
@@ -887,6 +728,7 @@ function renderResult(data) {
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
+  renderLiquidityScanner(data);
 
   if (data.disclaimer) {
     document.getElementById("disclaimer-text").textContent = "⚠ " + data.disclaimer;
@@ -895,58 +737,6 @@ function renderResult(data) {
   // Keep the live chart's coin/title in sync even if the user hasn't opened
   // that tab yet — it'll be correct the moment they click it.
   if (chartTitleEl) chartTitleEl.textContent = `${data.coin || coinSelect.value} · ${currentChartTimeframe.toUpperCase()}`;
-}
-
-function renderLiquidityData(data) {
-  clearAlerts();
-
-  // Only handle alerts from tier 1 data (not liquidty scanner)
-  const jump = data.jump_shock || {};
-  if (jump.jump_detected) {
-    addAlert("danger", `VOLATILITY SHOCK — ${jump.jump_direction} jump detected (z=${fmtNum(jump.jump_zscore, 2)})`);
-  }
-  if (data.fake_breakout_warning) {
-    addAlert("warning", "FAKE BREAKOUT RISK — order flow disagrees with price direction");
-  }
-
-  // Render hero and tier data for consistency
-  renderHero(data);
-  renderTier1(data);
-  renderTier2(data);
-  renderTier3(data);
-
-  if (data.disclaimer) {
-    document.getElementById("disclaimer-text").textContent = "⚠ " + data.disclaimer;
-  }
-
-  // Specifically render liquidity scanner data
-  if (liqScannerEl) {
-    renderLiquidityScanner(data);
-  }
-
-  // Keep chart title in sync
-  if (chartTitleEl) chartTitleEl.textContent = `${data.symbol} · USDT`;
-}
-
-async function fetchLiquidityData(coin = "BTCUSDT") {
-  const endpoint = `/liquidity?symbol=${encodeURIComponent(coin)}`;
-
-  try {
-    const res = await fetch(endpoint);
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || "Liquidity fetch failed");
-
-    resultBox.classList.remove("hidden");
-    emptyState.classList.add("hidden");
-    renderLiquidityData(data);
-    return data;
-  } catch (err) {
-    errorText.textContent = "⚠ " + err.message;
-    errorText.classList.remove("hidden");
-    resultBox.classList.add("hidden");
-    emptyState.classList.remove("hidden");
-    return null;
-  }
 }
 
 /* ---------------------------- fetch flow ---------------------------- */
