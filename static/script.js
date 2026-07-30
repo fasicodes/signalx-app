@@ -12,7 +12,7 @@ const clockText    = document.getElementById("clock-text");
 const tier1El      = document.getElementById("tier-1");
 const tier2El      = document.getElementById("tier-2");
 const tier3El      = document.getElementById("tier-3");
-const liqScannerEl = document.getElementById("liquidity-scanner");
+const liqScannerEl = document.getElementById("liquidity-content");
 const panelTabs    = document.querySelectorAll(".panel-tab");
 const tabPanels    = document.querySelectorAll(".tab-panel");
 
