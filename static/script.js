@@ -119,8 +119,6 @@ function activatePanel(name) {
   panelTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === name));
   tabPanels.forEach((panel) => panel.classList.toggle("active", panel.id === "panel-" + name));
   if (name === "livechart") {
-    // Chart needs real dimensions to size itself correctly — (re)initialize
-    // and refresh right when the tab becomes visible.
     ensureChartInitialized();
     resizeChart();
     loadChartData();
