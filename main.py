@@ -61,6 +61,7 @@ function ke comment mein iski asli limitation likhi hui hai.
 
 import os
 import time
+from collections import deque
 
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
@@ -68,6 +69,7 @@ import pandas as pd
 import numpy as np
 import pandas_ta as ta
 import ccxt
+import requests
 
 # v4 ke naye concepts ke liye extra libraries
 from hmmlearn.hmm import GaussianHMM
@@ -963,3 +965,139 @@ def candles_endpoint():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
+
+# ============================================================
+# LIQUIDITY SCANNER (Binance USD-M Futures) — NEW ADDITION
+# ============================================================
+BINANCE_FAPI = "https://fapi.binance.com"
+
+
+def fetch_json(path, params=None, timeout=8):
+    try:
+        r = requests.get(BINANCE_FAPI + path, params=params, timeout=timeout)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as e:
+        print(f"[warn] request failed for {path}: {e}")
+        return None
+
+
+def fetch_ticker(symbol):
+    return fetch_json("/fapi/v1/ticker/24hr", {"symbol": symbol})
+
+
+def fetch_mark_price(symbol):
+    return fetch_json("/fapi/v1/premiumIndex", {"symbol": symbol})
+
+
+def fetch_open_interest(symbol):
+    return fetch_json("/fapi/v1/openInterest", {"symbol": symbol})
+
+
+def fetch_depth(symbol, limit=100):
+    return fetch_json("/fapi/v1/depth", {"symbol": symbol, "limit": limit})
+
+
+def compute_bias(bids, asks, levels=50):
+    """Buy vs sell pressure from order book depth (qty-weighted)."""
+    buy_qty = sum(float(q) for _, q in bids[:levels])
+    sell_qty = sum(float(q) for _, q in asks[:levels])
+    total = buy_qty + sell_qty
+    if total == 0:
+        return 50.0, 50.0
+    buy_pct = (buy_qty / total) * 100
+    sell_pct = 100 - buy_pct
+    return buy_pct, sell_pct
+
+
+def largest_wall(levels, side_label):
+    """Find the single price level with the largest resting quantity."""
+    if not levels:
+        return None
+    best = max(levels, key=lambda lv: float(lv[1]))
+    price, qty = float(best[0]), float(best[1])
+    return {"side": side_label, "price": price, "qty": qty, "notional": price * qty}
+
+
+# In-memory spoof detection history (per-process, max 5 snapshots)
+_wall_history = deque(maxlen=5)
+
+
+def detect_spoof(history, current_walls, threshold_notional=1_000_000):
+    """
+    Very simple spoofing heuristic: a big wall (>threshold) that was
+    present in a recent snapshot but is now gone or drastically reduced.
+    Not a real spoofing detector — illustrative only.
+    """
+    flags = []
+    for prev_wall in history:
+        if prev_wall is None:
+            continue
+        still_there = False
+        for cur in current_walls:
+            if cur and abs(cur["price"] - prev_wall["price"]) < prev_wall["price"] * 0.0005:
+                if cur["qty"] >= prev_wall["qty"] * 0.5:
+                    still_there = True
+        if not still_there and prev_wall["notional"] >= threshold_notional:
+            flags.append(prev_wall)
+    return flags
+
+
+@app.route("/liquidity", methods=["GET"])
+def liquidity_endpoint():
+    """
+    Returns live liquidity scanner data for the given symbol.
+    Query params:
+      - symbol: e.g., BTCUSDT, ETHUSDT (Binance futures format)
+    """
+    symbol = request.args.get("symbol", "BTCUSDT").upper()
+
+    ticker = fetch_ticker(symbol)
+    mark = fetch_mark_price(symbol)
+    oi = fetch_open_interest(symbol)
+    depth = fetch_depth(symbol, limit=100)
+
+    if not depth:
+        return jsonify({"error": "failed to fetch order book"}), 400
+
+    bids = depth.get("bids", [])
+    asks = depth.get("asks", [])
+
+    buy_pct, sell_pct = compute_bias(bids, asks)
+    bid_wall = largest_wall(bids, "BID")
+    ask_wall = largest_wall(asks, "ASK")
+
+    spoof_flags = detect_spoof(list(_wall_history), [bid_wall, ask_wall])
+    _wall_history.append(bid_wall)
+    _wall_history.append(ask_wall)
+
+    price = float(ticker["lastPrice"]) if ticker else None
+    high = float(ticker["highPrice"]) if ticker else None
+    low = float(ticker["lowPrice"]) if ticker else None
+    vol_usd = float(ticker["quoteVolume"]) if ticker else None
+    pct_change = float(ticker["priceChangePercent"]) if ticker else None
+    mark_price = float(mark["markPrice"]) if mark else None
+    funding_rate = float(mark["lastFundingRate"]) * 100 if mark else None
+    open_interest = float(oi["openInterest"]) * price if (oi and price) else None
+
+    bias_tag = "BULLISH" if buy_pct > 55 else "BEARISH" if sell_pct > 55 else "NEUTRAL"
+
+    return jsonify({
+        "symbol": symbol,
+        "price": price,
+        "change_24h_pct": pct_change,
+        "high_24h": high,
+        "low_24h": low,
+        "volume_24h_usd": vol_usd,
+        "mark_price": mark_price,
+        "funding_rate_pct": funding_rate,
+        "open_interest_usd": open_interest,
+        "buy_pressure_pct": round(buy_pct, 1),
+        "sell_pressure_pct": round(sell_pct, 1),
+        "bias": bias_tag,
+        "bid_wall": bid_wall,
+        "ask_wall": ask_wall,
+        "spoof_flags": spoof_flags,
+        "disclaimer": "Probability estimates only — not financial advice. Heuristics are illustrative only."
+    })
