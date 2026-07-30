@@ -119,11 +119,15 @@ function activatePanel(name) {
   panelTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === name));
   tabPanels.forEach((panel) => panel.classList.toggle("active", panel.id === "panel-" + name));
   if (name === "livechart") {
-    // Chart needs real dimensions to size itself correctly — (re)initialize
-    // and refresh right when the tab becomes visible.
     ensureChartInitialized();
     resizeChart();
     loadChartData();
+  }
+  if (name === "liquidity") {
+    // Fetch liquidity data when tab is opened
+    const coin = coinSelect.value;
+    const symbol = coin.replace("/", "");
+    fetchLiquidityData(symbol);
   }
 }
 
