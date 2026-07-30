@@ -1,208 +1,462 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIGNAL/FM — Multi-Channel Market Readout</title>
-<link rel="stylesheet" href="/static/style.css">
-<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SIGNAL/FM — 19-Channel Market Readout</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
 
 <div class="terminal">
 
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-row">
-        <span class="brand-mark"></span>
-        <span class="brand-name">SIGNAL/FM</span>
-      </div>
-      <span class="brand-tagline">19-Channel Market Readout</span>
-    </div>
-    <div class="topbar-right">
-      <div class="live-clock"><span class="dot"></span><span id="clock-text">--:--:--</span></div>
-    </div>
-  </header>
+    <!-- =========================================================
+         HEADER
+    ========================================================== -->
 
-  <div class="control-row">
+    <header class="topbar">
 
-    <!-- Custom coin picker: shows each coin's logo. Built on top of the
-         native <select> below, which script.js keeps in sync and still
-         reads via coinSelect.value for the /signal + /candles calls. -->
-    <div class="coin-picker" id="coin-picker">
-      <button type="button" class="coin-picker-trigger" id="coin-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
-        <img id="coin-picker-icon" class="coin-picker-icon" alt="" src="" />
-        <span id="coin-picker-label" class="coin-picker-label">BTC / USDT</span>
-        <span class="coin-picker-caret">▾</span>
-      </button>
-      <div class="coin-picker-menu" id="coin-picker-menu" role="listbox"></div>
-    </div>
+        <div class="brand">
 
-    <select id="coin-select" class="coin-select coin-select-native">
-      <optgroup label="TOP 1–10">
-        <option value="BTC/USDT">BTC / USDT</option>
-        <option value="ETH/USDT">ETH / USDT</option>
-        <option value="BNB/USDT">BNB / USDT</option>
-        <option value="XRP/USDT">XRP / USDT</option>
-        <option value="SOL/USDT">SOL / USDT</option>
-        <option value="TRX/USDT">TRX / USDT</option>
-        <option value="HYPE/USDT">HYPE / USDT</option>
-        <option value="DOGE/USDT">DOGE / USDT</option>
-        <option value="ZEC/USDT">ZEC / USDT</option>
-        <option value="DOT/USDT">DOT / USDT</option>
-      </optgroup>
-      <optgroup label="TOP 11–20">
-        <option value="XLM/USDT">XLM / USDT</option>
-        <option value="XMR/USDT">XMR / USDT</option>
-        <option value="LINK/USDT">LINK / USDT</option>
-        <option value="ADA/USDT">ADA / USDT</option>
-        <option value="BCH/USDT">BCH / USDT</option>
-        <option value="GRAM/USDT">GRAM / USDT</option>
-        <option value="LTC/USDT">LTC / USDT</option>
-        <option value="SUI/USDT">SUI / USDT</option>
-        <option value="HBAR/USDT">HBAR / USDT</option>
-        <option value="FIL/USDT">FIL / USDT</option>
-      </optgroup>
-      <optgroup label="TOP 21–30">
-        <option value="AVAX/USDT">AVAX / USDT</option>
-        <option value="CRO/USDT">CRO / USDT</option>
-        <option value="NEAR/USDT">NEAR / USDT</option>
-        <option value="SHIB/USDT">SHIB / USDT</option>
-        <option value="UNI/USDT">UNI / USDT</option>
-        <option value="TAO/USDT">TAO / USDT</option>
-        <option value="ONDO/USDT">ONDO / USDT</option>
-        <option value="OKB/USDT">OKB / USDT</option>
-        <option value="ASTER/USDT">ASTER / USDT</option>
-        <option value="ATOM/USDT">ATOM / USDT</option>
-      </optgroup>
-    </select>
+            <div class="brand-row">
+                <span class="brand-mark"></span>
 
-    <button id="get-signal-btn" class="scan-btn">
-      <span class="scan-btn-text">RUN ANALYSIS</span>
-    </button>
-  </div>
+                <span class="brand-name">
+                    19-CHANNEL MARKET READOUT
+                </span>
+            </div>
 
-  <p id="error-text" class="error-text hidden"></p>
-  <div id="alert-stack" class="alert-stack"></div>
+            <div class="brand-tagline">
+                SIGNAL/FM · QUANTITATIVE MARKET ANALYSIS
+            </div>
 
-  <main id="result-box" class="hidden">
-
-    <!-- HERO: verdict gauge -->
-    <section class="hero">
-      <div class="gauge-wrap">
-        <svg viewBox="0 0 108 108">
-          <circle class="gauge-track" cx="54" cy="54" r="48"></circle>
-          <circle id="gauge-fill" class="gauge-fill" cx="54" cy="54" r="48"></circle>
-        </svg>
-        <div class="gauge-center">
-          <span id="gauge-verdict" class="gauge-verdict">--</span>
-          <span id="gauge-confidence" class="gauge-confidence">-- confidence</span>
         </div>
-      </div>
-      <div class="hero-data">
-        <span class="hero-eyebrow">Mark Price</span>
-        <div id="hero-price" class="hero-price">--</div>
-        <div class="hero-sub">
-          <span>RSI <b id="hero-rsi">--</b></span>
-          <span>MACD <b id="hero-macd">--</b></span>
+
+
+        <div class="topbar-right">
+
+            <div class="live-clock">
+                <span class="dot"></span>
+
+                <span id="clock-text">
+                    00:00:00
+                </span>
+            </div>
+
         </div>
-        <span id="hero-trend-tag" class="hero-trend-tag">--</span>
-      </div>
+
+    </header>
+
+
+    <!-- =========================================================
+         CONTROL BAR
+    ========================================================== -->
+
+    <section class="control-row">
+
+        <select id="coin-select" class="coin-select coin-select-native">
+
+            <option value="BTC/USDT">
+                BTC / USDT
+            </option>
+
+            <option value="ETH/USDT">
+                ETH / USDT
+            </option>
+
+            <option value="SOL/USDT">
+                SOL / USDT
+            </option>
+
+            <option value="BNB/USDT">
+                BNB / USDT
+            </option>
+
+            <option value="XRP/USDT">
+                XRP / USDT
+            </option>
+
+        </select>
+
+
+        <button
+            id="get-signal-btn"
+            class="scan-btn"
+            type="button"
+        >
+            <span class="scan-btn-text">RUN ANALYSIS</span>
+        </button>
+
     </section>
 
-    <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;01</span>
-      <span class="tier-label">Core Verdict Engine</span>
-    </div>
-    <p class="tier-note">Ch.01–05 — Hawkes Process, Bayesian Classifier &amp; Conformal Prediction. This is the only tier that produces the final verdict and confidence score.</p>
-    <div id="tier-1" class="channel-grid"></div>
 
-    <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;02–03</span>
-      <span class="tier-label">Microstructure · Extended Signals · Liquidity · Live Chart</span>
-    </div>
-    <p class="tier-note">Ch.06–19 — order-book, regime, cross-asset &amp; liquidity diagnostics, plus a live price chart. Display-only: does not alter the verdict above.</p>
+    <!-- =========================================================
+         CUSTOM COIN PICKER (script.js builds this on top of the hidden <select>)
+    ========================================================== -->
 
-    <!-- TAB NAVIGATION -->
-    <div class="panel-tabs">
-      <button class="panel-tab active" data-panel="microstructure" type="button">
-        <span class="panel-tab-num">01</span> DASHBOARD
-      </button>
-      <button class="panel-tab" data-panel="extended" type="button">
-        <span class="panel-tab-num">02</span> EXTENDED SIGNALS
-      </button>
-      <button class="panel-tab" data-panel="liquidity" type="button">
-        <span class="panel-tab-num">03</span> LIQUIDITY SCANNER
-      </button>
-      <button class="panel-tab" data-panel="livechart" type="button">
-        <span class="panel-tab-num">04</span> LIVE CHART
-      </button>
+    <div id="coin-picker" class="coin-picker">
+        <button id="coin-picker-trigger" class="coin-picker-trigger" type="button" aria-expanded="false" aria-haspopup="listbox">
+            <img id="coin-picker-icon" class="coin-picker-icon" src="" alt="">
+            <span id="coin-picker-label" class="coin-picker-label">BTC / USDT</span>
+            <span class="coin-picker-caret">▼</span>
+        </button>
+        <div id="coin-picker-menu" class="coin-picker-menu" role="listbox"></div>
     </div>
 
-    <div id="panel-microstructure" class="tab-panel active">
-      <p class="tier-note">Ch.06–10 — order-book &amp; regime diagnostics. Display-only: does not alter the verdict above.</p>
-      <div id="tier-2" class="channel-grid"></div>
+
+    <!-- =========================================================
+         ERROR MESSAGE
+    ========================================================== -->
+
+    <p
+        id="error-text"
+        class="error-text hidden"
+    ></p>
+
+
+    <!-- =========================================================
+         ALERT STACK
+    ========================================================== -->
+
+    <div
+        id="alert-stack"
+        class="alert-stack"
+    ></div>
+
+
+    <!-- =========================================================
+         EMPTY STATE
+    ========================================================== -->
+
+    <div
+        id="empty-state"
+        class="empty-state"
+    >
+
+        <div class="empty-mark">
+            ◇
+        </div>
+
+        <div>
+            SELECT AN ASSET AND RUN ANALYSIS
+        </div>
+
+        <small>
+            19-channel quantitative market readout
+        </small>
+
     </div>
 
-    <div id="panel-extended" class="tab-panel">
-      <p class="tier-note">Ch.11–18 — cross-asset, entropy, wavelet &amp; risk-agent panels. Display-only, exploratory.</p>
-      <div id="tier-3" class="channel-grid"></div>
-    </div>
 
-    <div id="panel-liquidity" class="tab-panel">
-      <p class="tier-note">Ch.19 — swing high/low liquidity sweep detector. Display-only, exploratory.</p>
-      <div id="liquidity-scanner"></div>
-    </div>
+    <!-- =========================================================
+         MAIN RESULT
+    ========================================================== -->
 
-    <div id="panel-livechart" class="tab-panel">
-      <div class="chart-panel">
-        <div class="chart-header">
-          <div class="chart-header-left">
-            <span class="chart-icon">◉</span>
-            <div>
-              <div class="chart-title" id="chart-title">BTC / USDT · 1H</div>
-              <div class="chart-subtitle">live candlestick feed — polled from the exchange</div>
+    <main
+        id="result-box"
+        class="hidden"
+    >
+
+
+        <!-- =====================================================
+             HERO / CORE VERDICT ENGINE
+        ====================================================== -->
+
+        <section class="hero">
+
+
+            <!-- VERDICT GAUGE -->
+
+            <div class="gauge-wrap">
+
+                <svg
+                    viewBox="0 0 112 112"
+                    aria-label="Confidence gauge"
+                >
+
+                    <circle
+                        class="gauge-track"
+                        cx="56"
+                        cy="56"
+                        r="48"
+                    ></circle>
+
+                    <circle
+                        id="gauge-fill"
+                        class="gauge-fill"
+                        cx="56"
+                        cy="56"
+                        r="48"
+                    ></circle>
+
+                </svg>
+
+
+                <div class="gauge-center">
+
+                    <div
+                        id="gauge-verdict"
+                        class="gauge-verdict"
+                    >
+                        --
+                    </div>
+
+                    <div
+                        id="gauge-confidence"
+                        class="gauge-confidence"
+                    >
+                        -- confidence
+                    </div>
+
+                </div>
+
             </div>
-          </div>
-          <div class="chart-price-block">
-            <span id="chart-live-dot" class="live-clock-dot"></span>
-            <span id="chart-price" class="chart-price">--</span>
-            <span id="chart-change" class="chart-change">--</span>
-          </div>
-        </div>
-        <div class="chart-tf-row" id="chart-tf-row">
-          <button class="chart-tf-btn" data-tf="1m">1m</button>
-          <button class="chart-tf-btn" data-tf="5m">5m</button>
-          <button class="chart-tf-btn" data-tf="15m">15m</button>
-          <button class="chart-tf-btn active" data-tf="1h">1h</button>
-          <button class="chart-tf-btn" data-tf="4h">4h</button>
-          <button class="chart-tf-btn" data-tf="1d">1d</button>
-        </div>
-        <div id="candle-chart" class="candle-chart"></div>
-        <div class="chart-footer">
-          <span id="chart-status">connecting…</span>
-        </div>
-      </div>
-    </div>
 
-  </main>
 
-  <div id="empty-state" class="empty-state">
-    <div class="empty-mark">◎</div>
-    <div>SELECT A PAIR AND RUN ANALYSIS TO BRING ALL 19 CHANNELS ONLINE</div>
-  </div>
+            <!-- HERO DATA -->
 
-  <footer class="disclaimer">
-    <span id="disclaimer-text">⚠ Probability estimates only — not financial advice. In-sample calculations, no walk-forward backtest run. Final verdict/confidence come only from Tier 01 (Hawkes + Bayesian via Conformal Prediction); Tiers 02–03 are display-only.</span>
-  </footer>
+            <div class="hero-data">
+
+                <div class="hero-eyebrow">
+                    CORE VERDICT ENGINE · TIER 01
+                </div>
+
+
+                <div
+                    id="hero-price"
+                    class="hero-price"
+                >
+                    $--
+                </div>
+
+
+                <div class="hero-sub">
+
+                    <span>
+                        RSI
+                        <b id="hero-rsi">--</b>
+                    </span>
+
+                    <span>
+                        MACD
+                        <b id="hero-macd">--</b>
+                    </span>
+
+                </div>
+
+
+                <div
+                    id="hero-trend-tag"
+                    class="hero-trend-tag"
+                >
+                    -- · -- · --
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             PANEL TABS
+        ====================================================== -->
+
+        <div class="panel-tabs" id="panel-tabs">
+            <button class="panel-tab active" data-panel="tiers">
+                <span class="panel-tab-num">01</span>
+                TIER 01
+            </button>
+            <button class="panel-tab" data-panel="tier2">
+                <span class="panel-tab-num">02</span>
+                TIER 02
+            </button>
+            <button class="panel-tab" data-panel="tier3">
+                <span class="panel-tab-num">03</span>
+                TIER 03
+            </button>
+            <button class="panel-tab" data-panel="livechart">
+                <span class="panel-tab-num">04</span>
+                LIVE CHART
+            </button>
+            <button class="panel-tab" data-panel="liquidity">
+                <span class="panel-tab-num">05</span>
+                LIQUIDITY SCAN
+            </button>
+        </div>
+
+
+        <!-- =====================================================
+             TAB PANEL: TIER 01 + 02 + 03 (default)
+        ====================================================== -->
+
+        <div id="panel-tiers" class="tab-panel active">
+
+
+            <!-- =====================================================
+                 TIER 01
+            ====================================================== -->
+
+            <div class="tier-divider">
+
+                <span class="tier-num">
+                    TIER 01
+                </span>
+
+                <span class="tier-label">
+                    Core Verdict Engine
+                </span>
+
+            </div>
+
+            <p class="tier-note">
+                Primary decision signals used for the final market verdict.
+            </p>
+
+
+            <section
+                id="tier-1"
+                class="channel-grid"
+            >
+            </section>
+
+
+            <!-- =====================================================
+                 TIER 02
+            ====================================================== -->
+
+            <div class="tier-divider">
+
+                <span class="tier-num">
+                    TIER 02
+                </span>
+
+                <span class="tier-label">
+                    Microstructure
+                </span>
+
+            </div>
+
+            <p class="tier-note">
+                Order flow, liquidity and market microstructure signals.
+            </p>
+
+
+            <section
+                id="tier-2"
+                class="channel-grid"
+            >
+            </section>
+
+
+            <!-- =====================================================
+                 TIER 03
+            ====================================================== -->
+
+            <div class="tier-divider">
+
+                <span class="tier-num">
+                    TIER 03
+                </span>
+
+                <span class="tier-label">
+                    Extended Signals
+                </span>
+
+            </div>
+
+            <p class="tier-note">
+                Additional quantitative signals for deeper market context.
+            </p>
+
+
+            <section
+                id="tier-3"
+                class="channel-grid"
+            >
+            </section>
+
+        </div>
+
+
+        <!-- =========================================================
+             TAB PANEL: LIVE CHART
+        ========================================================== -->
+
+        <div id="panel-livechart" class="tab-panel">
+            <div class="chart-panel">
+                <div class="chart-header">
+                    <div class="chart-header-left">
+                        <div class="chart-icon">⬈</div>
+                        <div>
+                            <div class="chart-title" id="chart-title">BTC/USDT · 1H</div>
+                            <div class="chart-subtitle">Lightweight-charts · live OHLCV · polling every 5s</div>
+                        </div>
+                    </div>
+                    <div class="chart-price-block">
+                        <span class="live-clock-dot"></span>
+                        <span class="chart-price" id="chart-price">$--</span>
+                        <span class="chart-change" id="chart-change">--</span>
+                    </div>
+                </div>
+                <div class="chart-tf-row" id="chart-tf-row">
+                    <button class="chart-tf-btn active" data-tf="1h">1H</button>
+                    <button class="chart-tf-btn" data-tf="4h">4H</button>
+                    <button class="chart-tf-btn" data-tf="1d">1D</button>
+                </div>
+
+                <div class="candle-chart" id="candle-chart"></div>
+                <div class="chart-footer" id="chart-status">loading candles…</div>
+            </div>
+        </div>
+
+
+        <!-- =========================================================
+             TAB PANEL: LIQUIDITY SCANNER
+        ========================================================== -->
+
+        <div id="panel-liquidity" class="tab-panel">
+            <div id="liquidity-content" class="liquidity-panel">
+                <div class="empty-state">
+                    <div class="empty-mark">◆</div>
+                    <div>LOADING LIQUIDITY SCAN…</div>
+                    <small>Binance USD-M Futures · order book & flow analysis</small>
+                </div>
+            </div>
+        </div>
+
+
+    </main>
+
+
+    <!-- =========================================================
+         FOOTER
+    ========================================================== -->
+
+    <footer class="disclaimer">
+
+        ⚠ Probability estimates only — not financial advice.
+        In-sample calculations may not represent future performance.
+        Final verdict confidence is derived from the core signal engine.
+
+    </footer>
+
 
 </div>
 
-<script src="/static/script.js"></script>
+
+<!-- =============================================================
+     JAVASCRIPT
+============================================================== -->
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
 </body>
 </html>
