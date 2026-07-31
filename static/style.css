@@ -376,6 +376,86 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .liq-stat-value { color: var(--text); font-family: var(--mono); font-size: 17px; font-weight: 700; white-space: nowrap; }
 
 /* ================================================================
+   LIQUIDITY POOL RADAR (Ch.19 extension) — sweep-style scan for
+   resting liquidity pools above/below current price, per coin.
+================================================================ */
+.liq-radar-wrap { display: flex; flex-direction: column; gap: 16px; padding-top: 16px; margin-top: 2px; border-top: 1px solid var(--line-soft); }
+.liq-radar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.liq-radar-title { color: var(--text); font-family: var(--sans); font-size: 13px; font-weight: 700; }
+.liq-radar-caption { color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px; }
+
+.liq-radar-body { display: grid; grid-template-columns: minmax(180px, 260px) 1fr; gap: 22px; align-items: center; }
+@media (max-width: 640px) { .liq-radar-body { grid-template-columns: 1fr; } }
+
+.liq-radar-scope {
+    position: relative; width: 100%; aspect-ratio: 1 / 1; max-width: 260px; margin: 0 auto;
+    border-radius: 50%; overflow: hidden;
+    background: radial-gradient(circle at 50% 50%, rgba(54, 224, 160, 0.06), var(--void) 78%);
+    border: 1px solid var(--line);
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.55);
+}
+.radar-ring {
+    position: absolute; top: 50%; left: 50%; border: 1px solid rgba(139, 150, 165, 0.16);
+    border-radius: 50%; transform: translate(-50%, -50%);
+}
+.radar-ring.r1 { width: 25%; height: 25%; }
+.radar-ring.r2 { width: 50%; height: 50%; }
+.radar-ring.r3 { width: 75%; height: 75%; }
+.radar-ring.r4 { width: 100%; height: 100%; }
+.radar-cross { position: absolute; background: rgba(139, 150, 165, 0.14); }
+.radar-cross.h { top: 50%; left: 0; width: 100%; height: 1px; transform: translateY(-50%); }
+.radar-cross.v { left: 50%; top: 0; width: 1px; height: 100%; transform: translateX(-50%); }
+
+.radar-sweep-beam {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, rgba(54, 224, 160, 0.4), rgba(54, 224, 160, 0.10) 20deg, transparent 55deg);
+    animation: radarSpin 4s linear infinite;
+    mix-blend-mode: screen;
+    transform-origin: 50% 50%;
+}
+@keyframes radarSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.radar-center-dot {
+    position: absolute; top: 50%; left: 50%; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--text); box-shadow: 0 0 10px rgba(233, 238, 245, 0.6);
+    transform: translate(-50%, -50%); z-index: 3;
+}
+.radar-center-label {
+    position: absolute; top: calc(50% + 9px); left: 50%; transform: translateX(-50%);
+    color: var(--text-faint); font-family: var(--mono); font-size: 7px; letter-spacing: 0.3px; z-index: 3; white-space: nowrap;
+}
+
+.radar-blip { position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); z-index: 2; cursor: default; }
+.radar-blip::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: inherit; }
+.radar-blip::after {
+    content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid currentColor;
+    opacity: 0; animation: radarPing 2.4s ease-out infinite;
+}
+.radar-blip.side-sell { background: var(--short); color: var(--short); box-shadow: 0 0 8px rgba(255, 82, 107, 0.6); }
+.radar-blip.side-buy  { background: var(--long); color: var(--long); box-shadow: 0 0 8px rgba(54, 224, 160, 0.6); }
+.radar-blip.swept { background: var(--text-faint); color: var(--text-faint); box-shadow: none; opacity: 0.5; }
+.radar-blip.swept::after { animation: none; }
+@keyframes radarPing {
+    0% { transform: scale(0.6); opacity: 0.5; }
+    100% { transform: scale(2.2); opacity: 0; }
+}
+
+.liq-radar-legend { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; padding-right: 2px; }
+.liq-radar-legend-row {
+    display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center;
+    padding: 8px 10px; background: var(--panel-raised); border: 1px solid var(--line-soft); border-radius: 7px;
+}
+.liq-radar-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.liq-radar-dot.side-sell { background: var(--short); box-shadow: 0 0 6px rgba(255, 82, 107, 0.5); }
+.liq-radar-dot.side-buy  { background: var(--long); box-shadow: 0 0 6px rgba(54, 224, 160, 0.5); }
+.liq-radar-dot.swept     { background: var(--text-faint); box-shadow: none; }
+.liq-radar-price { color: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 700; }
+.liq-radar-dist  { color: var(--text-dim); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+.liq-radar-strength-track { position: relative; width: 46px; height: 4px; background: #252c35; border-radius: 2px; overflow: hidden; }
+.liq-radar-strength-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px; }
+.liq-radar-empty { color: var(--text-faint); font-family: var(--mono); font-size: 10px; padding: 6px 0 2px; }
+
+/* ================================================================
    LIVE CHART PANEL (new tab)
 ================================================================ */
 
