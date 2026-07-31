@@ -64,7 +64,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const options = group.querySelectorAll("option");
       options.forEach(opt => {
         const symbol = opt.value.split("/")[0].toLowerCase();
-        // Fallback icon source or placeholder
         const iconUrl = `https://assets.coincap.io/assets/icons/${symbol}@2x.png`;
         menuHtml += `
           <div class="coin-picker-item" data-value="${opt.value}">
@@ -76,17 +75,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     coinPickerMenu.innerHTML = menuHtml;
 
-    // Set initial selection
     updatePickerSelection(coinSelectNative.value);
 
-    // Trigger toggle
     coinPickerTrigger.addEventListener("click", (e) => {
       e.stopPropagation();
       coinPickerMenu.classList.toggle("open");
       coinPickerTrigger.setAttribute("aria-expanded", coinPickerMenu.classList.contains("open"));
     });
 
-    // Item click
     coinPickerMenu.querySelectorAll(".coin-picker-item").forEach(item => {
       item.addEventListener("click", () => {
         const val = item.dataset.value;
@@ -168,7 +164,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (emptyState) emptyState.classList.add("hidden");
     if (resultBox) resultBox.classList.remove("hidden");
 
-    // Render Hero Gauge & Price
     const verdict = data.verdict || "FLAT";
     const confidence = data.confidence_score || 0;
     if (gaugeVerdict) gaugeVerdict.textContent = verdict;
@@ -189,7 +184,6 @@ document.addEventListener("DOMContentLoaded", () => {
       heroTrendTag.textContent = data.market_regime || "NEUTRAL REGIME";
     }
 
-    // Render Tier 1 (Ch. 01–05)
     if (tier1El) {
       tier1El.innerHTML = renderChannels([
         { id: "CH.01", title: "Hawkes Intensity Jumps", data: data.hawkes_intensity },
@@ -200,7 +194,6 @@ document.addEventListener("DOMContentLoaded", () => {
       ]);
     }
 
-    // Render Tier 2 (Ch. 06–10)
     if (tier2El) {
       tier2El.innerHTML = renderChannels([
         { id: "CH.06", title: "Microstructure Depth", data: data.microstructure_depth },
@@ -211,7 +204,6 @@ document.addEventListener("DOMContentLoaded", () => {
       ]);
     }
 
-    // Render Tier 3 (Ch. 11–18)
     if (tier3El) {
       tier3El.innerHTML = renderChannels([
         { id: "CH.11", title: "Cross-Asset Correlation", data: data.cross_asset },
@@ -225,10 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ]);
     }
 
-    // Render Liquidity Scanner (Ch. 19)
     renderLiquidityScanner(data);
-
-    // Initialize/Update Live Chart if available
     initLiveChart(coinSelectNative.value);
   }
 
@@ -258,7 +247,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         </div>`;
     }).join("");
-  });
+  }
 });
 
 /* ---------------------------- liquidity scanner: CH.19 (Radar Mode) ---------------------------- */
@@ -294,7 +283,6 @@ function renderLiquidityScanner(data) {
         ${window.badge(statusLabel, tone)}
       </div>
 
-      <!-- Aircraft Radar Screen UI -->
       <div class="radar-container">
         <div class="radar-grid-ring radar-ring-1"></div>
         <div class="radar-grid-ring radar-ring-2"></div>
@@ -303,7 +291,6 @@ function renderLiquidityScanner(data) {
         <div class="radar-crosshair-v"></div>
         <div class="radar-sweep-arm"></div>
         
-        <!-- Blips representing Swing High, Low & Mark Price -->
         <div class="radar-blip radar-blip-high" title="Swing High Zone"></div>
         <div class="radar-blip radar-blip-low" title="Swing Low Zone"></div>
         <div class="radar-blip radar-blip-price" title="Current Price Center"></div>
@@ -379,7 +366,6 @@ function initLiveChart(pair) {
       wickDownColor: "#ff4d6d",
     });
 
-    // Resize observer
     window.addEventListener("resize", () => {
       if (container && chartInstance) {
         chartInstance.applyOptions({ width: container.clientWidth, height: container.clientHeight });
@@ -387,7 +373,6 @@ function initLiveChart(pair) {
     });
   }
 
-  // Fetch candles
   fetch(`/candles?pair=${encodeURIComponent(pair)}&tf=1h`)
     .then(res => res.json())
     .then(data => {
