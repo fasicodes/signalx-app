@@ -325,7 +325,7 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .badge.on-flat { background: var(--line-soft); color: var(--text-dim); }
 
 /* ================================================================
-   LIQUIDITY SCANNER PANEL (Ch.19)
+   LIQUIDITY RADAR SCANNER PANEL (Ch.19)
 ================================================================ */
 
 .liq-panel {
@@ -345,6 +345,46 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 }
 .liq-title { color: var(--text); font-family: var(--sans); font-size: 14px; font-weight: 700; }
 .liq-subtitle { margin-top: 2px; color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px; }
+
+/* ---- radar display ---- */
+
+.radar-container {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 10px 0 4px;
+}
+
+.radar-canvas {
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: var(--void);
+    border: 1px solid var(--line);
+    box-shadow:
+        0 0 0 4px rgba(39, 48, 59, 0.35),
+        0 0 30px rgba(54, 224, 160, 0.06),
+        inset 0 0 40px rgba(7, 10, 15, 0.6);
+    display: block;
+    margin: 0 auto;
+}
+
+.radar-legend {
+    display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap;
+    padding: 8px 14px;
+    background: var(--panel-raised);
+    border: 1px solid var(--line-soft);
+    border-radius: 6px;
+}
+
+.radar-legend-item {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--text-dim); font-family: var(--mono); font-size: 9px;
+    font-weight: 600; letter-spacing: 0.4px; white-space: nowrap;
+}
+
+.radar-legend-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
 
 .liq-range { position: relative; padding: 26px 6px 6px; }
 .liq-range-track { position: relative; height: 5px; background: #252c35; border-radius: 3px; overflow: visible; }
@@ -464,6 +504,7 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     .panel-tabs { flex-wrap: wrap; }
     .panel-tab { flex: 1 1 calc(50% - 4px); justify-content: flex-start; padding-left: 10px; }
     .liq-panel, .chart-panel { padding: 16px; }
+    .radar-canvas { max-width: 300px; }
     .liq-stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
     .candle-chart { height: 300px; }
     .chart-tf-row { flex-wrap: wrap; }
@@ -475,6 +516,7 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     .topbar { flex-direction: column; gap: 8px; }
     .topbar-right { align-self: flex-end; }
     .liq-stats-grid { grid-template-columns: 1fr; }
+    .radar-canvas { max-width: 260px; }
     .panel-tab { flex: 1 1 100%; }
 }
 
