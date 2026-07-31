@@ -733,6 +733,78 @@ def liquidity_sweep_detector(df, lookback=50):
 
 
 # ============================================================
+# CH.19 EXTENSION - LIQUIDITY POOL RADAR
+# Purana liquidity_sweep_detector() sirf EK swing high/low deta tha.
+# Ye function usi Ch.19 window (candles) mein multiple equal-highs /
+# equal-lows clusters dhoondta hai aur unhe "resting liquidity pools"
+# ke tor par score karta hai - jaise ek radar screen par blips.
+#
+# Har coin apni khud ki candle history se independently scan hota
+# hai (generate_signal() ke andar per-symbol call hota hai), isliye
+# har coin ke pools alag-alag aate hain.
+#
+# Verdict/confidence ko YE BHI TOUCH NAHI KARTA - purana display-only
+# rule yahan bhi follow hota hai.
+# ============================================================
+def liquidity_pool_radar(df, lookback=100, pivot_window=3, cluster_tol_pct=0.15, max_pools=8):
+    recent = df.tail(lookback).reset_index(drop=True)
+    current_price = float(df["close"].iloc[-1])
+    n = len(recent)
+
+    if n < (pivot_window * 2 + 1):
+        return {"pools": []}
+
+    highs = recent["high"].values
+    lows = recent["low"].values
+
+    pivot_highs = []
+    pivot_lows = []
+    for i in range(pivot_window, n - pivot_window):
+        window_h = highs[i - pivot_window:i + pivot_window + 1]
+        if highs[i] == window_h.max():
+            pivot_highs.append((i, float(highs[i])))
+        window_l = lows[i - pivot_window:i + pivot_window + 1]
+        if lows[i] == window_l.min():
+            pivot_lows.append((i, float(lows[i])))
+
+    def cluster(pivots, side):
+        clusters = []
+        for idx, level in pivots:
+            placed = False
+            for c in clusters:
+                if abs(level - c["level"]) / c["level"] * 100 <= cluster_tol_pct:
+                    c["touches"] += 1
+                    c["level"] = (c["level"] * (c["touches"] - 1) + level) / c["touches"]
+                    c["last_idx"] = max(c["last_idx"], idx)
+                    placed = True
+                    break
+            if not placed:
+                clusters.append({"level": level, "touches": 1, "last_idx": idx, "side": side})
+        return clusters
+
+    pools = cluster(pivot_highs, "SELL_SIDE") + cluster(pivot_lows, "BUY_SIDE")
+
+    out = []
+    for p in pools:
+        distance_pct = round(abs(current_price - p["level"]) / current_price * 100, 3)
+        recency = p["last_idx"] / max(n - 1, 1)
+        strength = round(min(1.0, (p["touches"] / 4.0) * 0.7 + recency * 0.3), 3)
+        swept = (p["side"] == "SELL_SIDE" and current_price > p["level"]) or \
+                (p["side"] == "BUY_SIDE" and current_price < p["level"])
+        out.append({
+            "price": round(p["level"], 2),
+            "side": p["side"],              # SELL_SIDE = resting liquidity above price, BUY_SIDE = below price
+            "touches": p["touches"],
+            "distance_pct": distance_pct,
+            "strength": strength,
+            "swept": swept,
+        })
+
+    out.sort(key=lambda x: (-x["strength"], x["distance_pct"]))
+    return {"pools": out[:max_pools]}
+
+
+# ============================================================
 # MASTER FUNCTION - sab 19 concepts combine karta hai
 # *** FINAL VERDICT + CONFIDENCE ab bhi SIRF Hawkes + Bayesian se
 #     bante hain (Conformal Prediction), v4 jaisa hi - ISE CHANGE
@@ -841,6 +913,13 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         sweep_data = liquidity_sweep_detector(df)
     except Exception as e:
         sweep_data = {"liquidity_sweep_detected": None, "error": str(e)}
+
+    try:
+        radar_data = liquidity_pool_radar(df)
+        sweep_data["pools"] = radar_data.get("pools", [])
+    except Exception as e:
+        sweep_data["pools"] = []
+        sweep_data["pools_error"] = str(e)
 
     result = {
         "trend": trend,
