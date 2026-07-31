@@ -519,7 +519,11 @@ function renderTier3(data) {
   tier3El.innerHTML = cards.join("");
 }
 
-/* ---------------------------- liquidity scanner: CH.19 ---------------------------- */
+/* ---------------------------- liquidity scanner: CH.19 (RADAR) ---------------------------- */
+
+let radarAnimationId = null;
+let radarSweepAngle = -Math.PI / 2; // Start at top (12 o'clock)
+let radarLastTime = 0;
 
 function renderLiquidityScanner(data) {
   if (!liqScannerEl) return;
@@ -528,15 +532,50 @@ function renderLiquidityScanner(data) {
   const price = data.last_price;
 
   const hasRange = !na(sweep.swing_high) && !na(sweep.swing_low) && !na(price) && sweep.swing_high > sweep.swing_low;
-  let markerPct = 50;
-  if (hasRange) {
-    const range = sweep.swing_high - sweep.swing_low;
-    markerPct = Math.max(2, Math.min(98, ((price - sweep.swing_low) / range) * 100));
-  }
 
   const detected = !!sweep.liquidity_sweep_detected;
   const tone = detected ? "wait" : "flat";
-  const statusLabel = detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "NO SWEEP DETECTED";
+  const statusLabel = detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "SCANNING...";
+
+  // Calculate blip positions for radar
+  // Radar angle: 0 = right (3 o'clock), -PI/2 = top (12 o'clock), sweep goes clockwise
+  // Map price levels to radar angles (0 to 2π)
+  // Current price: between swing low and swing high
+  // Swing low: at bottom-ish, swing high: at top-ish
+  let blips = [];
+  if (hasRange) {
+    const range = sweep.swing_high - sweep.swing_low;
+    // Map price to angle: swing_low -> -PI/2 (bottom), swing_high -> PI/2 (top)
+    // Actually let's make it more intuitive: sweep the full circle
+    // Map price ratio to angle (0 to 2π)
+    const priceRatio = Math.max(0, Math.min(1, (price - sweep.swing_low) / range));
+    const priceAngle = -Math.PI / 2 + priceRatio * 2 * Math.PI;
+
+    blips = [
+      { angle: -Math.PI / 2, radius: 0.9, label: "SWING LOW", value: fmtPrice(sweep.swing_low), type: "low", color: "var(--short)" },
+      { angle: Math.PI / 2, radius: 0.9, label: "SWING HIGH", value: fmtPrice(sweep.swing_high), type: "high", color: "var(--long)" },
+      { angle: priceAngle, radius: 0.6, label: "CURRENT", value: fmtPrice(price), type: "current", color: "var(--accent)" },
+    ];
+  } else {
+    blips = [
+      { angle: -Math.PI / 2, radius: 0.8, label: "SWING LOW", value: fmtPrice(sweep.swing_low) || "--", type: "low", color: "var(--short)" },
+      { angle: Math.PI / 2, radius: 0.8, label: "SWING HIGH", value: fmtPrice(sweep.swing_high) || "--", type: "high", color: "var(--long)" },
+      { angle: 0, radius: 0.5, label: "CURRENT", value: fmtPrice(price) || "--", type: "current", color: "var(--accent)" },
+    ];
+  }
+
+  // Add sweep detection indicator blip if sweep detected
+  if (detected && hasRange) {
+    const sweepAngle = sweep.sweep_direction === "SWEPT_HIGH_REVERSED_DOWN" ? Math.PI / 2 : -Math.PI / 2;
+    blips.push({
+      angle: sweepAngle,
+      radius: 1.05,
+      label: "SWEEP DETECTED",
+      value: sweep.sweep_direction.replace(/_/g, " "),
+      type: "sweep",
+      color: "var(--wait)"
+    });
+  }
 
   liqScannerEl.innerHTML = `
     <div class="liq-panel">
@@ -544,25 +583,16 @@ function renderLiquidityScanner(data) {
         <div class="liq-header-left">
           <span class="liq-icon">⌁</span>
           <div>
-            <div class="liq-title">Liquidity Sweep Scanner</div>
-            <div class="liq-subtitle">CH.19 · swing high/low · display-only</div>
+            <div class="liq-title">Liquidity Radar Scanner</div>
+            <div class="liq-subtitle">CH.19 · rotating sweep · display-only</div>
           </div>
         </div>
         ${badge(statusLabel, tone)}
       </div>
 
-      <div class="liq-range">
-        <div class="liq-range-track">
-          <div class="liq-range-fill"></div>
-          <div class="liq-range-endpoint" style="left:0%;"></div>
-          <div class="liq-range-endpoint" style="left:100%;"></div>
-          <div class="liq-range-endpoint-label" style="left:0%;">${fmtPrice(sweep.swing_low)}</div>
-          <div class="liq-range-endpoint-label" style="left:100%;">${fmtPrice(sweep.swing_high)}</div>
-          ${hasRange ? `
-            <div class="liq-range-marker" style="left:${markerPct}%;"></div>
-            <div class="liq-range-marker-label" style="left:${markerPct}%;">${fmtPrice(price)}</div>
-          ` : ""}
-        </div>
+      <div class="radar-container">
+        <canvas id="liquidity-radar" class="radar-canvas" width="320" height="320"></canvas>
+        <div class="radar-legend" id="radar-legend"></div>
       </div>
 
       <div class="liq-stats-grid">
@@ -584,189 +614,258 @@ function renderLiquidityScanner(data) {
         </div>
       </div>
     </div>`;
+
+  // Initialize radar animation after DOM is ready
+  requestAnimationFrame(() => initRadar(blips, detected));
 }
 
-/* ==========================================================================
-   LIVE CHART TAB — real candlesticks via TradingView's lightweight-charts,
-   fed from the /candles endpoint and polled every few seconds for live
-   price + last-candle updates.
-   ========================================================================== */
+function initRadar(blips, detected) {
+  const canvas = document.getElementById("liquidity-radar");
+  if (!canvas) return;
 
-let lwChart = null;
-let lwCandleSeries = null;
-let chartPollTimer = null;
-let currentChartTimeframe = "1h";
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
-function ensureChartInitialized() {
-  if (lwChart || !candleChartEl || typeof LightweightCharts === "undefined") return;
+  // Stop any existing animation
+  if (radarAnimationId) {
+    cancelAnimationFrame(radarAnimationId);
+    radarAnimationId = null;
+  }
 
-  lwChart = LightweightCharts.createChart(candleChartEl, {
-    layout: {
-      background: { type: "solid", color: "transparent" },
-      textColor: "#8b96a5",
-      fontFamily: "IBM Plex Mono, monospace",
-      fontSize: 11,
-    },
-    grid: {
-      vertLines: { color: "rgba(39, 48, 59, 0.5)" },
-      horzLines: { color: "rgba(39, 48, 59, 0.5)" },
-    },
-    rightPriceScale: { borderColor: "#27303b" },
-    timeScale: { borderColor: "#27303b", timeVisible: true, secondsVisible: false },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-  });
+  // Setup canvas for high DPI
+  const dpr = window.devicePixelRatio || 1;
+  const size = canvas.clientWidth || 320;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  ctx.scale(dpr, dpr);
 
-  lwCandleSeries = lwChart.addCandlestickSeries({
-    upColor: "#36e0a0",
-    downColor: "#ff526b",
-    borderUpColor: "#28f3a5",
-    borderDownColor: "#ff6b7e",
-    wickUpColor: "#36e0a0",
-    wickDownColor: "#ff526b",
-  });
+  // Colors from CSS variables
+  const style = getComputedStyle(document.documentElement);
+  const colors = {
+    void: style.getPropertyValue("--void").trim() || "#070a0f",
+    panel: style.getPropertyValue("--panel").trim() || "#11161e",
+    line: style.getPropertyValue("--line").trim() || "#27303b",
+    lineSoft: style.getPropertyValue("--line-soft").trim() || "#1a222c",
+    text: style.getPropertyValue("--text").trim() || "#e9eef5",
+    textDim: style.getPropertyValue("--text-dim").trim() || "#8b96a5",
+    textFaint: style.getPropertyValue("--text-faint").trim() || "#566171",
+    long: style.getPropertyValue("--long").trim() || "#36e0a0",
+    short: style.getPropertyValue("--short").trim() || "#ff526b",
+    wait: style.getPropertyValue("--wait").trim() || "#ffc857",
+    accent: style.getPropertyValue("--accent").trim() || "#f5a623",
+    longDim: style.getPropertyValue("--long-dim").trim() || "rgba(54, 224, 160, 0.12)",
+    shortDim: style.getPropertyValue("--short-dim").trim() || "rgba(255, 82, 107, 0.12)",
+    waitDim: style.getPropertyValue("--wait-dim").trim() || "rgba(255, 200, 87, 0.12)",
+    accentDim: style.getPropertyValue("--accent-dim").trim() || "rgba(245, 166, 35, 0.12)",
+  };
 
-  window.addEventListener("resize", resizeChart);
-}
+  const centerX = size / 2;
+  const centerY = size / 2;
+  const maxRadius = (size / 2) - 20; // Leave padding for labels
 
-function resizeChart() {
-  if (!lwChart || !candleChartEl) return;
-  lwChart.resize(candleChartEl.clientWidth, candleChartEl.clientHeight);
-}
+  // Radar sweep speed (radians per second) - slow like real radar
+  const SWEEP_SPEED = Math.PI / 3; // ~3 seconds per full rotation
 
-if (chartTfRow) {
-  chartTfRow.querySelectorAll(".chart-tf-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      chartTfRow.querySelectorAll(".chart-tf-btn").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      currentChartTimeframe = btn.dataset.tf;
-      loadChartData();
+  function drawRadar(timestamp) {
+    if (!radarLastTime) radarLastTime = timestamp;
+    const delta = (timestamp - radarLastTime) / 1000; // seconds
+    radarLastTime = timestamp;
+
+    // Update sweep angle
+    radarSweepAngle += SWEEP_SPEED * delta;
+    if (radarSweepAngle > Math.PI * 3/2) radarSweepAngle = -Math.PI / 2;
+
+    // Clear
+    ctx.clearRect(0, 0, size, size);
+
+    // Draw background circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, maxRadius, 0, Math.PI * 2);
+    ctx.fillStyle = colors.void;
+    ctx.fill();
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw concentric circles (radar rings) - 4 rings
+    const ringCount = 4;
+    for (let i = 1; i <= ringCount; i++) {
+      const r = (maxRadius / ringCount) * i;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+      ctx.strokeStyle = colors.lineSoft;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Draw crosshairs (cardinal directions)
+    ctx.strokeStyle = colors.lineSoft;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 6]);
+    // Horizontal
+    ctx.beginPath();
+    ctx.moveTo(centerX - maxRadius, centerY);
+    ctx.lineTo(centerX + maxRadius, centerY);
+    ctx.stroke();
+    // Vertical
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY - maxRadius);
+    ctx.lineTo(centerX, centerY + maxRadius);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw diagonal crosshairs
+    ctx.beginPath();
+    ctx.moveTo(centerX - maxRadius * 0.707, centerY - maxRadius * 0.707);
+    ctx.lineTo(centerX + maxRadius * 0.707, centerY + maxRadius * 0.707);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(centerX - maxRadius * 0.707, centerY + maxRadius * 0.707);
+    ctx.lineTo(centerX + maxRadius * 0.707, centerY - maxRadius * 0.707);
+    ctx.stroke();
+
+    // Draw sweep line (rotating beam)
+    const sweepX = centerX + Math.cos(radarSweepAngle) * maxRadius;
+    const sweepY = centerY + Math.sin(radarSweepAngle) * maxRadius;
+
+    // Sweep trail (fading triangle/fan)
+    const trailAngle = 0.3; // ~17 degrees
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, maxRadius, radarSweepAngle - trailAngle/2, radarSweepAngle + trailAngle/2);
+    ctx.closePath();
+
+    // Gradient for sweep trail
+    const sweepGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
+    sweepGrad.addColorStop(0, colors.long.replace(")", ", 0.25").replace("rgb", "rgba"));
+    sweepGrad.addColorStop(1, colors.long.replace(")", ", 0").replace("rgb", "rgba"));
+    ctx.fillStyle = sweepGrad;
+    ctx.fill();
+
+    // Bright sweep line
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(sweepX, sweepY);
+    ctx.strokeStyle = colors.long;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // Sweep tip glow
+    ctx.beginPath();
+    ctx.arc(sweepX, sweepY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = colors.long;
+    ctx.shadowColor = colors.long;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Draw blips (detected targets)
+    blips.forEach(blip => {
+      const blipX = centerX + Math.cos(blip.angle) * maxRadius * blip.radius;
+      const blipY = centerY + Math.sin(blip.angle) * maxRadius * blip.radius;
+
+      // Check if sweep is near this blip (for highlight effect)
+      const angleDiff = Math.abs(radarSweepAngle - blip.angle);
+      const normalizedDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
+      const isHighlighted = normalizedDiff < 0.2; // ~11 degrees
+
+      // Blip pulse when highlighted
+      const pulseScale = isHighlighted ? 1 + Math.sin(timestamp / 100) * 0.3 : 1;
+      const blipRadius = 6 * pulseScale;
+
+      // Draw blip
+      ctx.beginPath();
+      ctx.arc(blipX, blipY, blipRadius, 0, Math.PI * 2);
+      const blipColor = blip.color || colors.accent;
+      ctx.fillStyle = isHighlighted ? blipColor : blipColor + "CC";
+      ctx.shadowColor = blipColor;
+      ctx.shadowBlur = isHighlighted ? 12 : 6;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Blip ring when highlighted
+      if (isHighlighted) {
+        ctx.beginPath();
+        ctx.arc(blipX, blipY, blipRadius + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = blipColor + "80";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Draw label for blip (outside radar)
+      const labelRadius = maxRadius * blip.radius + 20;
+      const labelX = centerX + Math.cos(blip.angle) * labelRadius;
+      const labelY = centerY + Math.sin(blip.angle) * labelRadius;
+
+      ctx.font = "10px 'IBM Plex Mono', monospace";
+      ctx.textAlign = blip.angle > -Math.PI/2 && blip.angle < Math.PI/2 ? "left" : "right";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = colors.textDim;
+      ctx.fillText(blip.label, labelX + (blip.angle > -Math.PI/2 && blip.angle < Math.PI/2 ? 8 : -8), labelY);
     });
-  });
-}
 
-async function loadChartData() {
-  if (!candleChartEl) return;
-  ensureChartInitialized();
-  if (!lwChart) {
-    if (chartStatusEl) chartStatusEl.textContent = "chart library failed to load — check your connection";
-    return;
-  }
+    // Draw center dot
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = colors.textDim;
+    ctx.fill();
 
-  const coin = coinSelect.value;
-  if (chartTitleEl) chartTitleEl.textContent = `${coin} · ${currentChartTimeframe.toUpperCase()}`;
-  if (chartStatusEl) chartStatusEl.textContent = "loading candles…";
-
-  try {
-    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${currentChartTimeframe}&limit=300`);
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || "candle fetch failed");
-
-    const bars = (data.candles || []).map((c) => ({
-      time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
-    }));
-    lwCandleSeries.setData(bars);
-    lwChart.timeScale().fitContent();
-
-    updateChartPrice(data);
-    if (chartStatusEl) {
-      chartStatusEl.textContent = `live · ${coin} · ${currentChartTimeframe.toUpperCase()} · updates every 5s`;
+    // Draw distance labels on rings
+    ctx.font = "8px 'IBM Plex Mono', monospace";
+    ctx.fillStyle = colors.textFaint;
+    ctx.textAlign = "center";
+    for (let i = 1; i <= ringCount; i++) {
+      const r = (maxRadius / ringCount) * i;
+      const pct = Math.round((i / ringCount) * 100);
+      ctx.fillText(`${pct}%`, centerX + r + 12, centerY - 2);
     }
 
-    restartChartPolling(coin);
-  } catch (err) {
-    if (chartStatusEl) chartStatusEl.textContent = "⚠ " + err.message;
+    radarAnimationId = requestAnimationFrame(drawRadar);
+  }
+
+  // Build legend
+  buildRadarLegend(blips, colors);
+
+  radarAnimationId = requestAnimationFrame(drawRadar);
+}
+
+function buildRadarLegend(blips, colors) {
+  const legendEl = document.getElementById("radar-legend");
+  if (!legendEl) return;
+
+  const uniqueTypes = [...new Set(blips.map(b => b.type))];
+  const typeLabels = {
+    high: { label: "Swing High", color: colors.long },
+    low: { label: "Swing Low", color: colors.short },
+    current: { label: "Current Price", color: colors.accent },
+    sweep: { label: "Sweep Detected", color: colors.wait },
+  };
+
+  legendEl.innerHTML = uniqueTypes.map(type => {
+    const info = typeLabels[type];
+    return `<div class="radar-legend-item">
+      <span class="radar-legend-dot" style="background:${info.color}; box-shadow: 0 0 8px ${info.color};"></span>
+      <span>${info.label}</span>
+    </div>`;
+  }).join("");
+}
+
+// Cleanup radar animation when panel is hidden
+function stopRadarAnimation() {
+  if (radarAnimationId) {
+    cancelAnimationFrame(radarAnimationId);
+    radarAnimationId = null;
   }
 }
 
-function updateChartPrice(data) {
-  if (chartPriceEl) chartPriceEl.textContent = fmtPrice(data.last_price);
-  if (chartChangeEl) {
-    const chg = data.change_pct;
-    chartChangeEl.textContent = na(chg) ? "--" : (chg > 0 ? "+" : "") + chg.toFixed(2) + "%";
-    chartChangeEl.classList.remove("up", "down");
-    if (!na(chg)) chartChangeEl.classList.add(chg >= 0 ? "up" : "down");
+// Hook into panel tab switching to stop radar when leaving liquidity panel
+const originalActivatePanel = activatePanel;
+activatePanel = function(name) {
+  if (name !== "liquidity") {
+    stopRadarAnimation();
   }
-}
-
-function restartChartPolling(coin) {
-  if (chartPollTimer) clearInterval(chartPollTimer);
-  chartPollTimer = setInterval(async () => {
-    const livePanel = document.getElementById("panel-livechart");
-    if (!livePanel || !livePanel.classList.contains("active")) return; // pause when tab hidden
-    try {
-      const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${currentChartTimeframe}&limit=2`);
-      const data = await res.json();
-      if (!res.ok || data.error || !data.candles || !data.candles.length) return;
-
-      const last = data.candles[data.candles.length - 1];
-      lwCandleSeries.update({
-        time: last.time, open: last.open, high: last.high, low: last.low, close: last.close,
-      });
-      updateChartPrice(data);
-    } catch (e) {
-      // Silent — a single missed poll shouldn't spam the UI; next tick retries.
-    }
-  }, 5000);
-}
-
-/* ---------------------------- main render ---------------------------- */
-
-function renderResult(data) {
-  clearAlerts();
-
-  const jump = data.jump_shock || {};
-  if (jump.jump_detected) {
-    addAlert("danger", `VOLATILITY SHOCK — ${jump.jump_direction} jump detected (z=${fmtNum(jump.jump_zscore, 2)})`);
-  }
-  if (data.fake_breakout_warning) {
-    addAlert("warning", "FAKE BREAKOUT RISK — order flow disagrees with price direction");
-  }
-
-  renderHero(data);
-  renderTier1(data);
-  renderTier2(data);
-  renderTier3(data);
-  renderLiquidityScanner(data);
-
-  if (data.disclaimer) {
-    document.getElementById("disclaimer-text").textContent = "⚠ " + data.disclaimer;
-  }
-
-  // Keep the live chart's coin/title in sync even if the user hasn't opened
-  // that tab yet — it'll be correct the moment they click it.
-  if (chartTitleEl) chartTitleEl.textContent = `${data.coin || coinSelect.value} · ${currentChartTimeframe.toUpperCase()}`;
-}
-
-/* ---------------------------- fetch flow ---------------------------- */
-
-async function runAnalysis() {
-  const coin = coinSelect.value;
-
-  errorText.classList.add("hidden");
-  errorText.textContent = "";
-  runBtn.disabled = true;
-  runBtn.querySelector(".scan-btn-text").textContent = "SCANNING…";
-
-  try {
-    const res = await fetch(`/signal?coin=${encodeURIComponent(coin)}&timeframe=1h`);
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-      throw new Error(data.error || "Signal fetch failed");
-    }
-
-    renderResult(data);
-    resultBox.classList.remove("hidden");
-    emptyState.classList.add("hidden");
-  } catch (err) {
-    errorText.textContent = "⚠ " + err.message;
-    errorText.classList.remove("hidden");
-    resultBox.classList.add("hidden");
-    emptyState.classList.remove("hidden");
-  } finally {
-    runBtn.disabled = false;
-    runBtn.querySelector(".scan-btn-text").textContent = "RUN ANALYSIS";
-  }
-}
-
-runBtn.addEventListener("click", runAnalysis);
+  originalActivatePanel(name);
+};
