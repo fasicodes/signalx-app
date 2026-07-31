@@ -78,6 +78,13 @@ CORS(app)
 
 exchange = ccxt.okx()
 
+# In-memory cache for the "Possible Spoofing" heuristic (Ch.21). Keyed by
+# symbol, holds the last order-book snapshot so the NEXT /liquidity request
+# can compare against it and see which large resting orders vanished.
+# NOTE: this is per-process memory - fine for a single Railway dyno, but
+# resets on restart and won't be shared across multiple workers/instances.
+_OB_SNAPSHOT_CACHE = {}
+
 # NOTE: exchange OKX hai. Neeche wali AVAILABLE_COINS list frontend (design.html)
 # ke coin-select dropdown se match karti hai. Agar koi coin OKX par USDT pair
 # ke sath list nahi hai to /signal us coin ke liye error return karega
@@ -482,9 +489,9 @@ def multi_timeframe_entropy(df, orders=(3, 4, 5), lookback=100):
 # Yahan sirf L2 (aggregated price-level) depth use ho raha hai, "L3"
 # sirf naam mein hai.
 # ============================================================
-def order_book_depth_profile(symbol="BTC/USDT", depth=10):
+def order_book_depth_profile(symbol="BTC/USDT", depth=10, order_book=None):
     try:
-        ob = exchange.fetch_order_book(symbol, limit=depth)
+        ob = order_book if order_book is not None else exchange.fetch_order_book(symbol, limit=depth)
     except Exception as e:
         return {"depth_slope": None, "error": str(e)}
 
@@ -733,75 +740,334 @@ def liquidity_sweep_detector(df, lookback=50):
 
 
 # ============================================================
-# CH.19 EXTENSION - LIQUIDITY POOL RADAR
-# Purana liquidity_sweep_detector() sirf EK swing high/low deta tha.
-# Ye function usi Ch.19 window (candles) mein multiple equal-highs /
-# equal-lows clusters dhoondta hai aur unhe "resting liquidity pools"
-# ke tor par score karta hai - jaise ek radar screen par blips.
+# 20. LIQUIDITY MAGNET + LIKELY TARGET  <-- (v8, LIQUIDITY SCANNER)
+# Formula: Magnet = argmax(Price_i * Volume_i) across order-book levels
+#          LikelyTarget = argmax( (Price_i * Volume_i) / Distance_i ),
+#          nudged toward whichever side liquidity_sweep_detector already
+#          flagged as the "continuation" direction.
 #
-# Har coin apni khud ki candle history se independently scan hota
-# hai (generate_signal() ke andar per-symbol call hota hai), isliye
-# har coin ke pools alag-alag aate hain.
-#
-# Verdict/confidence ko YE BHI TOUCH NAHI KARTA - purana display-only
-# rule yahan bhi follow hota hai.
+# LIMITATION (honestly): ye sirf currently-fetched top-N order-book levels
+# se ban raha hai (retail REST depth) - asal "liquidity magnet" institutional
+# desks bohot zyada depth + historical resting-order data se banate hain.
 # ============================================================
-def liquidity_pool_radar(df, lookback=100, pivot_window=3, cluster_tol_pct=0.15, max_pools=8):
-    recent = df.tail(lookback).reset_index(drop=True)
-    current_price = float(df["close"].iloc[-1])
-    n = len(recent)
+def liquidity_magnet_and_target(current_price, order_book, sweep_data=None, depth=25):
+    bids = order_book.get("bids", [])[:depth]
+    asks = order_book.get("asks", [])[:depth]
+    if not bids or not asks:
+        return {"magnet": None, "likely_target": None}
 
-    if n < (pivot_window * 2 + 1):
-        return {"pools": []}
+    clusters = [{"price": p, "usd": p * v, "side": "SUPPORT"} for p, v in bids]
+    clusters += [{"price": p, "usd": p * v, "side": "RESISTANCE"} for p, v in asks]
 
-    highs = recent["high"].values
-    lows = recent["low"].values
+    magnet = max(clusters, key=lambda c: c["usd"])
+    magnet_out = {
+        "price": round(magnet["price"], 6),
+        "usd_size": round(magnet["usd"], 2),
+        "side": magnet["side"],
+        "distance_pct": round(abs(current_price - magnet["price"]) / current_price * 100, 3),
+    }
 
-    pivot_highs = []
-    pivot_lows = []
-    for i in range(pivot_window, n - pivot_window):
-        window_h = highs[i - pivot_window:i + pivot_window + 1]
-        if highs[i] == window_h.max():
-            pivot_highs.append((i, float(highs[i])))
-        window_l = lows[i - pivot_window:i + pivot_window + 1]
-        if lows[i] == window_l.min():
-            pivot_lows.append((i, float(lows[i])))
+    def score(c):
+        dist = max(abs(current_price - c["price"]), 1e-9)
+        s = c["usd"] / dist
+        sweep_dir = (sweep_data or {}).get("sweep_direction")
+        if sweep_dir == "SWEPT_LOW_REVERSED_UP" and c["side"] == "RESISTANCE":
+            s *= 1.25
+        if sweep_dir == "SWEPT_HIGH_REVERSED_DOWN" and c["side"] == "SUPPORT":
+            s *= 1.25
+        return s
 
-    def cluster(pivots, side):
-        clusters = []
-        for idx, level in pivots:
-            placed = False
-            for c in clusters:
-                if abs(level - c["level"]) / c["level"] * 100 <= cluster_tol_pct:
-                    c["touches"] += 1
-                    c["level"] = (c["level"] * (c["touches"] - 1) + level) / c["touches"]
-                    c["last_idx"] = max(c["last_idx"], idx)
-                    placed = True
-                    break
-            if not placed:
-                clusters.append({"level": level, "touches": 1, "last_idx": idx, "side": side})
-        return clusters
+    ranked = sorted(clusters, key=score, reverse=True)
+    best = ranked[0]
+    runner_up = ranked[1] if len(ranked) > 1 else ranked[0]
+    s1, s2 = score(best), score(runner_up)
+    dominance = (s1 - s2) / s1 if s1 > 0 else 0.0
+    target_score = round(60 + dominance * 39, 1)
 
-    pools = cluster(pivot_highs, "SELL_SIDE") + cluster(pivot_lows, "BUY_SIDE")
+    target_out = {
+        "price": round(best["price"], 6),
+        "score": target_score,
+        "type": "Resistance Sweep" if best["side"] == "RESISTANCE" else "Support Sweep",
+        "distance_pct": round(abs(current_price - best["price"]) / current_price * 100, 3),
+    }
+    return {"magnet": magnet_out, "likely_target": target_out}
 
-    out = []
-    for p in pools:
-        distance_pct = round(abs(current_price - p["level"]) / current_price * 100, 3)
-        recency = p["last_idx"] / max(n - 1, 1)
-        strength = round(min(1.0, (p["touches"] / 4.0) * 0.7 + recency * 0.3), 3)
-        swept = (p["side"] == "SELL_SIDE" and current_price > p["level"]) or \
-                (p["side"] == "BUY_SIDE" and current_price < p["level"])
-        out.append({
-            "price": round(p["level"], 2),
-            "side": p["side"],              # SELL_SIDE = resting liquidity above price, BUY_SIDE = below price
-            "touches": p["touches"],
-            "distance_pct": distance_pct,
-            "strength": strength,
-            "swept": swept,
+
+# ============================================================
+# 21. POSSIBLE SPOOFING DETECTOR  <-- (v8, LIQUIDITY SCANNER)
+# Formula: flags a resting order-book level whose size drops by
+#          >= cancel_ratio between two polls without price trading
+#          through it.
+#
+# LIMITATION (honestly): asal spoofing detection order-by-order (L3)
+# add/cancel event stream aur trade-tape matching maangta hai. Yahan
+# sirf do polled L2 snapshots compare ho rahe hain - ye "order vanish
+# hua" dikha sakta hai, lekin ye fill tha ya genuine cancel, ye REST
+# API se pakka nahi bataya ja sakta. Isliye heuristic/exploratory hai.
+# ============================================================
+def possible_spoofing_detector(symbol, order_book, top_n=5, min_elapsed_sec=3, cancel_ratio=0.6):
+    now = time.time()
+    bids = order_book.get("bids", [])[:top_n]
+    asks = order_book.get("asks", [])[:top_n]
+    if not bids or not asks:
+        return {"available": False, "spoof_detected": False}
+
+    current_levels = {round(p, 6): v for p, v in (bids + asks)}
+    mid = (bids[0][0] + asks[0][0]) / 2
+
+    prev = _OB_SNAPSHOT_CACHE.get(symbol)
+    _OB_SNAPSHOT_CACHE[symbol] = {"levels": current_levels, "ts": now, "mid": mid}
+
+    if not prev or (now - prev["ts"]) < min_elapsed_sec:
+        return {"available": True, "spoof_detected": False, "note": "Collecting baseline snapshot..."}
+
+    vanished = []
+    for price, vol in prev["levels"].items():
+        if vol <= 0:
+            continue
+        current_vol = current_levels.get(price, 0.0)
+        drop_ratio = (vol - current_vol) / vol
+        if drop_ratio >= cancel_ratio:
+            vanished.append({
+                "price": round(price, 6),
+                "usd_size_before": round(price * vol, 2),
+                "cancelled_pct": round(min(drop_ratio, 1.0) * 100, 1),
+                "seconds_ago": round(now - prev["ts"], 1),
+            })
+
+    vanished.sort(key=lambda v: v["usd_size_before"], reverse=True)
+    top = vanished[0] if vanished else None
+    spoof_score = round(min(100, len(vanished) * 25 + (top["cancelled_pct"] * 0.3 if top else 0)), 1)
+
+    return {
+        "available": True,
+        "spoof_detected": bool(vanished),
+        "spoof_score": spoof_score,
+        "top_vanished_level": top,
+        "vanished_count": len(vanished),
+    }
+
+
+# ============================================================
+# 22. MARKET STRENGTH SCORE  <-- (v8, LIQUIDITY SCANNER)
+# Blends Hawkes pressure, OFI and depth-slope into a single 0-100 dial.
+# Purely a display convenience - does NOT feed into the Tier 01 verdict.
+# ============================================================
+def market_strength_score(buying_pressure, selling_pressure, ofi_score, depth_slope, vpin_score):
+    bp = (buying_pressure - selling_pressure) / 10.0
+    ofi_n = (ofi_score or 0) / 10.0
+    depth_n = float(np.tanh((depth_slope or 0) / 5.0))
+    toxicity_penalty = min(0.4, (vpin_score or 0) * 0.3)
+
+    raw = (bp * 0.4 + ofi_n * 0.35 + depth_n * 0.25) * (1 - toxicity_penalty)
+    score = round(float(np.clip(50 + raw * 50, 0, 100)), 1)
+
+    if score >= 70:
+        label = "STRONG"
+    elif score >= 55:
+        label = "MODERATE BULLISH"
+    elif score > 45:
+        label = "NEUTRAL"
+    elif score >= 30:
+        label = "MODERATE BEARISH"
+    else:
+        label = "WEAK"
+
+    bias = "BUY" if score >= 55 else ("SELL" if score <= 45 else "NEUTRAL")
+    return {"score": score, "label": label, "bias": bias}
+
+
+# ============================================================
+# 23. TRAP & SQUEEZE RISK  <-- (v8, LIQUIDITY SCANNER)
+# Heuristic 0-100 bars for Bull Trap / Bear Trap / Short Squeeze / Long
+# Squeeze, combining the sweep direction, OFI and order-book wall bias.
+# ============================================================
+def trap_and_squeeze_risk(sweep_data, ofi_data, depth_data, funding_data=None):
+    ofi = ofi_data.get("ofi_score") or 0
+    wall = depth_data.get("wall_bias")
+    sweep_dir = sweep_data.get("sweep_direction")
+
+    bull_trap = bear_trap = short_squeeze = long_squeeze = 0
+
+    if sweep_dir == "SWEPT_HIGH_REVERSED_DOWN":
+        bull_trap += 55
+        if ofi < 0:
+            bull_trap += 25
+        if wall == "ASK_WALL_HEAVIER":
+            bull_trap += 10
+
+    if sweep_dir == "SWEPT_LOW_REVERSED_UP":
+        bear_trap += 55
+        if ofi > 0:
+            bear_trap += 25
+        if wall == "BID_WALL_HEAVIER":
+            bear_trap += 10
+
+    if ofi > 3 and wall == "ASK_WALL_HEAVIER":
+        short_squeeze += 50
+    if ofi < -3 and wall == "BID_WALL_HEAVIER":
+        long_squeeze += 50
+
+    if funding_data and funding_data.get("available") and funding_data.get("funding_rate_pct") is not None:
+        fr = funding_data["funding_rate_pct"]
+        if fr < 0:
+            short_squeeze += 25
+        elif fr > 0.05:
+            long_squeeze += 20
+
+    clip = lambda v: int(min(100, max(0, v)))
+    return {
+        "bull_trap": clip(bull_trap),
+        "bear_trap": clip(bear_trap),
+        "short_squeeze": clip(short_squeeze),
+        "long_squeeze": clip(long_squeeze),
+    }
+
+
+# ============================================================
+# 24. LIQUIDITY TARGET ZONES  <-- (v8, LIQUIDITY SCANNER)
+# Top buy/sell walls straight from the order book, scored relative to
+# the largest resting order currently visible.
+# ============================================================
+def liquidity_target_zones(order_book, current_price, n_levels=4, scan_depth=25):
+    bids_all = order_book.get("bids", [])[:scan_depth]
+    asks_all = order_book.get("asks", [])[:scan_depth]
+    if not bids_all or not asks_all:
+        return []
+
+    max_usd = max([p * v for p, v in (bids_all + asks_all)] or [1])
+
+    bids = sorted(bids_all, key=lambda x: x[0] * x[1], reverse=True)[:n_levels]
+    asks = sorted(asks_all, key=lambda x: x[0] * x[1], reverse=True)[:n_levels]
+
+    zones = []
+    for price, vol in bids:
+        usd = price * vol
+        zones.append({
+            "price": round(price, 6), "side": "BUY_WALL", "usd_size": round(usd, 2),
+            "score": round(min(99, (usd / max_usd) * 99), 1),
+            "distance_pct": round((current_price - price) / current_price * 100, 3),
         })
+    for price, vol in asks:
+        usd = price * vol
+        zones.append({
+            "price": round(price, 6), "side": "SELL_WALL", "usd_size": round(usd, 2),
+            "score": round(min(99, (usd / max_usd) * 99), 1),
+            "distance_pct": round((price - current_price) / current_price * 100, 3),
+        })
+    zones.sort(key=lambda z: z["score"], reverse=True)
+    return zones
 
-    out.sort(key=lambda x: (-x["strength"], x["distance_pct"]))
-    return {"pools": out[:max_pools]}
+
+# ============================================================
+# 25. FUNDING RATE + OPEN INTEREST  <-- (v8, LIQUIDITY SCANNER)
+#
+# LIMITATION (honestly): OKX ye sirf PERPETUAL SWAP instruments ke liye
+# deta hai, spot pairs ke liye nahi. Har coin ka perp OKX par available
+# nahi hota (e.g. kuch chhoti-cap coins) - un ke liye ye gracefully
+# "available: false" return karta hai, page crash nahi hoti.
+# ============================================================
+def funding_open_interest(symbol):
+    perp_symbol = symbol if ":" in symbol else f"{symbol}:USDT"
+
+    funding_rate_pct, next_funding_ts = None, None
+    try:
+        funding = exchange.fetch_funding_rate(perp_symbol)
+        rate = funding.get("fundingRate")
+        if rate is not None:
+            funding_rate_pct = round(float(rate) * 100, 4)
+        next_funding_ts = funding.get("fundingTimestamp")
+    except Exception:
+        pass
+
+    open_interest = None
+    try:
+        oi = exchange.fetch_open_interest(perp_symbol)
+        oi_value = oi.get("openInterestAmount") or oi.get("openInterestValue") or oi.get("openInterest")
+        if oi_value is not None:
+            open_interest = round(float(oi_value), 2)
+    except Exception:
+        pass
+
+    return {
+        "available": funding_rate_pct is not None or open_interest is not None,
+        "funding_rate_pct": funding_rate_pct,
+        "open_interest": open_interest,
+        "next_funding_ts": next_funding_ts,
+        "perp_symbol": perp_symbol,
+    }
+
+
+# ============================================================
+# 26. CVD (CUMULATIVE VOLUME DELTA)  <-- (v8, LIQUIDITY SCANNER)
+# Formula: delta_i = +Volume_i agar close_i >= open_i warna -Volume_i;
+#          CVD_t = cumsum(delta)
+#
+# LIMITATION (honestly): asal CVD taker buy-volume minus taker
+# sell-volume se banta hai (trade-by-trade tape se). Yahan candle
+# direction (green/red) ko proxy ke taur par use kiya gaya hai kyunke
+# taker-side per-trade data har candle ke liye fetch karna bohot
+# zyada API calls maangta - ye ek approximation hai, exact CVD nahi.
+# ============================================================
+def cvd_volume_delta(df, lookback=50):
+    recent = df.tail(lookback).copy()
+    recent["delta"] = np.where(recent["close"] >= recent["open"], recent["volume"], -recent["volume"])
+    recent["cvd"] = recent["delta"].cumsum()
+    series = [round(float(v), 4) for v in recent["cvd"].tolist()][-30:]
+    cvd_now = series[-1] if series else 0.0
+    cvd_prev = series[-6] if len(series) >= 6 else (series[0] if series else 0.0)
+    trend = "RISING" if cvd_now > cvd_prev else ("FALLING" if cvd_now < cvd_prev else "FLAT")
+    return {"cvd": round(cvd_now, 2), "trend": trend, "series": series}
+
+
+# ============================================================
+# 27. MARKET CRASH RISK  <-- (v8, LIQUIDITY SCANNER)
+# Heuristic 0-100 composite of existing down-side stress signals
+# (jump diffusion, structural break, VPIN toxicity, OFI, sweep, CVD).
+#
+# LIMITATION (honestly): ye koi calibrated/backtested crash-prediction
+# model NAHI hai - sirf maujooda display-only signals ko ek weighted
+# checklist mein combine kiya gaya hai. Sirf awareness ke liye hai,
+# trading decision ke liye nahi.
+# ============================================================
+def market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cvd_data):
+    score = 0
+    factors = []
+
+    if jump_data.get("jump_detected") and jump_data.get("jump_direction") == "DOWN":
+        score += 30
+        factors.append("Downside price jump detected (Ch.09)")
+    if cusum_data.get("structural_break"):
+        score += 20
+        factors.append("Structural break in returns (Ch.18)")
+
+    vpin = vpin_data.get("vpin_score")
+    if vpin is not None and vpin > 0.6:
+        score += 20
+        factors.append("High toxic order flow (VPIN)")
+
+    ofi = ofi_data.get("ofi_score")
+    if ofi is not None and ofi < -4:
+        score += 15
+        factors.append("Heavy sell-side order flow")
+
+    if sweep_data.get("sweep_direction") == "SWEPT_HIGH_REVERSED_DOWN":
+        score += 10
+        factors.append("Liquidity sweep reversal at highs")
+
+    if cvd_data.get("trend") == "FALLING":
+        score += 5
+        factors.append("Falling cumulative volume delta")
+
+    score = min(100, score)
+    if score >= 65:
+        label = "ELEVATED"
+    elif score >= 35:
+        label = "WATCH"
+    else:
+        label = "LOW"
+
+    return {"score": score, "label": label, "factors": factors}
 
 
 # ============================================================
@@ -913,13 +1179,6 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         sweep_data = liquidity_sweep_detector(df)
     except Exception as e:
         sweep_data = {"liquidity_sweep_detected": None, "error": str(e)}
-
-    try:
-        radar_data = liquidity_pool_radar(df)
-        sweep_data["pools"] = radar_data.get("pools", [])
-    except Exception as e:
-        sweep_data["pools"] = []
-        sweep_data["pools_error"] = str(e)
 
     result = {
         "trend": trend,
@@ -1033,6 +1292,93 @@ def candles_endpoint():
             "candles": candles,
             "last_price": round(last_price, 8),
             "change_pct": change_pct,
+            "server_time": int(time.time()),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ============================================================
+# NEW (v8): /liquidity  -->  "LIQUIDITY SCANNER" tab (Ch.19-27) ke liye
+#
+# Ye endpoint /signal se ALAG rakha gaya hai jaan-boojh kar: /signal
+# heavy hai (HMM fit + RandomForest fit har baar), jabke ye endpoint
+# har ~12-15 sec par frontend se auto-poll ho sakta hai taake scanner
+# "dynamic"/live mehsoos ho, bina baar-baar poore 19-channel analysis
+# ko dobara chalaye. Verdict/confidence logic ko bilkul touch nahi karta.
+# ============================================================
+@app.route("/liquidity", methods=["GET"])
+def liquidity_endpoint():
+    coin = request.args.get("coin", "BTC/USDT")
+    timeframe = request.args.get("timeframe", "1h")
+
+    try:
+        df = get_candles(symbol=coin, timeframe=timeframe, limit=120)
+        current_price = float(df["close"].iloc[-1])
+
+        try:
+            ob = exchange.fetch_order_book(coin, limit=50)
+        except Exception as e:
+            ob = {"bids": [], "asks": [], "error": str(e)}
+
+        sweep_data = liquidity_sweep_detector(df)
+        buying_pressure, selling_pressure = hawkes_pressure(df)
+
+        try:
+            ofi_data = order_flow_imbalance(coin, snapshot_gap_sec=0.6)
+        except Exception as e:
+            ofi_data = {"ofi_score": None, "error": str(e)}
+
+        try:
+            depth_data = order_book_depth_profile(coin, depth=20, order_book=ob)
+        except Exception as e:
+            depth_data = {"depth_slope": None, "wall_bias": None, "error": str(e)}
+
+        try:
+            vpin_data = vpin_toxicity(coin)
+        except Exception as e:
+            vpin_data = {"vpin_score": None, "error": str(e)}
+
+        try:
+            jump_data = jump_diffusion_detector(df)
+        except Exception as e:
+            jump_data = {"jump_detected": None, "error": str(e)}
+
+        try:
+            cusum_data = cusum_structural_break(df)
+        except Exception as e:
+            cusum_data = {"structural_break": None, "error": str(e)}
+
+        cvd_data = cvd_volume_delta(df)
+
+        try:
+            funding_data = funding_open_interest(coin)
+        except Exception as e:
+            funding_data = {"available": False, "error": str(e)}
+
+        magnet_target = liquidity_magnet_and_target(current_price, ob, sweep_data=sweep_data)
+        strength_data = market_strength_score(
+            buying_pressure, selling_pressure,
+            ofi_data.get("ofi_score"), depth_data.get("depth_slope"), vpin_data.get("vpin_score"),
+        )
+        trap_squeeze_data = trap_and_squeeze_risk(sweep_data, ofi_data, depth_data, funding_data)
+        zones = liquidity_target_zones(ob, current_price)
+        spoof_data = possible_spoofing_detector(coin, ob)
+        crash_data = market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cvd_data)
+
+        return jsonify({
+            "coin": coin,
+            "last_price": round(current_price, 6),
+            "liquidity_sweep": sweep_data,
+            "magnet": magnet_target.get("magnet"),
+            "likely_target": magnet_target.get("likely_target"),
+            "market_strength": strength_data,
+            "possible_spoofing": spoof_data,
+            "trap_squeeze": trap_squeeze_data,
+            "liquidity_zones": zones,
+            "funding_open_interest": funding_data,
+            "cvd": cvd_data,
+            "crash_risk": crash_data,
             "server_time": int(time.time()),
         })
     except Exception as e:
