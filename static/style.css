@@ -426,18 +426,34 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 }
 
 .radar-blip { position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); z-index: 2; cursor: default; }
-.radar-blip::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: inherit; }
 .radar-blip::after {
     content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid currentColor;
     opacity: 0; animation: radarPing 2.4s ease-out infinite;
 }
-.radar-blip.side-sell { background: var(--short); color: var(--short); box-shadow: 0 0 8px rgba(255, 82, 107, 0.6); }
-.radar-blip.side-buy  { background: var(--long); color: var(--long); box-shadow: 0 0 8px rgba(54, 224, 160, 0.6); }
-.radar-blip.swept { background: var(--text-faint); color: var(--text-faint); box-shadow: none; opacity: 0.5; }
-.radar-blip.swept::after { animation: none; }
+.radar-blip.side-sell { background-color: var(--short); color: var(--short); box-shadow: 0 0 8px rgba(255, 82, 107, 0.6); }
+.radar-blip.side-buy  { background-color: var(--long);  color: var(--long);  box-shadow: 0 0 8px rgba(54, 224, 160, 0.6); }
+.radar-blip.swept { background-color: #4a5568; color: #4a5568; box-shadow: none; opacity: 0.85; }
+.radar-blip.swept::after { animation: none; content: none; }
+.radar-blip.swept::before {
+    content: "✕"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 7px; line-height: 1; color: var(--void); font-weight: 700;
+}
 @keyframes radarPing {
     0% { transform: scale(0.6); opacity: 0.5; }
     100% { transform: scale(2.2); opacity: 0; }
+}
+
+.liq-radar-key { display: flex; gap: 16px; flex-wrap: wrap; font-family: var(--mono); font-size: 9px; color: var(--text-dim); }
+.liq-radar-key span { display: inline-flex; align-items: center; gap: 6px; }
+.liq-radar-key i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.liq-radar-key i.k-sell  { background: var(--short); box-shadow: 0 0 6px rgba(255, 82, 107, 0.5); }
+.liq-radar-key i.k-buy   { background: var(--long);  box-shadow: 0 0 6px rgba(54, 224, 160, 0.5); }
+.liq-radar-key i.k-swept { background: #4a5568; }
+
+.liq-radar-swept-tag {
+    font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0.4px;
+    color: var(--text-faint); background: var(--line-soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 2px 5px; white-space: nowrap;
 }
 
 .liq-radar-legend { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; padding-right: 2px; }
@@ -448,7 +464,7 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .liq-radar-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .liq-radar-dot.side-sell { background: var(--short); box-shadow: 0 0 6px rgba(255, 82, 107, 0.5); }
 .liq-radar-dot.side-buy  { background: var(--long); box-shadow: 0 0 6px rgba(54, 224, 160, 0.5); }
-.liq-radar-dot.swept     { background: var(--text-faint); box-shadow: none; }
+.liq-radar-dot.swept     { background: #4a5568; box-shadow: none; }
 .liq-radar-price { color: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 700; }
 .liq-radar-dist  { color: var(--text-dim); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
 .liq-radar-strength-track { position: relative; width: 46px; height: 4px; background: #252c35; border-radius: 2px; overflow: hidden; }
