@@ -1388,29 +1388,3 @@ def liquidity_endpoint():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
-
-
-@app.route('/liquidity', methods=['GET'])
-def liquidity_endpoint():
-    symbol = request.args.get('coin', 'BTC/USDT')
-    # URL decode safety ke liye agar %2F ki jagah slash handle karna ho
-    symbol = symbol.replace('%2F', '/')
-    
-    try:
-        # Order book fetch karein
-        order_book = exchange.fetch_order_book(symbol, limit=25)
-        current_price = (order_book['bids'][0][0] + order_book['asks'][0][0]) / 2 if order_book['bids'] and order_book['asks'] else 0
-        
-        # Agar aapke paas sweep data ya magnets calculate karne ka function hai
-        candles = get_candles(symbol=symbol, timeframe='1h', limit=50)
-        sweep_data = liquidity_sweep_detector(candles)
-        magnet_result = liquidity_magnet_and_target(current_price, order_book, sweep_data)
-        
-        return jsonify({
-            "status": "success",
-            "symbol": symbol,
-            "current_price": current_price,
-            "liquidity_data": magnet_result
-        })
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
