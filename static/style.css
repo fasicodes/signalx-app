@@ -376,100 +376,91 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .liq-stat-value { color: var(--text); font-family: var(--mono); font-size: 17px; font-weight: 700; white-space: nowrap; }
 
 /* ================================================================
-   LIQUIDITY POOL RADAR (Ch.19 extension) — sweep-style scan for
-   resting liquidity pools above/below current price, per coin.
+   LIQUIDITY SCANNER — EXTRA PANELS (Ch.20-27)
 ================================================================ */
-.liq-radar-wrap { display: flex; flex-direction: column; gap: 16px; padding-top: 16px; margin-top: 2px; border-top: 1px solid var(--line-soft); }
-.liq-radar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.liq-radar-title { color: var(--text); font-family: var(--sans); font-size: 13px; font-weight: 700; }
-.liq-radar-caption { color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px; }
 
-.liq-radar-body { display: grid; grid-template-columns: minmax(180px, 260px) 1fr; gap: 22px; align-items: center; }
-@media (max-width: 640px) { .liq-radar-body { grid-template-columns: 1fr; } }
-
-.liq-radar-scope {
-    position: relative; width: 100%; aspect-ratio: 1 / 1; max-width: 260px; margin: 0 auto;
-    border-radius: 50%; overflow: hidden;
-    background: radial-gradient(circle at 50% 50%, rgba(54, 224, 160, 0.06), var(--void) 78%);
-    border: 1px solid var(--line);
-    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.55);
+.live-dot {
+    display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%;
+    background: var(--long); box-shadow: 0 0 6px var(--long); animation: pulse 1.8s infinite;
 }
-.radar-ring {
-    position: absolute; top: 50%; left: 50%; border: 1px solid rgba(139, 150, 165, 0.16);
-    border-radius: 50%; transform: translate(-50%, -50%);
-}
-.radar-ring.r1 { width: 25%; height: 25%; }
-.radar-ring.r2 { width: 50%; height: 50%; }
-.radar-ring.r3 { width: 75%; height: 75%; }
-.radar-ring.r4 { width: 100%; height: 100%; }
-.radar-cross { position: absolute; background: rgba(139, 150, 165, 0.14); }
-.radar-cross.h { top: 50%; left: 0; width: 100%; height: 1px; transform: translateY(-50%); }
-.radar-cross.v { left: 50%; top: 0; width: 1px; height: 100%; transform: translateX(-50%); }
 
-.radar-sweep-beam {
+.liq-extra-grid {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px;
+}
+
+.liq-card {
+    display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; min-height: 150px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.018), transparent 55%), var(--panel);
+    border: 1px solid var(--line); border-radius: 9px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+.liq-card:hover { border-color: #3a4654; background: var(--panel-hover); }
+.liq-card.span-2 { grid-column: span 2; }
+
+.liq-card-head { display: flex; align-items: center; gap: 10px; }
+.liq-card-icon {
+    display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0;
+    background: var(--accent-dim); border: 1px solid rgba(245, 166, 35, 0.3);
+    border-radius: 6px; color: var(--accent); font-size: 12px;
+}
+.liq-card-title { color: var(--text); font-family: var(--sans); font-size: 12.5px; font-weight: 700; line-height: 1.2; }
+.liq-card-subtitle { margin-top: 2px; color: var(--text-faint); font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.3px; }
+.liq-card-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+
+.liq-empty-note { color: var(--text-faint); font-family: var(--mono); font-size: 10px; }
+
+/* dual stat layout (magnet/target, funding/OI) */
+.liq-dual-stat { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.liq-dual-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.liq-dual-label { color: var(--text-faint); font-family: var(--mono); font-size: 8px; font-weight: 600; letter-spacing: 0.5px; }
+.liq-dual-value { color: var(--text); font-family: var(--mono); font-size: 16px; font-weight: 700; white-space: nowrap; }
+.liq-dual-detail { color: var(--text-dim); font-family: var(--mono); font-size: 9px; line-height: 1.4; }
+
+/* market strength — animated spinning ring around the score */
+.strength-gauge { position: relative; width: 88px; height: 88px; margin: 4px auto; }
+.strength-ring {
     position: absolute; inset: 0; border-radius: 50%;
-    background: conic-gradient(from 0deg, rgba(54, 224, 160, 0.4), rgba(54, 224, 160, 0.10) 20deg, transparent 55deg);
-    animation: radarSpin 4s linear infinite;
-    mix-blend-mode: screen;
-    transform-origin: 50% 50%;
+    background: conic-gradient(from 0deg, var(--long), var(--wait), var(--short), var(--long));
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+    opacity: 0.55; animation: strength-spin 6s linear infinite;
 }
-@keyframes radarSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes strength-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.strength-center {
+    position: absolute; inset: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--panel); border-radius: 50%; border: 1px solid var(--line);
+}
+.strength-score { font-family: var(--mono); font-size: 22px; font-weight: 800; line-height: 1; }
+.strength-label { margin-top: 5px; color: var(--text-dim); font-family: var(--mono); font-size: 8px; font-weight: 600; letter-spacing: 0.4px; text-align: center; }
 
-.radar-center-dot {
-    position: absolute; top: 50%; left: 50%; width: 9px; height: 9px; border-radius: 50%;
-    background: var(--text); box-shadow: 0 0 10px rgba(233, 238, 245, 0.6);
-    transform: translate(-50%, -50%); z-index: 3;
-}
-.radar-center-label {
-    position: absolute; top: calc(50% + 9px); left: 50%; transform: translateX(-50%);
-    color: var(--text-faint); font-family: var(--mono); font-size: 7px; letter-spacing: 0.3px; z-index: 3; white-space: nowrap;
-}
+/* spoofing */
+.spoof-alert { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 
-.radar-blip { position: absolute; width: 9px; height: 9px; border-radius: 50%; transform: translate(-50%, -50%); z-index: 2; cursor: default; }
-.radar-blip::after {
-    content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid currentColor;
-    opacity: 0; animation: radarPing 2.4s ease-out infinite;
-}
-.radar-blip.side-sell { background-color: var(--short); color: var(--short); box-shadow: 0 0 8px rgba(255, 82, 107, 0.6); }
-.radar-blip.side-buy  { background-color: var(--long);  color: var(--long);  box-shadow: 0 0 8px rgba(54, 224, 160, 0.6); }
-.radar-blip.swept { background-color: #4a5568; color: #4a5568; box-shadow: none; opacity: 0.85; }
-.radar-blip.swept::after { animation: none; content: none; }
-.radar-blip.swept::before {
-    content: "✕"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    font-size: 7px; line-height: 1; color: var(--void); font-weight: 700;
-}
-@keyframes radarPing {
-    0% { transform: scale(0.6); opacity: 0.5; }
-    100% { transform: scale(2.2); opacity: 0; }
-}
+/* trap & squeeze bars */
+.trap-rows { display: flex; flex-direction: column; gap: 10px; }
+.trap-row { display: grid; grid-template-columns: 92px 1fr 28px; align-items: center; gap: 10px; }
+.trap-label { color: var(--text-dim); font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.3px; }
+.trap-value { color: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 700; text-align: right; }
 
-.liq-radar-key { display: flex; gap: 16px; flex-wrap: wrap; font-family: var(--mono); font-size: 9px; color: var(--text-dim); }
-.liq-radar-key span { display: inline-flex; align-items: center; gap: 6px; }
-.liq-radar-key i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.liq-radar-key i.k-sell  { background: var(--short); box-shadow: 0 0 6px rgba(255, 82, 107, 0.5); }
-.liq-radar-key i.k-buy   { background: var(--long);  box-shadow: 0 0 6px rgba(54, 224, 160, 0.5); }
-.liq-radar-key i.k-swept { background: #4a5568; }
-
-.liq-radar-swept-tag {
-    font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0.4px;
-    color: var(--text-faint); background: var(--line-soft); border: 1px solid var(--line);
-    border-radius: 4px; padding: 2px 5px; white-space: nowrap;
+/* liquidity target zones */
+.zones-list { display: flex; flex-direction: column; gap: 8px; }
+.zone-row {
+    display: grid; grid-template-columns: auto 1fr auto auto auto; align-items: center; gap: 10px;
+    padding: 7px 9px; background: var(--panel-raised); border: 1px solid var(--line-soft); border-radius: 6px;
 }
+.zone-price { color: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 700; }
+.zone-usd { color: var(--text-dim); font-family: var(--mono); font-size: 10px; }
+.zone-dist { font-family: var(--mono); font-size: 9px; }
+.zone-score { color: var(--accent); font-family: var(--mono); font-size: 9px; font-weight: 700; }
 
-.liq-radar-legend { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; padding-right: 2px; }
-.liq-radar-legend-row {
-    display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center;
-    padding: 8px 10px; background: var(--panel-raised); border: 1px solid var(--line-soft); border-radius: 7px;
-}
-.liq-radar-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.liq-radar-dot.side-sell { background: var(--short); box-shadow: 0 0 6px rgba(255, 82, 107, 0.5); }
-.liq-radar-dot.side-buy  { background: var(--long); box-shadow: 0 0 6px rgba(54, 224, 160, 0.5); }
-.liq-radar-dot.swept     { background: #4a5568; box-shadow: none; }
-.liq-radar-price { color: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 700; }
-.liq-radar-dist  { color: var(--text-dim); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
-.liq-radar-strength-track { position: relative; width: 46px; height: 4px; background: #252c35; border-radius: 2px; overflow: hidden; }
-.liq-radar-strength-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px; }
-.liq-radar-empty { color: var(--text-faint); font-family: var(--mono); font-size: 10px; padding: 6px 0 2px; }
+/* CVD sparkline */
+.cvd-top { display: flex; align-items: center; gap: 10px; }
+.cvd-spark { width: 100%; height: 36px; display: block; }
+
+/* market crash risk */
+.crash-head { display: flex; align-items: center; gap: 12px; }
+.crash-score { font-family: var(--mono); font-size: 24px; font-weight: 800; }
+.crash-factors { padding-left: 16px; color: var(--text-dim); font-family: var(--mono); font-size: 9.5px; line-height: 1.7; }
 
 /* ================================================================
    LIVE CHART PANEL (new tab)
@@ -529,6 +520,7 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     body { padding: 15px; }
     .channel-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .coin-picker { min-width: 220px; }
+    .liq-extra-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 850px) {
@@ -561,6 +553,11 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     .panel-tab { flex: 1 1 calc(50% - 4px); justify-content: flex-start; padding-left: 10px; }
     .liq-panel, .chart-panel { padding: 16px; }
     .liq-stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .liq-extra-grid { grid-template-columns: 1fr; }
+    .liq-card.span-2 { grid-column: auto; }
+    .liq-dual-stat { grid-template-columns: 1fr; gap: 10px; }
+    .zone-row { grid-template-columns: auto 1fr auto; row-gap: 4px; }
+    .zone-dist, .zone-score { grid-column: 2 / 4; justify-self: end; }
     .candle-chart { height: 300px; }
     .chart-tf-row { flex-wrap: wrap; }
 }
