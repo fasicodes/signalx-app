@@ -552,15 +552,15 @@ function renderLiquidityScanner(data) {
     const priceAngle = -Math.PI / 2 + priceRatio * 2 * Math.PI;
 
     blips = [
-      { angle: -Math.PI / 2, radius: 0.9, label: "SWING LOW", value: fmtPrice(sweep.swing_low), type: "low", color: "var(--short)" },
-      { angle: Math.PI / 2, radius: 0.9, label: "SWING HIGH", value: fmtPrice(sweep.swing_high), type: "high", color: "var(--long)" },
-      { angle: priceAngle, radius: 0.6, label: "CURRENT", value: fmtPrice(price), type: "current", color: "var(--accent)" },
+      { angle: -Math.PI / 2, radius: 0.9, label: "SWING LOW", value: fmtPrice(sweep.swing_low), type: "low" },
+      { angle: Math.PI / 2, radius: 0.9, label: "SWING HIGH", value: fmtPrice(sweep.swing_high), type: "high" },
+      { angle: priceAngle, radius: 0.6, label: "CURRENT", value: fmtPrice(price), type: "current" },
     ];
   } else {
     blips = [
-      { angle: -Math.PI / 2, radius: 0.8, label: "SWING LOW", value: fmtPrice(sweep.swing_low) || "--", type: "low", color: "var(--short)" },
-      { angle: Math.PI / 2, radius: 0.8, label: "SWING HIGH", value: fmtPrice(sweep.swing_high) || "--", type: "high", color: "var(--long)" },
-      { angle: 0, radius: 0.5, label: "CURRENT", value: fmtPrice(price) || "--", type: "current", color: "var(--accent)" },
+      { angle: -Math.PI / 2, radius: 0.8, label: "SWING LOW", value: fmtPrice(sweep.swing_low) || "--", type: "low" },
+      { angle: Math.PI / 2, radius: 0.8, label: "SWING HIGH", value: fmtPrice(sweep.swing_high) || "--", type: "high" },
+      { angle: 0, radius: 0.5, label: "CURRENT", value: fmtPrice(price) || "--", type: "current" },
     ];
   }
 
@@ -572,8 +572,7 @@ function renderLiquidityScanner(data) {
       radius: 1.05,
       label: "SWEEP DETECTED",
       value: sweep.sweep_direction.replace(/_/g, " "),
-      type: "sweep",
-      color: "var(--wait)"
+      type: "sweep"
     });
   }
 
@@ -739,8 +738,8 @@ function initRadar(blips, detected) {
 
     // Gradient for sweep trail
     const sweepGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
-    sweepGrad.addColorStop(0, colors.long.replace(")", ", 0.25").replace("rgb", "rgba"));
-    sweepGrad.addColorStop(1, colors.long.replace(")", ", 0").replace("rgb", "rgba"));
+    sweepGrad.addColorStop(0, colors.long.includes("rgba") ? colors.long.replace("0.12", "0.25") : `rgba(54, 224, 160, 0.25)`);
+    sweepGrad.addColorStop(1, colors.long.includes("rgba") ? colors.long.replace("0.12", "0") : `rgba(54, 224, 160, 0)`);
     ctx.fillStyle = sweepGrad;
     ctx.fill();
 
@@ -776,10 +775,18 @@ function initRadar(blips, detected) {
       const pulseScale = isHighlighted ? 1 + Math.sin(timestamp / 100) * 0.3 : 1;
       const blipRadius = 6 * pulseScale;
 
+      // Resolve blip color from type
+      const typeColorMap = {
+        low: colors.short,
+        high: colors.long,
+        current: colors.accent,
+        sweep: colors.wait
+      };
+      const blipColor = typeColorMap[blip.type] || colors.accent;
+
       // Draw blip
       ctx.beginPath();
       ctx.arc(blipX, blipY, blipRadius, 0, Math.PI * 2);
-      const blipColor = blip.color || colors.accent;
       ctx.fillStyle = isHighlighted ? blipColor : blipColor + "CC";
       ctx.shadowColor = blipColor;
       ctx.shadowBlur = isHighlighted ? 12 : 6;
