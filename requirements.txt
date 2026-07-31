@@ -4,8 +4,8 @@ pandas
 pandas-ta
 ccxt
 numpy
-gunicorn
 hmmlearn
 scikit-learn
 PyWavelets
 requests
+gunicorn
