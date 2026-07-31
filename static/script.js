@@ -122,6 +122,11 @@ function activatePanel(name) {
     ensureChartInitialized();
     resizeChart();
     loadChartData();
+  } else if (name === "liquidity") {
+    loadLiquidityRadarData();
+    startLiquidityPolling();
+  } else {
+    stopLiquidityPolling();
   }
 }
 
@@ -519,163 +524,329 @@ function renderTier3(data) {
   tier3El.innerHTML = cards.join("");
 }
 
-/* ---------------------------- liquidity scanner: CH.19 ---------------------------- */
+/* ==========================================================================
+   LIQUIDITY RADAR DASHBOARD — full multi-card scanner (Ch.19 tab).
+   Lazy-loaded from /liquidity-radar only when this tab is opened (same
+   pattern as the Live Chart tab's /candles), then polled every few
+   seconds so it's a real, moving scan — not a static snapshot. When a
+   fresh liquidity sweep is detected between polls, it fires a red-dot
+   alert (both a banner and a flashing marker on the radar).
+   ========================================================================== */
 
-/* Builds the radar visual: rotating sweep beam + concentric rings, with
-   pool "blips" placed by distance (radius) and side — SELL_SIDE pools
-   (resistance, resting liquidity above price) plotted in the top arc,
-   BUY_SIDE pools (support, resting liquidity below price) in the bottom
-   arc. Purely a display extension of the CH.19 sweep card above it —
-   doesn't touch anything else on the page. */
-function buildLiquidityRadar(sweep, price) {
-  const pools = Array.isArray(sweep.pools) ? sweep.pools.slice(0, 8) : [];
+let liqPollTimer = null;
+let liqLastSnapshot = null; // { sweepDetected, sweptPriceKeys: Set }
 
-  if (!pools.length) {
-    return `
-      <div class="liq-radar-wrap">
-        <div class="liq-radar-head">
-          <span class="liq-radar-title">Liquidity Pool Radar</span>
-          <span class="liq-radar-caption">no clustered pools in current window</span>
-        </div>
-        <div class="liq-radar-empty">Not enough swing clustering detected in the fetched candle window to plot pools yet.</div>
-      </div>`;
+function toneForScore(score, invert = false) {
+  if (na(score)) return "flat";
+  const s = invert ? 100 - score : score;
+  if (s >= 66) return "short";
+  if (s >= 33) return "wait";
+  return "long";
+}
+
+/* Generic 6-axis spider/radar chart. axes = [{ label, value(0-100), color }] */
+function buildSpiderChart(axes, liveAlert) {
+  const size = 220;
+  const cx = size / 2;
+  const cy = size / 2;
+  const maxR = 88;
+  const rings = [0.25, 0.5, 0.75, 1];
+  const count = axes.length;
+
+  function point(i, valuePct) {
+    const angle = (-90 + i * (360 / count)) * (Math.PI / 180);
+    const r = (Math.max(0, Math.min(100, valuePct)) / 100) * maxR;
+    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
   }
 
-  const maxDist = Math.max(0.4, ...pools.map((p) => p.distance_pct || 0));
-  const sellPools = pools.filter((p) => p.side === "SELL_SIDE");
-  const buyPools  = pools.filter((p) => p.side === "BUY_SIDE");
+  let ringShapes = "";
+  rings.forEach((frac) => {
+    const pts = axes.map((_, i) => {
+      const angle = (-90 + i * (360 / count)) * (Math.PI / 180);
+      const r = frac * maxR;
+      return `${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`;
+    }).join(" ");
+    ringShapes += `<polygon points="${pts}" class="spider-ring" />`;
+  });
 
-  function angleSteps(list, centerDeg, spread) {
-    const count = list.length;
-    if (!count) return [];
-    if (count === 1) return [centerDeg];
-    const step = spread / (count - 1);
-    return list.map((_, i) => centerDeg - spread / 2 + i * step);
-  }
-  const sellAngles = angleSteps(sellPools, 0, 130);   // top arc = above price
-  const buyAngles  = angleSteps(buyPools, 180, 130);  // bottom arc = below price
+  let spokes = "";
+  let labels = "";
+  axes.forEach((a, i) => {
+    const outer = point(i, 100);
+    const angle = (-90 + i * (360 / count)) * (Math.PI / 180);
+    const labelR = maxR + 20;
+    const lx = cx + labelR * Math.cos(angle);
+    const ly = cy + labelR * Math.sin(angle);
+    spokes += `<line x1="${cx}" y1="${cy}" x2="${outer.x}" y2="${outer.y}" class="spider-spoke" />`;
+    labels += `<text x="${lx}" y="${ly}" class="spider-label" text-anchor="middle" dominant-baseline="middle">${a.label}</text>`;
+  });
 
-  function toPos(deg, distPct) {
-    const r = Math.min(0.94, 0.16 + 0.78 * Math.min(1, distPct / maxDist));
-    const rad = (deg * Math.PI) / 180;
-    return { x: 50 + r * 50 * Math.sin(rad), y: 50 - r * 50 * Math.cos(rad) };
-  }
-
-  let blips = "";
-  let legendRows = "";
-
-  function plot(list, angles, sideClass) {
-    list.forEach((p, i) => {
-      const { x, y } = toPos(angles[i], p.distance_pct || 0);
-      const sweptClass = p.swept ? " swept" : "";
-      const title = `${fmtPrice(p.price)} · ${fmtPct(p.distance_pct, 2)} away · ${p.touches} touch${p.touches > 1 ? "es" : ""}${p.swept ? " · already swept" : ""}`;
-      blips += `<div class="radar-blip ${sideClass}${sweptClass}" style="left:${x}%; top:${y}%;" title="${title}"></div>`;
-
-      const strengthPct = Math.round((p.strength || 0) * 100);
-      const fillColor = p.swept ? "var(--text-faint)" : (sideClass === "side-sell" ? "var(--short)" : "var(--long)");
-      legendRows += `
-        <div class="liq-radar-legend-row">
-          <span class="liq-radar-dot ${sideClass}${sweptClass}"></span>
-          <span class="liq-radar-price">${fmtPrice(p.price)}</span>
-          <span class="liq-radar-dist">${fmtPct(p.distance_pct, 2)}</span>
-          <span class="liq-radar-strength-track"><span class="liq-radar-strength-fill" style="width:${strengthPct}%; background:${fillColor};"></span></span>
-        </div>`;
-    });
-  }
-  plot(sellPools, sellAngles, "side-sell");
-  plot(buyPools, buyAngles, "side-buy");
+  const dataPts = axes.map((a, i) => point(i, a.value)).map((p) => `${p.x},${p.y}`).join(" ");
+  const dots = axes.map((a, i) => {
+    const p = point(i, a.value);
+    const alertClass = liveAlert && a.label === "SWEEP" ? " spider-dot-alert" : "";
+    return `<circle cx="${p.x}" cy="${p.y}" r="4" class="spider-dot${alertClass}" style="fill:${a.color};" />`;
+  }).join("");
 
   return `
-    <div class="liq-radar-wrap">
-      <div class="liq-radar-head">
-        <span class="liq-radar-title">Liquidity Pool Radar</span>
-        <span class="liq-radar-caption">${pools.length} pool${pools.length > 1 ? "s" : ""} detected · above = sell-side · below = buy-side</span>
-      </div>
-      <div class="liq-radar-body">
-        <div class="liq-radar-scope">
-          <span class="radar-ring r1"></span>
-          <span class="radar-ring r2"></span>
-          <span class="radar-ring r3"></span>
-          <span class="radar-ring r4"></span>
-          <span class="radar-cross h"></span>
-          <span class="radar-cross v"></span>
-          <div class="radar-sweep-beam"></div>
-          ${blips}
-          <div class="radar-center-dot"></div>
-          <div class="radar-center-label">${fmtPrice(price)}</div>
-        </div>
-        <div class="liq-radar-legend">
-          ${legendRows}
-        </div>
+    <svg viewBox="0 0 ${size} ${size}" class="spider-svg">
+      ${ringShapes}
+      ${spokes}
+      <polygon points="${dataPts}" class="spider-shape" />
+      ${dots}
+      ${labels}
+    </svg>`;
+}
+
+function radialGauge(score, label) {
+  const r = 34;
+  const circumference = 2 * Math.PI * r;
+  const pct = na(score) ? 0 : Math.max(0, Math.min(100, score));
+  const offset = circumference * (1 - pct / 100);
+  const tone = toneForScore(pct);
+  return `
+    <div class="lr-gauge-wrap">
+      <svg viewBox="0 0 80 80" class="lr-gauge-svg">
+        <circle cx="40" cy="40" r="${r}" class="lr-gauge-track" />
+        <circle cx="40" cy="40" r="${r}" class="lr-gauge-fill c-${tone}"
+          stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" />
+      </svg>
+      <div class="lr-gauge-center">
+        <span class="lr-gauge-value">${na(score) ? "--" : score}</span>
+        <span class="lr-gauge-label">${label}</span>
       </div>
     </div>`;
 }
 
-function renderLiquidityScanner(data) {
+function meterRow(label, value, tone) {
+  return `
+    <div class="lr-meter-row">
+      <span class="lr-meter-label">${label}</span>
+      ${meterBar(value || 0, "c-" + tone)}
+      <span class="lr-meter-value">${na(value) ? "--" : value}</span>
+    </div>`;
+}
+
+function renderLiquidityRadarDashboard(data, liveAlert) {
   if (!liqScannerEl) return;
 
-  const sweep = data.liquidity_sweep || {};
   const price = data.last_price;
+  const sweep = data.liquidity_sweep || {};
+  const pools = Array.isArray(data.pools) ? data.pools : [];
+  const magnet = data.magnet;
+  const target = data.target;
+  const spoof = data.spoofing || {};
+  const trap = data.trap_squeeze || {};
+  const funding = data.funding_open_interest || {};
+  const cvd = data.cvd || {};
 
-  const hasRange = !na(sweep.swing_high) && !na(sweep.swing_low) && !na(price) && sweep.swing_high > sweep.swing_low;
-  let markerPct = 50;
-  if (hasRange) {
-    const range = sweep.swing_high - sweep.swing_low;
-    markerPct = Math.max(2, Math.min(98, ((price - sweep.swing_low) / range) * 100));
+  const bullish = data.bullish_pct;
+  const bearish = data.bearish_pct;
+  const biasTone = !na(bullish) && !na(bearish) ? (bullish > bearish ? "long" : bullish < bearish ? "short" : "wait") : "flat";
+  const biasLabel = biasTone === "long" ? "BULLISH BIAS" : biasTone === "short" ? "BEARISH BIAS" : "NEUTRAL";
+
+  const sweepActive = !!sweep.liquidity_sweep_detected;
+  const nearestSwept = pools.filter((p) => p.swept).sort((a, b) => a.distance_pct - b.distance_pct)[0];
+
+  const spiderAxes = [
+    { label: "STRENGTH", value: data.market_strength ?? 0, color: "var(--accent)" },
+    { label: "BULL", value: bullish ?? 0, color: "var(--long)" },
+    { label: "SWEEP", value: sweepActive ? 100 : (nearestSwept ? 40 : 8), color: "var(--short)" },
+    { label: "BEAR", value: bearish ?? 0, color: "var(--short)" },
+    { label: "SPOOF", value: spoof.spoof_score ?? 0, color: "var(--wait)" },
+    { label: "TARGET", value: target ? Math.round((target.strength || 0) * 100) : 0, color: "var(--long-bright)" },
+  ];
+
+  const zoneRows = pools.length ? pools.map((p) => {
+    const isSell = p.side === "SELL_SIDE";
+    const tone = p.swept ? "flat" : (isSell ? "short" : "long");
+    const wallLabel = p.swept ? "SWEPT" : (isSell ? "SELL WALL" : "BUY WALL");
+    const scorePct = Math.round((p.strength || 0) * 100);
+    return `
+      <div class="lr-zone-row">
+        <span class="lr-zone-price">${fmtPrice(p.price)}</span>
+        ${badge(wallLabel, tone)}
+        <span class="lr-zone-dist">${fmtPct(p.distance_pct, 2)}</span>
+        <div class="lr-zone-score-track"><div class="lr-zone-score-fill c-${tone === "flat" ? "accent" : tone}" style="width:${scorePct}%;"></div></div>
+        <span class="lr-zone-score-num">${scorePct}/100</span>
+      </div>`;
+  }).join("") : `<div class="liq-radar-empty">No clustered liquidity zones detected in current window.</div>`;
+
+  const cvdPoints = Array.isArray(cvd.cvd_points) ? cvd.cvd_points : [];
+  let cvdSvg = `<div class="liq-radar-empty">CVD data unavailable.</div>`;
+  if (cvdPoints.length > 1) {
+    const w = 260, h = 60;
+    const min = Math.min(...cvdPoints), max = Math.max(...cvdPoints);
+    const range = max - min || 1;
+    const stepX = w / (cvdPoints.length - 1);
+    const linePts = cvdPoints.map((v, i) => `${(i * stepX).toFixed(1)},${(h - ((v - min) / range) * h).toFixed(1)}`).join(" ");
+    const cvdTone = (cvd.cvd_last || 0) >= 0 ? "var(--long)" : "var(--short)";
+    cvdSvg = `
+      <svg viewBox="0 0 ${w} ${h}" class="lr-cvd-svg" preserveAspectRatio="none">
+        <polyline points="${linePts}" fill="none" stroke="${cvdTone}" stroke-width="1.6" />
+      </svg>`;
   }
 
-  const detected = !!sweep.liquidity_sweep_detected;
-  const tone = detected ? "wait" : "flat";
-  const statusLabel = detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "NO SWEEP DETECTED";
+  const fundingTone = na(funding.funding_rate_pct) ? "flat" : (funding.funding_rate_pct > 0.02 ? "short" : funding.funding_rate_pct < 0 ? "long" : "wait");
 
   liqScannerEl.innerHTML = `
-    <div class="liq-panel">
-      <div class="liq-header">
-        <div class="liq-header-left">
-          <span class="liq-icon">⌁</span>
-          <div>
-            <div class="liq-title">Liquidity Sweep Scanner</div>
-            <div class="liq-subtitle">CH.19 · swing high/low · display-only</div>
-          </div>
-        </div>
-        ${badge(statusLabel, tone)}
-      </div>
+    <div class="lr-dash${liveAlert ? " lr-flash" : ""}">
 
-      <div class="liq-range">
-        <div class="liq-range-track">
-          <div class="liq-range-fill"></div>
-          <div class="liq-range-endpoint" style="left:0%;"></div>
-          <div class="liq-range-endpoint" style="left:100%;"></div>
-          <div class="liq-range-endpoint-label" style="left:0%;">${fmtPrice(sweep.swing_low)}</div>
-          <div class="liq-range-endpoint-label" style="left:100%;">${fmtPrice(sweep.swing_high)}</div>
-          ${hasRange ? `
-            <div class="liq-range-marker" style="left:${markerPct}%;"></div>
-            <div class="liq-range-marker-label" style="left:${markerPct}%;">${fmtPrice(price)}</div>
-          ` : ""}
+      <div class="lr-header">
+        <div class="lr-header-left">
+          <span class="lr-coin-badge">${(data.coin || "").replace("/", "")} · PERPETUAL</span>
+          ${badge(biasLabel, biasTone)}
+          ${sweepActive ? `<span class="lr-live-alert-dot" title="Live liquidity sweep detected"></span>` : ""}
+        </div>
+        <div class="lr-header-right">
+          <div class="lr-price">${fmtPrice(price)}</div>
+          <div class="lr-confidence">${na(data.market_strength) ? "--" : data.market_strength}<span>STRENGTH / 100</span></div>
         </div>
       </div>
 
-      <div class="liq-stats-grid">
-        <div class="liq-stat">
-          <span class="liq-stat-label">SWING HIGH</span>
-          <span class="liq-stat-value">${fmtPrice(sweep.swing_high)}</span>
+      <div class="lr-bias-bar">
+        <div class="lr-bias-fill" style="width:${na(bullish) ? 50 : bullish}%;"></div>
+        <span class="lr-bias-label left">${na(bullish) ? "--" : fmtPct(bullish, 1)} BUY</span>
+        <span class="lr-bias-label right">${na(bearish) ? "--" : fmtPct(bearish, 1)} SELL</span>
+      </div>
+
+      <div class="lr-grid-top">
+        <div class="lr-card">
+          <div class="lr-card-title">Liquidity Magnet</div>
+          ${magnet ? `
+            <div class="lr-card-big text-long">${fmtPrice(magnet.price)}</div>
+            <div class="lr-card-sub">Nearest strong cluster · price pulled toward this level</div>
+            <div class="lr-card-foot">
+              <span>Distance <b>${fmtPct(magnet.distance_pct, 2)}</b></span>
+              <span>Score <b>${Math.round((magnet.strength || 0) * 100)}/100</b></span>
+            </div>` : `<div class="liq-radar-empty">No magnet level found.</div>`}
         </div>
-        <div class="liq-stat">
-          <span class="liq-stat-label">SWING LOW</span>
-          <span class="liq-stat-value">${fmtPrice(sweep.swing_low)}</span>
+
+        <div class="lr-card">
+          <div class="lr-card-title">Likely Target</div>
+          ${target ? `
+            <div class="lr-card-big text-wait">${fmtPrice(target.price)}</div>
+            <div class="lr-card-sub">Highest-probability level beyond the magnet</div>
+            <div class="lr-card-foot">
+              <span>Distance <b>${fmtPct(target.distance_pct, 2)}</b></span>
+              <span>Score <b>${Math.round((target.strength || 0) * 100)}/100</b></span>
+            </div>` : `<div class="liq-radar-empty">No secondary target found.</div>`}
         </div>
-        <div class="liq-stat">
-          <span class="liq-stat-label">DIST → HIGH</span>
-          <span class="liq-stat-value text-long">${fmtPct(sweep.distance_to_high_pct, 2)}</span>
+
+        <div class="lr-card lr-card-center">
+          <div class="lr-card-title">Market Strength</div>
+          ${radialGauge(data.market_strength, "SCORE")}
         </div>
-        <div class="liq-stat">
-          <span class="liq-stat-label">DIST → LOW</span>
-          <span class="liq-stat-value text-short">${fmtPct(sweep.distance_to_low_pct, 2)}</span>
+
+        <div class="lr-card lr-card-span2">
+          <div class="lr-card-title">Live Radar</div>
+          <div class="lr-spider-wrap">${buildSpiderChart(spiderAxes, liveAlert)}</div>
         </div>
       </div>
 
-      ${buildLiquidityRadar(sweep, price)}
+      <div class="lr-grid-mid">
+        <div class="lr-card">
+          <div class="lr-card-title">Possible Spoofing <span class="lr-hint" title="Heuristic estimate from public order-book snapshots — cannot confirm intent, no exchange labels orders as spoofed.">ⓘ</span></div>
+          ${na(spoof.spoof_score) ? `<div class="liq-radar-empty">Order-book snapshot unavailable.</div>` : `
+            <div class="lr-card-big text-${toneForScore(spoof.spoof_score)}">${spoof.spoof_score}/100</div>
+            <div class="lr-card-sub">${spoof.flagged_price ? `${fmtPrice(spoof.flagged_price)} · ${(spoof.flagged_side || "").replace(/_/g, " ")}` : "no large order vanished this scan"}</div>
+            ${spoof.flagged_price ? `<div class="lr-card-foot"><span>Cancelled <b>${spoof.cancelled_pct}%</b></span><span>Size <b>${fmtNum(spoof.vanished_size, 2)}</b></span></div>` : ""}`}
+        </div>
+
+        <div class="lr-card">
+          <div class="lr-card-title">Last Liquidity Sweep</div>
+          ${sweepActive ? `
+            ${badge((sweep.sweep_direction || "SWEEP").replace(/_/g, " "), "short")}
+            <div class="lr-card-sub">Price swept ${fmtPrice(sweep.swing_high > price ? sweep.swing_high : sweep.swing_low)} this candle</div>
+          ` : nearestSwept ? `
+            ${badge("EARLIER SWEEP", "flat")}
+            <div class="lr-card-sub">Nearest swept level: ${fmtPrice(nearestSwept.price)} · ${fmtPct(nearestSwept.distance_pct, 2)} away</div>
+          ` : `<div class="liq-radar-empty">No sweep detected in current window.</div>`}
+        </div>
+
+        <div class="lr-card">
+          <div class="lr-card-title">Trap &amp; Squeeze Risk</div>
+          ${meterRow("BULL TRAP", trap.bull_trap, "short")}
+          ${meterRow("BEAR TRAP", trap.bear_trap, "wait")}
+          ${meterRow("SHORT SQUEEZE", trap.short_squeeze, "long")}
+          ${meterRow("LONG SQUEEZE", trap.long_squeeze, "accent")}
+        </div>
+      </div>
+
+      <div class="lr-card">
+        <div class="lr-card-title">Liquidity Target Zones</div>
+        <div class="lr-zones-list">${zoneRows}</div>
+      </div>
+
+      <div class="lr-grid-bottom">
+        <div class="lr-card">
+          <div class="lr-card-title">Funding Rate &amp; Open Interest</div>
+          ${funding.available ? `
+            <div class="lr-dual-split">
+              <div><span class="lr-dual-label">FUNDING</span><span class="lr-dual-value text-${fundingTone}">${fmtSigned(funding.funding_rate_pct, 4, "%")}</span></div>
+              <div><span class="lr-dual-label">OPEN INTEREST</span><span class="lr-dual-value">${na(funding.open_interest) ? "--" : fmtNum(funding.open_interest, 2)}</span></div>
+            </div>
+            <div class="lr-card-sub">${fundingTone === "short" ? "Elevated positive funding — longs paying, long-squeeze risk" : fundingTone === "long" ? "Negative funding — shorts paying, short-squeeze risk" : "Neutral funding rate, no extreme lean"}</div>
+          ` : `<div class="liq-radar-empty">No perpetual swap listing found for this coin on OKX — funding/OI unavailable.</div>`}
+        </div>
+
+        <div class="lr-card">
+          <div class="lr-card-title">CVD · Volume Delta</div>
+          ${cvdSvg}
+          <div class="lr-card-sub">Cumulative delta ${na(cvd.cvd_last) ? "--" : fmtNum(cvd.cvd_last, 2)} · ${(cvd.cvd_last || 0) >= 0 ? "net buy pressure" : "net sell pressure"}</div>
+        </div>
+      </div>
+
     </div>`;
+}
+
+async function loadLiquidityRadarData() {
+  if (!liqScannerEl) return;
+  const coin = coinSelect.value;
+
+  if (!liqScannerEl.dataset.loadedOnce) {
+    liqScannerEl.innerHTML = `<div class="liq-radar-empty">Scanning ${coin} order book, funding, and recent trades…</div>`;
+  }
+
+  try {
+    const res = await fetch(`/liquidity-radar?coin=${encodeURIComponent(coin)}&timeframe=1h`);
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "liquidity radar fetch failed");
+
+    const sweptKeys = new Set((data.pools || []).filter((p) => p.swept).map((p) => p.price));
+    const sweepDetected = !!(data.liquidity_sweep || {}).liquidity_sweep_detected;
+
+    let liveAlert = false;
+    if (liqLastSnapshot && liqLastSnapshot.coin === coin) {
+      const newSweep = sweepDetected && !liqLastSnapshot.sweepDetected;
+      const newlySweptPool = [...sweptKeys].some((k) => !liqLastSnapshot.sweptKeys.has(k));
+      if (newSweep || newlySweptPool) {
+        liveAlert = true;
+        addAlert("danger", `🔴 LIQUIDITY SWEEP — fresh liquidity taken on ${coin}`);
+      }
+    }
+    liqLastSnapshot = { coin, sweepDetected, sweptKeys };
+
+    renderLiquidityRadarDashboard(data, liveAlert);
+    liqScannerEl.dataset.loadedOnce = "1";
+    if (liveAlert) setTimeout(() => renderLiquidityRadarDashboard(data, false), 2200);
+  } catch (err) {
+    liqScannerEl.innerHTML = `<div class="liq-radar-empty">⚠ ${err.message}</div>`;
+  }
+}
+
+function startLiquidityPolling() {
+  stopLiquidityPolling();
+  liqPollTimer = setInterval(() => {
+    const panel = document.getElementById("panel-liquidity");
+    if (!panel || !panel.classList.contains("active")) return; // pause when tab hidden
+    loadLiquidityRadarData();
+  }, 6000);
+}
+
+function stopLiquidityPolling() {
+  if (liqPollTimer) clearInterval(liqPollTimer);
+  liqPollTimer = null;
 }
 
 /* ==========================================================================
@@ -683,6 +854,7 @@ function renderLiquidityScanner(data) {
    fed from the /candles endpoint and polled every few seconds for live
    price + last-candle updates.
    ========================================================================== */
+
 
 let lwChart = null;
 let lwCandleSeries = null;
@@ -818,7 +990,14 @@ function renderResult(data) {
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
-  renderLiquidityScanner(data);
+
+  // Liquidity Radar dashboard loads independently from /liquidity-radar
+  // (see loadLiquidityRadarData) — but refresh it immediately if that tab
+  // happens to already be open so it doesn't wait for the next poll tick.
+  const liquidityPanel = document.getElementById("panel-liquidity");
+  if (liquidityPanel && liquidityPanel.classList.contains("active")) {
+    loadLiquidityRadarData();
+  }
 
   if (data.disclaimer) {
     document.getElementById("disclaimer-text").textContent = "⚠ " + data.disclaimer;
