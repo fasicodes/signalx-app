@@ -1,878 +1,402 @@
-/* ==========================================================================
-   SIGNAL/FM — dynamic 19-channel renderer
-   ========================================================================== */
+/* ================================================================
+   SIGNAL/FM — MULTI-CHANNEL MARKET READOUT TERMINAL (CLIENT JS)
+================================================================ */
 
-const coinSelect   = document.getElementById("coin-select");
-const runBtn       = document.getElementById("get-signal-btn");
-const errorText    = document.getElementById("error-text");
-const resultBox    = document.getElementById("result-box");
-const alertStack   = document.getElementById("alert-stack");
-const emptyState   = document.getElementById("empty-state");
-const clockText    = document.getElementById("clock-text");
-const tier1El      = document.getElementById("tier-1");
-const tier2El      = document.getElementById("tier-2");
-const tier3El      = document.getElementById("tier-3");
-const liqScannerEl = document.getElementById("liquidity-scanner");
-const panelTabs    = document.querySelectorAll(".panel-tab");
-const tabPanels    = document.querySelectorAll(".tab-panel");
-
-// coin picker elements
-const coinPicker        = document.getElementById("coin-picker");
-const coinPickerTrigger = document.getElementById("coin-picker-trigger");
-const coinPickerIcon    = document.getElementById("coin-picker-icon");
-const coinPickerLabel   = document.getElementById("coin-picker-label");
-const coinPickerMenu    = document.getElementById("coin-picker-menu");
-
-// live chart elements
-const chartTitleEl  = document.getElementById("chart-title");
-const chartPriceEl  = document.getElementById("chart-price");
-const chartChangeEl = document.getElementById("chart-change");
-const chartStatusEl = document.getElementById("chart-status");
-const chartTfRow    = document.getElementById("chart-tf-row");
-const candleChartEl = document.getElementById("candle-chart");
-
-const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 48; // r=48
-
-/* If any of these are missing, design.html doesn't match this script.js —
-   make sure both files were replaced together and the browser isn't serving
-   a cached copy. */
-{
-  const required = { coinSelect, runBtn, errorText, resultBox, alertStack, emptyState, clockText, tier1El, tier2El, tier3El, liqScannerEl };
-  const missing = Object.keys(required).filter((k) => !required[k]);
-  if (missing.length) {
-    console.error("SIGNAL/FM: design.html is missing element(s) for:", missing.join(", "), "— check that templates/design.html matches this static/script.js and clear the browser cache.");
+document.addEventListener("DOMContentLoaded", () => {
+  // Live Clock
+  const clockText = document.getElementById("clock-text");
+  if (clockText) {
+    setInterval(() => {
+      const now = new Date();
+      clockText.textContent = now.toUTCString().split(" ")[4] + " UTC";
+    }, 1000);
   }
-}
 
-/* ---------------------------- utils ---------------------------- */
+  // DOM Elements
+  const coinSelectNative = document.getElementById("coin-select");
+  const coinPicker = document.getElementById("coin-picker");
+  const coinPickerTrigger = document.getElementById("coin-picker-trigger");
+  const coinPickerMenu = document.getElementById("coin-picker-menu");
+  const coinPickerIcon = document.getElementById("coin-picker-icon");
+  const coinPickerLabel = document.getElementById("coin-picker-label");
+  const getSignalBtn = document.getElementById("get-signal-btn");
+  const errorTextEl = document.getElementById("error-text");
+  const resultBox = document.getElementById("result-box");
+  const emptyState = document.getElementById("empty-state");
 
-const na = (v) => v === null || v === undefined || Number.isNaN(v);
+  // Hero elements
+  const gaugeFill = document.getElementById("gauge-fill");
+  const gaugeVerdict = document.getElementById("gauge-verdict");
+  const gaugeConfidence = document.getElementById("gauge-confidence");
+  const heroPrice = document.getElementById("hero-price");
+  const heroRsi = document.getElementById("hero-rsi");
+  const heroMacd = document.getElementById("hero-macd");
+  const heroTrendTag = document.getElementById("hero-trend-tag");
 
-function fmtPrice(v) {
-  if (na(v)) return "--";
-  return "$" + Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
-function fmtPct(v, digits = 1) {
-  if (na(v)) return "--";
-  return Number(v).toFixed(digits) + "%";
-}
-function fmtNum(v, digits = 2) {
-  if (na(v)) return "--";
-  return Number(v).toFixed(digits);
-}
-function fmtSigned(v, digits = 2, suffix = "") {
-  if (na(v)) return "--";
-  const n = Number(v);
-  return (n > 0 ? "+" : "") + n.toFixed(digits) + suffix;
-}
+  // Tier containers
+  const tier1El = document.getElementById("tier-1");
+  const tier2El = document.getElementById("tier-2");
+  const tier3El = document.getElementById("tier-3");
+  const liqScannerEl = document.getElementById("liquidity-scanner");
 
-function scopeTicks(seed) {
-  const heights = [4, 8, 5, 11, 6];
-  let out = "";
-  for (let i = 0; i < 5; i++) {
-    const h = heights[(i + seed) % heights.length];
-    out += `<span style="height:${h}px"></span>`;
-  }
-  return `<span class="scope-ticks">${out}</span>`;
-}
+  // Tabs
+  const panelTabs = document.querySelectorAll(".panel-tab");
+  const tabPanels = document.querySelectorAll(".tab-panel");
 
-function channelCard({ id, title, model, body, span2 = false }) {
-  return `
-    <div class="channel-card${span2 ? " span-2" : ""}">
-      <div class="channel-head">
-        <div class="channel-id-group">
-          ${scopeTicks(id)}
-          <div>
-            <div class="channel-id">CH.${String(id).padStart(2, "0")}</div>
-            <div class="channel-title">${title}</div>
-          </div>
-        </div>
-        <span class="channel-model">${model}</span>
-      </div>
-      ${body}
-    </div>`;
-}
-
-function meterBar(pct, colorClass) {
-  const clamped = Math.max(0, Math.min(100, pct));
-  return `<div class="meter-track"><div class="meter-fill ${colorClass}" style="width:${clamped}%"></div></div>`;
-}
-
-function centeredMeter(value, max, colorClass) {
-  if (na(value)) {
-    return `<div class="meter-track centered"><div class="center-tick"></div></div>`;
-  }
-  const pct = Math.min(Math.abs(value), max) / max * 50;
-  const style = value >= 0
-    ? `left:50%; width:${pct}%;`
-    : `left:${50 - pct}%; width:${pct}%;`;
-  return `<div class="meter-track centered"><div class="center-tick"></div><div class="meter-fill ${value >= 0 ? "c-long" : "c-short"}" style="${style}"></div></div>`;
-}
-
-function badge(text, tone) {
-  return `<span class="badge on-${tone}">${text}</span>`;
-}
-
-/* ---------------------------- tabs ---------------------------- */
-
-function activatePanel(name) {
-  panelTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === name));
-  tabPanels.forEach((panel) => panel.classList.toggle("active", panel.id === "panel-" + name));
-  if (name === "livechart") {
-    ensureChartInitialized();
-    resizeChart();
-    loadChartData();
-  }
-}
-
-panelTabs.forEach((tab) => {
-  tab.addEventListener("click", () => activatePanel(tab.dataset.panel));
-});
-
-/* ---------------------------- clock ---------------------------- */
-
-function tickClock() {
-  if (!clockText) return;
-  const now = new Date();
-  clockText.textContent = now.toLocaleTimeString("en-GB", { hour12: false });
-}
-tickClock();
-setInterval(tickClock, 1000);
-
-/* ---------------------------- alerts ---------------------------- */
-
-function clearAlerts() { alertStack.innerHTML = ""; }
-function addAlert(type, text) {
-  const el = document.createElement("div");
-  el.className = "alert-banner " + type;
-  el.innerHTML = `<span class="alert-dot"></span><span>${text}</span>`;
-  alertStack.appendChild(el);
-}
-
-/* ==========================================================================
-   COIN PICKER — custom dropdown with logos, built on top of the hidden
-   native <select id="coin-select">. script.js everywhere else keeps using
-   coinSelect.value, so nothing downstream needs to change.
-   ========================================================================== */
-
-// Known ticker -> CoinCap icon slug overrides (most tickers map 1:1 already).
-const COIN_ICON_OVERRIDES = {
-  HYPE: "hype",
-  GRAM: "gram",
-  ASTER: "aster",
-  ONDO: "ondo",
-  TAO: "tao",
-};
-
-function coinIconUrl(ticker) {
-  const slug = (COIN_ICON_OVERRIDES[ticker] || ticker).toLowerCase();
-  return `https://assets.coincap.io/assets/icons/${slug}@2x.png`;
-}
-
-// Tiny inline SVG fallback (colored ring + ticker initials) used when a
-// coin's logo can't be fetched from the icon CDN.
-function fallbackIconDataUrl(ticker) {
-  const initials = (ticker || "?").slice(0, 3).toUpperCase();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
-    <circle cx="20" cy="20" r="19" fill="#151b24" stroke="#27303b" stroke-width="1.5"/>
-    <text x="20" y="25" font-family="monospace" font-size="11" font-weight="700"
-      fill="#8b96a5" text-anchor="middle">${initials}</text>
-  </svg>`;
-  return "data:image/svg+xml;base64," + btoa(svg);
-}
-
-function attachIconFallback(imgEl, ticker) {
-  imgEl.addEventListener("error", () => {
-    imgEl.onerror = null;
-    imgEl.src = fallbackIconDataUrl(ticker);
-  }, { once: true });
-}
-
-function buildCoinPicker() {
-  if (!coinPicker || !coinSelect) return;
-
-  coinPickerMenu.innerHTML = "";
-
-  Array.from(coinSelect.children).forEach((group) => {
-    if (group.tagName !== "OPTGROUP") return;
-
-    const groupLabel = document.createElement("div");
-    groupLabel.className = "coin-picker-group-label";
-    groupLabel.textContent = group.label;
-    coinPickerMenu.appendChild(groupLabel);
-
-    Array.from(group.children).forEach((option) => {
-      const value = option.value;
-      const ticker = value.split("/")[0];
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "coin-picker-option";
-      btn.dataset.value = value;
-      btn.setAttribute("role", "option");
-
-      const img = document.createElement("img");
-      img.className = "coin-picker-option-icon";
-      img.alt = "";
-      img.src = coinIconUrl(ticker);
-      attachIconFallback(img, ticker);
-
-      const label = document.createElement("span");
-      label.textContent = option.textContent;
-
-      btn.appendChild(img);
-      btn.appendChild(label);
-      btn.addEventListener("click", () => selectCoin(value));
-
-      coinPickerMenu.appendChild(btn);
+  panelTabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      panelTabs.forEach(t => t.classList.remove("active"));
+      tabPanels.forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      const target = document.getElementById(`panel-${tab.dataset.panel}`);
+      if (target) target.classList.add("active");
     });
   });
 
-  syncCoinPickerTrigger();
-}
+  // Custom Coin Picker Setup
+  function initCoinPicker() {
+    if (!coinSelectNative || !coinPickerMenu) return;
+    const groups = coinSelectNative.querySelectorAll("optgroup");
+    let menuHtml = "";
 
-function syncCoinPickerTrigger() {
-  const value = coinSelect.value;
-  const ticker = value.split("/")[0];
-  coinPickerLabel.textContent = value.replace("/", " / ");
-  coinPickerIcon.src = coinIconUrl(ticker);
-  attachIconFallback(coinPickerIcon, ticker);
+    groups.forEach(group => {
+      menuHtml += `<div class="coin-picker-group-label">${group.label}</div>`;
+      const options = group.querySelectorAll("option");
+      options.forEach(opt => {
+        const symbol = opt.value.split("/")[0].toLowerCase();
+        // Fallback icon source or placeholder
+        const iconUrl = `https://assets.coincap.io/assets/icons/${symbol}@2x.png`;
+        menuHtml += `
+          <div class="coin-picker-item" data-value="${opt.value}">
+            <img class="coin-picker-icon" src="${iconUrl}" onerror="this.src=''" alt="" />
+            <span>${opt.text}</span>
+          </div>`;
+      });
+    });
 
-  coinPickerMenu.querySelectorAll(".coin-picker-option").forEach((opt) => {
-    opt.classList.toggle("active", opt.dataset.value === value);
-  });
-}
+    coinPickerMenu.innerHTML = menuHtml;
 
-function selectCoin(value) {
-  coinSelect.value = value;
-  coinSelect.dispatchEvent(new Event("change"));
-  syncCoinPickerTrigger();
-  closeCoinPicker();
-}
+    // Set initial selection
+    updatePickerSelection(coinSelectNative.value);
 
-function openCoinPicker() {
-  coinPicker.classList.add("open");
-  coinPickerTrigger.setAttribute("aria-expanded", "true");
-}
-function closeCoinPicker() {
-  coinPicker.classList.remove("open");
-  coinPickerTrigger.setAttribute("aria-expanded", "false");
-}
+    // Trigger toggle
+    coinPickerTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      coinPickerMenu.classList.toggle("open");
+      coinPickerTrigger.setAttribute("aria-expanded", coinPickerMenu.classList.contains("open"));
+    });
 
-if (coinPickerTrigger) {
-  coinPickerTrigger.addEventListener("click", () => {
-    coinPicker.classList.contains("open") ? closeCoinPicker() : openCoinPicker();
-  });
-  document.addEventListener("click", (e) => {
-    if (!coinPicker.contains(e.target)) closeCoinPicker();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeCoinPicker();
-  });
-}
+    // Item click
+    coinPickerMenu.querySelectorAll(".coin-picker-item").forEach(item => {
+      item.addEventListener("click", () => {
+        const val = item.dataset.value;
+        coinSelectNative.value = val;
+        updatePickerSelection(val);
+        coinPickerMenu.classList.remove("open");
+        coinPickerTrigger.setAttribute("aria-expanded", "false");
+      });
+    });
 
-if (coinSelect) {
-  coinSelect.addEventListener("change", () => {
-    syncCoinPickerTrigger();
-    // Keep the live chart in sync if the coin changes while that tab is open.
-    const livePanel = document.getElementById("panel-livechart");
-    if (livePanel && livePanel.classList.contains("active")) {
-      loadChartData();
+    document.addEventListener("click", () => {
+      coinPickerMenu.classList.remove("open");
+      coinPickerTrigger.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function updatePickerSelection(val) {
+    if (!coinPickerLabel || !coinPickerIcon) return;
+    const option = coinSelectNative.querySelector(`option[value="${val}"]`);
+    if (option) {
+      coinPickerLabel.textContent = option.text;
+      const symbol = val.split("/")[0].toLowerCase();
+      coinPickerIcon.src = `https://assets.coincap.io/assets/icons/${symbol}@2x.png`;
     }
+  }
+
+  initCoinPicker();
+
+  // Helper formatters
+  window.na = function(val) {
+    return val === null || val === undefined || isNaN(val);
+  };
+
+  window.fmtPrice = function(val) {
+    if (window.na(val)) return "--";
+    return Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  };
+
+  window.fmtPct = function(val, decimals = 1) {
+    if (window.na(val)) return "--";
+    const num = Number(val);
+    return (num > 0 ? "+" : "") + num.toFixed(decimals) + "%";
+  };
+
+  window.badge = function(text, tone = "flat") {
+    return `<span class="badge ${tone}">${text}</span>`;
+  };
+
+  // Run Analysis Button Handler
+  if (getSignalBtn) {
+    getSignalBtn.addEventListener("click", async () => {
+      const pair = coinSelectNative.value;
+      if (errorTextEl) errorTextEl.classList.add("hidden");
+      getSignalBtn.disabled = true;
+      getSignalBtn.querySelector(".scan-btn-text").textContent = "SCANNING...";
+
+      try {
+        const res = await fetch(`/signal?pair=${encodeURIComponent(pair)}`);
+        const json = await res.json();
+
+        if (!res.ok || json.error) {
+          throw new Error(json.error || "Failed to fetch signal data.");
+        }
+
+        renderDashboard(json);
+      } catch (err) {
+        if (errorTextEl) {
+          errorTextEl.textContent = err.message;
+          errorTextEl.classList.remove("hidden");
+        }
+      } finally {
+        getSignalBtn.disabled = false;
+        getSignalBtn.querySelector(".scan-btn-text").textContent = "RUN ANALYSIS";
+      }
+    });
+  }
+
+  function renderDashboard(data) {
+    if (emptyState) emptyState.classList.add("hidden");
+    if (resultBox) resultBox.classList.remove("hidden");
+
+    // Render Hero Gauge & Price
+    const verdict = data.verdict || "FLAT";
+    const confidence = data.confidence_score || 0;
+    if (gaugeVerdict) gaugeVerdict.textContent = verdict;
+    if (gaugeConfidence) gaugeConfidence.textContent = `${confidence.toFixed(1)}% confidence`;
+
+    if (gaugeFill) {
+      const radius = 48;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference - (confidence / 100) * circumference;
+      gaugeFill.style.strokeDashoffset = offset;
+      gaugeFill.style.stroke = verdict === "LONG" ? "var(--long)" : verdict === "SHORT" ? "var(--short)" : "var(--wait)";
+    }
+
+    if (heroPrice) heroPrice.textContent = fmtPrice(data.last_price);
+    if (heroRsi && data.technical_summary) heroRsi.textContent = data.technical_summary.rsi?.toFixed(1) || "--";
+    if (heroMacd && data.technical_summary) heroMacd.textContent = data.technical_summary.macd_histogram?.toFixed(4) || "--";
+    if (heroTrendTag) {
+      heroTrendTag.textContent = data.market_regime || "NEUTRAL REGIME";
+    }
+
+    // Render Tier 1 (Ch. 01–05)
+    if (tier1El) {
+      tier1El.innerHTML = renderChannels([
+        { id: "CH.01", title: "Hawkes Intensity Jumps", data: data.hawkes_intensity },
+        { id: "CH.02", title: "Bayesian State Classifier", data: data.bayesian_state },
+        { id: "CH.03", title: "Conformal Prediction Bounds", data: data.conformal_bounds },
+        { id: "CH.04", title: "Order Flow Imbalance", data: data.ofi_metrics },
+        { id: "CH.05", title: "Volatility Surface Regime", data: data.vol_surface }
+      ]);
+    }
+
+    // Render Tier 2 (Ch. 06–10)
+    if (tier2El) {
+      tier2El.innerHTML = renderChannels([
+        { id: "CH.06", title: "Microstructure Depth", data: data.microstructure_depth },
+        { id: "CH.07", title: "Liquidity Cluster Radar", data: data.liquidity_cluster },
+        { id: "CH.08", title: "Spread Dynamics", data: data.spread_dynamics },
+        { id: "CH.09", title: "Markov Regime Transition", data: data.markov_regime },
+        { id: "CH.10", title: "Multi-Timeframe Trend", data: data.mtf_trend }
+      ]);
+    }
+
+    // Render Tier 3 (Ch. 11–18)
+    if (tier3El) {
+      tier3El.innerHTML = renderChannels([
+        { id: "CH.11", title: "Cross-Asset Correlation", data: data.cross_asset },
+        { id: "CH.12", title: "Entropy & Complexity", data: data.entropy_metrics },
+        { id: "CH.13", title: "Wavelet Energy Spectrum", data: data.wavelet_spectrum },
+        { id: "CH.14", title: "Risk Agent Telemetry", data: data.risk_agent },
+        { id: "CH.15", title: "Momentum Divergence", data: data.momentum_div },
+        { id: "CH.16", title: "Volume Profile Nodes", data: data.volume_profile },
+        { id: "CH.17", title: "Funding Rate Arbitrage", data: data.funding_rate },
+        { id: "CH.18", title: "Tail Risk Probability", data: data.tail_risk }
+      ]);
+    }
+
+    // Render Liquidity Scanner (Ch. 19)
+    renderLiquidityScanner(data);
+
+    // Initialize/Update Live Chart if available
+    initLiveChart(coinSelectNative.value);
+  }
+
+  function renderChannels(channels) {
+    return channels.map(ch => {
+      const d = ch.data || {};
+      const signal = d.signal || d.regime || d.state || "FLAT";
+      const tone = signal === "LONG" || signal === "BULLISH" ? "long" : signal === "SHORT" || signal === "BEARISH" ? "short" : signal === "WAIT" ? "wait" : "flat";
+
+      return `
+        <div class="channel-card">
+          <div>
+            <div class="channel-header">
+              <div>
+                <span class="channel-id">${ch.id}</span>
+                <div class="channel-title">${ch.title}</div>
+              </div>
+              ${badge(signal, tone)}
+            </div>
+            <div class="channel-body">
+              ${d.description || d.summary || "Telemetry feed operational. Monitoring cluster conditions."}
+            </div>
+          </div>
+          <div class="channel-metrics">
+            <span>Score: <b>${d.score !== undefined ? Number(d.score).toFixed(2) : "--"}</b></span>
+            <span>Confidence: <b>${d.confidence !== undefined ? Number(d.confidence).toFixed(1) + "%" : "--"}</b></span>
+          </div>
+        </div>`;
+    }).join("");
   });
-}
+});
 
-buildCoinPicker();
-
-/* ---------------------------- hero ---------------------------- */
-
-function renderHero(data) {
-  const verdict = (data.final_verdict || "--").toUpperCase();
-  const gaugeVerdict = document.getElementById("gauge-verdict");
-  const gaugeConfidence = document.getElementById("gauge-confidence");
-  const gaugeFill = document.getElementById("gauge-fill");
-
-  gaugeVerdict.textContent = verdict;
-  gaugeConfidence.textContent = fmtPct(data.confidence_pct) + " confidence";
-
-  let color = "var(--wait)";
-  if (verdict === "LONG") color = "var(--long)";
-  else if (verdict === "SHORT") color = "var(--short)";
-  gaugeVerdict.style.color = color;
-  gaugeFill.style.stroke = color;
-
-  const confRatio = na(data.confidence_pct) ? 0 : Math.max(0, Math.min(100, data.confidence_pct)) / 100;
-  const offset = GAUGE_CIRCUMFERENCE * (1 - confRatio);
-  gaugeFill.style.strokeDasharray = GAUGE_CIRCUMFERENCE;
-  gaugeFill.style.strokeDashoffset = offset;
-
-  document.getElementById("hero-price").textContent = fmtPrice(data.last_price);
-  document.getElementById("hero-rsi").textContent = fmtNum(data.rsi);
-  document.getElementById("hero-macd").textContent = fmtNum(data.macd, 4);
-
-  const tag = document.getElementById("hero-trend-tag");
-  tag.textContent = `${data.coin || ""} · ${data.timeframe || ""} · ${data.trend || "--"}`.toUpperCase();
-}
-
-/* ---------------------------- tier 1: core verdict engine ---------------------------- */
-
-function renderTier1(data) {
-  const cards = [];
-
-  cards.push(channelCard({
-    id: 1, title: "Buying / Selling Pressure", model: "hawkes process",
-    span2: true,
-    body: `
-      <div class="dual-split">
-        <div class="dual-item">
-          <span class="dual-label">BUY PRESSURE</span>
-          <span class="dual-value text-long">${fmtNum(data.buying_pressure, 1)} / 10</span>
-          ${meterBar((data.buying_pressure ?? 0) * 10, "c-long")}
-        </div>
-        <div class="dual-item">
-          <span class="dual-label">SELL PRESSURE</span>
-          <span class="dual-value text-short">${fmtNum(data.selling_pressure, 1)} / 10</span>
-          ${meterBar((data.selling_pressure ?? 0) * 10, "c-short")}
-        </div>
-      </div>`
-  }));
-
-  cards.push(channelCard({
-    id: 2, title: "Market Bias", model: "bayesian classifier",
-    span2: true,
-    body: `
-      ${meterBar(data.bullish_pct ?? 50, "c-long")}
-      <div class="dual-split">
-        <div class="dual-item"><span class="dual-label">BULLISH</span><span class="dual-value text-long">${fmtPct(data.bullish_pct)}</span></div>
-        <div class="dual-item"><span class="dual-label">BEARISH</span><span class="dual-value text-short">${fmtPct(data.bearish_pct)}</span></div>
-      </div>`
-  }));
-
-  cards.push(channelCard({
-    id: 3, title: "Quantile Volatility", model: "95th pctile · SL/TP",
-    span2: true,
-    body: `
-      <div class="dual-split">
-        <div class="dual-item"><span class="dual-label">EXPECTED MOVE</span><span class="dual-value">${fmtPct(data.expected_volatility_pct, 2)}</span></div>
-        <div class="dual-item"><span class="dual-label">EXTREME MOVE (95%)</span><span class="dual-value">${fmtPct(data.extreme_volatility_95_pct, 2)}</span></div>
-        <div class="dual-item"><span class="dual-label">STOP LOSS</span><span class="dual-value text-short">${fmtPrice(data.stop_loss)}</span></div>
-        <div class="dual-item"><span class="dual-label">TAKE PROFIT</span><span class="dual-value text-long">${fmtPrice(data.take_profit)}</span></div>
-      </div>`
-  }));
-
-  const decision = data.confidence_pct != null && data.confidence_pct < 55 ? "SKIP" : "TRADE";
-  cards.push(channelCard({
-    id: 4, title: "Conformal Decision", model: "conformal prediction",
-    body: `
-      ${badge(decision, decision === "TRADE" ? "long" : "wait")}
-      <div class="channel-main">${fmtPct(data.confidence_pct)}</div>
-      <div class="channel-detail">confidence score</div>`
-  }));
-
-  cards.push(channelCard({
-    id: 5, title: "Suggested Risk", model: "fractional kelly",
-    body: `
-      <div class="channel-main text-wait">${fmtPct(data.suggested_risk_pct, 2)}</div>
-      <div class="channel-detail">of account per trade</div>`
-  }));
-
-  tier1El.innerHTML = cards.join("");
-}
-
-/* ---------------------------- tier 2: microstructure ---------------------------- */
-
-function renderTier2(data) {
-  const cards = [];
-  const ofi = data.order_flow || {};
-  const toxic = data.toxic_flow || {};
-  const regime = data.market_regime || {};
-  const jump = data.jump_shock || {};
-  const meta = data.meta_label || {};
-
-  cards.push(channelCard({
-    id: 6, title: "Order Flow Imbalance", model: "L1 snapshot delta",
-    body: `
-      ${centeredMeter(ofi.ofi_score, 10)}
-      <div class="channel-main">${fmtSigned(ofi.ofi_score, 2)}</div>
-      <div class="channel-detail">${ofi.ofi_score == null ? "no data" : (ofi.ofi_score >= 0 ? "buyers aggressive" : "sellers aggressive")}</div>`
-  }));
-
-  const toxTone = toxic.toxicity === "HIGH_TOXICITY" ? "short" : toxic.toxicity === "MODERATE_TOXICITY" ? "wait" : "long";
-  cards.push(channelCard({
-    id: 7, title: "Toxic Flow", model: "VPIN",
-    body: `
-      ${meterBar(na(toxic.vpin_score) ? 0 : toxic.vpin_score * 100, "c-" + toxTone)}
-      <div class="channel-main">${na(toxic.vpin_score) ? "--" : fmtNum(toxic.vpin_score, 3)}</div>
-      ${badge(toxic.toxicity || "N/A", toxic.toxicity ? toxTone : "flat")}`
-  }));
-
-  const regTone = regime.regime === "Trending" ? "long" : regime.regime === "Ranging" ? "wait" : "flat";
-  cards.push(channelCard({
-    id: 8, title: "Market Regime", model: "gaussian HMM",
-    body: `
-      ${badge((regime.regime || "N/A").toUpperCase(), regTone)}
-      <div class="channel-detail">${regime.state_mean_return_pct != null ? `avg state return ${fmtSigned(regime.state_mean_return_pct, 3, "%")}` : "insufficient data"}</div>`
-  }));
-
-  const jumpTone = jump.jump_detected ? "short" : "flat";
-  cards.push(channelCard({
-    id: 9, title: "Jump Diffusion", model: "z-score shock detector",
-    body: `
-      ${badge(jump.jump_detected ? `JUMP · ${jump.jump_direction}` : "NO JUMP", jumpTone)}
-      <div class="channel-detail">z-score ${fmtNum(jump.jump_zscore, 2)}</div>`
-  }));
-
-  const metaTone = meta.meta_decision === "EXECUTE" ? "long" : meta.meta_decision === "SKIP" ? "flat" : "flat";
-  cards.push(channelCard({
-    id: 10, title: "Meta-Labeling Filter", model: "random forest",
-    body: `
-      ${badge(meta.meta_decision || "N/A", metaTone)}
-      ${meterBar(meta.meta_win_probability ?? 0, "c-accent")}
-      <div class="channel-detail">${meta.meta_win_probability != null ? `${fmtPct(meta.meta_win_probability)} win probability` : "insufficient data"}</div>`
-  }));
-
-  tier2El.innerHTML = cards.join("");
-}
-
-/* ---------------------------- tier 3: extended signals (Ch.11–18) ---------------------------- */
-
-function renderTier3(data) {
-  const cards = [];
-  const div = data.intermarket_divergence || {};
-  const ent = data.entropy || {};
-  const depth = data.depth_profile || {};
-  const vwap = data.vwap_deviation || {};
-  const rl = data.rl_risk_agent || {};
-  const hurst = data.hurst || {};
-  const wave = data.wavelet_trend || {};
-  const cusum = data.structural_break || {};
-
-  const divTone = (div.interpretation || "").includes("OUTPERFORM") ? "long" : (div.interpretation || "").includes("UNDERPERFORM") ? "short" : "flat";
-  cards.push(channelCard({
-    id: 11, title: "Intermarket Divergence", model: `vs ${div.benchmark || "--"}`,
-    body: `
-      <div class="channel-main">${fmtSigned(div.divergence_score, 2)}</div>
-      ${badge((div.interpretation || "N/A").replace(/_/g, " "), divTone)}`
-  }));
-
-  const entTone = ent.regime === "LOW_ENTROPY_TRENDING" ? "long" : ent.regime === "HIGH_ENTROPY_CHOPPY" ? "short" : "wait";
-  cards.push(channelCard({
-    id: 12, title: "Permutation Entropy", model: "multi-order avg",
-    body: `
-      <div class="channel-main">${fmtNum(ent.entropy_avg, 3)}</div>
-      ${badge((ent.regime || "N/A").replace(/_/g, " "), entTone)}`
-  }));
-
-  const wallTone = depth.wall_bias === "BID_WALL_HEAVIER" ? "long" : depth.wall_bias === "ASK_WALL_HEAVIER" ? "short" : "flat";
-  cards.push(channelCard({
-    id: 13, title: "Order Book Depth (L2)", model: "weighted slope",
-    body: `
-      <div class="channel-main">${fmtNum(depth.depth_slope, 3)}</div>
-      ${badge((depth.wall_bias || "N/A").replace(/_/g, " "), wallTone)}`
-  }));
-
-  const vwapTone = vwap.signal === "MEAN_REVERSION_LIKELY" ? "wait" : "flat";
-  cards.push(channelCard({
-    id: 14, title: "VWAP Deviation", model: "z-score",
-    body: `
-      <div class="channel-main">${fmtSigned(vwap.vwap_deviation_z, 2)}</div>
-      ${badge((vwap.signal || "N/A").replace(/_/g, " "), vwapTone)}
-      ${vwap.toxic_reversion_flag ? `<div class="channel-detail text-short">toxic reversion flagged</div>` : ""}`
-  }));
-
-  cards.push(channelCard({
-    id: 15, title: "Dynamic Risk Agent", model: "RL-style heuristic",
-    body: `
-      ${badge((rl.rl_state || "N/A").replace(/_/g, " "), "accent")}
-      <div class="dual-split">
-        <div class="dual-item"><span class="dual-label">MULTIPLIER</span><span class="dual-value">${fmtNum(rl.rl_risk_multiplier, 2)}x</span></div>
-        <div class="dual-item"><span class="dual-label">ADJ. RISK</span><span class="dual-value text-wait">${fmtPct(rl.rl_adjusted_risk_pct, 2)}</span></div>
-      </div>`
-  }));
-
-  const hurstTone = hurst.memory === "TRENDING_PERSISTENT" ? "long" : hurst.memory === "MEAN_REVERTING" ? "short" : "flat";
-  cards.push(channelCard({
-    id: 16, title: "Hurst Exponent", model: "variance scaling",
-    body: `
-      <div class="channel-main">${fmtNum(hurst.hurst, 3)}</div>
-      ${badge((hurst.memory || "N/A").replace(/_/g, " "), hurstTone)}`
-  }));
-
-  const waveTone = wave.wavelet_trend_direction === "UP" ? "long" : wave.wavelet_trend_direction === "DOWN" ? "short" : "flat";
-  cards.push(channelCard({
-    id: 17, title: "Wavelet Denoised Trend", model: "db4 · level 2",
-    body: `
-      ${badge(wave.wavelet_trend_direction || "N/A", waveTone)}
-      <div class="channel-detail">slope ${fmtSigned(wave.wavelet_trend_slope, 4)}</div>`
-  }));
-
-  cards.push(channelCard({
-    id: 18, title: "Structural Break", model: "CUSUM test",
-    body: `
-      ${badge(cusum.structural_break ? "BREAK DETECTED" : "STABLE", cusum.structural_break ? "short" : "long")}
-      <div class="dual-split">
-        <div class="dual-item"><span class="dual-label">CUSUM+</span><span class="dual-value">${fmtNum(cusum.cusum_pos, 4)}</span></div>
-        <div class="dual-item"><span class="dual-label">CUSUM-</span><span class="dual-value">${fmtNum(cusum.cusum_neg, 4)}</span></div>
-      </div>`
-  }));
-
-  tier3El.innerHTML = cards.join("");
-}
-
-/* ---------------------------- liquidity scanner: CH.19 (RADAR) ---------------------------- */
-
-let radarAnimationId = null;
-let radarSweepAngle = -Math.PI / 2; // Start at top (12 o'clock)
-let radarLastTime = 0;
+/* ---------------------------- liquidity scanner: CH.19 (Radar Mode) ---------------------------- */
 
 function renderLiquidityScanner(data) {
+  const liqScannerEl = document.getElementById("liquidity-scanner");
   if (!liqScannerEl) return;
 
   const sweep = data.liquidity_sweep || {};
   const price = data.last_price;
 
-  const hasRange = !na(sweep.swing_high) && !na(sweep.swing_low) && !na(price) && sweep.swing_high > sweep.swing_low;
+  const hasRange = !window.na(sweep.swing_high) && !window.na(sweep.swing_low) && !window.na(price) && sweep.swing_high > sweep.swing_low;
+  let markerPct = 50;
+  if (hasRange) {
+    const range = sweep.swing_high - sweep.swing_low;
+    markerPct = Math.max(2, Math.min(98, ((price - sweep.swing_low) / range) * 100));
+  }
 
   const detected = !!sweep.liquidity_sweep_detected;
   const tone = detected ? "wait" : "flat";
-  const statusLabel = detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "SCANNING...";
-
-  // Calculate blip positions for radar
-  // Radar angle: 0 = right (3 o'clock), -PI/2 = top (12 o'clock), sweep goes clockwise
-  // Map price levels to radar angles (0 to 2π)
-  // Current price: between swing low and swing high
-  // Swing low: at bottom-ish, swing high: at top-ish
-  let blips = [];
-  if (hasRange) {
-    const range = sweep.swing_high - sweep.swing_low;
-    // Map price to angle: swing_low -> -PI/2 (bottom), swing_high -> PI/2 (top)
-    // Actually let's make it more intuitive: sweep the full circle
-    // Map price ratio to angle (0 to 2π)
-    const priceRatio = Math.max(0, Math.min(1, (price - sweep.swing_low) / range));
-    const priceAngle = -Math.PI / 2 + priceRatio * 2 * Math.PI;
-
-    blips = [
-      { angle: -Math.PI / 2, radius: 0.9, label: "SWING LOW", value: fmtPrice(sweep.swing_low), type: "low" },
-      { angle: Math.PI / 2, radius: 0.9, label: "SWING HIGH", value: fmtPrice(sweep.swing_high), type: "high" },
-      { angle: priceAngle, radius: 0.6, label: "CURRENT", value: fmtPrice(price), type: "current" },
-    ];
-  } else {
-    blips = [
-      { angle: -Math.PI / 2, radius: 0.8, label: "SWING LOW", value: fmtPrice(sweep.swing_low) || "--", type: "low" },
-      { angle: Math.PI / 2, radius: 0.8, label: "SWING HIGH", value: fmtPrice(sweep.swing_high) || "--", type: "high" },
-      { angle: 0, radius: 0.5, label: "CURRENT", value: fmtPrice(price) || "--", type: "current" },
-    ];
-  }
-
-  // Add sweep detection indicator blip if sweep detected
-  if (detected && hasRange) {
-    const sweepAngle = sweep.sweep_direction === "SWEPT_HIGH_REVERSED_DOWN" ? Math.PI / 2 : -Math.PI / 2;
-    blips.push({
-      angle: sweepAngle,
-      radius: 1.05,
-      label: "SWEEP DETECTED",
-      value: sweep.sweep_direction.replace(/_/g, " "),
-      type: "sweep"
-    });
-  }
+  const statusLabel = detected ? (sweep.sweep_direction || "SWEEP").replace(/_/g, " ") : "RADAR ACTIVE · NO SWEEP";
 
   liqScannerEl.innerHTML = `
     <div class="liq-panel">
       <div class="liq-header">
         <div class="liq-header-left">
-          <span class="liq-icon">⌁</span>
+          <span class="liq-icon">✈</span>
           <div>
-            <div class="liq-title">Liquidity Radar Scanner</div>
-            <div class="liq-subtitle">CH.19 · rotating sweep · display-only</div>
+            <div class="liq-title">Liquidity Radar (Aircraft Sweep Scanner)</div>
+            <div class="liq-subtitle">CH.19 · real-time cluster telemetry &amp; sweep detection</div>
           </div>
         </div>
-        ${badge(statusLabel, tone)}
+        ${window.badge(statusLabel, tone)}
       </div>
 
+      <!-- Aircraft Radar Screen UI -->
       <div class="radar-container">
-        <canvas id="liquidity-radar" class="radar-canvas" width="320" height="320"></canvas>
-        <div class="radar-legend" id="radar-legend"></div>
+        <div class="radar-grid-ring radar-ring-1"></div>
+        <div class="radar-grid-ring radar-ring-2"></div>
+        <div class="radar-grid-ring radar-ring-3"></div>
+        <div class="radar-crosshair-h"></div>
+        <div class="radar-crosshair-v"></div>
+        <div class="radar-sweep-arm"></div>
+        
+        <!-- Blips representing Swing High, Low & Mark Price -->
+        <div class="radar-blip radar-blip-high" title="Swing High Zone"></div>
+        <div class="radar-blip radar-blip-low" title="Swing Low Zone"></div>
+        <div class="radar-blip radar-blip-price" title="Current Price Center"></div>
+      </div>
+
+      <div class="liq-range">
+        <div class="liq-range-track">
+          <div class="liq-range-fill"></div>
+          <div class="liq-range-endpoint" style="left:0%;"></div>
+          <div class="liq-range-endpoint" style="left:100%;"></div>
+          <div class="liq-range-endpoint-label" style="left:0%;">${window.fmtPrice(sweep.swing_low)}</div>
+          <div class="liq-range-endpoint-label" style="left:100%;">${window.fmtPrice(sweep.swing_high)}</div>
+          ${hasRange ? `
+            <div class="liq-range-marker" style="left:${markerPct}%;"></div>
+            <div class="liq-range-marker-label" style="left:${markerPct}%;">${window.fmtPrice(price)}</div>
+          ` : ""}
+        </div>
       </div>
 
       <div class="liq-stats-grid">
         <div class="liq-stat">
           <span class="liq-stat-label">SWING HIGH</span>
-          <span class="liq-stat-value">${fmtPrice(sweep.swing_high)}</span>
+          <span class="liq-stat-value">${window.fmtPrice(sweep.swing_high)}</span>
         </div>
         <div class="liq-stat">
           <span class="liq-stat-label">SWING LOW</span>
-          <span class="liq-stat-value">${fmtPrice(sweep.swing_low)}</span>
+          <span class="liq-stat-value">${window.fmtPrice(sweep.swing_low)}</span>
         </div>
         <div class="liq-stat">
           <span class="liq-stat-label">DIST → HIGH</span>
-          <span class="liq-stat-value text-long">${fmtPct(sweep.distance_to_high_pct, 2)}</span>
+          <span class="liq-stat-value text-long">${window.fmtPct(sweep.distance_to_high_pct, 2)}</span>
         </div>
         <div class="liq-stat">
           <span class="liq-stat-label">DIST → LOW</span>
-          <span class="liq-stat-value text-short">${fmtPct(sweep.distance_to_low_pct, 2)}</span>
+          <span class="liq-stat-value text-short">${window.fmtPct(sweep.distance_to_low_pct, 2)}</span>
         </div>
       </div>
     </div>`;
-
-  // Initialize radar animation after DOM is ready
-  requestAnimationFrame(() => initRadar(blips, detected));
 }
 
-function initRadar(blips, detected) {
-  const canvas = document.getElementById("liquidity-radar");
-  if (!canvas) return;
+/* ---------------------------- live chart initializer ---------------------------- */
+let chartInstance = null;
+let candleSeries = null;
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+function initLiveChart(pair) {
+  const container = document.getElementById("candle-chart");
+  if (!container || typeof LightweightCharts === "undefined") return;
 
-  // Stop any existing animation
-  if (radarAnimationId) {
-    cancelAnimationFrame(radarAnimationId);
-    radarAnimationId = null;
-  }
-
-  // Setup canvas for high DPI
-  const dpr = window.devicePixelRatio || 1;
-  const size = canvas.clientWidth || 320;
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
-  ctx.scale(dpr, dpr);
-
-  // Colors from CSS variables
-  const style = getComputedStyle(document.documentElement);
-  const colors = {
-    void: style.getPropertyValue("--void").trim() || "#070a0f",
-    panel: style.getPropertyValue("--panel").trim() || "#11161e",
-    line: style.getPropertyValue("--line").trim() || "#27303b",
-    lineSoft: style.getPropertyValue("--line-soft").trim() || "#1a222c",
-    text: style.getPropertyValue("--text").trim() || "#e9eef5",
-    textDim: style.getPropertyValue("--text-dim").trim() || "#8b96a5",
-    textFaint: style.getPropertyValue("--text-faint").trim() || "#566171",
-    long: style.getPropertyValue("--long").trim() || "#36e0a0",
-    short: style.getPropertyValue("--short").trim() || "#ff526b",
-    wait: style.getPropertyValue("--wait").trim() || "#ffc857",
-    accent: style.getPropertyValue("--accent").trim() || "#f5a623",
-    longDim: style.getPropertyValue("--long-dim").trim() || "rgba(54, 224, 160, 0.12)",
-    shortDim: style.getPropertyValue("--short-dim").trim() || "rgba(255, 82, 107, 0.12)",
-    waitDim: style.getPropertyValue("--wait-dim").trim() || "rgba(255, 200, 87, 0.12)",
-    accentDim: style.getPropertyValue("--accent-dim").trim() || "rgba(245, 166, 35, 0.12)",
-  };
-
-  const centerX = size / 2;
-  const centerY = size / 2;
-  const maxRadius = (size / 2) - 20; // Leave padding for labels
-
-  // Radar sweep speed (radians per second) - slow like real radar
-  const SWEEP_SPEED = Math.PI / 3; // ~3 seconds per full rotation
-
-  function drawRadar(timestamp) {
-    if (!radarLastTime) radarLastTime = timestamp;
-    const delta = (timestamp - radarLastTime) / 1000; // seconds
-    radarLastTime = timestamp;
-
-    // Update sweep angle
-    radarSweepAngle += SWEEP_SPEED * delta;
-    if (radarSweepAngle > Math.PI * 3/2) radarSweepAngle = -Math.PI / 2;
-
-    // Clear
-    ctx.clearRect(0, 0, size, size);
-
-    // Draw background circle
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, maxRadius, 0, Math.PI * 2);
-    ctx.fillStyle = colors.void;
-    ctx.fill();
-    ctx.strokeStyle = colors.line;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Draw concentric circles (radar rings) - 4 rings
-    const ringCount = 4;
-    for (let i = 1; i <= ringCount; i++) {
-      const r = (maxRadius / ringCount) * i;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
-      ctx.strokeStyle = colors.lineSoft;
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 6]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // Draw crosshairs (cardinal directions)
-    ctx.strokeStyle = colors.lineSoft;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([6, 6]);
-    // Horizontal
-    ctx.beginPath();
-    ctx.moveTo(centerX - maxRadius, centerY);
-    ctx.lineTo(centerX + maxRadius, centerY);
-    ctx.stroke();
-    // Vertical
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY - maxRadius);
-    ctx.lineTo(centerX, centerY + maxRadius);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw diagonal crosshairs
-    ctx.beginPath();
-    ctx.moveTo(centerX - maxRadius * 0.707, centerY - maxRadius * 0.707);
-    ctx.lineTo(centerX + maxRadius * 0.707, centerY + maxRadius * 0.707);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(centerX - maxRadius * 0.707, centerY + maxRadius * 0.707);
-    ctx.lineTo(centerX + maxRadius * 0.707, centerY - maxRadius * 0.707);
-    ctx.stroke();
-
-    // Draw sweep line (rotating beam)
-    const sweepX = centerX + Math.cos(radarSweepAngle) * maxRadius;
-    const sweepY = centerY + Math.sin(radarSweepAngle) * maxRadius;
-
-    // Sweep trail (fading triangle/fan)
-    const trailAngle = 0.3; // ~17 degrees
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.arc(centerX, centerY, maxRadius, radarSweepAngle - trailAngle/2, radarSweepAngle + trailAngle/2);
-    ctx.closePath();
-
-    // Gradient for sweep trail
-    const sweepGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
-    sweepGrad.addColorStop(0, colors.long.includes("rgba") ? colors.long.replace("0.12", "0.25") : `rgba(54, 224, 160, 0.25)`);
-    sweepGrad.addColorStop(1, colors.long.includes("rgba") ? colors.long.replace("0.12", "0") : `rgba(54, 224, 160, 0)`);
-    ctx.fillStyle = sweepGrad;
-    ctx.fill();
-
-    // Bright sweep line
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(sweepX, sweepY);
-    ctx.strokeStyle = colors.long;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.stroke();
-
-    // Sweep tip glow
-    ctx.beginPath();
-    ctx.arc(sweepX, sweepY, 4, 0, Math.PI * 2);
-    ctx.fillStyle = colors.long;
-    ctx.shadowColor = colors.long;
-    ctx.shadowBlur = 8;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Draw blips (detected targets)
-    blips.forEach(blip => {
-      const blipX = centerX + Math.cos(blip.angle) * maxRadius * blip.radius;
-      const blipY = centerY + Math.sin(blip.angle) * maxRadius * blip.radius;
-
-      // Check if sweep is near this blip (for highlight effect)
-      const angleDiff = Math.abs(radarSweepAngle - blip.angle);
-      const normalizedDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
-      const isHighlighted = normalizedDiff < 0.2; // ~11 degrees
-
-      // Blip pulse when highlighted
-      const pulseScale = isHighlighted ? 1 + Math.sin(timestamp / 100) * 0.3 : 1;
-      const blipRadius = 6 * pulseScale;
-
-      // Resolve blip color from type
-      const typeColorMap = {
-        low: colors.short,
-        high: colors.long,
-        current: colors.accent,
-        sweep: colors.wait
-      };
-      const blipColor = typeColorMap[blip.type] || colors.accent;
-
-      // Draw blip
-      ctx.beginPath();
-      ctx.arc(blipX, blipY, blipRadius, 0, Math.PI * 2);
-      ctx.fillStyle = isHighlighted ? blipColor : blipColor + "CC";
-      ctx.shadowColor = blipColor;
-      ctx.shadowBlur = isHighlighted ? 12 : 6;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      // Blip ring when highlighted
-      if (isHighlighted) {
-        ctx.beginPath();
-        ctx.arc(blipX, blipY, blipRadius + 4, 0, Math.PI * 2);
-        ctx.strokeStyle = blipColor + "80";
-        ctx.lineWidth = 2;
-        ctx.stroke();
+  if (!chartInstance) {
+    chartInstance = LightweightCharts.createChart(container, {
+      layout: {
+        background: { color: "#0a0e0b" },
+        textColor: "#6b8271",
+      },
+      grid: {
+        vertLines: { color: "#1a261e" },
+        horzLines: { color: "#1a261e" },
+      },
+      timeScale: {
+        borderColor: "#1a261e",
+        timeVisible: true,
+      },
+      rightPriceScale: {
+        borderColor: "#1a261e",
       }
-
-      // Draw label for blip (outside radar)
-      const labelRadius = maxRadius * blip.radius + 20;
-      const labelX = centerX + Math.cos(blip.angle) * labelRadius;
-      const labelY = centerY + Math.sin(blip.angle) * labelRadius;
-
-      ctx.font = "10px 'IBM Plex Mono', monospace";
-      ctx.textAlign = blip.angle > -Math.PI/2 && blip.angle < Math.PI/2 ? "left" : "right";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = colors.textDim;
-      ctx.fillText(blip.label, labelX + (blip.angle > -Math.PI/2 && blip.angle < Math.PI/2 ? 8 : -8), labelY);
     });
 
-    // Draw center dot
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
-    ctx.fillStyle = colors.textDim;
-    ctx.fill();
+    candleSeries = chartInstance.addCandlestickSeries({
+      upColor: "#36e0a0",
+      downColor: "#ff4d6d",
+      borderVisible: false,
+      wickUpColor: "#36e0a0",
+      wickDownColor: "#ff4d6d",
+    });
 
-    // Draw distance labels on rings
-    ctx.font = "8px 'IBM Plex Mono', monospace";
-    ctx.fillStyle = colors.textFaint;
-    ctx.textAlign = "center";
-    for (let i = 1; i <= ringCount; i++) {
-      const r = (maxRadius / ringCount) * i;
-      const pct = Math.round((i / ringCount) * 100);
-      ctx.fillText(`${pct}%`, centerX + r + 12, centerY - 2);
-    }
-
-    radarAnimationId = requestAnimationFrame(drawRadar);
+    // Resize observer
+    window.addEventListener("resize", () => {
+      if (container && chartInstance) {
+        chartInstance.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+      }
+    });
   }
 
-  // Build legend
-  buildRadarLegend(blips, colors);
-
-  radarAnimationId = requestAnimationFrame(drawRadar);
+  // Fetch candles
+  fetch(`/candles?pair=${encodeURIComponent(pair)}&tf=1h`)
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.candles) && candleSeries) {
+        candleSeries.setData(data.candles);
+        document.getElementById("chart-status").textContent = "feed active · connected";
+      }
+    })
+    .catch(() => {
+      document.getElementById("chart-status").textContent = "feed connection error";
+    });
 }
-
-function buildRadarLegend(blips, colors) {
-  const legendEl = document.getElementById("radar-legend");
-  if (!legendEl) return;
-
-  const uniqueTypes = [...new Set(blips.map(b => b.type))];
-  const typeLabels = {
-    high: { label: "Swing High", color: colors.long },
-    low: { label: "Swing Low", color: colors.short },
-    current: { label: "Current Price", color: colors.accent },
-    sweep: { label: "Sweep Detected", color: colors.wait },
-  };
-
-  legendEl.innerHTML = uniqueTypes.map(type => {
-    const info = typeLabels[type];
-    return `<div class="radar-legend-item">
-      <span class="radar-legend-dot" style="background:${info.color}; box-shadow: 0 0 8px ${info.color};"></span>
-      <span>${info.label}</span>
-    </div>`;
-  }).join("");
-}
-
-// Cleanup radar animation when panel is hidden
-function stopRadarAnimation() {
-  if (radarAnimationId) {
-    cancelAnimationFrame(radarAnimationId);
-    radarAnimationId = null;
-  }
-}
-
-// Hook into panel tab switching to stop radar when leaving liquidity panel
-const originalActivatePanel = activatePanel;
-activatePanel = function(name) {
-  if (name !== "liquidity") {
-    stopRadarAnimation();
-  }
-  originalActivatePanel(name);
-};
