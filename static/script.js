@@ -521,6 +521,96 @@ function renderTier3(data) {
 
 /* ---------------------------- liquidity scanner: CH.19 ---------------------------- */
 
+/* Builds the radar visual: rotating sweep beam + concentric rings, with
+   pool "blips" placed by distance (radius) and side — SELL_SIDE pools
+   (resistance, resting liquidity above price) plotted in the top arc,
+   BUY_SIDE pools (support, resting liquidity below price) in the bottom
+   arc. Purely a display extension of the CH.19 sweep card above it —
+   doesn't touch anything else on the page. */
+function buildLiquidityRadar(sweep, price) {
+  const pools = Array.isArray(sweep.pools) ? sweep.pools.slice(0, 8) : [];
+
+  if (!pools.length) {
+    return `
+      <div class="liq-radar-wrap">
+        <div class="liq-radar-head">
+          <span class="liq-radar-title">Liquidity Pool Radar</span>
+          <span class="liq-radar-caption">no clustered pools in current window</span>
+        </div>
+        <div class="liq-radar-empty">Not enough swing clustering detected in the fetched candle window to plot pools yet.</div>
+      </div>`;
+  }
+
+  const maxDist = Math.max(0.4, ...pools.map((p) => p.distance_pct || 0));
+  const sellPools = pools.filter((p) => p.side === "SELL_SIDE");
+  const buyPools  = pools.filter((p) => p.side === "BUY_SIDE");
+
+  function angleSteps(list, centerDeg, spread) {
+    const count = list.length;
+    if (!count) return [];
+    if (count === 1) return [centerDeg];
+    const step = spread / (count - 1);
+    return list.map((_, i) => centerDeg - spread / 2 + i * step);
+  }
+  const sellAngles = angleSteps(sellPools, 0, 130);   // top arc = above price
+  const buyAngles  = angleSteps(buyPools, 180, 130);  // bottom arc = below price
+
+  function toPos(deg, distPct) {
+    const r = Math.min(0.94, 0.16 + 0.78 * Math.min(1, distPct / maxDist));
+    const rad = (deg * Math.PI) / 180;
+    return { x: 50 + r * 50 * Math.sin(rad), y: 50 - r * 50 * Math.cos(rad) };
+  }
+
+  let blips = "";
+  let legendRows = "";
+
+  function plot(list, angles, sideClass) {
+    list.forEach((p, i) => {
+      const { x, y } = toPos(angles[i], p.distance_pct || 0);
+      const sweptClass = p.swept ? " swept" : "";
+      const title = `${fmtPrice(p.price)} · ${fmtPct(p.distance_pct, 2)} away · ${p.touches} touch${p.touches > 1 ? "es" : ""}${p.swept ? " · already swept" : ""}`;
+      blips += `<div class="radar-blip ${sideClass}${sweptClass}" style="left:${x}%; top:${y}%;" title="${title}"></div>`;
+
+      const strengthPct = Math.round((p.strength || 0) * 100);
+      const fillColor = p.swept ? "var(--text-faint)" : (sideClass === "side-sell" ? "var(--short)" : "var(--long)");
+      legendRows += `
+        <div class="liq-radar-legend-row">
+          <span class="liq-radar-dot ${sideClass}${sweptClass}"></span>
+          <span class="liq-radar-price">${fmtPrice(p.price)}</span>
+          <span class="liq-radar-dist">${fmtPct(p.distance_pct, 2)}</span>
+          <span class="liq-radar-strength-track"><span class="liq-radar-strength-fill" style="width:${strengthPct}%; background:${fillColor};"></span></span>
+        </div>`;
+    });
+  }
+  plot(sellPools, sellAngles, "side-sell");
+  plot(buyPools, buyAngles, "side-buy");
+
+  return `
+    <div class="liq-radar-wrap">
+      <div class="liq-radar-head">
+        <span class="liq-radar-title">Liquidity Pool Radar</span>
+        <span class="liq-radar-caption">${pools.length} pool${pools.length > 1 ? "s" : ""} detected · above = sell-side · below = buy-side</span>
+      </div>
+      <div class="liq-radar-body">
+        <div class="liq-radar-scope">
+          <span class="radar-ring r1"></span>
+          <span class="radar-ring r2"></span>
+          <span class="radar-ring r3"></span>
+          <span class="radar-ring r4"></span>
+          <span class="radar-cross h"></span>
+          <span class="radar-cross v"></span>
+          <div class="radar-sweep-beam"></div>
+          ${blips}
+          <div class="radar-center-dot"></div>
+          <div class="radar-center-label">${fmtPrice(price)}</div>
+        </div>
+        <div class="liq-radar-legend">
+          ${legendRows}
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderLiquidityScanner(data) {
   if (!liqScannerEl) return;
 
@@ -583,6 +673,8 @@ function renderLiquidityScanner(data) {
           <span class="liq-stat-value text-short">${fmtPct(sweep.distance_to_low_pct, 2)}</span>
         </div>
       </div>
+
+      ${buildLiquidityRadar(sweep, price)}
     </div>`;
 }
 
