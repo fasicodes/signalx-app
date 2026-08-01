@@ -1343,6 +1343,8 @@ def liquidity_endpoint():
     try:
         ob = exchange.fetch_order_book(coin, limit=50)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         ob = {"bids": [], "asks": [], "error": str(e)}
 
     try:
@@ -1437,6 +1439,7 @@ def liquidity_endpoint():
         "cvd": cvd_data,
         "crash_risk": crash_data,
         "server_time": int(time.time()),
+        "_debug_orderbook_error": ob.get("error"),  # TEMPORARY - hata dein jab masla mil jaye
     })
 
 
