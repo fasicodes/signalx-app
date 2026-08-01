@@ -119,6 +119,25 @@ AVAILABLE_COINS = [
 ]
 
 
+def _clean_order_book(ob):
+    """OKX (via ccxt) kabhi kabhi har bid/ask level mein 2 se zyada values
+    bhejta hai (e.g. [price, amount, extra_field]). Neeche code mein
+    `for price, vol in bids` jaisi unpacking sirf exactly 2 values
+    expect karti hai, isliye poore book ko yahan strictly [price, amount]
+    tak trim kar dete hain taake koi bhi downstream function crash na ho."""
+    def clean_side(levels):
+        cleaned = []
+        for lvl in levels or []:
+            if len(lvl) >= 2:
+                cleaned.append([float(lvl[0]), float(lvl[1])])
+        return cleaned
+
+    return {
+        "bids": clean_side(ob.get("bids")),
+        "asks": clean_side(ob.get("asks")),
+    }
+
+
 def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200):
     """Exchange se OHLCV candles fetch karta hai."""
     ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
@@ -250,9 +269,9 @@ def fractional_kelly(win_prob, reward_risk_ratio=1.5, k=0.5):
 # 6. ORDER FLOW IMBALANCE (OFI)  (v4 - UNCHANGED)
 # ============================================================
 def order_flow_imbalance(symbol="BTC/USDT", snapshot_gap_sec=1.0):
-    ob1 = exchange.fetch_order_book(symbol, limit=5)
+    ob1 = _clean_order_book(exchange.fetch_order_book(symbol, limit=5))
     time.sleep(snapshot_gap_sec)
-    ob2 = exchange.fetch_order_book(symbol, limit=5)
+    ob2 = _clean_order_book(exchange.fetch_order_book(symbol, limit=5))
 
     bid1_price, bid1_size = ob1["bids"][0]
     ask1_price, ask1_size = ob1["asks"][0]
@@ -506,6 +525,7 @@ def multi_timeframe_entropy(df, orders=(3, 4, 5), lookback=100):
 def order_book_depth_profile(symbol="BTC/USDT", depth=10, order_book=None):
     try:
         ob = order_book if order_book is not None else exchange.fetch_order_book(symbol, limit=depth)
+        ob = _clean_order_book(ob)
     except Exception as e:
         return {"depth_slope": None, "error": str(e)}
 
@@ -1341,7 +1361,7 @@ def liquidity_endpoint():
         return jsonify({"error": f"candle fetch failed: {e}"}), 400
 
     try:
-        ob = exchange.fetch_order_book(coin, limit=50)
+        ob = _clean_order_book(exchange.fetch_order_book(coin, limit=50))
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -1439,7 +1459,6 @@ def liquidity_endpoint():
         "cvd": cvd_data,
         "crash_risk": crash_data,
         "server_time": int(time.time()),
-        "_debug_orderbook_error": ob.get("error"),  # TEMPORARY - hata dein jab masla mil jaye
     })
 
 
