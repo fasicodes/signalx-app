@@ -57,6 +57,20 @@ Ye tamam concepts statistically "sound-looking" hain lekin koi bhi is code
 mein NO real backtesting / walk-forward validation nahi ho rahi. Isliye
 "accuracy %" ka koi guaranteed number nahi diya ja sakta. Neeche har naye
 function ke comment mein iski asli limitation likhi hui hai.
+
+---------------------------------------------------------------------------
+PATCH NOTE (is file mein): /liquidity route ko resilient bana diya gaya hai.
+Pehle is route ke andar kuch calculations (sweep detector, hawkes pressure,
+zones, spoofing, crash risk) bina try/except ke seedha call ho rahe thay -
+agar in mein se kisi ek mein bhi koi chhota runtime error aata (jaise
+order-book empty, ya edge-case data), to POORA route 400 (Bad Request)
+return kar deta tha, chahe baaqi sab data theek se mil raha hota.
+Ab har sub-calculation apne alag try/except mein hai (waisa hi jaisa
+generate_signal() mein already ho raha hai) - agar ek panel fail ho to
+sirf wo panel "N/A"/None dikhata hai, baaqi route normally kaam karta hai.
+Sirf candle-fetch fail hone par (invalid coin/timeframe) hi 400 aata hai,
+aur us waqt error message clear batata hai ke asal wajah kya thi.
+---------------------------------------------------------------------------
 """
 
 import os
@@ -854,7 +868,7 @@ def possible_spoofing_detector(symbol, order_book, top_n=5, min_elapsed_sec=3, c
 # Purely a display convenience - does NOT feed into the Tier 01 verdict.
 # ============================================================
 def market_strength_score(buying_pressure, selling_pressure, ofi_score, depth_slope, vpin_score):
-    bp = (buying_pressure - selling_pressure) / 10.0
+    bp = ((buying_pressure or 0) - (selling_pressure or 0)) / 10.0
     ofi_n = (ofi_score or 0) / 10.0
     depth_n = float(np.tanh((depth_slope or 0) / 5.0))
     toxicity_penalty = min(0.4, (vpin_score or 0) * 0.3)
@@ -1306,6 +1320,12 @@ def candles_endpoint():
 # har ~12-15 sec par frontend se auto-poll ho sakta hai taake scanner
 # "dynamic"/live mehsoos ho, bina baar-baar poore 19-channel analysis
 # ko dobara chalaye. Verdict/confidence logic ko bilkul touch nahi karta.
+#
+# PATCH: har sub-calculation ab apne alag try/except mein hai (jaisa
+# generate_signal() mein pehle se ho raha tha) - taake ek panel ka
+# fail hona poore route ko 400 na de de. Sirf candle-fetch fail hone
+# par (invalid coin/timeframe) 400 aata hai, aur us waqt exact wajah
+# error message mein saaf batayi jati hai.
 # ============================================================
 @app.route("/liquidity", methods=["GET"])
 def liquidity_endpoint():
@@ -1315,74 +1335,109 @@ def liquidity_endpoint():
     try:
         df = get_candles(symbol=coin, timeframe=timeframe, limit=120)
         current_price = float(df["close"].iloc[-1])
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"candle fetch failed: {e}"}), 400
 
-        try:
-            ob = exchange.fetch_order_book(coin, limit=50)
-        except Exception as e:
-            ob = {"bids": [], "asks": [], "error": str(e)}
+    try:
+        ob = exchange.fetch_order_book(coin, limit=50)
+    except Exception as e:
+        ob = {"bids": [], "asks": [], "error": str(e)}
 
+    try:
         sweep_data = liquidity_sweep_detector(df)
+    except Exception as e:
+        sweep_data = {"liquidity_sweep_detected": None, "error": str(e)}
+
+    try:
         buying_pressure, selling_pressure = hawkes_pressure(df)
+    except Exception as e:
+        buying_pressure, selling_pressure = None, None
 
-        try:
-            ofi_data = order_flow_imbalance(coin, snapshot_gap_sec=0.6)
-        except Exception as e:
-            ofi_data = {"ofi_score": None, "error": str(e)}
+    try:
+        ofi_data = order_flow_imbalance(coin, snapshot_gap_sec=0.6)
+    except Exception as e:
+        ofi_data = {"ofi_score": None, "error": str(e)}
 
-        try:
-            depth_data = order_book_depth_profile(coin, depth=20, order_book=ob)
-        except Exception as e:
-            depth_data = {"depth_slope": None, "wall_bias": None, "error": str(e)}
+    try:
+        depth_data = order_book_depth_profile(coin, depth=20, order_book=ob)
+    except Exception as e:
+        depth_data = {"depth_slope": None, "wall_bias": None, "error": str(e)}
 
-        try:
-            vpin_data = vpin_toxicity(coin)
-        except Exception as e:
-            vpin_data = {"vpin_score": None, "error": str(e)}
+    try:
+        vpin_data = vpin_toxicity(coin)
+    except Exception as e:
+        vpin_data = {"vpin_score": None, "error": str(e)}
 
-        try:
-            jump_data = jump_diffusion_detector(df)
-        except Exception as e:
-            jump_data = {"jump_detected": None, "error": str(e)}
+    try:
+        jump_data = jump_diffusion_detector(df)
+    except Exception as e:
+        jump_data = {"jump_detected": None, "error": str(e)}
 
-        try:
-            cusum_data = cusum_structural_break(df)
-        except Exception as e:
-            cusum_data = {"structural_break": None, "error": str(e)}
+    try:
+        cusum_data = cusum_structural_break(df)
+    except Exception as e:
+        cusum_data = {"structural_break": None, "error": str(e)}
 
+    try:
         cvd_data = cvd_volume_delta(df)
+    except Exception as e:
+        cvd_data = {"cvd": None, "trend": None, "series": [], "error": str(e)}
 
-        try:
-            funding_data = funding_open_interest(coin)
-        except Exception as e:
-            funding_data = {"available": False, "error": str(e)}
+    try:
+        funding_data = funding_open_interest(coin)
+    except Exception as e:
+        funding_data = {"available": False, "error": str(e)}
 
+    try:
         magnet_target = liquidity_magnet_and_target(current_price, ob, sweep_data=sweep_data)
+    except Exception as e:
+        magnet_target = {"magnet": None, "likely_target": None, "error": str(e)}
+
+    try:
         strength_data = market_strength_score(
             buying_pressure, selling_pressure,
             ofi_data.get("ofi_score"), depth_data.get("depth_slope"), vpin_data.get("vpin_score"),
         )
-        trap_squeeze_data = trap_and_squeeze_risk(sweep_data, ofi_data, depth_data, funding_data)
-        zones = liquidity_target_zones(ob, current_price)
-        spoof_data = possible_spoofing_detector(coin, ob)
-        crash_data = market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cvd_data)
-
-        return jsonify({
-            "coin": coin,
-            "last_price": round(current_price, 6),
-            "liquidity_sweep": sweep_data,
-            "magnet": magnet_target.get("magnet"),
-            "likely_target": magnet_target.get("likely_target"),
-            "market_strength": strength_data,
-            "possible_spoofing": spoof_data,
-            "trap_squeeze": trap_squeeze_data,
-            "liquidity_zones": zones,
-            "funding_open_interest": funding_data,
-            "cvd": cvd_data,
-            "crash_risk": crash_data,
-            "server_time": int(time.time()),
-        })
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        strength_data = {"score": None, "label": None, "error": str(e)}
+
+    try:
+        trap_squeeze_data = trap_and_squeeze_risk(sweep_data, ofi_data, depth_data, funding_data)
+    except Exception as e:
+        trap_squeeze_data = {"bull_trap": 0, "bear_trap": 0, "short_squeeze": 0, "long_squeeze": 0, "error": str(e)}
+
+    try:
+        zones = liquidity_target_zones(ob, current_price)
+    except Exception as e:
+        zones = []
+
+    try:
+        spoof_data = possible_spoofing_detector(coin, ob)
+    except Exception as e:
+        spoof_data = {"available": False, "spoof_detected": False, "error": str(e)}
+
+    try:
+        crash_data = market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cvd_data)
+    except Exception as e:
+        crash_data = {"score": None, "label": None, "factors": [], "error": str(e)}
+
+    return jsonify({
+        "coin": coin,
+        "last_price": round(current_price, 6),
+        "liquidity_sweep": sweep_data,
+        "magnet": magnet_target.get("magnet"),
+        "likely_target": magnet_target.get("likely_target"),
+        "market_strength": strength_data,
+        "possible_spoofing": spoof_data,
+        "trap_squeeze": trap_squeeze_data,
+        "liquidity_zones": zones,
+        "funding_open_interest": funding_data,
+        "cvd": cvd_data,
+        "crash_risk": crash_data,
+        "server_time": int(time.time()),
+    })
 
 
 if __name__ == "__main__":
