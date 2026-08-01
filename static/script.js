@@ -30,6 +30,11 @@ const chartChangeEl = document.getElementById("chart-change");
 const chartStatusEl = document.getElementById("chart-status");
 const chartTfRow    = document.getElementById("chart-tf-row");
 const candleChartEl = document.getElementById("candle-chart");
+const chartPanelEl  = document.getElementById("chart-panel");
+const chartFullscreenBtn = document.getElementById("chart-fullscreen-btn");
+const chartBackBtn = document.getElementById("chart-back-btn");
+const chartToolsEl = document.getElementById("chart-tools");
+const drawOverlayEl = document.getElementById("draw-overlay");
 
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 48; // r=48
 
@@ -850,12 +855,198 @@ function ensureChartInitialized() {
     wickDownColor: "#ff526b",
   });
 
+  lwChart.subscribeClick(handleChartClick);
+  lwChart.subscribeCrosshairMove(handleChartCrosshairMove);
+  lwChart.timeScale().subscribeVisibleLogicalRangeChange(() => renderDrawings());
+
   window.addEventListener("resize", resizeChart);
 }
 
 function resizeChart() {
   if (!lwChart || !candleChartEl) return;
   lwChart.resize(candleChartEl.clientWidth, candleChartEl.clientHeight);
+  renderDrawings();
+}
+
+/* ==========================================================================
+   CHART FULLSCREEN — expands the chart panel to fill the screen with a
+   back button top-left to return to the normal layout.
+   ========================================================================== */
+
+function setChartFullscreen(on) {
+  if (!chartPanelEl) return;
+  chartPanelEl.classList.toggle("fullscreen", on);
+  document.body.classList.toggle("chart-fullscreen-lock", on);
+  // chart canvas size changed — resize on next frame once layout settles
+  requestAnimationFrame(() => requestAnimationFrame(resizeChart));
+}
+
+if (chartFullscreenBtn) {
+  chartFullscreenBtn.addEventListener("click", () => setChartFullscreen(true));
+}
+if (chartBackBtn) {
+  chartBackBtn.addEventListener("click", () => setChartFullscreen(false));
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && chartPanelEl && chartPanelEl.classList.contains("fullscreen")) {
+    setChartFullscreen(false);
+  }
+});
+
+/* ==========================================================================
+   CHART DRAWING TOOLS — trend line, horizontal line, and measure, drawn on
+   an SVG overlay positioned on top of the chart canvas. Coordinates are
+   converted through the chart's own time/price scales so drawings stay
+   correctly placed while panning, zooming, or resizing.
+   ========================================================================== */
+
+let activeChartTool = "cursor";
+let chartDrawings = [];
+let pendingDrawPoint = null;
+let drawingsCoinKey = null;
+
+if (chartToolsEl) {
+  chartToolsEl.querySelectorAll(".chart-tool-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tool = btn.dataset.tool;
+      if (tool === "clear") {
+        chartDrawings = [];
+        pendingDrawPoint = null;
+        renderDrawings();
+        return;
+      }
+      chartToolsEl.querySelectorAll(".chart-tool-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeChartTool = tool;
+      pendingDrawPoint = null;
+      if (candleChartEl) candleChartEl.style.cursor = tool === "cursor" ? "default" : "crosshair";
+      renderDrawings();
+    });
+  });
+}
+
+function handleChartClick(param) {
+  if (activeChartTool === "cursor" || !lwCandleSeries) return;
+  if (!param.point || param.time === undefined) return;
+  const price = lwCandleSeries.coordinateToPrice(param.point.y);
+  if (price === null || price === undefined) return;
+
+  if (activeChartTool === "horizontal") {
+    chartDrawings.push({ type: "horizontal", price });
+    renderDrawings();
+    return;
+  }
+
+  if (activeChartTool === "trendline" || activeChartTool === "measure") {
+    if (!pendingDrawPoint) {
+      pendingDrawPoint = { time: param.time, price };
+    } else {
+      chartDrawings.push({ type: activeChartTool, p1: pendingDrawPoint, p2: { time: param.time, price } });
+      pendingDrawPoint = null;
+      renderDrawings();
+    }
+  }
+}
+
+function handleChartCrosshairMove(param) {
+  if (!pendingDrawPoint || !lwCandleSeries) return;
+  if (!param.point || param.time === undefined) { renderDrawings(); return; }
+  const price = lwCandleSeries.coordinateToPrice(param.point.y);
+  if (price === null || price === undefined) return;
+  renderDrawings({ time: param.time, price });
+}
+
+function renderDrawings(previewPoint) {
+  if (!drawOverlayEl || !lwChart || !lwCandleSeries || !candleChartEl) return;
+
+  while (drawOverlayEl.firstChild) drawOverlayEl.removeChild(drawOverlayEl.firstChild);
+
+  const width = candleChartEl.clientWidth;
+  const height = candleChartEl.clientHeight;
+  if (!width || !height) return;
+  drawOverlayEl.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+  const NS = "http://www.w3.org/2000/svg";
+  const timeX = (t) => lwChart.timeScale().timeToCoordinate(t);
+  const priceY = (p) => lwCandleSeries.priceToCoordinate(p);
+
+  chartDrawings.forEach((d) => {
+    if (d.type === "horizontal") {
+      const y = priceY(d.price);
+      if (y === null || y === undefined) return;
+
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", 0); line.setAttribute("x2", width);
+      line.setAttribute("y1", y); line.setAttribute("y2", y);
+      line.setAttribute("stroke", "#f5a623");
+      line.setAttribute("stroke-width", "1.4");
+      line.setAttribute("stroke-dasharray", "4 3");
+      drawOverlayEl.appendChild(line);
+
+      const label = document.createElementNS(NS, "text");
+      label.setAttribute("x", width - 8); label.setAttribute("y", y - 6);
+      label.setAttribute("text-anchor", "end");
+      label.setAttribute("fill", "#f5a623");
+      label.setAttribute("font-size", "10");
+      label.setAttribute("font-family", "IBM Plex Mono, monospace");
+      label.setAttribute("font-weight", "700");
+      label.textContent = fmtPrice(d.price);
+      drawOverlayEl.appendChild(label);
+      return;
+    }
+
+    if (d.type === "trendline" || d.type === "measure") {
+      const x1 = timeX(d.p1.time), y1 = priceY(d.p1.price);
+      const x2 = timeX(d.p2.time), y2 = priceY(d.p2.price);
+      if ([x1, y1, x2, y2].some((v) => v === null || v === undefined)) return;
+
+      const up = d.p2.price >= d.p1.price;
+      const color = d.type === "measure" ? (up ? "#36e0a0" : "#ff526b") : "#4dabf7";
+
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+      line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+      line.setAttribute("stroke", color);
+      line.setAttribute("stroke-width", "1.8");
+      drawOverlayEl.appendChild(line);
+
+      [[x1, y1], [x2, y2]].forEach(([cx, cy]) => {
+        const dot = document.createElementNS(NS, "circle");
+        dot.setAttribute("cx", cx); dot.setAttribute("cy", cy); dot.setAttribute("r", "3.5");
+        dot.setAttribute("fill", color);
+        drawOverlayEl.appendChild(dot);
+      });
+
+      if (d.type === "measure") {
+        const pct = ((d.p2.price - d.p1.price) / d.p1.price) * 100;
+        const label = document.createElementNS(NS, "text");
+        label.setAttribute("x", (x1 + x2) / 2);
+        label.setAttribute("y", Math.min(y1, y2) - 8);
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("fill", color);
+        label.setAttribute("font-size", "11");
+        label.setAttribute("font-weight", "700");
+        label.setAttribute("font-family", "IBM Plex Mono, monospace");
+        label.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
+        drawOverlayEl.appendChild(label);
+      }
+    }
+  });
+
+  // live preview line while placing the second point of a trend/measure line
+  if (previewPoint && pendingDrawPoint) {
+    const x1 = timeX(pendingDrawPoint.time), y1 = priceY(pendingDrawPoint.price);
+    const x2 = timeX(previewPoint.time), y2 = priceY(previewPoint.price);
+    if (![x1, y1, x2, y2].some((v) => v === null || v === undefined)) {
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+      line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+      line.setAttribute("stroke", "#8b96a5");
+      line.setAttribute("stroke-width", "1");
+      line.setAttribute("stroke-dasharray", "3 3");
+      drawOverlayEl.appendChild(line);
+    }
+  }
 }
 
 if (chartTfRow) {
@@ -891,6 +1082,15 @@ async function loadChartData() {
     }));
     lwCandleSeries.setData(bars);
     lwChart.timeScale().fitContent();
+
+    // drawings are per-coin — switching pairs clears the board, but stay
+    // put when only the timeframe changes for the same coin.
+    if (drawingsCoinKey !== coin) {
+      chartDrawings = [];
+      pendingDrawPoint = null;
+      drawingsCoinKey = coin;
+    }
+    renderDrawings();
 
     updateChartPrice(data);
     if (chartStatusEl) {
