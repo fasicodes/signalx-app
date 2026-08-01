@@ -156,6 +156,19 @@
 
     <div id="panel-liquidity" class="tab-panel">
       <p class="tier-note">Ch.19 — swing high/low liquidity sweep detector. Display-only, exploratory.</p>
+      <div class="radar-wrap" id="radar-wrap">
+        <canvas id="radar-canvas" class="radar-canvas"></canvas>
+        <div class="radar-live-badge"><span class="dot"></span><span>LIVE SCAN</span></div>
+        <div class="radar-hud" id="radar-hud">
+          <div class="radar-hud-left">
+            <span class="radar-hud-dot buy"></span>BUY WALLS
+            <span class="radar-hud-dot sell"></span>SELL WALLS
+          </div>
+          <div class="radar-hud-right">
+            <span class="radar-hud-dot price"></span>PRICE
+          </div>
+        </div>
+      </div>
       <div id="liquidity-scanner"></div>
     </div>
 
