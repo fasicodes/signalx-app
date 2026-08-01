@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -160,7 +160,13 @@
     </div>
 
     <div id="panel-livechart" class="tab-panel">
-      <div class="chart-panel">
+      <div class="chart-panel" id="chart-panel">
+
+        <button type="button" id="chart-back-btn" class="chart-back-btn" title="Exit fullscreen">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>BACK</span>
+        </button>
+
         <div class="chart-header">
           <div class="chart-header-left">
             <span class="chart-icon">◉</span>
@@ -173,6 +179,9 @@
             <span id="chart-live-dot" class="live-clock-dot"></span>
             <span id="chart-price" class="chart-price">--</span>
             <span id="chart-change" class="chart-change">--</span>
+            <button type="button" id="chart-fullscreen-btn" class="chart-icon-btn" title="Fullscreen">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
           </div>
         </div>
         <div class="chart-tf-row" id="chart-tf-row">
@@ -183,7 +192,32 @@
           <button class="chart-tf-btn" data-tf="4h">4h</button>
           <button class="chart-tf-btn" data-tf="1d">1d</button>
         </div>
-        <div id="candle-chart" class="candle-chart"></div>
+
+        <div class="chart-body">
+          <div class="chart-tools" id="chart-tools">
+            <button type="button" class="chart-tool-btn active" data-tool="cursor" title="Cursor">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 3l14 7-6 2-2 6-6-15z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="none"/></svg>
+            </button>
+            <button type="button" class="chart-tool-btn" data-tool="trendline" title="Trend Line">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/><line x1="6.5" y1="17.5" x2="17.5" y2="6.5" stroke="currentColor" stroke-width="1.8"/></svg>
+            </button>
+            <button type="button" class="chart-tool-btn" data-tool="horizontal" title="Horizontal Line">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"/></svg>
+            </button>
+            <button type="button" class="chart-tool-btn" data-tool="measure" title="Measure">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="9" width="18" height="6" rx="1" stroke="currentColor" stroke-width="1.6"/><path d="M7 9v2.5M11 9v2.5M15 9v2.5" stroke="currentColor" stroke-width="1.6"/></svg>
+            </button>
+            <span class="chart-tool-sep"></span>
+            <button type="button" class="chart-tool-btn chart-tool-danger" data-tool="clear" title="Clear all drawings">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+          <div class="chart-canvas-wrap">
+            <div id="candle-chart" class="candle-chart"></div>
+            <svg id="draw-overlay" class="draw-overlay"></svg>
+          </div>
+        </div>
+
         <div class="chart-footer">
           <span id="chart-status">connecting…</span>
         </div>
