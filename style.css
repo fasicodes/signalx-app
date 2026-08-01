@@ -376,6 +376,93 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .liq-stat-value { color: var(--text); font-family: var(--mono); font-size: 17px; font-weight: 700; white-space: nowrap; }
 
 /* ================================================================
+   LIQUIDITY SCANNER — EXTRA PANELS (Ch.20-27)
+================================================================ */
+
+.live-dot {
+    display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%;
+    background: var(--long); box-shadow: 0 0 6px var(--long); animation: pulse 1.8s infinite;
+}
+
+.liq-extra-grid {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px;
+}
+
+.liq-card {
+    display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; min-height: 150px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.018), transparent 55%), var(--panel);
+    border: 1px solid var(--line); border-radius: 9px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+.liq-card:hover { border-color: #3a4654; background: var(--panel-hover); }
+.liq-card.span-2 { grid-column: span 2; }
+
+.liq-card-head { display: flex; align-items: center; gap: 10px; }
+.liq-card-icon {
+    display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0;
+    background: var(--accent-dim); border: 1px solid rgba(245, 166, 35, 0.3);
+    border-radius: 6px; color: var(--accent); font-size: 12px;
+}
+.liq-card-title { color: var(--text); font-family: var(--sans); font-size: 12.5px; font-weight: 700; line-height: 1.2; }
+.liq-card-subtitle { margin-top: 2px; color: var(--text-faint); font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.3px; }
+.liq-card-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+
+.liq-empty-note { color: var(--text-faint); font-family: var(--mono); font-size: 10px; }
+
+/* dual stat layout (magnet/target, funding/OI) */
+.liq-dual-stat { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.liq-dual-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.liq-dual-label { color: var(--text-faint); font-family: var(--mono); font-size: 8px; font-weight: 600; letter-spacing: 0.5px; }
+.liq-dual-value { color: var(--text); font-family: var(--mono); font-size: 16px; font-weight: 700; white-space: nowrap; }
+.liq-dual-detail { color: var(--text-dim); font-family: var(--mono); font-size: 9px; line-height: 1.4; }
+
+/* market strength — animated spinning ring around the score */
+.strength-gauge { position: relative; width: 88px; height: 88px; margin: 4px auto; }
+.strength-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--long), var(--wait), var(--short), var(--long));
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 7px));
+    opacity: 0.55; animation: strength-spin 6s linear infinite;
+}
+@keyframes strength-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.strength-center {
+    position: absolute; inset: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--panel); border-radius: 50%; border: 1px solid var(--line);
+}
+.strength-score { font-family: var(--mono); font-size: 22px; font-weight: 800; line-height: 1; }
+.strength-label { margin-top: 5px; color: var(--text-dim); font-family: var(--mono); font-size: 8px; font-weight: 600; letter-spacing: 0.4px; text-align: center; }
+
+/* spoofing */
+.spoof-alert { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+
+/* trap & squeeze bars */
+.trap-rows { display: flex; flex-direction: column; gap: 10px; }
+.trap-row { display: grid; grid-template-columns: 92px 1fr 28px; align-items: center; gap: 10px; }
+.trap-label { color: var(--text-dim); font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.3px; }
+.trap-value { color: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 700; text-align: right; }
+
+/* liquidity target zones */
+.zones-list { display: flex; flex-direction: column; gap: 8px; }
+.zone-row {
+    display: grid; grid-template-columns: auto 1fr auto auto auto; align-items: center; gap: 10px;
+    padding: 7px 9px; background: var(--panel-raised); border: 1px solid var(--line-soft); border-radius: 6px;
+}
+.zone-price { color: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 700; }
+.zone-usd { color: var(--text-dim); font-family: var(--mono); font-size: 10px; }
+.zone-dist { font-family: var(--mono); font-size: 9px; }
+.zone-score { color: var(--accent); font-family: var(--mono); font-size: 9px; font-weight: 700; }
+
+/* CVD sparkline */
+.cvd-top { display: flex; align-items: center; gap: 10px; }
+.cvd-spark { width: 100%; height: 36px; display: block; }
+
+/* market crash risk */
+.crash-head { display: flex; align-items: center; gap: 12px; }
+.crash-score { font-family: var(--mono); font-size: 24px; font-weight: 800; }
+.crash-factors { padding-left: 16px; color: var(--text-dim); font-family: var(--mono); font-size: 9.5px; line-height: 1.7; }
+
+/* ================================================================
    LIVE CHART PANEL (new tab)
 ================================================================ */
 
@@ -433,6 +520,7 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     body { padding: 15px; }
     .channel-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .coin-picker { min-width: 220px; }
+    .liq-extra-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 850px) {
@@ -465,6 +553,11 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     .panel-tab { flex: 1 1 calc(50% - 4px); justify-content: flex-start; padding-left: 10px; }
     .liq-panel, .chart-panel { padding: 16px; }
     .liq-stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .liq-extra-grid { grid-template-columns: 1fr; }
+    .liq-card.span-2 { grid-column: auto; }
+    .liq-dual-stat { grid-template-columns: 1fr; gap: 10px; }
+    .zone-row { grid-template-columns: auto 1fr auto; row-gap: 4px; }
+    .zone-dist, .zone-score { grid-column: 2 / 4; justify-self: end; }
     .candle-chart { height: 300px; }
     .chart-tf-row { flex-wrap: wrap; }
 }
