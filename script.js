@@ -33,6 +33,13 @@ const candleChartEl = document.getElementById("candle-chart");
 
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 48; // r=48
 
+// Liquidity scanner (CH.19-27) auto-refresh state.
+let currentCoin = null;
+let lastLiquidityExtra = null;
+let liquidityFetchInFlight = false;
+let liquidityPollTimer = null;
+const LIQUIDITY_POLL_MS = 15000;
+
 /* If any of these are missing, design.html doesn't match this script.js —
    make sure both files were replaced together and the browser isn't serving
    a cached copy. */
@@ -119,11 +126,12 @@ function activatePanel(name) {
   panelTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.panel === name));
   tabPanels.forEach((panel) => panel.classList.toggle("active", panel.id === "panel-" + name));
   if (name === "livechart") {
-    // Chart needs real dimensions to size itself correctly — (re)initialize
-    // and refresh right when the tab becomes visible.
     ensureChartInitialized();
     resizeChart();
     loadChartData();
+  }
+  if (name === "liquidity" && currentCoin) {
+    fetchAndRenderLiquidity(currentCoin);
   }
 }
 
@@ -521,13 +529,199 @@ function renderTier3(data) {
   tier3El.innerHTML = cards.join("");
 }
 
-/* ---------------------------- liquidity scanner: CH.19 ---------------------------- */
+/* ==========================================================================
+   LIQUIDITY SCANNER — CH.19-27, now dynamic: sweep bar renders instantly
+   from /signal, then /liquidity fills in magnet/target/strength/spoofing/
+   trap-squeeze/zones/funding/CVD/crash-risk and keeps polling every
+   LIQUIDITY_POLL_MS so the tab stays live without re-running full analysis.
+   ========================================================================== */
 
-function renderLiquidityScanner(data) {
+function toneForScore(score) {
+  if (na(score)) return "flat";
+  if (score >= 65) return "long";
+  if (score <= 35) return "short";
+  return "wait";
+}
+
+function liqCard({ icon, title, subtitle, body, span2 = false }) {
+  return `
+    <div class="liq-card${span2 ? " span-2" : ""}">
+      <div class="liq-card-head">
+        <span class="liq-card-icon">${icon}</span>
+        <div>
+          <div class="liq-card-title">${title}</div>
+          ${subtitle ? `<div class="liq-card-subtitle">${subtitle}</div>` : ""}
+        </div>
+      </div>
+      <div class="liq-card-body">${body}</div>
+    </div>`;
+}
+
+function sparkline(series, tone) {
+  if (!series || !series.length) return `<div class="liq-empty-note">Not enough data yet</div>`;
+  const w = 160, h = 34;
+  const min = Math.min(...series), max = Math.max(...series);
+  const range = max - min || 1;
+  const step = w / (series.length - 1 || 1);
+  const points = series.map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / range) * h).toFixed(1)}`).join(" ");
+  const stroke = tone === "long" ? "var(--long)" : tone === "short" ? "var(--short)" : "var(--text-dim)";
+  return `<svg class="cvd-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="2"/></svg>`;
+}
+
+function renderMagnetTargetCard(extra) {
+  const magnet = extra.magnet || {};
+  const target = extra.likely_target || {};
+  return liqCard({
+    icon: "⊙", title: "Liquidity Magnet & Likely Target", subtitle: "CH.20 · order-book cluster pull", span2: true,
+    body: `
+      <div class="liq-dual-stat">
+        <div class="liq-dual-col">
+          <span class="liq-dual-label">LIQUIDITY MAGNET</span>
+          <span class="liq-dual-value">${fmtPrice(magnet.price)}</span>
+          <span class="liq-dual-detail">${na(magnet.usd_size) ? "--" : "$" + Number(magnet.usd_size).toLocaleString()} cluster · ${fmtPct(magnet.distance_pct)} away</span>
+          ${magnet.side ? badge(magnet.side, magnet.side === "SUPPORT" ? "long" : "short") : ""}
+        </div>
+        <div class="liq-dual-col">
+          <span class="liq-dual-label">LIKELY TARGET</span>
+          <span class="liq-dual-value">${fmtPrice(target.price)}</span>
+          <span class="liq-dual-detail">Score ${fmtNum(target.score, 0)}/100 · ${fmtPct(target.distance_pct)} away</span>
+          ${target.type ? badge(target.type.toUpperCase(), target.type.includes("Resistance") ? "short" : "long") : ""}
+        </div>
+      </div>`,
+  });
+}
+
+function renderMarketStrengthCard(extra) {
+  const s = extra.market_strength || {};
+  const tone = toneForScore(s.score);
+  return liqCard({
+    icon: "◎", title: "Market Strength", subtitle: "CH.22 · blended pressure dial",
+    body: `
+      <div class="strength-gauge">
+        <div class="strength-ring"></div>
+        <div class="strength-center">
+          <span class="strength-score text-${tone}">${na(s.score) ? "--" : Math.round(s.score)}</span>
+          <span class="strength-label">${s.label || "--"}</span>
+        </div>
+      </div>`,
+  });
+}
+
+function renderSpoofingCard(extra) {
+  const sp = extra.possible_spoofing || {};
+  const top = sp.top_vanished_level;
+  let body;
+  if (!sp.available) {
+    body = `<div class="liq-empty-note">Order-book data unavailable</div>`;
+  } else if (sp.note) {
+    body = `<div class="liq-empty-note">${sp.note}</div>`;
+  } else if (sp.spoof_detected && top) {
+    body = `
+      ${badge("POSSIBLE SPOOF", "wait")}
+      <span class="liq-dual-value">${fmtPrice(top.price)}</span>
+      <span class="liq-dual-detail">${"$" + Number(top.usd_size_before).toLocaleString()} pulled · cancelled after ${fmtNum(top.seconds_ago, 0)}s · ${fmtPct(top.cancelled_pct, 0)} of size gone</span>`;
+  } else {
+    body = `${badge("NO SPOOFING DETECTED", "flat")}<div class="liq-empty-note">Order-book levels stable between polls</div>`;
+  }
+  return liqCard({ icon: "⚠", title: "Possible Spoofing", subtitle: "CH.21 · resting-order vanish scan", body });
+}
+
+function renderTrapSqueezeCard(extra) {
+  const t = extra.trap_squeeze || {};
+  const rows = [
+    ["BULL TRAP", t.bull_trap, "c-short"],
+    ["BEAR TRAP", t.bear_trap, "c-long"],
+    ["SHORT SQUEEZE", t.short_squeeze, "c-long"],
+    ["LONG SQUEEZE", t.long_squeeze, "c-short"],
+  ];
+  return liqCard({
+    icon: "⤬", title: "Trap & Squeeze Risk", subtitle: "CH.23 · reversal & liquidation pressure", span2: true,
+    body: `<div class="trap-rows">${rows.map(([label, v, cls]) => `
+      <div class="trap-row">
+        <span class="trap-label">${label}</span>
+        ${meterBar(na(v) ? 0 : v, cls)}
+        <span class="trap-value">${na(v) ? "--" : v}</span>
+      </div>`).join("")}</div>`,
+  });
+}
+
+function renderZonesCard(extra) {
+  const zones = extra.liquidity_zones || [];
+  const rows = zones.length ? zones.map((z) => `
+    <div class="zone-row">
+      ${badge(z.side === "BUY_WALL" ? "BUY WALL" : "SELL WALL", z.side === "BUY_WALL" ? "long" : "short")}
+      <span class="zone-price">${fmtPrice(z.price)}</span>
+      <span class="zone-usd">${"$" + Number(z.usd_size).toLocaleString()}</span>
+      <span class="zone-dist text-dim">${fmtPct(z.distance_pct)}</span>
+      <span class="zone-score">${fmtNum(z.score, 0)}/100</span>
+    </div>`).join("") : `<div class="liq-empty-note">No order-book data yet</div>`;
+  return liqCard({
+    icon: "▤", title: "Liquidity Target Zones", subtitle: "CH.24 · largest resting order-book walls", span2: true,
+    body: `<div class="zones-list">${rows}</div>`,
+  });
+}
+
+function renderFundingCard(extra) {
+  const f = extra.funding_open_interest || {};
+  const body = f.available ? `
+    <div class="liq-dual-stat">
+      <div class="liq-dual-col">
+        <span class="liq-dual-label">FUNDING RATE</span>
+        <span class="liq-dual-value ${na(f.funding_rate_pct) ? "" : (f.funding_rate_pct >= 0 ? "text-long" : "text-short")}">${na(f.funding_rate_pct) ? "--" : fmtSigned(f.funding_rate_pct, 4, "%")}</span>
+      </div>
+      <div class="liq-dual-col">
+        <span class="liq-dual-label">OPEN INTEREST</span>
+        <span class="liq-dual-value">${na(f.open_interest) ? "--" : Number(f.open_interest).toLocaleString()}</span>
+      </div>
+    </div>` : `<div class="liq-empty-note">Perpetual market not available for this pair on OKX</div>`;
+  return liqCard({ icon: "%", title: "Funding Rate + Open Interest", subtitle: "CH.25 · perpetual swap data", body });
+}
+
+function renderCvdCard(extra) {
+  const c = extra.cvd || {};
+  const tone = c.trend === "RISING" ? "long" : c.trend === "FALLING" ? "short" : "flat";
+  return liqCard({
+    icon: "∿", title: "CVD · Volume Delta", subtitle: "CH.26 · approximate cumulative delta",
+    body: `
+      <div class="cvd-top">
+        <span class="liq-dual-value">${na(c.cvd) ? "--" : fmtNum(c.cvd, 2)}</span>
+        ${badge(c.trend || "--", tone)}
+      </div>
+      ${sparkline(c.series, tone)}`,
+  });
+}
+
+function renderCrashCard(extra) {
+  const c = extra.crash_risk || {};
+  const tone = c.label === "ELEVATED" ? "short" : c.label === "WATCH" ? "wait" : "long";
+  const factors = c.factors || [];
+  return liqCard({
+    icon: "☢", title: "Market Crash Risk", subtitle: "CH.27 · composite down-side stress checklist", span2: true,
+    body: `
+      <div class="crash-head">
+        <span class="crash-score text-${tone}">${na(c.score) ? "--" : c.score}</span>
+        ${badge(c.label || "--", tone)}
+      </div>
+      ${factors.length ? `<ul class="crash-factors">${factors.map((f) => `<li>${f}</li>`).join("")}</ul>` : `<div class="liq-empty-note">No elevated stress factors right now</div>`}`,
+  });
+}
+
+function renderLiquidityExtras(extraRaw) {
+  const extra = extraRaw || {};
+  return [
+    renderMagnetTargetCard(extra),
+    renderMarketStrengthCard(extra),
+    renderSpoofingCard(extra),
+    renderTrapSqueezeCard(extra),
+    renderZonesCard(extra),
+    renderFundingCard(extra),
+    renderCvdCard(extra),
+    renderCrashCard(extra),
+  ].join("");
+}
+
+function paintLiquidityScanner(sweep, price, extra) {
   if (!liqScannerEl) return;
-
-  const sweep = data.liquidity_sweep || {};
-  const price = data.last_price;
 
   const hasRange = !na(sweep.swing_high) && !na(sweep.swing_low) && !na(price) && sweep.swing_high > sweep.swing_low;
   let markerPct = 50;
@@ -547,7 +741,7 @@ function renderLiquidityScanner(data) {
           <span class="liq-icon">⌁</span>
           <div>
             <div class="liq-title">Liquidity Sweep Scanner</div>
-            <div class="liq-subtitle">CH.19 · swing high/low · display-only</div>
+            <div class="liq-subtitle"><span class="live-dot"></span>CH.19 · swing high/low · auto-refreshing</div>
           </div>
         </div>
         ${badge(statusLabel, tone)}
@@ -585,7 +779,36 @@ function renderLiquidityScanner(data) {
           <span class="liq-stat-value text-short">${fmtPct(sweep.distance_to_low_pct, 2)}</span>
         </div>
       </div>
-    </div>`;
+    </div>
+
+    <div class="liq-extra-grid">${renderLiquidityExtras(extra)}</div>`;
+}
+
+function renderLiquidityScanner(data) {
+  paintLiquidityScanner(data.liquidity_sweep || {}, data.last_price, lastLiquidityExtra);
+}
+
+async function fetchAndRenderLiquidity(coin) {
+  if (!coin || liquidityFetchInFlight) return;
+  liquidityFetchInFlight = true;
+  try {
+    const res = await fetch(`/liquidity?coin=${encodeURIComponent(coin)}&timeframe=1h`);
+    const data = await res.json();
+    if (!res.ok || data.error || coin !== currentCoin) return;
+    lastLiquidityExtra = data;
+    paintLiquidityScanner(data.liquidity_sweep || {}, data.last_price, data);
+  } catch (e) {
+    // Silent — a single missed poll shouldn't spam the UI; next tick retries.
+  } finally {
+    liquidityFetchInFlight = false;
+  }
+}
+
+function startLiquidityPolling() {
+  if (liquidityPollTimer) return;
+  liquidityPollTimer = setInterval(() => {
+    if (currentCoin) fetchAndRenderLiquidity(currentCoin);
+  }, LIQUIDITY_POLL_MS);
 }
 
 /* ==========================================================================
@@ -749,6 +972,9 @@ async function runAnalysis() {
   runBtn.disabled = true;
   runBtn.querySelector(".scan-btn-text").textContent = "SCANNING…";
 
+  if (coin !== currentCoin) lastLiquidityExtra = null;
+  currentCoin = coin;
+
   try {
     const res = await fetch(`/signal?coin=${encodeURIComponent(coin)}&timeframe=1h`);
     const data = await res.json();
@@ -760,6 +986,9 @@ async function runAnalysis() {
     renderResult(data);
     resultBox.classList.remove("hidden");
     emptyState.classList.add("hidden");
+
+    fetchAndRenderLiquidity(coin);
+    startLiquidityPolling();
   } catch (err) {
     errorText.textContent = "⚠ " + err.message;
     errorText.classList.remove("hidden");
