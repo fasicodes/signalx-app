@@ -511,9 +511,9 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .radar-wrap {
     position: relative;
     width: 100%;
-    max-width: 700px;
+    max-width: 480px;
     aspect-ratio: 1;
-    margin: 0 auto;
+    margin: 0 auto 16px;
     background:
         radial-gradient(circle, rgba(10, 20, 15, 0.95), rgba(5, 10, 8, 0.98)),
         var(--void);
@@ -628,6 +628,14 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 
 @media (max-width: 650px) {
     body { padding: 12px 10px 30px; }
+    .radar-wrap { max-width: 100%; }
+    .radar-live-badge { top: 12px; left: 12px; padding: 3px 8px; }
+    .radar-live-badge span { font-size: 8px; }
+    .radar-live-badge .dot { width: 5px; height: 5px; }
+    .radar-hud { padding: 10px 12px; }
+    .radar-hud-left, .radar-hud-right { gap: 6px; font-size: 9px; }
+    .radar-hud-dot { width: 6px; height: 6px; }
+}
     .topbar { align-items: flex-start; }
     .brand-name { font-size: 14px; }
     .live-clock { font-size: 11px; }
@@ -659,8 +667,18 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     .chart-tf-row { flex-wrap: wrap; }
 }
 
+@media (max-width: 500px) {
+    .radar-wrap { max-width: 100%; }
+}
+
 @media (max-width: 400px) {
     .channel-grid { grid-template-columns: 1fr; }
+    .radar-wrap { max-width: 100%; }
+    .radar-hud { padding: 8px 10px; }
+    .radar-hud-left, .radar-hud-right { gap: 4px; font-size: 8px; }
+    .radar-hud-dot { width: 5px; height: 5px; }
+    .radar-live-badge { top: 8px; left: 8px; padding: 2px 6px; }
+}
     .channel-card.span-2 { grid-column: auto; }
     .topbar { flex-direction: column; gap: 8px; }
     .topbar-right { align-self: flex-end; }
