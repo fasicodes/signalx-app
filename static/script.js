@@ -38,6 +38,15 @@ let currentCoin = null;
 let lastLiquidityExtra = null;
 let liquidityFetchInFlight = false;
 let liquidityPollTimer = null;
+
+// Radar liquidity scanner state (CH.19-27)
+let radarCanvas = null;
+let radarCtx = null;
+let radarAnimId = null;
+let radarAngle = 0;
+let radarLastTime = 0;
+let radarDots = []; // {side, angle, radius, pulsing}
+let radarVisible = false;
 const LIQUIDITY_POLL_MS = 15000;
 
 /* If any of these are missing, design.html doesn't match this script.js —
@@ -130,8 +139,14 @@ function activatePanel(name) {
     resizeChart();
     loadChartData();
   }
-  if (name === "liquidity" && currentCoin) {
-    fetchAndRenderLiquidity(currentCoin);
+  // Radar visibility management
+  if (name === "liquidity") {
+    resumeRadar();
+    // Init canvas on first show if not already done
+    setTimeout(initRadarCanvas, 50);
+    if (currentCoin) fetchAndRenderLiquidity(currentCoin);
+  } else {
+    pauseRadar();
   }
 }
 
@@ -720,8 +735,236 @@ function renderLiquidityExtras(extraRaw) {
   ].join("");
 }
 
+function radarRender(timestamp) {
+  if (!radarVisible || !radarCanvas || !radarCtx) return;
+
+  // Delta time for smooth animation
+  if (radarLastTime === 0) radarLastTime = timestamp;
+  const delta = timestamp - radarLastTime;
+  radarLastTime = timestamp;
+
+  // Rotation: full circle every 3 seconds
+  radarAngle = (radarAngle + delta * 0.0021) % (Math.PI * 2);
+
+  const W = radarCanvas.width;
+  const H = radarCanvas.height;
+  const CX = W / 2;
+  const CY = H / 2;
+  const maxR = Math.min(CX, CY) - 10;
+
+  // Clear
+  radarCtx.clearRect(0, 0, W, H);
+  radarCtx.fillStyle = 'rgba(3, 10, 7, 0.96)';
+  radarCtx.fillRect(0, 0, W, H);
+
+  // Concentric rings (20/40/60/80/100%)
+  for (let i = 5; i >= 1; i--) {
+    const r = maxR * i / 5;
+    radarCtx.beginPath();
+    radarCtx.arc(CX, CY, r, 0, Math.PI * 2);
+    radarCtx.strokeStyle = 'rgba(54, 224, 160, ' + (0.06 + 0.03 * (6 - i)) + ')';
+    radarCtx.lineWidth = i === 5 ? 1.5 : 1;
+    radarCtx.stroke();
+  }
+
+  // Crosshair lines
+  radarCtx.strokeStyle = 'rgba(54, 224, 160, 0.16)';
+  radarCtx.lineWidth = 1;
+  radarCtx.beginPath();
+  radarCtx.moveTo(0, CY); radarCtx.lineTo(W, CY);
+  radarCtx.moveTo(CX, 0); radarCtx.lineTo(CX, H);
+  radarCtx.stroke();
+
+  // Diagonal lines (like a real radar)
+  for (let d = 0; d < 4; d++) {
+    const a = d * Math.PI / 4;
+    radarCtx.beginPath();
+    radarCtx.moveTo(CX - Math.cos(a) * maxR, CY - Math.sin(a) * maxR);
+    radarCtx.lineTo(CX + Math.cos(a) * maxR, CY + Math.sin(a) * maxR);
+    radarCtx.strokeStyle = 'rgba(54, 224, 160, 0.08)';
+    radarCtx.stroke();
+  }
+
+  // Rotating sweep beam with 5 trailing segments
+  for (let i = 0; i < 5; i++) {
+    const a = radarAngle - i * 0.16;
+    const len = maxR * (1 - i * 0.18);
+    const alpha = 0.75 - i * 0.14;
+    radarCtx.save();
+    radarCtx.translate(CX, CY);
+    radarCtx.rotate(a);
+    radarCtx.beginPath();
+    radarCtx.moveTo(0, 0);
+    radarCtx.lineTo(len, 0);
+    radarCtx.strokeStyle = 'rgba(54, 224, 160, ' + Math.max(alpha, 0.05) + ')';
+    radarCtx.lineWidth = 3 - i * 0.5;
+    radarCtx.shadowBlur = 18;
+    radarCtx.shadowColor = 'rgba(54, 224, 160, 0.8)';
+    radarCtx.stroke();
+    radarCtx.restore();
+  }
+
+  // Leading edge glow
+  radarCtx.save();
+  radarCtx.translate(CX, CY);
+  radarCtx.rotate(radarAngle);
+  radarCtx.beginPath();
+  radarCtx.moveTo(0, 0);
+  radarCtx.lineTo(maxR, 0);
+  radarCtx.strokeStyle = 'rgba(80, 255, 190, 0.9)';
+  radarCtx.lineWidth = 2.5;
+  radarCtx.shadowBlur = 30;
+  radarCtx.shadowColor = 'rgba(54, 224, 160, 1)';
+  radarCtx.stroke();
+  radarCtx.restore();
+
+  // Blips / dots
+  const now = Date.now();
+  for (const dot of radarDots) {
+    const a = dot.angle;
+    const r = dot.radius;
+    const x = CX + Math.cos(a) * r;
+    const y = CY + Math.sin(a) * r;
+
+    const isBuy = dot.side === 'buy';
+    const isSell = dot.side === 'sell';
+    const isSweep = dot.side === 'sweep';
+    const isPrice = dot.side === 'price';
+
+    let col, glow;
+    if (isBuy || (isSweep && dot.sweepDir === 'buy')) {
+      col = '54, 224, 160';
+      glow = 'rgba(54, 224, 160, 0.9)';
+    } else if (isSell || (isSweep && dot.sweepDir === 'sell')) {
+      col = '255, 82, 107';
+      glow = 'rgba(255, 82, 107, 0.9)';
+    } else {
+      col = '245, 166, 35';
+      glow = 'rgba(245, 166, 35, 0.9)';
+    }
+
+    // Pulse on sweep blips
+    const pulse = isSweep ? 1 + 0.25 * Math.sin(now / 250) : 1;
+    const br = (isSweep ? 5 : isPrice ? 3.5 : 4.5) * pulse;
+
+    radarCtx.beginPath();
+    radarCtx.arc(x, y, br, 0, Math.PI * 2);
+    radarCtx.fillStyle = 'rgba(' + col + ', 0.95)';
+    radarCtx.shadowBlur = isSweep ? 24 : 12;
+    radarCtx.shadowColor = glow;
+    radarCtx.fill();
+
+    // Outer halo ring
+    radarCtx.beginPath();
+    radarCtx.arc(x, y, br + 4, 0, Math.PI * 2);
+    radarCtx.strokeStyle = 'rgba(' + col + ', 0.3)';
+    radarCtx.lineWidth = 1;
+    radarCtx.stroke();
+
+    radarCtx.shadowBlur = 0;
+  }
+
+  // Center dot
+  radarCtx.beginPath();
+  radarCtx.arc(CX, CY, 2.5, 0, Math.PI * 2);
+  radarCtx.fillStyle = 'rgba(54, 224, 160, 0.9)';
+  radarCtx.shadowBlur = 12;
+  radarCtx.shadowColor = 'rgba(54, 224, 160, 0.9)';
+  radarCtx.fill();
+  radarCtx.shadowBlur = 0;
+
+  radarAnimId = requestAnimationFrame(radarRender);
+}
+
+function initRadarCanvas() {
+  const canvas = document.getElementById('radar-canvas');
+  if (!canvas || radarCtx) return;
+  radarCanvas = canvas;
+  radarCtx = canvas.getContext('2d');
+
+  // Set canvas resolution
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width < 10 || rect.height < 10) return;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  radarCtx.scale(dpr, dpr);
+
+  radarVisible = true;
+  radarLastTime = 0;
+  radarAnimId = requestAnimationFrame(radarRender);
+}
+
+function updateRadarDots(sweep, price, zones) {
+  if (!radarCanvas) return;
+  const W = radarCanvas.width;
+  const H = radarCanvas.height;
+  const maxR = Math.min(W, H) / 2 - 10;
+  if (maxR <= 10) return;
+
+  radarDots = [];
+
+  // Central sweep blip
+  if (sweep && sweep.liquidity_sweep_detected && sweep.sweep_direction) {
+    const dir = String(sweep.sweep_direction);
+    radarDots.push({
+      side: 'sweep',
+      sweepDir: dir.indexOf('HIGH') >= 0 ? 'sell' : 'buy',
+      angle: Math.PI * 1.25,
+      radius: maxR * 0.12
+    });
+  }
+
+  // Liquidity zones -> position around radar
+  if (zones && Array.isArray(zones) && zones.length) {
+    const buyZones = zones.filter((z) => z.side === 'BUY_WALL');
+    const sellZones = zones.filter((z) => z.side === 'SELL_WALL');
+
+    buyZones.forEach((z, i) => {
+      const dist = Math.min(Math.max(z.distance_pct || 5, 2), 100);
+      const radius = maxR * 0.25 + (dist / 100) * maxR * 0.65;
+      const angle = Math.PI + (i + 1) * (Math.PI / (buyZones.length + 1)); // bottom half
+      radarDots.push({ side: 'buy', angle: angle, radius: radius });
+    });
+
+    sellZones.forEach((z, i) => {
+      const dist = Math.min(Math.max(z.distance_pct || 5, 2), 100);
+      const radius = maxR * 0.25 + (dist / 100) * maxR * 0.65;
+      const angle = (i + 1) * (Math.PI / (sellZones.length + 1)); // top half
+      radarDots.push({ side: 'sell', angle: angle, radius: radius });
+    });
+  }
+
+  // Current price marker (bottom center)
+  if (!na(price) && sweep && !na(sweep.swing_low) && !na(sweep.swing_high)) {
+    radarDots.push({ side: 'price', angle: Math.PI * 1.5, radius: maxR * 0.28 });
+  }
+}
+
+function pauseRadar() {
+  radarVisible = false;
+  if (radarAnimId) {
+    cancelAnimationFrame(radarAnimId);
+    radarAnimId = null;
+  }
+}
+
+function resumeRadar() {
+  if (!radarCanvas) {
+    initRadarCanvas();
+    return;
+  }
+  radarVisible = true;
+  radarLastTime = 0;
+  if (!radarAnimId) radarAnimId = requestAnimationFrame(radarRender);
+}
+
 function paintLiquidityScanner(sweep, price, extra) {
   if (!liqScannerEl) return;
+
+  // Feed radar with current liquidity data
+  const zones = (extra && extra.liquidity_zones) || (extra && extra.liquidity_target_zones) || [];
+  updateRadarDots(sweep, price, zones);
 
   const hasRange = !na(sweep.swing_high) && !na(sweep.swing_low) && !na(price) && sweep.swing_high > sweep.swing_low;
   let markerPct = 50;
