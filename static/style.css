@@ -503,6 +503,103 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .candle-chart { width: 100%; height: 420px; border-radius: 7px; overflow: hidden; background: var(--void); }
 .chart-footer { color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px; }
 
+
+/* ================================================================
+   RADAR LIQUIDITY SCANNER
+================================================================ */
+
+.radar-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 700px;
+    aspect-ratio: 1;
+    margin: 0 auto;
+    background:
+        radial-gradient(circle, rgba(10, 20, 15, 0.95), rgba(5, 10, 8, 0.98)),
+        var(--void);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow:
+        0 0 30px rgba(54, 224, 160, 0.08),
+        inset 0 0 50px rgba(5, 15, 10, 0.6);
+}
+
+.radar-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.radar-live-badge {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(5, 12, 8, 0.85);
+    border: 1px solid rgba(54, 224, 160, 0.3);
+    border-radius: 4px;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.radar-live-badge .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--long);
+    box-shadow: 0 0 8px var(--long);
+    animation: pulse 1.8s infinite;
+}
+
+.radar-live-badge span {
+    color: var(--long);
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+}
+
+.radar-hud {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(to top, rgba(5, 12, 8, 0.85), transparent);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.radar-hud-left,
+.radar-hud-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.radar-hud-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 3px;
+    vertical-align: middle;
+}
+
+.radar-hud-dot.buy { background: var(--long); box-shadow: 0 0 5px var(--long); }
+.radar-hud-dot.sell { background: var(--short); box-shadow: 0 0 5px var(--short); }
+.radar-hud-dot.price { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+
 /* ================================================================
    FOOTER
 ================================================================ */
