@@ -81,6 +81,13 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     border-bottom: 1px solid var(--line); padding-bottom: 10px;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
+.hamburger-btn {
+    display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0;
+    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.hamburger-btn:hover { color: var(--long); border-color: rgba(54, 224, 160, 0.4); background: var(--panel-hover); }
 .brand-row { display: flex; align-items: center; gap: 9px; }
 .brand-mark {
     width: 20px; height: 20px; display: grid; place-items: center;
@@ -279,9 +286,36 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
    Privacy/Terms/Disclaimer), independent of the analysis tabs
 ================================================================ */
 
-.home-shell { display: flex; align-items: flex-start; gap: 14px; width: 100%; flex: 1; }
-.home-info-nav { flex: 0 0 200px; }
+.home-shell { display: flex; flex-direction: column; width: 100%; flex: 1; }
 .home-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* Slide-out drawer (opened via the hamburger icon next to the logo) */
+.side-drawer-backdrop {
+    position: fixed; inset: 0; z-index: 850; background: rgba(4, 6, 9, 0.6);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.side-drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.side-drawer {
+    position: fixed; top: 0; left: 0; z-index: 860; width: 260px; height: 100vh;
+    display: flex; flex-direction: column; gap: 14px; padding: 14px;
+    background: var(--panel); border-right: 1px solid var(--line);
+    transform: translateX(-100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow-y: auto;
+}
+.side-drawer.open { transform: translateX(0); box-shadow: 14px 0 34px rgba(0, 0, 0, 0.4); }
+
+.side-drawer-head { display: flex; }
+.side-drawer-back {
+    display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 15px 0 11px;
+    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 7px;
+    color: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.4px; cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+.side-drawer-back:hover { color: var(--long); border-color: rgba(54, 224, 160, 0.4); }
+
+.side-drawer-links { display: flex; flex-direction: column; gap: 3px; }
 
 .home-info-overlay {
     position: fixed; inset: 0; z-index: 800; overflow-y: auto;
@@ -301,12 +335,8 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 }
 .home-info-back-btn:hover { color: var(--long); border-color: rgba(54, 224, 160, 0.4); }
 
-@media (max-width: 850px) {
-    .home-shell { flex-direction: column; }
-    .home-info-nav {
-        flex-direction: row; flex-wrap: wrap; width: 100%; flex-basis: auto;
-        position: static; top: auto;
-    }
+@media (max-width: 400px) {
+    .side-drawer { width: 84vw; }
 }
 
 /* ================================================================
