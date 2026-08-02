@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Fjalla+One&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -28,6 +28,36 @@
       <div class="live-clock"><span class="dot"></span><span id="clock-text">--:--:--</span></div>
     </div>
   </header>
+
+  <div class="home-shell">
+
+    <!-- Always-visible info sidebar: works whether or not RUN ANALYSIS
+         has been pressed yet. Independent of the tabs-layout inside
+         #result-box, so it never touches the analysis flow. -->
+    <nav class="panel-tabs home-info-nav" id="home-info-nav">
+      <button class="panel-tab home-info-tab" data-info="contact" type="button">
+        <span class="panel-tab-num">05</span>
+        <span class="panel-tab-text">CONTACT US</span>
+      </button>
+      <button class="panel-tab home-info-tab" data-info="about" type="button">
+        <span class="panel-tab-num">06</span>
+        <span class="panel-tab-text">ABOUT</span>
+      </button>
+      <button class="panel-tab home-info-tab" data-info="privacy" type="button">
+        <span class="panel-tab-num">07</span>
+        <span class="panel-tab-text">PRIVACY POLICY</span>
+      </button>
+      <button class="panel-tab home-info-tab" data-info="terms" type="button">
+        <span class="panel-tab-num">08</span>
+        <span class="panel-tab-text">TERMS &amp; CONDITIONS</span>
+      </button>
+      <button class="panel-tab home-info-tab" data-info="disclaimer" type="button">
+        <span class="panel-tab-num">09</span>
+        <span class="panel-tab-text">DISCLAIMER</span>
+      </button>
+    </nav>
+
+    <div class="home-main">
 
   <div class="control-row">
 
@@ -659,6 +689,420 @@
     <div>SELECT A PAIR AND RUN ANALYSIS TO BRING ALL 19 CHANNELS ONLINE</div>
   </div>
 
+    </div><!-- /.home-main -->
+
+  </div><!-- /.home-shell -->
+
+  <!-- Standalone info overlay: opens over the whole page when a sidebar
+       item (Contact/About/Privacy/Terms/Disclaimer) is clicked, with a
+       BACK button at the top. Fully separate from the analysis tabs. -->
+  <div class="home-info-overlay hidden" id="home-info-overlay">
+    <button type="button" class="home-info-back-btn" id="home-info-back">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>BACK</span>
+    </button>
+
+    <div class="home-info-inner">
+
+      <div class="home-info-panel" data-info="contact">
+        <div class="about-card">
+          <h2 class="about-title">Contact Us</h2>
+          <p>We welcome your inquiries.</p>
+          <p>Whether you have a question about Signal FM, require assistance, wish to provide feedback, or have a business proposal, our team is ready to support you.</p>
+
+          <h3 class="about-subhead">Get in Touch</h3>
+          <div class="contact-info-row">
+            <span class="contact-info-label">Email</span>
+            <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
+          </div>
+
+          <h3 class="about-subhead">Follow Us</h3>
+          <ul class="social-list">
+            <li><span class="social-label">TikTok</span><a href="https://www.tiktok.com/@signalfm1" target="_blank" rel="noopener">@signalfm1</a></li>
+            <li><span class="social-label">Instagram</span><a href="https://www.instagram.com/signalfm01/" target="_blank" rel="noopener">@signalfm01</a></li>
+            <li><span class="social-label">Facebook</span><a href="https://www.facebook.com/profile.php?id=61593016040987&sk=reels_tab" target="_blank" rel="noopener">Signal FM</a></li>
+            <li><span class="social-label">LinkedIn</span><a href="https://www.linkedin.com/in/signal-fm-459324427/" target="_blank" rel="noopener">Signal FM</a></li>
+          </ul>
+
+          <h3 class="about-subhead">Response Time</h3>
+          <p>We aim to respond to all inquiries within 24–48 hours, Monday to Friday.</p>
+          <p>Thank you for choosing Signal FM. We value your trust and look forward to assisting you.</p>
+        </div>
+      </div>
+
+      <div class="home-info-panel" data-info="about">
+        <div class="about-card">
+          <h2 class="about-title">About Us</h2>
+          <p>Welcome to Signal FM.</p>
+          <p>I am Fasiullah Ayaz, The Founder and CEO of Signal FM.</p>
+          <p>Signal FM is a web-based trading signal platform designed to assist traders by analyzing multiple market concepts and calculations to generate real-time trading signals. Our goal is to simplify market analysis and provide traders with timely insights that can support their decision-making process.</p>
+
+          <h3 class="about-subhead">Why We Built Signal FM</h3>
+          <p>Trading can be challenging, especially when traders need to analyze information from multiple sources before making a decision. Signal FM was created to make this process more efficient by bringing different analytical methods together in one place.</p>
+          <p>Whether you are just starting your trading journey or already have experience in the markets, Signal FM is designed to provide helpful insights whenever you need additional market confirmation.</p>
+
+          <h3 class="about-subhead">Our Mission</h3>
+          <p>Our mission is to make trading analysis more accessible for both beginners and experienced traders.</p>
+          <p>Instead of spending time collecting and comparing different calculations from various platforms, users can access market insights in one place through Signal FM. We aim to help traders make more informed decisions with greater confidence while keeping the process simple and efficient.</p>
+
+          <h3 class="about-subhead">Our Values</h3>
+          <p>At Signal FM, we believe in:</p>
+          <ul class="about-list">
+            <li>Simplicity and ease of use.</li>
+            <li>Continuous improvement and innovation.</li>
+            <li>Providing timely and transparent market insights.</li>
+            <li>Building tools that support traders at every experience level.</li>
+            <li>Maintaining trust through responsible and ethical practices.</li>
+          </ul>
+
+          <h3 class="about-subhead">Looking Ahead</h3>
+          <p>We are continuously working to improve Signal FM. In the future, we plan to expand our platform by adding support for additional financial markets, including cryptocurrency trading, along with new analytical tools and features to provide an even better experience for our users.</p>
+          <p>Thank you for being part of the Signal FM community. We are committed to continuously improving our platform and helping traders access smarter market insights.</p>
+        </div>
+      </div>
+
+      <div class="home-info-panel" data-info="privacy">
+        <div class="about-card legal-card">
+          <div class="legal-head">
+            <h2 class="about-title">Privacy Policy</h2>
+            <span class="legal-updated">Last Updated: August 2026</span>
+          </div>
+          <p>Welcome to Signal FM. We are committed to protecting your privacy and safeguarding your personal information. This Privacy Policy outlines the types of information we collect, how we use it, and the choices available to you regarding your data when you use our website.</p>
+
+          <div class="legal-section">
+            <span class="legal-section-num">01</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">How We Use Your Information</h3>
+              <p>We use the information we collect to:</p>
+              <ul class="about-list">
+                <li>Respond to inquiries and provide customer support.</li>
+                <li>Improve our website, services, and user experience.</li>
+                <li>Monitor website performance, security, and reliability.</li>
+                <li>Communicate important updates related to our services.</li>
+              </ul>
+              <p>We do not sell, rent, or trade your personal information to third parties.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">02</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Cookies</h3>
+              <p>Signal FM may use cookies and similar technologies to enhance website functionality, remember user preferences, and improve your browsing experience.</p>
+              <p>You may disable cookies through your browser settings; however, please note that some features of the website may not function as intended.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">03</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Third-Party Services</h3>
+              <p>Our website may utilize trusted third-party services, such as Google Analytics and Google AdSense (when enabled), to analyze website traffic and deliver relevant advertisements.</p>
+              <p>These third-party services may collect information in accordance with their own privacy policies.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">04</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Data Security</h3>
+              <p>We implement reasonable technical and organizational measures to protect your personal information from unauthorized access, disclosure, alteration, or misuse.</p>
+              <p>However, no method of data transmission or electronic storage is completely secure, and we cannot guarantee absolute security.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">05</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Your Rights</h3>
+              <p>You may contact us at any time to:</p>
+              <ul class="about-list">
+                <li>Request access to your personal information.</li>
+                <li>Request correction of inaccurate or incomplete data.</li>
+                <li>Request deletion of your personal data, where applicable.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">06</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Changes to This Privacy Policy</h3>
+              <p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated revision date.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">07</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Contact Us</h3>
+              <p>If you have any questions about this Privacy Policy or how your personal information is handled, please contact us:</p>
+              <div class="contact-info-row">
+                <span class="contact-info-label">Email</span>
+                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="about-subhead">Company Leadership</h3>
+          <div class="leadership-grid">
+            <div class="leadership-card">
+              <span class="leadership-initial">FA</span>
+              <div>
+                <div class="leadership-name">Fasiullah Ayaz</div>
+                <div class="leadership-role">Chief Executive Officer (CEO)</div>
+              </div>
+            </div>
+            <div class="leadership-card">
+              <span class="leadership-initial">MQ</span>
+              <div>
+                <div class="leadership-name">Mustafa Qureshi</div>
+                <div class="leadership-role">Chief Operating Officer (COO)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-info-panel" data-info="terms">
+        <div class="about-card legal-card">
+          <div class="legal-head">
+            <h2 class="about-title">Terms &amp; Conditions</h2>
+            <span class="legal-updated">Last Updated: August 2026</span>
+          </div>
+          <p>Welcome to Signal FM. By accessing or using our website, you agree to comply with these Terms &amp; Conditions. If you do not agree with any part of these terms, please do not use our website.</p>
+
+          <div class="legal-section">
+            <span class="legal-section-num">01</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Acceptance of Terms</h3>
+              <p>By using Signal FM, you confirm that you have read, understood, and agreed to these Terms &amp; Conditions.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">02</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Our Services</h3>
+              <p>Signal FM provides trading signals and market insights generated using various analytical methods, concepts, and calculations. The information provided is intended for educational and informational purposes only.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">03</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">User Responsibilities</h3>
+              <p>By using our website, you agree to:</p>
+              <ul class="about-list">
+                <li>Use the website only for lawful purposes.</li>
+                <li>Not misuse, copy, or attempt to damage the website.</li>
+                <li>Not interfere with the website's security or functionality.</li>
+                <li>Be responsible for your own trading and investment decisions.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">04</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Intellectual Property</h3>
+              <p>All content on Signal FM, including text, graphics, logos, designs, and software, is the property of Signal FM unless otherwise stated. You may not copy, reproduce, or distribute our content without prior written permission.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">05</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">No Financial Advice</h3>
+              <p>Signal FM does not provide financial, investment, or legal advice. Trading signals are generated through analytical methods and should not be considered a guarantee of future market performance.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">06</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Limitation of Liability</h3>
+              <p>Signal FM, its owners, employees, and affiliates shall not be liable for any financial loss, trading loss, or damages resulting from the use of our website or trading signals.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">07</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Third-Party Links</h3>
+              <p>Our website may contain links to third-party websites. We are not responsible for the content, privacy practices, or services provided by those websites.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">08</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Changes to the Service</h3>
+              <p>We reserve the right to modify, suspend, or discontinue any part of the website or its services at any time without prior notice.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">09</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Changes to These Terms</h3>
+              <p>We may update these Terms &amp; Conditions from time to time. Continued use of the website after changes are published constitutes acceptance of the updated terms.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">10</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Contact Information</h3>
+              <p>If you have any questions regarding these Terms &amp; Conditions, please contact us:</p>
+              <div class="contact-info-row">
+                <span class="contact-info-label">Email</span>
+                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="about-subhead">Company Leadership</h3>
+          <div class="leadership-grid">
+            <div class="leadership-card">
+              <span class="leadership-initial">FA</span>
+              <div>
+                <div class="leadership-name">Fasiullah Ayaz</div>
+                <div class="leadership-role">Chief Executive Officer (CEO)</div>
+              </div>
+            </div>
+            <div class="leadership-card">
+              <span class="leadership-initial">MQ</span>
+              <div>
+                <div class="leadership-name">Mustafa Qureshi</div>
+                <div class="leadership-role">Chief Operating Officer (COO)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-info-panel" data-info="disclaimer">
+        <div class="about-card legal-card">
+          <div class="legal-head">
+            <h2 class="about-title">Disclaimer</h2>
+            <span class="legal-updated">Last Updated: August 2026</span>
+          </div>
+          <p>Welcome to Signal FM. By accessing or using our website, you agree to comply with these Terms &amp; Conditions. If you do not agree with any part of these terms, please do not use our website.</p>
+
+          <div class="legal-section">
+            <span class="legal-section-num">01</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Acceptance of Terms</h3>
+              <p>By using Signal FM, you confirm that you have read, understood, and agreed to these Terms &amp; Conditions.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">02</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Our Services</h3>
+              <p>Signal FM provides trading signals and market insights generated using various analytical methods, concepts, and calculations. The information provided is intended for educational and informational purposes only.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">03</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">User Responsibilities</h3>
+              <p>By using our website, you agree to:</p>
+              <ul class="about-list">
+                <li>Use the website only for lawful purposes.</li>
+                <li>Not misuse, copy, or attempt to damage the website.</li>
+                <li>Not interfere with the website's security or functionality.</li>
+                <li>Be responsible for your own trading and investment decisions.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">04</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Intellectual Property</h3>
+              <p>All content on Signal FM, including text, graphics, logos, designs, and software, is the property of Signal FM unless otherwise stated. You may not copy, reproduce, or distribute our content without prior written permission.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">05</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">No Financial Advice</h3>
+              <p>Signal FM does not provide financial, investment, or legal advice. Trading signals are generated through analytical methods and should not be considered a guarantee of future market performance.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">06</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Limitation of Liability</h3>
+              <p>Signal FM, its owners, employees, and affiliates shall not be liable for any financial loss, trading loss, or damages resulting from the use of our website or trading signals.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">07</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Third-Party Links</h3>
+              <p>Our website may contain links to third-party websites. We are not responsible for the content, privacy practices, or services provided by those websites.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">08</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Changes to the Service</h3>
+              <p>We reserve the right to modify, suspend, or discontinue any part of the website or its services at any time without prior notice.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">09</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Changes to These Terms</h3>
+              <p>We may update these Terms &amp; Conditions from time to time. Continued use of the website after changes are published constitutes acceptance of the updated terms.</p>
+            </div>
+          </div>
+
+          <div class="legal-section">
+            <span class="legal-section-num">10</span>
+            <div class="legal-section-body">
+              <h3 class="about-subhead">Contact Information</h3>
+              <p>If you have any questions regarding these Terms &amp; Conditions, please contact us:</p>
+              <div class="contact-info-row">
+                <span class="contact-info-label">Email</span>
+                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="about-subhead">Company Leadership</h3>
+          <div class="leadership-grid">
+            <div class="leadership-card">
+              <span class="leadership-initial">FA</span>
+              <div>
+                <div class="leadership-name">Fasiullah Ayaz</div>
+                <div class="leadership-role">Chief Executive Officer (CEO)</div>
+              </div>
+            </div>
+            <div class="leadership-card">
+              <span class="leadership-initial">MQ</span>
+              <div>
+                <div class="leadership-name">Mustafa Qureshi</div>
+                <div class="leadership-role">Chief Operating Officer (COO)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.home-info-inner -->
+  </div><!-- /.home-info-overlay -->
+
   <footer class="disclaimer">
     <span id="disclaimer-text">⚠ Probability estimates only — not financial advice. In-sample calculations, no walk-forward backtest run. Final verdict/confidence come only from Tier 01 (Hawkes + Bayesian via Conformal Prediction); Tiers 02–03 are display-only.</span>
   </footer>
@@ -666,5 +1110,42 @@
 </div>
 
 <script src="/static/script.js"></script>
+<script>
+// Standalone controller for the homepage info sidebar (Contact/About/
+// Privacy/Terms/Disclaimer). Fully independent of script.js and the
+// #result-box tabs-layout, so it never affects the RUN ANALYSIS flow.
+(function () {
+  var navButtons = document.querySelectorAll('.home-info-tab');
+  var overlay = document.getElementById('home-info-overlay');
+  var backBtn = document.getElementById('home-info-back');
+  var panels = document.querySelectorAll('.home-info-panel');
+
+  function openInfo(key) {
+    panels.forEach(function (p) {
+      p.classList.toggle('active', p.getAttribute('data-info') === key);
+    });
+    navButtons.forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-info') === key);
+    });
+    overlay.classList.remove('hidden');
+    overlay.scrollTop = 0;
+    document.body.classList.add('chart-fullscreen-lock');
+  }
+
+  function closeInfo() {
+    overlay.classList.add('hidden');
+    document.body.classList.remove('chart-fullscreen-lock');
+    navButtons.forEach(function (b) { b.classList.remove('active'); });
+  }
+
+  navButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      openInfo(btn.getAttribute('data-info'));
+    });
+  });
+
+  if (backBtn) backBtn.addEventListener('click', closeInfo);
+})();
+</script>
 </body>
 </html>
