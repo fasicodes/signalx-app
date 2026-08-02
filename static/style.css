@@ -290,25 +290,8 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ================================================================
-   ABOUT / CONTACT PANEL
+   ABOUT / CONTACT PANELS
 ================================================================ */
-
-.about-wrap { display: flex; flex-direction: column; gap: 16px; }
-
-.about-subnav {
-    display: flex; align-items: center; gap: 6px; width: fit-content;
-    padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-}
-.about-subtab {
-    height: 32px; padding: 0 18px; background: transparent; border: none; border-radius: 6px;
-    color: var(--text-dim); font-family: var(--mono); font-size: 10.5px; font-weight: 700;
-    letter-spacing: 0.5px; cursor: pointer; transition: background 0.2s ease, color 0.2s ease;
-}
-.about-subtab:hover { color: var(--text); background: var(--panel-hover); }
-.about-subtab.active { color: var(--long); background: var(--long-dim); }
-
-.about-subpanel { display: none; }
-.about-subpanel.active { display: block; animation: fade-in 0.25s ease; }
 
 .about-card {
     padding: 26px 28px; max-width: 720px;
