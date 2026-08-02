@@ -18,6 +18,9 @@
 
   <header class="topbar">
     <div class="brand">
+      <button type="button" class="hamburger-btn" id="hamburger-btn" aria-label="Open menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
       <div class="brand-row">
         <span class="brand-mark"></span>
         <span class="brand-name">Signal FM</span>
@@ -29,12 +32,18 @@
     </div>
   </header>
 
-  <div class="home-shell">
-
-    <!-- Always-visible info sidebar: works whether or not RUN ANALYSIS
-         has been pressed yet. Independent of the tabs-layout inside
-         #result-box, so it never touches the analysis flow. -->
-    <nav class="panel-tabs home-info-nav" id="home-info-nav">
+  <!-- Slide-out menu drawer: opens from the hamburger icon next to the
+       Signal FM logo. Fully independent of the tabs-layout inside
+       #result-box, so it never touches the RUN ANALYSIS flow. -->
+  <div class="side-drawer-backdrop" id="side-drawer-backdrop"></div>
+  <nav class="side-drawer" id="home-info-nav">
+    <div class="side-drawer-head">
+      <button type="button" class="side-drawer-back" id="side-drawer-back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>BACK</span>
+      </button>
+    </div>
+    <div class="side-drawer-links">
       <button class="panel-tab home-info-tab" data-info="contact" type="button">
         <span class="panel-tab-num">05</span>
         <span class="panel-tab-text">CONTACT US</span>
@@ -55,7 +64,10 @@
         <span class="panel-tab-num">09</span>
         <span class="panel-tab-text">DISCLAIMER</span>
       </button>
-    </nav>
+    </div>
+  </nav>
+
+  <div class="home-shell">
 
     <div class="home-main">
 
@@ -703,6 +715,31 @@
   var backBtn = document.getElementById('home-info-back');
   var panels = document.querySelectorAll('.home-info-panel');
 
+  var hamburgerBtn = document.getElementById('hamburger-btn');
+  var drawer = document.getElementById('home-info-nav');
+  var drawerBackdrop = document.getElementById('side-drawer-backdrop');
+  var drawerBackBtn = document.getElementById('side-drawer-back');
+
+  function openDrawer() {
+    drawer.classList.add('open');
+    drawerBackdrop.classList.add('open');
+    if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    drawerBackdrop.classList.remove('open');
+    if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  if (hamburgerBtn) {
+    hamburgerBtn.addEventListener('click', function () {
+      if (drawer.classList.contains('open')) { closeDrawer(); } else { openDrawer(); }
+    });
+  }
+  if (drawerBackBtn) drawerBackBtn.addEventListener('click', closeDrawer);
+  if (drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
+
   function openInfo(key) {
     panels.forEach(function (p) {
       p.classList.toggle('active', p.getAttribute('data-info') === key);
@@ -723,6 +760,7 @@
 
   navButtons.forEach(function (btn) {
     btn.addEventListener('click', function () {
+      closeDrawer();
       openInfo(btn.getAttribute('data-info'));
     });
   });
