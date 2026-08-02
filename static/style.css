@@ -31,12 +31,15 @@
     --accent: #f5a623;
     --accent-dim: rgba(245, 166, 35, 0.12);
     --mono: "IBM Plex Mono", "JetBrains Mono", monospace;
-    --sans: "Plus Jakarta Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --sans: "Space Grotesk", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 html { background: var(--void); }
 
 body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     min-height: 100vh;
     background:
         radial-gradient(circle at 50% -20%, rgba(35, 65, 90, 0.18), transparent 45%),
@@ -48,11 +51,18 @@ body {
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    padding: 18px 22px 45px;
+    padding: 18px 22px 24px;
     overflow-x: hidden;
 }
 
-.terminal { width: 100%; max-width: 1500px; margin: 0 auto; }
+.terminal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 1500px;
+    margin: 0 auto;
+    flex: 1;
+}
 
 ::selection { background: var(--long); color: var(--void); }
 
@@ -241,30 +251,39 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .tier-note { display: none; }
 
 /* ================================================================
-   PANEL TABS — left-aligned, not stretched full width
+   PANEL TABS — vertical rail beside the content
 ================================================================ */
 
+.tabs-layout {
+    display: flex; align-items: flex-start; gap: 14px; margin: 4px 0 4px;
+}
+
 .panel-tabs {
-    display: flex; align-items: center; justify-content: flex-start; gap: 4px;
-    margin: 4px 0 14px; padding: 4px; background: var(--panel);
-    border: 1px solid var(--line); border-radius: 8px;
+    display: flex; flex-direction: column; gap: 3px; flex: 0 0 200px;
+    padding: 6px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; position: sticky; top: 14px;
 }
 .panel-tab {
-    flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
-    gap: 7px; height: 36px; padding: 0 18px; background: transparent; border: none;
+    display: flex; align-items: center; gap: 10px; width: 100%; height: 42px;
+    padding: 0 12px; background: transparent; border: none; border-left: 2px solid transparent;
     border-radius: 6px; color: var(--text-dim); font-family: var(--mono);
-    font-size: 11px; font-weight: 700; letter-spacing: 0.5px; cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; text-align: left; cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 .panel-tab-num {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 17px; height: 17px; border-radius: 4px; background: var(--line-soft);
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: 4px; background: var(--line-soft);
     color: var(--text-faint); font-size: 9px; font-weight: 800;
     transition: background 0.2s ease, color 0.2s ease;
 }
+.panel-tab-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panel-tab:hover { color: var(--text); background: var(--panel-hover); }
-.panel-tab.active { color: var(--void); background: var(--long); box-shadow: 0 0 14px rgba(54, 224, 160, 0.2); }
-.panel-tab.active .panel-tab-num { background: rgba(6, 17, 13, 0.25); color: var(--void); }
+.panel-tab.active {
+    color: var(--long); background: var(--long-dim); border-left-color: var(--long);
+}
+.panel-tab.active .panel-tab-num { background: var(--long); color: var(--void); }
+
+.tab-content-area { flex: 1; min-width: 0; }
 
 .tab-panel { display: none; }
 .tab-panel.active { display: block; animation: fade-in 0.25s ease; }
@@ -561,8 +580,13 @@ body.chart-fullscreen-lock { overflow: hidden; }
    FOOTER
 ================================================================ */
 
+main#result-box,
+.empty-state {
+    flex: 1;
+}
+
 .disclaimer {
-    margin-top: 16px; padding: 8px 4px 0; border-top: 1px solid var(--line);
+    margin-top: auto; padding: 14px 4px 0; border-top: 1px solid var(--line);
     color: var(--text-faint); font-family: var(--mono); font-size: 9px; line-height: 1.5; text-align: center;
 }
 
@@ -581,6 +605,13 @@ body.chart-fullscreen-lock { overflow: hidden; }
     .channel-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .channel-card.span-2 { grid-column: span 2; }
     .hero { gap: 20px; padding: 16px; }
+    .tabs-layout { flex-direction: column; }
+    .panel-tabs {
+        flex-direction: row; flex-wrap: wrap; width: 100%; flex-basis: auto;
+        position: static; top: auto;
+    }
+    .panel-tab { flex: 1 1 calc(50% - 3px); border-left: none; border-bottom: 2px solid transparent; }
+    .panel-tab.active { border-left-color: transparent; border-bottom-color: var(--long); }
 }
 
 @media (max-width: 650px) {
@@ -603,8 +634,8 @@ body.chart-fullscreen-lock { overflow: hidden; }
     .channel-model { display: none; }
     .channel-main { font-size: 17px; }
     .dual-split { gap: 7px; }
-    .panel-tabs { flex-wrap: wrap; }
-    .panel-tab { flex: 1 1 calc(50% - 4px); justify-content: flex-start; padding-left: 10px; }
+    .panel-tab { flex: 1 1 calc(50% - 3px); padding-left: 10px; }
+    .panel-tab-text { font-size: 9.5px; }
     .liq-panel, .chart-panel { padding: 16px; }
     .liq-stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
     .liq-extra-grid { grid-template-columns: 1fr; }
