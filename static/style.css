@@ -698,7 +698,6 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
         var(--panel);
     border: 1px solid var(--line); border-radius: 9px;
 }
-.chart-top-bar { display: flex; flex-direction: column; gap: 14px; }
 .chart-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .chart-header-left { display: flex; align-items: center; gap: 10px; }
 .chart-icon {
@@ -743,35 +742,27 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 }
 .chart-back-btn:hover { color: var(--long); border-color: rgba(54, 224, 160, 0.4); }
 
-/* fullscreen chart panel */
+/* fullscreen chart panel — simple, robust: header + timeframe row shrink
+   down to a slim strip (small font, no subtitle, tight padding) and stay
+   in normal document flow. No absolute-positioning tricks here on purpose,
+   so this never depends on any other file/markup staying in sync. */
 .chart-panel { position: relative; }
 .chart-panel.fullscreen {
     position: fixed; inset: 0; z-index: 999; margin: 0; border-radius: 0;
     width: 100vw; height: 100vh; padding: 54px 14px 14px; overflow: hidden;
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: column; gap: 8px;
 }
 .chart-panel.fullscreen .chart-back-btn { display: flex; }
+.chart-panel.fullscreen .chart-header { flex-shrink: 0; gap: 8px; }
+.chart-panel.fullscreen .chart-subtitle { display: none; }
+.chart-panel.fullscreen .chart-icon { width: 24px; height: 24px; font-size: 11px; }
+.chart-panel.fullscreen .chart-title { font-size: 13.5px; }
+.chart-panel.fullscreen .chart-price { font-size: 15px; }
+.chart-panel.fullscreen .chart-tf-row { flex-shrink: 0; }
+.chart-panel.fullscreen .chart-tf-btn { height: 22px; padding: 0 9px; }
 .chart-panel.fullscreen .chart-body { flex: 1; min-height: 0; }
 .chart-panel.fullscreen .candle-chart { height: 100%; }
-.chart-panel.fullscreen .chart-canvas-wrap { flex: 1; min-height: 0; }
-
-/* Compact floating "glass" bar: title + price + timeframe, sitting on top
-   of the chart instead of pushing it down, so the candles get almost the
-   entire screen. */
-.chart-panel.fullscreen .chart-top-bar {
-    position: absolute; top: 54px; left: 14px; right: 14px; z-index: 5;
-    flex-direction: row; align-items: center; justify-content: space-between;
-    flex-wrap: wrap; gap: 10px;
-    background: rgba(17, 22, 30, 0.55);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 9px;
-    padding: 8px 12px;
-}
-.chart-panel.fullscreen .chart-subtitle { display: none; }
-.chart-panel.fullscreen .chart-header { flex: 1; min-width: 0; gap: 8px; }
-.chart-panel.fullscreen .chart-tf-row { flex-shrink: 0; }
+.chart-panel.fullscreen .chart-canvas-wrap { flex: 1; min-height: 0; width: 100%; }
 body.chart-fullscreen-lock { overflow: hidden; }
 
 /* chart body: side toolbar + canvas */
@@ -817,9 +808,6 @@ body.chart-fullscreen-lock { overflow: hidden; }
 .chart-panel.fullscreen .chart-tool-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.12); }
 .chart-panel.fullscreen .chart-tool-btn.active { background: rgba(54, 224, 160, 0.22); border-color: transparent; }
 .chart-panel.fullscreen .chart-tool-sep { background: rgba(255, 255, 255, 0.15); }
-.chart-panel.fullscreen .chart-canvas-wrap {
-    width: 100%;
-}
 
 .chart-canvas-wrap { position: relative; flex: 1; min-width: 0; }
 .draw-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
