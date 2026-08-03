@@ -894,16 +894,33 @@ document.addEventListener("keydown", (e) => {
 });
 
 /* ==========================================================================
-   CHART DRAWING TOOLS — trend line, horizontal line, and measure, drawn on
-   an SVG overlay positioned on top of the chart canvas. Coordinates are
-   converted through the chart's own time/price scales so drawings stay
-   correctly placed while panning, zooming, or resizing.
+   CHART DRAWING TOOLS — 10 tools drawn on an SVG overlay positioned on top
+   of the chart canvas: Cursor, Trend Line, Ray, Horizontal Line, Vertical
+   Line, Rectangle, Fibonacci Retracement, Brush (freehand), Text Note, and
+   Measure — plus a Clear-All utility. Coordinates are converted through the
+   chart's own time/price scales so drawings stay correctly placed while
+   panning, zooming, or resizing.
    ========================================================================== */
+
+const TWO_CLICK_TOOLS = ["trendline", "ray", "measure", "rectangle", "fib"];
 
 let activeChartTool = "cursor";
 let chartDrawings = [];
 let pendingDrawPoint = null;
 let drawingsCoinKey = null;
+
+// Freehand brush state — driven by native mouse events since the chart
+// library's own click/crosshair subscriptions don't expose drag gestures.
+let isBrushing = false;
+let currentBrushPoints = [];
+
+function setChartInteractionsEnabled(enabled) {
+  if (!lwChart) return;
+  lwChart.applyOptions({
+    handleScroll: enabled,
+    handleScale: enabled,
+  });
+}
 
 if (chartToolsEl) {
   chartToolsEl.querySelectorAll(".chart-tool-btn").forEach((btn) => {
@@ -912,6 +929,8 @@ if (chartToolsEl) {
       if (tool === "clear") {
         chartDrawings = [];
         pendingDrawPoint = null;
+        isBrushing = false;
+        currentBrushPoints = [];
         renderDrawings();
         return;
       }
@@ -920,13 +939,16 @@ if (chartToolsEl) {
       activeChartTool = tool;
       pendingDrawPoint = null;
       if (candleChartEl) candleChartEl.style.cursor = tool === "cursor" ? "default" : "crosshair";
+      // Pause chart pan/zoom while free-drawing so the brush stroke tracks
+      // the mouse instead of fighting the chart's own drag-to-pan.
+      setChartInteractionsEnabled(tool !== "brush");
       renderDrawings();
     });
   });
 }
 
 function handleChartClick(param) {
-  if (activeChartTool === "cursor" || !lwCandleSeries) return;
+  if (activeChartTool === "cursor" || activeChartTool === "brush" || !lwCandleSeries) return;
   if (!param.point || param.time === undefined) return;
   const price = lwCandleSeries.coordinateToPrice(param.point.y);
   if (price === null || price === undefined) return;
@@ -937,7 +959,22 @@ function handleChartClick(param) {
     return;
   }
 
-  if (activeChartTool === "trendline" || activeChartTool === "measure") {
+  if (activeChartTool === "vertical") {
+    chartDrawings.push({ type: "vertical", time: param.time });
+    renderDrawings();
+    return;
+  }
+
+  if (activeChartTool === "text") {
+    const text = window.prompt("Note text:");
+    if (text && text.trim()) {
+      chartDrawings.push({ type: "text", time: param.time, price, text: text.trim() });
+    }
+    renderDrawings();
+    return;
+  }
+
+  if (TWO_CLICK_TOOLS.includes(activeChartTool)) {
     if (!pendingDrawPoint) {
       pendingDrawPoint = { time: param.time, price };
     } else {
@@ -956,7 +993,49 @@ function handleChartCrosshairMove(param) {
   renderDrawings({ time: param.time, price });
 }
 
-function renderDrawings(previewPoint) {
+// ---- Brush (freehand) drag handling — native mouse events ----
+
+function chartPixelToTimePrice(clientX, clientY) {
+  const rect = candleChartEl.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const time = lwChart ? lwChart.timeScale().coordinateToTime(x) : null;
+  const price = lwCandleSeries ? lwCandleSeries.coordinateToPrice(y) : null;
+  return { time, price };
+}
+
+if (candleChartEl) {
+  candleChartEl.addEventListener("mousedown", (e) => {
+    if (activeChartTool !== "brush" || !lwChart || !lwCandleSeries) return;
+    isBrushing = true;
+    currentBrushPoints = [];
+    const pt = chartPixelToTimePrice(e.clientX, e.clientY);
+    if (pt.time !== null && pt.time !== undefined && pt.price !== null && pt.price !== undefined) {
+      currentBrushPoints.push({ time: pt.time, price: pt.price });
+    }
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!isBrushing) return;
+    const pt = chartPixelToTimePrice(e.clientX, e.clientY);
+    if (pt.time !== null && pt.time !== undefined && pt.price !== null && pt.price !== undefined) {
+      currentBrushPoints.push({ time: pt.time, price: pt.price });
+      renderDrawings(null, currentBrushPoints);
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isBrushing) return;
+    isBrushing = false;
+    if (currentBrushPoints.length > 1) {
+      chartDrawings.push({ type: "brush", points: currentBrushPoints.slice() });
+    }
+    currentBrushPoints = [];
+    renderDrawings();
+  });
+}
+
+function renderDrawings(previewPoint, liveBrushPoints) {
   if (!drawOverlayEl || !lwChart || !lwCandleSeries || !candleChartEl) return;
 
   while (drawOverlayEl.firstChild) drawOverlayEl.removeChild(drawOverlayEl.firstChild);
@@ -969,11 +1048,13 @@ function renderDrawings(previewPoint) {
   const NS = "http://www.w3.org/2000/svg";
   const timeX = (t) => lwChart.timeScale().timeToCoordinate(t);
   const priceY = (p) => lwCandleSeries.priceToCoordinate(p);
+  const okXY = (...vals) => vals.every((v) => v !== null && v !== undefined && !Number.isNaN(v));
 
   chartDrawings.forEach((d) => {
+
     if (d.type === "horizontal") {
       const y = priceY(d.price);
-      if (y === null || y === undefined) return;
+      if (!okXY(y)) return;
 
       const line = document.createElementNS(NS, "line");
       line.setAttribute("x1", 0); line.setAttribute("x2", width);
@@ -995,10 +1076,130 @@ function renderDrawings(previewPoint) {
       return;
     }
 
+    if (d.type === "vertical") {
+      const x = timeX(d.time);
+      if (!okXY(x)) return;
+
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", x); line.setAttribute("x2", x);
+      line.setAttribute("y1", 0); line.setAttribute("y2", height);
+      line.setAttribute("stroke", "#4dabf7");
+      line.setAttribute("stroke-width", "1.4");
+      line.setAttribute("stroke-dasharray", "4 3");
+      drawOverlayEl.appendChild(line);
+      return;
+    }
+
+    if (d.type === "text") {
+      const x = timeX(d.time), y = priceY(d.price);
+      if (!okXY(x, y)) return;
+
+      const dot = document.createElementNS(NS, "circle");
+      dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", "2.5");
+      dot.setAttribute("fill", "#f5a623");
+      drawOverlayEl.appendChild(dot);
+
+      const label = document.createElementNS(NS, "text");
+      label.setAttribute("x", x + 8); label.setAttribute("y", y - 8);
+      label.setAttribute("fill", "#f5a623");
+      label.setAttribute("font-size", "12");
+      label.setAttribute("font-family", "IBM Plex Mono, monospace");
+      label.setAttribute("font-weight", "700");
+      label.textContent = d.text;
+      drawOverlayEl.appendChild(label);
+      return;
+    }
+
+    if (d.type === "brush") {
+      const pts = d.points
+        .map((p) => { const x = timeX(p.time), y = priceY(p.price); return okXY(x, y) ? `${x},${y}` : null; })
+        .filter(Boolean).join(" ");
+      if (!pts) return;
+
+      const poly = document.createElementNS(NS, "polyline");
+      poly.setAttribute("points", pts);
+      poly.setAttribute("fill", "none");
+      poly.setAttribute("stroke", "#c084fc");
+      poly.setAttribute("stroke-width", "2");
+      poly.setAttribute("stroke-linejoin", "round");
+      poly.setAttribute("stroke-linecap", "round");
+      drawOverlayEl.appendChild(poly);
+      return;
+    }
+
+    if (d.type === "rectangle") {
+      const x1 = timeX(d.p1.time), y1 = priceY(d.p1.price);
+      const x2 = timeX(d.p2.time), y2 = priceY(d.p2.price);
+      if (!okXY(x1, y1, x2, y2)) return;
+
+      const rect = document.createElementNS(NS, "rect");
+      rect.setAttribute("x", Math.min(x1, x2)); rect.setAttribute("y", Math.min(y1, y2));
+      rect.setAttribute("width", Math.abs(x2 - x1)); rect.setAttribute("height", Math.abs(y2 - y1));
+      rect.setAttribute("fill", "rgba(77, 171, 247, 0.12)");
+      rect.setAttribute("stroke", "#4dabf7");
+      rect.setAttribute("stroke-width", "1.4");
+      drawOverlayEl.appendChild(rect);
+      return;
+    }
+
+    if (d.type === "fib") {
+      const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+      const p1 = d.p1.price, p2 = d.p2.price;
+      levels.forEach((lvl) => {
+        const price = p1 + (p2 - p1) * lvl;
+        const y = priceY(price);
+        if (!okXY(y)) return;
+
+        const line = document.createElementNS(NS, "line");
+        line.setAttribute("x1", 0); line.setAttribute("x2", width);
+        line.setAttribute("y1", y); line.setAttribute("y2", y);
+        line.setAttribute("stroke", "#f5a623");
+        line.setAttribute("stroke-width", lvl === 0 || lvl === 1 ? "1.6" : "1");
+        if (lvl !== 0 && lvl !== 1) line.setAttribute("stroke-dasharray", "3 3");
+        line.setAttribute("opacity", "0.75");
+        drawOverlayEl.appendChild(line);
+
+        const label = document.createElementNS(NS, "text");
+        label.setAttribute("x", 6); label.setAttribute("y", y - 4);
+        label.setAttribute("fill", "#f5a623");
+        label.setAttribute("font-size", "9");
+        label.setAttribute("font-family", "IBM Plex Mono, monospace");
+        label.textContent = `${(lvl * 100).toFixed(1)}% · ${fmtPrice(price)}`;
+        drawOverlayEl.appendChild(label);
+      });
+      return;
+    }
+
+    if (d.type === "ray") {
+      const x1 = timeX(d.p1.time), y1 = priceY(d.p1.price);
+      const x2 = timeX(d.p2.time), y2 = priceY(d.p2.price);
+      if (!okXY(x1, y1, x2, y2)) return;
+
+      let ex = x2, ey = y2;
+      const dx = x2 - x1, dy = y2 - y1;
+      if (Math.abs(dx) > 0.0001) {
+        const t = dx > 0 ? (width - x1) / dx : (0 - x1) / dx;
+        ex = x1 + t * dx; ey = y1 + t * dy;
+      }
+
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+      line.setAttribute("x2", ex); line.setAttribute("y2", ey);
+      line.setAttribute("stroke", "#36e0a0");
+      line.setAttribute("stroke-width", "1.8");
+      drawOverlayEl.appendChild(line);
+
+      const dot = document.createElementNS(NS, "circle");
+      dot.setAttribute("cx", x1); dot.setAttribute("cy", y1); dot.setAttribute("r", "3.5");
+      dot.setAttribute("fill", "#36e0a0");
+      drawOverlayEl.appendChild(dot);
+      return;
+    }
+
     if (d.type === "trendline" || d.type === "measure") {
       const x1 = timeX(d.p1.time), y1 = priceY(d.p1.price);
       const x2 = timeX(d.p2.time), y2 = priceY(d.p2.price);
-      if ([x1, y1, x2, y2].some((v) => v === null || v === undefined)) return;
+      if (!okXY(x1, y1, x2, y2)) return;
 
       const up = d.p2.price >= d.p1.price;
       const color = d.type === "measure" ? (up ? "#36e0a0" : "#ff526b") : "#4dabf7";
@@ -1030,14 +1231,15 @@ function renderDrawings(previewPoint) {
         label.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
         drawOverlayEl.appendChild(label);
       }
+      return;
     }
   });
 
-  // live preview line while placing the second point of a trend/measure line
+  // live preview line while placing the second point of a two-click tool
   if (previewPoint && pendingDrawPoint) {
     const x1 = timeX(pendingDrawPoint.time), y1 = priceY(pendingDrawPoint.price);
     const x2 = timeX(previewPoint.time), y2 = priceY(previewPoint.price);
-    if (![x1, y1, x2, y2].some((v) => v === null || v === undefined)) {
+    if (okXY(x1, y1, x2, y2)) {
       const line = document.createElementNS(NS, "line");
       line.setAttribute("x1", x1); line.setAttribute("y1", y1);
       line.setAttribute("x2", x2); line.setAttribute("y2", y2);
@@ -1045,6 +1247,23 @@ function renderDrawings(previewPoint) {
       line.setAttribute("stroke-width", "1");
       line.setAttribute("stroke-dasharray", "3 3");
       drawOverlayEl.appendChild(line);
+    }
+  }
+
+  // live preview of the brush stroke currently being drawn
+  if (liveBrushPoints && liveBrushPoints.length > 1) {
+    const pts = liveBrushPoints
+      .map((p) => { const x = timeX(p.time), y = priceY(p.price); return okXY(x, y) ? `${x},${y}` : null; })
+      .filter(Boolean).join(" ");
+    if (pts) {
+      const poly = document.createElementNS(NS, "polyline");
+      poly.setAttribute("points", pts);
+      poly.setAttribute("fill", "none");
+      poly.setAttribute("stroke", "#c084fc");
+      poly.setAttribute("stroke-width", "2");
+      poly.setAttribute("stroke-linejoin", "round");
+      poly.setAttribute("stroke-linecap", "round");
+      drawOverlayEl.appendChild(poly);
     }
   }
 }
