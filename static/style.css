@@ -774,15 +774,25 @@ body.chart-fullscreen-lock { overflow: hidden; }
 /* Fullscreen: float the toolbar over the chart with a translucent,
    blurred background instead of the solid panel color, so the chart
    feels bigger and more immersive. */
+.chart-panel.fullscreen .chart-body {
+    position: relative;
+}
 .chart-panel.fullscreen .chart-tools {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 6;
     background: rgba(17, 22, 30, 0.4);
     border-color: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
-.chart-panel.fullscreen .chart-tool-btn:hover { background: rgba(255, 255, 255, 0.06); }
-.chart-panel.fullscreen .chart-tool-btn.active { background: rgba(54, 224, 160, 0.16); }
+.chart-panel.fullscreen .chart-tool-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.chart-panel.fullscreen .chart-tool-btn.active { background: rgba(54, 224, 160, 0.2); }
+.chart-panel.fullscreen .chart-canvas-wrap {
+    width: 100%;
+}
 
 .chart-canvas-wrap { position: relative; flex: 1; min-width: 0; }
 .draw-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
