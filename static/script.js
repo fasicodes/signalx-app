@@ -25,6 +25,7 @@ const coinPickerMenu    = document.getElementById("coin-picker-menu");
 
 // live chart elements
 const chartTitleEl  = document.getElementById("chart-title");
+const chartCoinIconEl = document.getElementById("chart-coin-icon");
 const chartPriceEl  = document.getElementById("chart-price");
 const chartChangeEl = document.getElementById("chart-change");
 const chartStatusEl = document.getElementById("chart-status");
@@ -258,6 +259,15 @@ function syncCoinPickerTrigger() {
   });
 }
 
+// Keep the live-chart header's coin logo (top-left of the Live Chart tab,
+// and visible in fullscreen too) in sync with whichever pair is selected.
+function syncChartCoinIcon() {
+  if (!chartCoinIconEl || !coinSelect) return;
+  const ticker = coinSelect.value.split("/")[0];
+  chartCoinIconEl.src = coinIconUrl(ticker);
+  attachIconFallback(chartCoinIconEl, ticker);
+}
+
 function selectCoin(value) {
   coinSelect.value = value;
   coinSelect.dispatchEvent(new Event("change"));
@@ -289,6 +299,7 @@ if (coinPickerTrigger) {
 if (coinSelect) {
   coinSelect.addEventListener("change", () => {
     syncCoinPickerTrigger();
+    syncChartCoinIcon();
     // Keep the live chart in sync if the coin changes while that tab is open.
     const livePanel = document.getElementById("panel-livechart");
     if (livePanel && livePanel.classList.contains("active")) {
@@ -298,6 +309,7 @@ if (coinSelect) {
 }
 
 buildCoinPicker();
+syncChartCoinIcon();
 
 /* ---------------------------- hero ---------------------------- */
 
@@ -1289,6 +1301,7 @@ async function loadChartData() {
 
   const coin = coinSelect.value;
   if (chartTitleEl) chartTitleEl.textContent = `${coin} · ${currentChartTimeframe.toUpperCase()}`;
+  syncChartCoinIcon();
   if (chartStatusEl) chartStatusEl.textContent = "loading candles…";
 
   try {
@@ -1379,6 +1392,7 @@ function renderResult(data) {
   // Keep the live chart's coin/title in sync even if the user hasn't opened
   // that tab yet — it'll be correct the moment they click it.
   if (chartTitleEl) chartTitleEl.textContent = `${data.coin || coinSelect.value} · ${currentChartTimeframe.toUpperCase()}`;
+  syncChartCoinIcon();
 }
 
 /* ---------------------------- fetch flow ---------------------------- */
