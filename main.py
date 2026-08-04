@@ -80,8 +80,39 @@ from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
 import ccxt
+
+# pandas-ta is optional: it is not published for every Python version, so we
+# ship a numpy/pandas fallback for the two indicators generate_signal() needs
+# (RSI + MACD) that produces equivalent columns. The verdict/confidence logic
+# itself is untouched either way.
+try:
+    import pandas_ta as ta
+    _HAS_PANDAS_TA = True
+except ImportError:  # pragma: no cover - exercised only when pandas-ta is absent
+    ta = None
+    _HAS_PANDAS_TA = False
+
+
+def _ta_rsi(series, length=14):
+    """Wilder-smoothed RSI (same formula as pandas_ta.rsi)."""
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1.0 / length, min_periods=length, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / length, min_periods=length, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - 100 / (1 + rs)
+    return rsi.where((avg_loss != 0) | (avg_gain != 0), 100.0)
+
+
+def _ta_macd(series, fast=12, slow=26, signal=9):
+    """EMA-based MACD (same formula as pandas_ta.macd)."""
+    ema_fast = series.ewm(span=fast, adjust=False).mean()
+    ema_slow = series.ewm(span=slow, adjust=False).mean()
+    macd = ema_fast - ema_slow
+    signal_line = macd.ewm(span=signal, adjust=False).mean()
+    return macd, signal_line
 
 # v4 ke naye concepts ke liye extra libraries
 from hmmlearn.hmm import GaussianHMM
@@ -1111,10 +1142,16 @@ def market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cv
 #     NAHI KIYA GAYA. Baaqi concepts sirf extra info hain. ***
 # ============================================================
 def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
-    df["rsi"] = ta.rsi(df["close"], length=14)
-    macd = ta.macd(df["close"])
-    df["macd"] = macd["MACD_12_26_9"]
-    df["macd_signal"] = macd["MACDs_12_26_9"]
+    if _HAS_PANDAS_TA:
+        df["rsi"] = ta.rsi(df["close"], length=14)
+        macd = ta.macd(df["close"])
+        df["macd"] = macd["MACD_12_26_9"]
+        df["macd_signal"] = macd["MACDs_12_26_9"]
+    else:
+        df["rsi"] = _ta_rsi(df["close"], 14)
+        macd_line, macd_signal_line = _ta_macd(df["close"])
+        df["macd"] = macd_line
+        df["macd_signal"] = macd_signal_line
     df = df.dropna(subset=["rsi", "macd", "macd_signal"]).reset_index(drop=True)
 
     latest = df.iloc[-1]
