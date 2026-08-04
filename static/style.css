@@ -734,36 +734,45 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 
 /* back button — only visible in fullscreen */
 .chart-back-btn {
-    display: none; align-items: center; gap: 7px; position: absolute; top: 16px; left: 16px; z-index: 5;
+    display: none; align-items: center; gap: 7px;
     height: 32px; padding: 0 14px 0 10px; background: var(--panel-raised); border: 1px solid var(--line);
     border-radius: 7px; color: var(--text); font-family: var(--mono); font-size: 11px; font-weight: 700;
-    letter-spacing: 0.4px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    letter-spacing: 0.4px; cursor: pointer; flex-shrink: 0;
     transition: border-color 0.15s ease, color 0.15s ease;
 }
 .chart-back-btn:hover { color: var(--long); border-color: rgba(54, 224, 160, 0.4); }
+.chart-panel.fullscreen .chart-back-btn { display: flex; }
 
-/* fullscreen chart panel — simple, robust: header + timeframe row shrink
-   down to a slim strip (small font, no subtitle, tight padding) and stay
-   in normal document flow. No absolute-positioning tricks here on purpose,
-   so this never depends on any other file/markup staying in sync. */
+/* fullscreen chart panel — true edge-to-edge takeover. The back button
+   now lives inline inside .chart-header-left (see design.html) instead of
+   being absolutely positioned, so no extra top/side padding is needed to
+   make room for it — the chart gets the full viewport. */
 .chart-panel { position: relative; }
 .chart-panel.fullscreen {
     position: fixed; inset: 0; z-index: 999; margin: 0; border-radius: 0;
-    width: 100vw; height: 100vh; padding: 54px 14px 14px; overflow: hidden;
+    width: 100vw; height: 100vh; padding: 10px; overflow: hidden;
     display: flex; flex-direction: column; gap: 8px;
+    background: var(--void);
 }
-.chart-panel.fullscreen .chart-back-btn { display: flex; }
 .chart-panel.fullscreen .chart-header { flex-shrink: 0; gap: 8px; }
 .chart-panel.fullscreen .chart-subtitle { display: none; }
-.chart-panel.fullscreen .chart-icon { width: 24px; height: 24px; font-size: 11px; }
+.chart-panel.fullscreen .chart-icon,
+.chart-panel.fullscreen .chart-coin-logo { width: 24px; height: 24px; font-size: 11px; }
 .chart-panel.fullscreen .chart-title { font-size: 13.5px; }
 .chart-panel.fullscreen .chart-price { font-size: 15px; }
 .chart-panel.fullscreen .chart-tf-row { flex-shrink: 0; }
 .chart-panel.fullscreen .chart-tf-btn { height: 22px; padding: 0 9px; }
 .chart-panel.fullscreen .chart-body { flex: 1; min-height: 0; }
-.chart-panel.fullscreen .candle-chart { height: 100%; }
+.chart-panel.fullscreen .candle-chart { height: 100%; border-radius: 4px; }
 .chart-panel.fullscreen .chart-canvas-wrap { flex: 1; min-height: 0; width: 100%; }
 body.chart-fullscreen-lock { overflow: hidden; }
+
+/* coin logo shown in the live-chart header (top bar), synced to the
+   selected pair — same look as the coin picker's logo elsewhere. */
+.chart-coin-logo {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--line-soft);
+    border: 1px solid var(--line); object-fit: contain; flex-shrink: 0;
+}
 
 /* chart body: side toolbar + canvas */
 .chart-body { display: flex; align-items: stretch; gap: 10px; }
@@ -886,7 +895,9 @@ main#result-box,
     .chart-tf-row { flex-wrap: wrap; }
     .chart-body { flex-direction: column; }
     .chart-tools { flex-direction: row; align-self: flex-start; }
-    .chart-panel.fullscreen { padding: 56px 12px 14px; }
+    .chart-panel.fullscreen { padding: 8px; }
+    .chart-panel.fullscreen .chart-header { gap: 6px; }
+    .chart-panel.fullscreen .chart-subtitle { display: none; }
 }
 
 @media (max-width: 400px) {
