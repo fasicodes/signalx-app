@@ -938,6 +938,151 @@ let activeChartTool = "cursor";
 let chartDrawings = [];
 let pendingDrawPoint = null;
 let drawingsCoinKey = null;
+let drawingIdSeq = 0;
+
+// ---- Selection / move / individual-delete state (cursor tool) ----
+let selectedDrawingId = null;
+let isDraggingDrawing = false;
+let dragLastPoint = null;
+const HIT_TOLERANCE = 10;
+
+// small floating "×" button shown next to whichever drawing is selected —
+// tapping it removes ONLY that drawing, unlike the toolbar's Clear-All.
+let drawDeleteBtnEl = null;
+function ensureDrawDeleteBtn() {
+  if (drawDeleteBtnEl) return drawDeleteBtnEl;
+  const host = drawOverlayEl && drawOverlayEl.parentElement;
+  if (!host) return null;
+  drawDeleteBtnEl = document.createElement("button");
+  drawDeleteBtnEl.type = "button";
+  drawDeleteBtnEl.className = "draw-delete-btn";
+  drawDeleteBtnEl.title = "Delete this drawing";
+  drawDeleteBtnEl.textContent = "×";
+  drawDeleteBtnEl.hidden = true;
+  drawDeleteBtnEl.addEventListener("mousedown", (e) => e.stopPropagation());
+  drawDeleteBtnEl.addEventListener("touchstart", (e) => e.stopPropagation(), { passive: true });
+  drawDeleteBtnEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (selectedDrawingId == null) return;
+    chartDrawings = chartDrawings.filter((d) => d.id !== selectedDrawingId);
+    selectedDrawingId = null;
+    renderDrawings();
+  });
+  host.appendChild(drawDeleteBtnEl);
+  return drawDeleteBtnEl;
+}
+
+function positionDrawDeleteBtn(x, y) {
+  const btn = ensureDrawDeleteBtn();
+  if (!btn) return;
+  btn.hidden = false;
+  btn.style.left = `${x}px`;
+  btn.style.top = `${y}px`;
+}
+
+function hideDrawDeleteBtn() {
+  if (drawDeleteBtnEl) drawDeleteBtnEl.hidden = true;
+}
+
+function chartTimeX(t) { return lwChart ? lwChart.timeScale().timeToCoordinate(t) : null; }
+function chartPriceY(p) { return lwCandleSeries ? lwCandleSeries.priceToCoordinate(p) : null; }
+
+function shiftTime(t, deltaTime) {
+  if (typeof t === "number" && typeof deltaTime === "number") return t + deltaTime;
+  return t;
+}
+
+// distance from point (px,py) to segment (x1,y1)-(x2,y2)
+function distPointToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  let t = lenSq ? ((px - x1) * dx + (py - y1) * dy) / lenSq : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cx = x1 + t * dx, cy = y1 + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+// finds the topmost drawing under pixel (x,y), used to select/drag/delete
+// an individual drawing instead of affecting every drawing at once.
+function hitTestDrawing(x, y) {
+  if (!lwChart || !lwCandleSeries || !candleChartEl) return null;
+  const width = candleChartEl.clientWidth;
+  for (let i = chartDrawings.length - 1; i >= 0; i--) {
+    const d = chartDrawings[i];
+    if (d.type === "horizontal") {
+      const y0 = chartPriceY(d.price);
+      if (y0 != null && Math.abs(y - y0) <= HIT_TOLERANCE) return d;
+    } else if (d.type === "vertical") {
+      const x0 = chartTimeX(d.time);
+      if (x0 != null && Math.abs(x - x0) <= HIT_TOLERANCE) return d;
+    } else if (d.type === "text") {
+      const tx = chartTimeX(d.time), ty = chartPriceY(d.price);
+      if (tx != null && ty != null && Math.hypot(x - tx, y - ty) <= HIT_TOLERANCE + 8) return d;
+    } else if (d.type === "brush") {
+      for (let j = 0; j < d.points.length - 1; j++) {
+        const x1 = chartTimeX(d.points[j].time), y1 = chartPriceY(d.points[j].price);
+        const x2 = chartTimeX(d.points[j + 1].time), y2 = chartPriceY(d.points[j + 1].price);
+        if (x1 == null || y1 == null || x2 == null || y2 == null) continue;
+        if (distPointToSegment(x, y, x1, y1, x2, y2) <= HIT_TOLERANCE) return d;
+      }
+    } else if (d.type === "rectangle") {
+      const x1 = chartTimeX(d.p1.time), y1 = chartPriceY(d.p1.price);
+      const x2 = chartTimeX(d.p2.time), y2 = chartPriceY(d.p2.price);
+      if (x1 == null || y1 == null || x2 == null || y2 == null) continue;
+      const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+      const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+      const inOuter = x >= minX - HIT_TOLERANCE && x <= maxX + HIT_TOLERANCE && y >= minY - HIT_TOLERANCE && y <= maxY + HIT_TOLERANCE;
+      if (inOuter) return d;
+    } else if (d.type === "fib") {
+      const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+      for (const lvl of levels) {
+        const price = d.p1.price + (d.p2.price - d.p1.price) * lvl;
+        const py = chartPriceY(price);
+        if (py != null && Math.abs(y - py) <= HIT_TOLERANCE) return d;
+      }
+    } else if (d.type === "ray") {
+      const x1 = chartTimeX(d.p1.time), y1 = chartPriceY(d.p1.price);
+      const x2 = chartTimeX(d.p2.time), y2 = chartPriceY(d.p2.price);
+      if (x1 == null || y1 == null || x2 == null || y2 == null) continue;
+      let ex = x2, ey = y2;
+      const dx = x2 - x1, dy = y2 - y1;
+      if (Math.abs(dx) > 0.0001) {
+        const t = dx > 0 ? (width - x1) / dx : (0 - x1) / dx;
+        ex = x1 + t * dx; ey = y1 + t * dy;
+      }
+      if (distPointToSegment(x, y, x1, y1, ex, ey) <= HIT_TOLERANCE) return d;
+    } else if (d.type === "trendline" || d.type === "measure") {
+      const x1 = chartTimeX(d.p1.time), y1 = chartPriceY(d.p1.price);
+      const x2 = chartTimeX(d.p2.time), y2 = chartPriceY(d.p2.price);
+      if (x1 == null || y1 == null || x2 == null || y2 == null) continue;
+      if (distPointToSegment(x, y, x1, y1, x2, y2) <= HIT_TOLERANCE) return d;
+    }
+  }
+  return null;
+}
+
+// moves a single drawing by a time/price delta — used while dragging with
+// the cursor tool so only the selected drawing is repositioned.
+function moveDrawingBy(d, deltaTime, deltaPrice) {
+  if (d.type === "horizontal") {
+    d.price += deltaPrice;
+  } else if (d.type === "vertical") {
+    d.time = shiftTime(d.time, deltaTime);
+  } else if (d.type === "text") {
+    d.time = shiftTime(d.time, deltaTime);
+    d.price += deltaPrice;
+  } else if (d.type === "brush") {
+    d.points.forEach((p) => {
+      p.time = shiftTime(p.time, deltaTime);
+      p.price += deltaPrice;
+    });
+  } else if (d.p1 && d.p2) {
+    d.p1.time = shiftTime(d.p1.time, deltaTime);
+    d.p1.price += deltaPrice;
+    d.p2.time = shiftTime(d.p2.time, deltaTime);
+    d.p2.price += deltaPrice;
+  }
+}
 
 // Freehand brush state — driven by native mouse events since the chart
 // library's own click/crosshair subscriptions don't expose drag gestures.
@@ -961,6 +1106,9 @@ if (chartToolsEl) {
         pendingDrawPoint = null;
         isBrushing = false;
         currentBrushPoints = [];
+        selectedDrawingId = null;
+        isDraggingDrawing = false;
+        hideDrawDeleteBtn();
         renderDrawings();
         return;
       }
@@ -968,6 +1116,9 @@ if (chartToolsEl) {
       btn.classList.add("active");
       activeChartTool = tool;
       pendingDrawPoint = null;
+      selectedDrawingId = null;
+      isDraggingDrawing = false;
+      hideDrawDeleteBtn();
       if (candleChartEl) candleChartEl.style.cursor = tool === "cursor" ? "default" : "crosshair";
       // Pause chart pan/zoom while free-drawing so the brush stroke tracks
       // the mouse instead of fighting the chart's own drag-to-pan.
@@ -984,13 +1135,13 @@ function handleChartClick(param) {
   if (price === null || price === undefined) return;
 
   if (activeChartTool === "horizontal") {
-    chartDrawings.push({ type: "horizontal", price });
+    chartDrawings.push({ type: "horizontal", price, id: ++drawingIdSeq });
     renderDrawings();
     return;
   }
 
   if (activeChartTool === "vertical") {
-    chartDrawings.push({ type: "vertical", time: param.time });
+    chartDrawings.push({ type: "vertical", time: param.time, id: ++drawingIdSeq });
     renderDrawings();
     return;
   }
@@ -998,7 +1149,7 @@ function handleChartClick(param) {
   if (activeChartTool === "text") {
     const text = window.prompt("Note text:");
     if (text && text.trim()) {
-      chartDrawings.push({ type: "text", time: param.time, price, text: text.trim() });
+      chartDrawings.push({ type: "text", time: param.time, price, text: text.trim(), id: ++drawingIdSeq });
     }
     renderDrawings();
     return;
@@ -1008,7 +1159,7 @@ function handleChartClick(param) {
     if (!pendingDrawPoint) {
       pendingDrawPoint = { time: param.time, price };
     } else {
-      chartDrawings.push({ type: activeChartTool, p1: pendingDrawPoint, p2: { time: param.time, price } });
+      chartDrawings.push({ type: activeChartTool, p1: pendingDrawPoint, p2: { time: param.time, price }, id: ++drawingIdSeq });
       pendingDrawPoint = null;
       renderDrawings();
     }
@@ -1034,36 +1185,122 @@ function chartPixelToTimePrice(clientX, clientY) {
   return { time, price };
 }
 
+function chartPixelXY(clientX, clientY) {
+  const rect = candleChartEl.getBoundingClientRect();
+  return { x: clientX - rect.left, y: clientY - rect.top };
+}
+
+// shared handlers for both mouse and touch input, so selecting, dragging,
+// and freehand-drawing all work the same way on mobile as on desktop.
+function onDrawPointerDown(clientX, clientY) {
+  if (!lwChart || !lwCandleSeries) return;
+
+  if (activeChartTool === "cursor") {
+    const { x, y } = chartPixelXY(clientX, clientY);
+    const hit = hitTestDrawing(x, y);
+    if (hit) {
+      selectedDrawingId = hit.id;
+      isDraggingDrawing = true;
+      dragLastPoint = chartPixelToTimePrice(clientX, clientY);
+      setChartInteractionsEnabled(false);
+    } else if (selectedDrawingId !== null) {
+      selectedDrawingId = null;
+      hideDrawDeleteBtn();
+    }
+    renderDrawings();
+    return;
+  }
+
+  if (activeChartTool !== "brush") return;
+  isBrushing = true;
+  currentBrushPoints = [];
+  const pt = chartPixelToTimePrice(clientX, clientY);
+  if (pt.time !== null && pt.time !== undefined && pt.price !== null && pt.price !== undefined) {
+    currentBrushPoints.push({ time: pt.time, price: pt.price });
+  }
+}
+
+function onDrawPointerMove(clientX, clientY) {
+  if (isDraggingDrawing) {
+    const pt = chartPixelToTimePrice(clientX, clientY);
+    if (pt.time != null && pt.price != null && dragLastPoint) {
+      const deltaTime = (typeof pt.time === "number" && typeof dragLastPoint.time === "number")
+        ? pt.time - dragLastPoint.time : 0;
+      const deltaPrice = pt.price - dragLastPoint.price;
+      const d = chartDrawings.find((dd) => dd.id === selectedDrawingId);
+      if (d) moveDrawingBy(d, deltaTime, deltaPrice);
+      dragLastPoint = pt;
+      renderDrawings();
+    }
+    return true;
+  }
+  if (!isBrushing) return false;
+  const pt = chartPixelToTimePrice(clientX, clientY);
+  if (pt.time !== null && pt.time !== undefined && pt.price !== null && pt.price !== undefined) {
+    currentBrushPoints.push({ time: pt.time, price: pt.price });
+    renderDrawings(null, currentBrushPoints);
+  }
+  return true;
+}
+
+function onDrawPointerUp() {
+  if (isDraggingDrawing) {
+    isDraggingDrawing = false;
+    dragLastPoint = null;
+    setChartInteractionsEnabled(activeChartTool !== "brush");
+    return;
+  }
+  if (!isBrushing) return;
+  isBrushing = false;
+  if (currentBrushPoints.length > 1) {
+    chartDrawings.push({ type: "brush", points: currentBrushPoints.slice(), id: ++drawingIdSeq });
+  }
+  currentBrushPoints = [];
+  renderDrawings();
+}
+
 if (candleChartEl) {
   candleChartEl.addEventListener("mousedown", (e) => {
-    if (activeChartTool !== "brush" || !lwChart || !lwCandleSeries) return;
-    isBrushing = true;
-    currentBrushPoints = [];
-    const pt = chartPixelToTimePrice(e.clientX, e.clientY);
-    if (pt.time !== null && pt.time !== undefined && pt.price !== null && pt.price !== undefined) {
-      currentBrushPoints.push({ time: pt.time, price: pt.price });
-    }
+    if (activeChartTool !== "cursor" && activeChartTool !== "brush") return;
+    onDrawPointerDown(e.clientX, e.clientY);
   });
+  candleChartEl.addEventListener("touchstart", (e) => {
+    if (activeChartTool !== "cursor" && activeChartTool !== "brush") return;
+    const t = e.touches[0];
+    if (!t) return;
+    onDrawPointerDown(t.clientX, t.clientY);
+    if (isDraggingDrawing || isBrushing) e.preventDefault();
+  }, { passive: false });
 
   window.addEventListener("mousemove", (e) => {
-    if (!isBrushing) return;
-    const pt = chartPixelToTimePrice(e.clientX, e.clientY);
-    if (pt.time !== null && pt.time !== undefined && pt.price !== null && pt.price !== undefined) {
-      currentBrushPoints.push({ time: pt.time, price: pt.price });
-      renderDrawings(null, currentBrushPoints);
-    }
+    onDrawPointerMove(e.clientX, e.clientY);
   });
+  window.addEventListener("touchmove", (e) => {
+    const t = e.touches[0];
+    if (!t) return;
+    const handled = onDrawPointerMove(t.clientX, t.clientY);
+    if (handled) e.preventDefault();
+  }, { passive: false });
 
-  window.addEventListener("mouseup", () => {
-    if (!isBrushing) return;
-    isBrushing = false;
-    if (currentBrushPoints.length > 1) {
-      chartDrawings.push({ type: "brush", points: currentBrushPoints.slice() });
-    }
-    currentBrushPoints = [];
-    renderDrawings();
-  });
+  window.addEventListener("mouseup", onDrawPointerUp);
+  window.addEventListener("touchend", onDrawPointerUp);
+  window.addEventListener("touchcancel", onDrawPointerUp);
 }
+
+// Delete/Backspace removes only the currently-selected drawing — the
+// toolbar's trash icon remains a separate "clear everything" action.
+document.addEventListener("keydown", (e) => {
+  if (selectedDrawingId == null) return;
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (e.key === "Delete" || e.key === "Backspace") {
+    e.preventDefault();
+    chartDrawings = chartDrawings.filter((d) => d.id !== selectedDrawingId);
+    selectedDrawingId = null;
+    hideDrawDeleteBtn();
+    renderDrawings();
+  }
+});
 
 function renderDrawings(previewPoint, liveBrushPoints) {
   if (!drawOverlayEl || !lwChart || !lwCandleSeries || !candleChartEl) return;
@@ -1080,7 +1317,22 @@ function renderDrawings(previewPoint, liveBrushPoints) {
   const priceY = (p) => lwCandleSeries.priceToCoordinate(p);
   const okXY = (...vals) => vals.every((v) => v !== null && v !== undefined && !Number.isNaN(v));
 
+  // pixel anchor of whichever drawing is currently selected, used to place
+  // the individual-delete "×" button right next to it.
+  let selectedAnchor = null;
+  function markSelectionRing(cx, cy, r) {
+    const ring = document.createElementNS(NS, "circle");
+    ring.setAttribute("cx", cx); ring.setAttribute("cy", cy); ring.setAttribute("r", r);
+    ring.setAttribute("fill", "none");
+    ring.setAttribute("stroke", "#ffffff");
+    ring.setAttribute("stroke-width", "1.4");
+    ring.setAttribute("stroke-dasharray", "3 2");
+    ring.setAttribute("opacity", "0.85");
+    drawOverlayEl.appendChild(ring);
+  }
+
   chartDrawings.forEach((d) => {
+    const isSel = d.id === selectedDrawingId;
 
     if (d.type === "horizontal") {
       const y = priceY(d.price);
@@ -1090,7 +1342,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       line.setAttribute("x1", 0); line.setAttribute("x2", width);
       line.setAttribute("y1", y); line.setAttribute("y2", y);
       line.setAttribute("stroke", "#f5a623");
-      line.setAttribute("stroke-width", "1.4");
+      line.setAttribute("stroke-width", isSel ? "2.4" : "1.4");
       line.setAttribute("stroke-dasharray", "4 3");
       drawOverlayEl.appendChild(line);
 
@@ -1103,6 +1355,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       label.setAttribute("font-weight", "700");
       label.textContent = fmtPrice(d.price);
       drawOverlayEl.appendChild(label);
+      if (isSel) selectedAnchor = { x: width - 20, y: y - 6 };
       return;
     }
 
@@ -1114,9 +1367,10 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       line.setAttribute("x1", x); line.setAttribute("x2", x);
       line.setAttribute("y1", 0); line.setAttribute("y2", height);
       line.setAttribute("stroke", "#4dabf7");
-      line.setAttribute("stroke-width", "1.4");
+      line.setAttribute("stroke-width", isSel ? "2.4" : "1.4");
       line.setAttribute("stroke-dasharray", "4 3");
       drawOverlayEl.appendChild(line);
+      if (isSel) selectedAnchor = { x, y: 20 };
       return;
     }
 
@@ -1124,6 +1378,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       const x = timeX(d.time), y = priceY(d.price);
       if (!okXY(x, y)) return;
 
+      if (isSel) markSelectionRing(x, y, 9);
       const dot = document.createElementNS(NS, "circle");
       dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", "2.5");
       dot.setAttribute("fill", "#f5a623");
@@ -1137,6 +1392,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       label.setAttribute("font-weight", "700");
       label.textContent = d.text;
       drawOverlayEl.appendChild(label);
+      if (isSel) selectedAnchor = { x, y };
       return;
     }
 
@@ -1150,10 +1406,14 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       poly.setAttribute("points", pts);
       poly.setAttribute("fill", "none");
       poly.setAttribute("stroke", "#c084fc");
-      poly.setAttribute("stroke-width", "2");
+      poly.setAttribute("stroke-width", isSel ? "3.2" : "2");
       poly.setAttribute("stroke-linejoin", "round");
       poly.setAttribute("stroke-linecap", "round");
       drawOverlayEl.appendChild(poly);
+      if (isSel) {
+        const first = pts.split(" ")[0].split(",");
+        selectedAnchor = { x: Number(first[0]), y: Number(first[1]) };
+      }
       return;
     }
 
@@ -1167,8 +1427,10 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       rect.setAttribute("width", Math.abs(x2 - x1)); rect.setAttribute("height", Math.abs(y2 - y1));
       rect.setAttribute("fill", "rgba(77, 171, 247, 0.12)");
       rect.setAttribute("stroke", "#4dabf7");
-      rect.setAttribute("stroke-width", "1.4");
+      rect.setAttribute("stroke-width", isSel ? "2.6" : "1.4");
+      if (isSel) rect.setAttribute("stroke-dasharray", "5 3");
       drawOverlayEl.appendChild(rect);
+      if (isSel) selectedAnchor = { x: Math.max(x1, x2), y: Math.min(y1, y2) };
       return;
     }
 
@@ -1197,6 +1459,10 @@ function renderDrawings(previewPoint, liveBrushPoints) {
         label.textContent = `${(lvl * 100).toFixed(1)}% · ${fmtPrice(price)}`;
         drawOverlayEl.appendChild(label);
       });
+      if (isSel) {
+        const yMid = priceY((d.p1.price + d.p2.price) / 2);
+        if (okXY(yMid)) selectedAnchor = { x: width - 20, y: yMid };
+      }
       return;
     }
 
@@ -1216,13 +1482,14 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       line.setAttribute("x1", x1); line.setAttribute("y1", y1);
       line.setAttribute("x2", ex); line.setAttribute("y2", ey);
       line.setAttribute("stroke", "#36e0a0");
-      line.setAttribute("stroke-width", "1.8");
+      line.setAttribute("stroke-width", isSel ? "2.8" : "1.8");
       drawOverlayEl.appendChild(line);
 
       const dot = document.createElementNS(NS, "circle");
       dot.setAttribute("cx", x1); dot.setAttribute("cy", y1); dot.setAttribute("r", "3.5");
       dot.setAttribute("fill", "#36e0a0");
       drawOverlayEl.appendChild(dot);
+      if (isSel) selectedAnchor = { x: x1, y: y1 };
       return;
     }
 
@@ -1238,8 +1505,9 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       line.setAttribute("x1", x1); line.setAttribute("y1", y1);
       line.setAttribute("x2", x2); line.setAttribute("y2", y2);
       line.setAttribute("stroke", color);
-      line.setAttribute("stroke-width", "1.8");
+      line.setAttribute("stroke-width", isSel ? "2.8" : "1.8");
       drawOverlayEl.appendChild(line);
+      if (isSel) selectedAnchor = { x: Math.max(x1, x2), y: Math.min(y1, y2) };
 
       [[x1, y1], [x2, y2]].forEach(([cx, cy]) => {
         const dot = document.createElementNS(NS, "circle");
@@ -1295,6 +1563,12 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       poly.setAttribute("stroke-linecap", "round");
       drawOverlayEl.appendChild(poly);
     }
+  }
+
+  if (selectedDrawingId != null && selectedAnchor) {
+    positionDrawDeleteBtn(selectedAnchor.x, selectedAnchor.y);
+  } else {
+    hideDrawDeleteBtn();
   }
 
   renderIndicatorOverlay();
