@@ -914,6 +914,19 @@ body.chart-fullscreen-lock { overflow: hidden; }
 .chart-canvas-wrap { position: relative; flex: 1; min-width: 0; }
 .draw-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
+/* Individual-delete button for whichever drawing is currently selected
+   (cursor tool). Deletes ONLY that one drawing — the toolbar trash icon
+   remains a separate "clear everything" action. */
+.draw-delete-btn {
+    position: absolute; transform: translate(-50%, -50%);
+    width: 22px; height: 22px; display: grid; place-items: center;
+    background: #ff526b; color: #fff; border: 2px solid var(--void, #0b0f14);
+    border-radius: 50%; font-size: 14px; line-height: 1; font-weight: 700;
+    cursor: pointer; z-index: 7; padding: 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.draw-delete-btn:hover { background: #ff324f; }
+
 .candle-chart { width: 100%; height: 420px; border-radius: 7px; overflow: hidden; background: var(--void); }
 .chart-footer { color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px; }
 
@@ -987,7 +1000,23 @@ main#result-box,
     .candle-chart { height: 300px; }
     .chart-tf-row { flex-wrap: wrap; }
     .chart-body { flex-direction: column; }
-    .chart-tools { flex-direction: row; align-self: flex-start; }
+    /* Normal (non-fullscreen) mobile layout: toolbar becomes a horizontal
+       strip above the chart. It's made scrollable so every tool stays
+       reachable even when there isn't room to show all of them at once —
+       previously they just overflowed off-screen with no way to reach them. */
+    .chart-panel:not(.fullscreen) .chart-tools {
+        flex-direction: row;
+        align-self: stretch;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    .chart-panel:not(.fullscreen) .chart-tool-btn { flex-shrink: 0; }
+    /* Fullscreen mobile: keep the toolbar as a compact vertical dock pinned
+       to the left edge (as on desktop) instead of the row layout above,
+       which otherwise stretched it toward the middle of the screen. */
+    .chart-panel.fullscreen .chart-tools { flex-direction: column; }
     .chart-panel.fullscreen { padding: 8px; }
     .chart-panel.fullscreen .chart-header { gap: 6px; }
     .chart-panel.fullscreen .chart-subtitle { display: none; }
