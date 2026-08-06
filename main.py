@@ -169,9 +169,21 @@ def _clean_order_book(ob):
     }
 
 
-def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200):
-    """Exchange se OHLCV candles fetch karta hai."""
-    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+# seconds per candle, used to work out a `since` timestamp when the
+# frontend asks for older history ("before" a given time) so infinite
+# scroll-back can page further into the past instead of hitting a wall.
+TIMEFRAME_SECONDS = {
+    "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800,
+    "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "12h": 43200,
+    "1d": 86400, "1w": 604800, "1M": 2592000, "3M": 7776000,
+}
+
+
+def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200, since=None):
+    """Exchange se OHLCV candles fetch karta hai. `since` (ms epoch) diya
+    jaye to us waqt se aage ki candles milti hain -- older-history
+    pagination isi se ban'ti hai."""
+    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit, since=since)
     df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
     return df
@@ -1340,8 +1352,34 @@ def candles_endpoint():
         limit = 200
     limit = max(2, min(limit, 1000))
 
+    # infinite scroll-back: frontend sends the oldest candle time it
+    # already has as `before` (unix seconds) and we page further into
+    # the past from there instead of always returning the latest window.
+    before = request.args.get("before")
+    since_ms = None
+    if before:
+        try:
+            before_ts = int(before)
+            tf_secs = TIMEFRAME_SECONDS.get(timeframe, 3600)
+            since_ms = max(0, (before_ts - limit * tf_secs) * 1000)
+        except ValueError:
+            since_ms = None
+
     try:
-        df = get_candles(symbol=coin, timeframe=timeframe, limit=limit)
+        df = get_candles(symbol=coin, timeframe=timeframe, limit=limit, since=since_ms)
+        if before and since_ms is not None:
+            before_cutoff = pd.to_datetime(int(before), unit="s")
+            df = df[df["timestamp"] < before_cutoff]
+
+        if df.empty:
+            # no more history available further back — let the frontend
+            # know cleanly instead of erroring out.
+            return jsonify({
+                "coin": coin, "timeframe": timeframe, "candles": [],
+                "last_price": None, "change_pct": 0.0,
+                "server_time": int(time.time()),
+            })
+
         candles = [
             {
                 "time": int(row.timestamp.timestamp()),
