@@ -883,6 +883,47 @@ body.chart-fullscreen-lock { overflow: hidden; }
 .chart-tool-btn.chart-tool-danger:hover { color: var(--short); background: var(--short-dim); }
 .chart-tool-sep { width: 20px; height: 1px; background: var(--line); margin: 3px 0; }
 
+/* Tool group: main button + tiny expand arrow + flyout submenu, in the
+   style of TradingView's grouped drawing-tool icons. */
+.chart-tool-group { position: relative; }
+.chart-tool-arrow {
+    position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px;
+    display: grid; place-items: center; color: var(--text-dim);
+    background: var(--panel-raised); border-radius: 2px; cursor: pointer;
+    pointer-events: auto;
+}
+.chart-tool-group:hover .chart-tool-arrow,
+.chart-tool-group.flyout-open .chart-tool-arrow { color: var(--text); }
+
+.chart-tool-flyout {
+    display: none; position: absolute; top: -4px; left: calc(100% + 8px);
+    min-width: 220px; max-height: 70vh; overflow-y: auto; z-index: 20;
+    background: #161b24; border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); padding: 4px;
+}
+.chart-tool-group.flyout-open .chart-tool-flyout { display: block; }
+.chart-flyout-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    padding: 7px 10px; background: transparent; border: none; border-radius: 5px;
+    color: var(--text-dim); cursor: pointer; font-size: 12.5px;
+}
+.chart-flyout-item:hover { background: var(--panel-hover); color: var(--text); }
+.chart-flyout-icon { display: grid; place-items: center; width: 18px; height: 18px; flex-shrink: 0; }
+.chart-flyout-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chart-flyout-section {
+    padding: 8px 10px 4px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-dim); opacity: 0.7; border-top: 1px solid var(--line); margin-top: 4px;
+}
+.chart-flyout-section:first-child { border-top: none; margin-top: 0; }
+
+/* Mobile horizontal toolbar: open flyouts downward instead of sideways,
+   and keep them from running off the right edge of the screen. */
+@media (max-width: 650px) {
+    .chart-panel:not(.fullscreen) .chart-tool-flyout {
+        top: calc(100% + 8px); left: 0; right: auto;
+    }
+}
+
 /* Fullscreen: float the toolbar over the chart with a translucent,
    blurred background instead of the solid panel color, so the chart
    feels bigger and more immersive. */
