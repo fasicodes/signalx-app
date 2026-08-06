@@ -227,9 +227,100 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .alert-banner.warning { color: var(--wait); background: var(--wait-dim); border: 1px solid rgba(255, 200, 87, 0.3); }
 .alert-banner.warning .alert-dot { background: var(--wait); box-shadow: 0 0 7px var(--wait); }
 
-.empty-state { padding: 65px 20px; text-align: center; color: var(--text-faint); font-family: var(--mono); font-size: 12px; letter-spacing: 0.8px; }
-.empty-state .empty-mark { margin-bottom: 12px; color: var(--line); font-size: 34px; }
-.empty-state small { display: block; margin-top: 9px; color: var(--text-faint); font-size: 10px; }
+/* ================================================================
+   EMPTY STATE — "AWAITING ANALYSIS" LANDING PANEL
+================================================================ */
+
+.empty-state {
+    position: relative; overflow: hidden;
+    display: grid; place-items: center; min-height: 420px;
+    padding: 40px 20px; border-radius: 10px;
+    border: 1px solid var(--line);
+    background: radial-gradient(circle at 50% 38%, rgba(54, 224, 160, 0.05), transparent 60%), var(--panel);
+}
+
+/* faint 3x3 grid of "channel" placeholders behind the radar, echoing
+   the real channel-card grid that appears once analysis has run */
+.empty-skeleton-grid {
+    position: absolute; inset: 14px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px;
+    pointer-events: none; z-index: 0;
+}
+.skeleton-box {
+    border-radius: 7px; border: 1px solid var(--line-soft);
+    background: linear-gradient(100deg, var(--panel) 30%, var(--panel-raised) 50%, var(--panel) 70%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 2.6s ease-in-out infinite;
+    opacity: 0.55;
+}
+.skeleton-box:nth-child(2) { animation-delay: 0.15s; }
+.skeleton-box:nth-child(3) { animation-delay: 0.3s; }
+.skeleton-box:nth-child(4) { animation-delay: 0.45s; }
+.skeleton-box:nth-child(5) { opacity: 0; } /* center cell sits behind the radar core */
+.skeleton-box:nth-child(6) { animation-delay: 0.6s; }
+.skeleton-box:nth-child(7) { animation-delay: 0.75s; }
+.skeleton-box:nth-child(8) { animation-delay: 0.9s; }
+.skeleton-box:nth-child(9) { animation-delay: 1.05s; }
+@keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.empty-core {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+
+.empty-radar {
+    position: relative; width: 118px; height: 118px; margin-bottom: 18px;
+    display: grid; place-items: center;
+}
+.radar-ring {
+    position: absolute; border-radius: 50%; border: 1px solid rgba(54, 224, 160, 0.22);
+}
+.radar-ring-1 { width: 100%; height: 100%; }
+.radar-ring-2 { width: 68%; height: 68%; }
+.radar-ring-3 { width: 36%; height: 36%; border-color: rgba(54, 224, 160, 0.35); }
+.radar-sweep {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, rgba(54, 224, 160, 0.35), transparent 28%);
+    animation: radar-spin 2.8s linear infinite;
+    -webkit-mask-image: radial-gradient(circle, transparent 0%, transparent 34%, #000 35%, #000 100%);
+    mask-image: radial-gradient(circle, transparent 0%, transparent 34%, #000 35%, #000 100%);
+}
+.radar-blip {
+    position: absolute; top: 18%; right: 22%; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--long-bright); box-shadow: 0 0 10px 2px rgba(54, 224, 160, 0.6);
+    animation: pulse 1.6s ease-in-out infinite;
+}
+.radar-candles { position: relative; width: 56px; height: 32px; z-index: 1; }
+@keyframes radar-spin { to { transform: rotate(360deg); } }
+
+.empty-title {
+    font-family: var(--heading); font-size: 22px; font-weight: 600;
+    color: var(--text); letter-spacing: 0.2px;
+}
+.empty-subtitle {
+    margin-top: 8px; color: var(--text-dim); font-family: var(--serif);
+    font-size: 13px; line-height: 1.6;
+}
+.empty-subtitle b { color: var(--long); font-weight: 600; }
+
+.empty-ticker {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 6px; margin-top: 22px; padding: 9px 14px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--panel-raised);
+    font-family: var(--mono); font-size: 11px;
+}
+.empty-ticker-loading { color: var(--text-faint); letter-spacing: 0.5px; }
+.empty-ticker-item {
+    display: flex; align-items: center; gap: 5px; padding: 3px 9px;
+    border-left: 1px solid var(--line-soft);
+}
+.empty-ticker-item:first-child { border-left: none; }
+.empty-ticker-symbol { color: var(--text-dim); font-weight: 600; }
+.empty-ticker-change.text-long { color: var(--long); }
+.empty-ticker-change.text-short { color: var(--short); }
 
 /* ================================================================
    HERO — CORE VERDICT
