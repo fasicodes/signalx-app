@@ -300,10 +300,10 @@
   </main>
 
   <div id="empty-state" class="empty-state">
-    <div class="empty-skeleton-grid" aria-hidden="true">
-      <span class="skeleton-box"></span><span class="skeleton-box"></span><span class="skeleton-box"></span>
-      <span class="skeleton-box"></span><span class="skeleton-box"></span><span class="skeleton-box"></span>
-      <span class="skeleton-box"></span><span class="skeleton-box"></span><span class="skeleton-box"></span>
+    <div class="empty-skeleton-grid" id="empty-skeleton-grid" aria-hidden="true">
+      <span class="skeleton-box" data-slot="0"></span><span class="skeleton-box" data-slot="1"></span><span class="skeleton-box" data-slot="2"></span>
+      <span class="skeleton-box" data-slot="3"></span><span class="skeleton-box skeleton-box-center"></span><span class="skeleton-box" data-slot="4"></span>
+      <span class="skeleton-box" data-slot="5"></span><span class="skeleton-box" data-slot="6"></span><span class="skeleton-box" data-slot="7"></span>
     </div>
 
     <div class="empty-core">
@@ -817,14 +817,41 @@
 
   if (backBtn) backBtn.addEventListener('click', closeInfo);
 
-  // HOME tab: just gets the user back to the landing view - closes the
-  // drawer, closes the info overlay if one is open, and scrolls to top.
-  // It never touches the RUN ANALYSIS flow or #result-box state.
+  // HOME tab: gets the user back to the landing "Awaiting Analysis" view -
+  // closes the drawer, closes the info overlay if one is open, hides any
+  // previously-run result panel, shows the empty state again, and scrolls
+  // to top. Uses the same globals script.js sets up (resultBox, emptyState,
+  // errorText, clearAlerts, liquidityPollTimer) since both scripts run in
+  // the same classic (non-module) global scope.
   var homeNavTab = document.getElementById('home-nav-tab');
   if (homeNavTab) {
     homeNavTab.addEventListener('click', function () {
       closeDrawer();
       closeInfo();
+
+      if (typeof resultBox !== 'undefined' && resultBox) {
+        resultBox.classList.add('hidden');
+      }
+      if (typeof emptyState !== 'undefined' && emptyState) {
+        emptyState.classList.remove('hidden');
+      }
+      if (typeof errorText !== 'undefined' && errorText) {
+        errorText.classList.add('hidden');
+        errorText.textContent = '';
+      }
+      if (typeof clearAlerts === 'function') {
+        clearAlerts();
+      }
+      if (typeof liquidityPollTimer !== 'undefined' && liquidityPollTimer) {
+        clearInterval(liquidityPollTimer);
+        liquidityPollTimer = null;
+      }
+      if (typeof runBtn !== 'undefined' && runBtn) {
+        runBtn.disabled = false;
+        var btnText = runBtn.querySelector('.scan-btn-text');
+        if (btnText) btnText.textContent = 'RUN ANALYSIS';
+      }
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
@@ -835,9 +862,10 @@
 // never touches the RUN ANALYSIS flow or #result-box state.
 (function () {
   var tickerEl = document.getElementById('empty-ticker');
-  if (!tickerEl) return;
+  var skeletonBoxes = document.querySelectorAll('#empty-skeleton-grid .skeleton-box[data-slot]');
 
   function renderTicker(rows) {
+    if (!tickerEl) return;
     if (!Array.isArray(rows) || !rows.length) {
       tickerEl.innerHTML = '<span class="empty-ticker-loading">market snapshot unavailable</span>';
       return;
@@ -854,11 +882,49 @@
     }).join('');
   }
 
+  // Fills the 8 faint background boxes (the 3x3 grid minus the center
+  // radar cell) with each coin's symbol, live price and 24h % change -
+  // same data as the ticker strip, just laid out as a mini card grid.
+  function renderSkeletonGrid(rows) {
+    if (!skeletonBoxes.length) return;
+    skeletonBoxes.forEach(function (box, i) {
+      var row = Array.isArray(rows) ? rows[i] : null;
+      if (!row) {
+        box.classList.remove('is-filled');
+        box.innerHTML = '';
+        return;
+      }
+      var pct = typeof row.changePercent === 'number' ? row.changePercent : null;
+      var dir = pct === null ? '' : (pct >= 0 ? 'text-long' : 'text-short');
+      var sign = pct === null ? '' : (pct >= 0 ? '+' : '');
+      var pctText = pct === null ? '--' : (sign + pct.toFixed(2) + '%');
+      var priceText = typeof row.last === 'number'
+        ? (row.last >= 100 ? row.last.toFixed(0) : row.last.toFixed(row.last >= 1 ? 2 : 4))
+        : '--';
+      var iconUrl = (typeof coinIconUrl === 'function') ? coinIconUrl(row.symbol) : '';
+
+      box.classList.add('is-filled');
+      box.innerHTML =
+        '<span class="skeleton-box-head">' +
+          (iconUrl ? '<img class="skeleton-box-icon" src="' + iconUrl + '" alt="" onerror="this.style.display=\'none\'" />' : '') +
+          '<span class="skeleton-box-symbol">' + row.symbol + '</span>' +
+        '</span>' +
+        '<span class="skeleton-box-price">$' + priceText + '</span>' +
+        '<span class="skeleton-box-change ' + dir + '">' + pctText + '</span>';
+    });
+  }
+
   function loadTicker() {
     fetch('/ticker')
       .then(function (r) { return r.json(); })
-      .then(function (data) { renderTicker(data); })
-      .catch(function () { renderTicker([]); });
+      .then(function (data) {
+        renderTicker(data);
+        renderSkeletonGrid(data);
+      })
+      .catch(function () {
+        renderTicker([]);
+        renderSkeletonGrid([]);
+      });
   }
 
   loadTicker();
