@@ -714,7 +714,7 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .chart-change.up { background: var(--long-dim); color: var(--long); }
 .chart-change.down { background: var(--short-dim); color: var(--short); }
 
-.chart-tf-row { display: flex; align-items: center; gap: 6px; }
+.chart-tf-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .chart-tf-btn {
     height: 26px; padding: 0 12px; background: var(--panel-raised); border: 1px solid var(--line);
     border-radius: 5px; color: var(--text-dim); font-family: var(--mono); font-size: 10px;
@@ -723,6 +723,20 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 }
 .chart-tf-btn:hover { color: var(--text); border-color: #3a4654; }
 .chart-tf-btn.active { background: var(--long-dim); border-color: rgba(54, 224, 160, 0.4); color: var(--long); }
+
+.chart-tf-sep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+
+/* Range presets (1D/1M/3M/6M/1Y/5Y) — pick a sensible candle interval +
+   history length automatically and zoom the chart to show that span,
+   separate from the manual interval buttons above. */
+.chart-range-btn {
+    height: 26px; padding: 0 10px; background: transparent; border: 1px solid transparent;
+    border-radius: 5px; color: var(--text-dim); font-family: var(--mono); font-size: 10px;
+    font-weight: 700; letter-spacing: 0.3px; cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.chart-range-btn:hover { color: var(--text); background: var(--panel-hover); }
+.chart-range-btn.active { background: rgba(77, 171, 247, 0.16); border-color: rgba(77, 171, 247, 0.4); color: #4dabf7; }
 
 /* fullscreen icon button (in header) */
 .chart-icon-btn {
@@ -973,7 +987,7 @@ body.chart-fullscreen-lock { overflow: hidden; }
    drawing it belonged to has already been deleted. */
 .draw-delete-btn[hidden] { display: none; }
 
-.candle-chart { width: 100%; height: 420px; border-radius: 7px; overflow: hidden; background: var(--void); }
+.candle-chart { width: 100%; height: 520px; border-radius: 7px; overflow: hidden; background: var(--void); }
 .chart-footer { color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px; }
 
 /* ================================================================
@@ -1043,7 +1057,7 @@ main#result-box,
     .liq-dual-stat { grid-template-columns: 1fr; gap: 10px; }
     .zone-row { grid-template-columns: auto 1fr auto; row-gap: 4px; }
     .zone-dist, .zone-score { grid-column: 2 / 4; justify-self: end; }
-    .candle-chart { height: 300px; }
+    .candle-chart { height: 380px; }
     .chart-tf-row { flex-wrap: wrap; }
     .chart-body { flex-direction: column; }
     /* Normal (non-fullscreen) mobile layout: toolbar becomes a horizontal
