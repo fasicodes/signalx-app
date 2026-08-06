@@ -44,6 +44,10 @@
       </button>
     </div>
     <div class="side-drawer-links">
+      <button class="panel-tab" id="home-nav-tab" type="button">
+        <span class="panel-tab-num">04</span>
+        <span class="panel-tab-text">HOME</span>
+      </button>
       <button class="panel-tab home-info-tab" data-info="contact" type="button">
         <span class="panel-tab-num">05</span>
         <span class="panel-tab-text">CONTACT US</span>
@@ -296,8 +300,38 @@
   </main>
 
   <div id="empty-state" class="empty-state">
-    <div class="empty-mark">◎</div>
-    <div>SELECT A PAIR AND RUN ANALYSIS TO BRING ALL 19 CHANNELS ONLINE</div>
+    <div class="empty-skeleton-grid" aria-hidden="true">
+      <span class="skeleton-box"></span><span class="skeleton-box"></span><span class="skeleton-box"></span>
+      <span class="skeleton-box"></span><span class="skeleton-box"></span><span class="skeleton-box"></span>
+      <span class="skeleton-box"></span><span class="skeleton-box"></span><span class="skeleton-box"></span>
+    </div>
+
+    <div class="empty-core">
+      <div class="empty-radar">
+        <span class="radar-ring radar-ring-1"></span>
+        <span class="radar-ring radar-ring-2"></span>
+        <span class="radar-ring radar-ring-3"></span>
+        <span class="radar-sweep"></span>
+        <span class="radar-blip"></span>
+        <svg class="radar-candles" viewBox="0 0 60 34" aria-hidden="true">
+          <line x1="8" y1="6" x2="8" y2="28" stroke="var(--short)" stroke-width="1.4"/>
+          <rect x="5" y="16" width="6" height="10" fill="var(--short)" rx="1"/>
+          <line x1="22" y1="10" x2="22" y2="26" stroke="var(--long)" stroke-width="1.4"/>
+          <rect x="19" y="12" width="6" height="9" fill="var(--long)" rx="1"/>
+          <line x1="36" y1="4" x2="36" y2="22" stroke="var(--long)" stroke-width="1.4"/>
+          <rect x="33" y="6" width="6" height="10" fill="var(--long)" rx="1"/>
+          <line x1="50" y1="2" x2="50" y2="16" stroke="var(--long-bright)" stroke-width="1.4"/>
+          <rect x="47" y="3" width="6" height="8" fill="var(--long-bright)" rx="1"/>
+        </svg>
+      </div>
+
+      <h2 class="empty-title">Awaiting Analysis</h2>
+      <p class="empty-subtitle">Select a pair above and click <b>Run Analysis</b> to<br>initialize Tier 01–03 telemetry.</p>
+
+      <div id="empty-ticker" class="empty-ticker">
+        <span class="empty-ticker-loading">loading market snapshot…</span>
+      </div>
+    </div>
   </div>
 
     </div><!-- /.home-main -->
@@ -782,6 +816,53 @@
   });
 
   if (backBtn) backBtn.addEventListener('click', closeInfo);
+
+  // HOME tab: just gets the user back to the landing view - closes the
+  // drawer, closes the info overlay if one is open, and scrolls to top.
+  // It never touches the RUN ANALYSIS flow or #result-box state.
+  var homeNavTab = document.getElementById('home-nav-tab');
+  if (homeNavTab) {
+    homeNavTab.addEventListener('click', function () {
+      closeDrawer();
+      closeInfo();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+})();
+
+// Live market snapshot strip inside the "Awaiting Analysis" panel.
+// Purely decorative/display-only - refreshes on load and every 30s,
+// never touches the RUN ANALYSIS flow or #result-box state.
+(function () {
+  var tickerEl = document.getElementById('empty-ticker');
+  if (!tickerEl) return;
+
+  function renderTicker(rows) {
+    if (!Array.isArray(rows) || !rows.length) {
+      tickerEl.innerHTML = '<span class="empty-ticker-loading">market snapshot unavailable</span>';
+      return;
+    }
+    tickerEl.innerHTML = rows.map(function (row) {
+      var pct = typeof row.changePercent === 'number' ? row.changePercent : null;
+      var dir = pct === null ? '' : (pct >= 0 ? 'text-long' : 'text-short');
+      var sign = pct === null ? '' : (pct >= 0 ? '+' : '');
+      var pctText = pct === null ? '--' : (sign + pct.toFixed(2) + '%');
+      return '<span class="empty-ticker-item">' +
+        '<span class="empty-ticker-symbol">' + row.symbol + '</span>' +
+        '<span class="empty-ticker-change ' + dir + '">' + pctText + '</span>' +
+        '</span>';
+    }).join('');
+  }
+
+  function loadTicker() {
+    fetch('/ticker')
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderTicker(data); })
+      .catch(function () { renderTicker([]); });
+  }
+
+  loadTicker();
+  setInterval(loadTicker, 30000);
 })();
 </script>
 </body>
