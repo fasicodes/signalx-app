@@ -896,7 +896,10 @@ function ensureChartInitialized() {
 
   lwChart.subscribeClick(handleChartClick);
   lwChart.subscribeCrosshairMove(handleChartCrosshairMove);
-  lwChart.timeScale().subscribeVisibleLogicalRangeChange(() => renderDrawings());
+  lwChart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+    renderDrawings();
+    maybeLoadOlderCandles();
+  });
 
   window.addEventListener("resize", resizeChart);
 
@@ -2072,6 +2075,8 @@ async function loadChartData() {
     lastBars = (data.candles || []).map((c) => ({
       time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0,
     }));
+    oldestLoadedTime = lastBars.length ? lastBars[0].time : null;
+    noMoreHistoryKey = null;
     lwCandleSeries.setData(lastBars);
     lwChart.timeScale().fitContent();
     refreshIndicators();
@@ -2095,6 +2100,52 @@ async function loadChartData() {
     restartChartPolling(coin);
   } catch (err) {
     if (chartStatusEl) chartStatusEl.textContent = "⚠ " + err.message;
+  }
+}
+
+// Infinite scroll-back: fires whenever the visible range changes. When the
+// user pans/zooms close to the oldest bar currently loaded, page further
+// into the past instead of leaving them stuck at a hard wall.
+async function maybeLoadOlderCandles() {
+  if (!lwChart || !lwCandleSeries || isLoadingOlderCandles) return;
+  if (!lastBars.length || oldestLoadedTime == null) return;
+
+  const range = lwChart.timeScale().getVisibleLogicalRange();
+  if (!range || range.from > 20) return;
+
+  const coin = coinSelect.value;
+  const key = `${coin}|${currentChartTimeframe}`;
+  if (noMoreHistoryKey === key) return;
+
+  isLoadingOlderCandles = true;
+  try {
+    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${currentChartTimeframe}&limit=${chartLimit}&before=${oldestLoadedTime}`);
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "older candle fetch failed");
+
+    const older = (data.candles || []).map((c) => ({
+      time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0,
+    }));
+
+    if (!older.length) {
+      noMoreHistoryKey = key;
+      return;
+    }
+
+    const addedCount = older.length;
+    lastBars = [...older, ...lastBars];
+    oldestLoadedTime = lastBars[0].time;
+
+    const savedRange = lwChart.timeScale().getVisibleLogicalRange();
+    lwCandleSeries.setData(lastBars);
+    if (savedRange) {
+      lwChart.timeScale().setVisibleLogicalRange({ from: savedRange.from + addedCount, to: savedRange.to + addedCount });
+    }
+    renderDrawings();
+  } catch (err) {
+    // silent — a failed older-history fetch shouldn't disrupt the live chart
+  } finally {
+    isLoadingOlderCandles = false;
   }
 }
 
@@ -2229,6 +2280,9 @@ runBtn.addEventListener("click", runAnalysis);
 // ------------------------------ state -----------------------------------
 
 let lastBars = [];            // OHLCV series currently rendered on the chart
+let oldestLoadedTime = null;  // unix seconds of the earliest bar in lastBars
+let isLoadingOlderCandles = false;
+let noMoreHistoryKey = null;  // `${coin}|${timeframe}` once the exchange has no earlier data
 let activeIndicators = {};    // key -> true (toggled ON)
 let indicatorSeries = {};     // key -> [ISeriesApi] (series-type indicators)
 const IND_PALETTE = {
