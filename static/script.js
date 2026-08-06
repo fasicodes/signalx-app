@@ -849,6 +849,19 @@ let lwChart = null;
 let lwCandleSeries = null;
 let chartPollTimer = null;
 let currentChartTimeframe = "1h";
+let chartLimit = 300;
+
+// Range presets pick a candle interval big enough that the requested
+// history actually fits in one request (OKX has no native 6M/1Y/5Y candle
+// size, so longer ranges fall back to daily/weekly candles instead).
+const CHART_RANGE_PRESETS = {
+  "1D": { tf: "5m", limit: 288 },
+  "1M": { tf: "4h", limit: 186 },
+  "3M": { tf: "1d", limit: 92 },
+  "6M": { tf: "1d", limit: 183 },
+  "1Y": { tf: "1d", limit: 366 },
+  "5Y": { tf: "1w", limit: 262 },
+};
 
 function ensureChartInitialized() {
   if (lwChart || !candleChartEl || typeof LightweightCharts === "undefined") return;
@@ -1263,6 +1276,21 @@ function distPointToSegment(px, py, x1, y1, x2, y2) {
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 
+// Generous bounding-box hit test — used for multi-line drawings (fib
+// channel, fan, wedge, pitchfork, circles, spiral, extension) where a
+// click could land on any one of several parallel/radiating lines. Testing
+// each line individually was fragile (missed the middle lines); treating
+// the whole shape like a clickable box — the way rectangle/gann-box
+// already work — is what actually matches how people try to select them.
+function bboxHit(x, y, points, pad) {
+  const xs = points.map((p) => p && p.x).filter((v) => v != null && !Number.isNaN(v));
+  const ys = points.map((p) => p && p.y).filter((v) => v != null && !Number.isNaN(v));
+  if (!xs.length || !ys.length) return false;
+  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
+  const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+  return x >= minX && x <= maxX && y >= minY && y <= maxY;
+}
+
 if (chartToolsEl) renderToolbar();
 
 function handleChartClick(param) {
@@ -1468,6 +1496,7 @@ document.addEventListener("keydown", (e) => {
 function hitTestDrawing(x, y) {
   if (!lwChart || !lwCandleSeries || !candleChartEl) return null;
   const width = candleChartEl.clientWidth, height = candleChartEl.clientHeight;
+  const okXYVal = (v) => v != null && !Number.isNaN(v);
   for (let i = chartDrawings.length - 1; i >= 0; i--) {
     const d = chartDrawings[i];
     const P1 = d.p1 ? { x: chartTimeX(d.p1.time), y: chartPriceY(d.p1.price) } : null;
@@ -1517,10 +1546,8 @@ function hitTestDrawing(x, y) {
     } else if (d.type === "fibext") {
       if (!d.p3) continue;
       const x3 = chartTimeX(d.p3.time);
-      for (const lvl of FIB_EXT_LEVELS) {
-        const py = chartPriceY(d.p3.price + (d.p2.price - d.p1.price) * lvl);
-        if (py != null && x3 != null && x >= x3 - HIT_TOLERANCE && Math.abs(y - py) <= HIT_TOLERANCE) return d;
-      }
+      const levelYs = FIB_EXT_LEVELS.map((lvl) => chartPriceY(d.p3.price + (d.p2.price - d.p1.price) * lvl));
+      if (bboxHit(x, y, [{ x: x3, y: levelYs[0] }, { x: width, y: levelYs[0] }, ...levelYs.map((py) => ({ x: width, y: py }))], HIT_TOLERANCE)) return d;
     } else if (d.type === "fibtimezone") {
       const unit = (typeof d.p2.time === "number" && typeof d.p1.time === "number") ? d.p2.time - d.p1.time : null;
       if (unit == null) continue;
@@ -1534,33 +1561,33 @@ function hitTestDrawing(x, y) {
       if (Math.abs(y - yMid) <= HIT_TOLERANCE + 6 && x >= Math.min(P1.x, P2.x) - HIT_TOLERANCE && x <= Math.max(P1.x, P2.x) + HIT_TOLERANCE) return d;
     } else if (d.type === "fibfan") {
       if (!ok2) continue;
-      for (const lvl of [0.236, 0.382, 0.5, 0.618, 0.786]) {
+      const extPts = [0.236, 0.382, 0.5, 0.618, 0.786].map((lvl) => {
         const py = chartPriceY(d.p1.price + (d.p2.price - d.p1.price) * lvl);
-        if (py != null && distPointToSegment(x, y, P1.x, P1.y, P2.x, py) <= HIT_TOLERANCE) return d;
-      }
+        return okXYVal(py) ? extendRay(P1, { x: P2.x, y: py }, width) : null;
+      }).filter(Boolean);
+      if (bboxHit(x, y, [P1, P2, ...extPts], HIT_TOLERANCE)) return d;
     } else if (d.type === "fibcircles" || d.type === "fibarcs") {
       if (!ok2) continue;
-      const r0 = Math.hypot(P2.x - P1.x, P2.y - P1.y);
-      for (const lvl of [0.382, 0.618, 1, 1.618, 2.618]) {
-        const r = r0 * lvl;
-        const dist = Math.hypot(x - P1.x, y - P1.y);
-        if (Math.abs(dist - r) <= HIT_TOLERANCE) return d;
-      }
+      const r0 = Math.hypot(P2.x - P1.x, P2.y - P1.y) * 2.618;
+      if (bboxHit(x, y, [{ x: P1.x - r0, y: P1.y - r0 }, { x: P1.x + r0, y: P1.y + r0 }], HIT_TOLERANCE)) return d;
     } else if (d.type === "fibspiral") {
       if (!ok2) continue;
       const pts = fibSpiralPoints(P1, P2);
-      for (let j = 0; j < pts.length - 1; j++) {
-        if (distPointToSegment(x, y, pts[j].x, pts[j].y, pts[j + 1].x, pts[j + 1].y) <= HIT_TOLERANCE) return d;
-      }
-    } else if (d.type === "fibwedge" || d.type === "pitchfork") {
+      if (bboxHit(x, y, pts, HIT_TOLERANCE)) return d;
+    } else if (d.type === "fibwedge") {
       if (!P1 || !P2 || !P3) continue;
-      if (distPointToSegment(x, y, P1.x, P1.y, P2.x, P2.y) <= HIT_TOLERANCE) return d;
-      if (distPointToSegment(x, y, P1.x, P1.y, P3.x, P3.y) <= HIT_TOLERANCE) return d;
+      if (bboxHit(x, y, [P1, P2, P3], HIT_TOLERANCE)) return d;
+    } else if (d.type === "pitchfork") {
+      if (!P1 || !P2 || !P3) continue;
+      const mid = { x: (P2.x + P3.x) / 2, y: (P2.y + P3.y) / 2 };
+      const medExt = extendRay(P1, mid, width);
+      const p2Par = { x: P2.x + (medExt.x - P1.x), y: P2.y + (medExt.y - P1.y) };
+      const p3Par = { x: P3.x + (medExt.x - P1.x), y: P3.y + (medExt.y - P1.y) };
+      if (bboxHit(x, y, [P1, P2, P3, medExt, p2Par, p3Par], HIT_TOLERANCE)) return d;
     } else if (d.type === "fibchannel") {
       if (!P1 || !P2 || !P3) continue;
-      if (distPointToSegment(x, y, P1.x, P1.y, P2.x, P2.y) <= HIT_TOLERANCE) return d;
       const offsetY = P3.y - lerpY(P1, P2, P3.x);
-      if (distPointToSegment(x, y, P1.x, P1.y + offsetY, P2.x, P2.y + offsetY) <= HIT_TOLERANCE) return d;
+      if (bboxHit(x, y, [P1, P2, { x: P1.x, y: P1.y + offsetY }, { x: P2.x, y: P2.y + offsetY }], HIT_TOLERANCE)) return d;
     } else if (d.type === "extended" || d.type === "trendangle" || d.type === "arrow" || d.type === "trendline" || d.type === "measure" || d.type === "callout") {
       if (!ok2) continue;
       if (distPointToSegment(x, y, P1.x, P1.y, P2.x, P2.y) <= HIT_TOLERANCE) return d;
@@ -2001,7 +2028,24 @@ if (chartTfRow) {
     btn.addEventListener("click", () => {
       chartTfRow.querySelectorAll(".chart-tf-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
+      chartTfRow.querySelectorAll(".chart-range-btn").forEach((b) => b.classList.remove("active"));
       currentChartTimeframe = btn.dataset.tf;
+      chartLimit = 300;
+      loadChartData();
+    });
+  });
+
+  chartTfRow.querySelectorAll(".chart-range-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const preset = CHART_RANGE_PRESETS[btn.dataset.range];
+      if (!preset) return;
+      chartTfRow.querySelectorAll(".chart-range-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      chartTfRow.querySelectorAll(".chart-tf-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.tf === preset.tf);
+      });
+      currentChartTimeframe = preset.tf;
+      chartLimit = preset.limit;
       loadChartData();
     });
   });
@@ -2021,7 +2065,7 @@ async function loadChartData() {
   if (chartStatusEl) chartStatusEl.textContent = "loading candles…";
 
   try {
-    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${currentChartTimeframe}&limit=300`);
+    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${currentChartTimeframe}&limit=${chartLimit}`);
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || "candle fetch failed");
 
