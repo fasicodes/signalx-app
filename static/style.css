@@ -987,7 +987,7 @@ body.chart-fullscreen-lock { overflow: hidden; }
    drawing it belonged to has already been deleted. */
 .draw-delete-btn[hidden] { display: none; }
 
-.candle-chart { width: 100%; height: 520px; border-radius: 7px; overflow: hidden; background: var(--void); }
+.candle-chart { width: 100%; height: min(78vh, 820px); border-radius: 7px; overflow: hidden; background: var(--void); }
 .chart-footer { color: var(--text-faint); font-family: var(--mono); font-size: 9px; letter-spacing: 0.4px; }
 
 /* ================================================================
@@ -1057,7 +1057,7 @@ main#result-box,
     .liq-dual-stat { grid-template-columns: 1fr; gap: 10px; }
     .zone-row { grid-template-columns: auto 1fr auto; row-gap: 4px; }
     .zone-dist, .zone-score { grid-column: 2 / 4; justify-self: end; }
-    .candle-chart { height: 380px; }
+    .candle-chart { height: min(60vh, 460px); }
     .chart-tf-row { flex-wrap: wrap; }
     .chart-body { flex-direction: column; }
     /* Normal (non-fullscreen) mobile layout: toolbar becomes a horizontal
