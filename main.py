@@ -1334,6 +1334,33 @@ def available_coins():
 
 
 # ============================================================
+# NEW: /ticker  -->  homepage "Awaiting Analysis" strip ke liye
+# chand top coins ka live last price + 24h % change deta hai.
+# Display-only hai, /signal verdict logic ko bilkul touch nahi karta.
+# ============================================================
+TICKER_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "BNB/USDT", "DOGE/USDT"]
+
+
+@app.route("/ticker", methods=["GET"])
+def ticker_strip():
+    try:
+        tickers = exchange.fetch_tickers(TICKER_SYMBOLS)
+        out = []
+        for sym in TICKER_SYMBOLS:
+            t = tickers.get(sym)
+            if not t:
+                continue
+            out.append({
+                "symbol": sym.split("/")[0],
+                "last": t.get("last"),
+                "changePercent": t.get("percentage"),
+            })
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ============================================================
 # NEW (v7): /candles  -->  "LIVE CHART" tab ke liye OHLCV series
 #
 # Frontend har chand second baad (poll) chhote limit ke sath is
