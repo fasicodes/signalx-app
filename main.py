@@ -1338,7 +1338,10 @@ def available_coins():
 # chand top coins ka live last price + 24h % change deta hai.
 # Display-only hai, /signal verdict logic ko bilkul touch nahi karta.
 # ============================================================
-TICKER_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "BNB/USDT", "DOGE/USDT"]
+TICKER_SYMBOLS = [
+    "BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT",
+    "ADA/USDT", "DOT/USDT", "XLM/USDT", "DOGE/USDT",
+]
 
 
 @app.route("/ticker", methods=["GET"])
