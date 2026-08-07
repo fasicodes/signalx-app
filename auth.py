@@ -1,5 +1,6 @@
 """
-Simple username/password auth routes for SignalX, MySQL ke sath.
+Email/password auth routes for SignalX, MySQL ke sath.
+Email hi primary identifier hai (username nahi).
 
 Is file ko main.py mein register karna hai:
 
@@ -7,11 +8,13 @@ Is file ko main.py mein register karna hai:
     app.register_blueprint(auth_bp)
 
 Routes:
-    POST /register  -> { "username": "...", "password": "..." }
-    POST /login      -> { "username": "...", "password": "..." }
-    POST /logout
-    GET  /me          -> current logged-in user batata hai (ya 401)
+    POST /api/register  -> { "email": "...", "password": "..." }
+    POST /api/login      -> { "email": "...", "password": "..." }
+    POST /api/logout
+    GET  /api/me          -> current logged-in user batata hai (ya 401)
 """
+
+import re
 
 from flask import Blueprint, request, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -21,17 +24,21 @@ from db import get_db_connection
 
 auth_bp = Blueprint("auth", __name__)
 
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 
 @auth_bp.route("/api/register", methods=["POST"])
 def register():
     data = request.get_json(silent=True) or {}
-    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
 
-    if not username or not password:
-        return jsonify({"error": "username aur password dono zaroori hain"}), 400
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+    if not EMAIL_RE.match(email):
+        return jsonify({"error": "Please enter a valid email address"}), 400
     if len(password) < 6:
-        return jsonify({"error": "password kam se kam 6 characters ka ho"}), 400
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
 
     password_hash = generate_password_hash(password)
 
@@ -40,12 +47,12 @@ def register():
         with conn.cursor() as cursor:
             try:
                 cursor.execute(
-                    "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
-                    (username, password_hash),
+                    "INSERT INTO users (email, password_hash) VALUES (%s, %s)",
+                    (email, password_hash),
                 )
             except pymysql.err.IntegrityError:
-                return jsonify({"error": "Ye username pehle se maujood hai"}), 409
-        return jsonify({"message": "Account ban gaya", "username": username}), 201
+                return jsonify({"error": "An account with this email already exists"}), 409
+        return jsonify({"message": "Account created successfully", "email": email}), 201
     finally:
         conn.close()
 
@@ -53,36 +60,36 @@ def register():
 @auth_bp.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json(silent=True) or {}
-    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
 
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT id, username, password_hash FROM users WHERE username = %s",
-                (username,),
+                "SELECT id, email, password_hash FROM users WHERE email = %s",
+                (email,),
             )
             user = cursor.fetchone()
     finally:
         conn.close()
 
     if not user or not check_password_hash(user["password_hash"], password):
-        return jsonify({"error": "Ghalat username ya password"}), 401
+        return jsonify({"error": "Incorrect email or password"}), 401
 
     session["user_id"] = user["id"]
-    session["username"] = user["username"]
-    return jsonify({"message": "Login successful", "username": user["username"]}), 200
+    session["email"] = user["email"]
+    return jsonify({"message": "Login successful", "email": user["email"]}), 200
 
 
 @auth_bp.route("/api/logout", methods=["POST"])
 def logout():
     session.clear()
-    return jsonify({"message": "Logout ho gaya"}), 200
+    return jsonify({"message": "Logged out successfully"}), 200
 
 
 @auth_bp.route("/api/me", methods=["GET"])
 def me():
     if "user_id" not in session:
-        return jsonify({"error": "Login nahi hain"}), 401
-    return jsonify({"username": session["username"]}), 200
+        return jsonify({"error": "Not logged in"}), 401
+    return jsonify({"email": session["email"]}), 200
