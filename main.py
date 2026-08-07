@@ -119,7 +119,11 @@ from hmmlearn.hmm import GaussianHMM
 from sklearn.ensemble import RandomForestClassifier
 
 app = Flask(__name__)
-CORS(app)
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
+CORS(app, supports_credentials=True)
+
+from auth import auth_bp
+app.register_blueprint(auth_bp)
 
 exchange = ccxt.okx()
 
