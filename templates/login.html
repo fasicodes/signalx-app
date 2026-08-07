@@ -4,54 +4,100 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Login</title>
-<link rel="stylesheet" href="/static/style.css?v=20260804-ind-1">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --void: #070a0f;
+    --panel: #11161e;
+    --panel-raised: #151b24;
+    --line: #27303b;
+    --text: #e9eef5;
+    --text-dim: #8b96a5;
+    --text-faint: #566171;
+    --accent: #f5a623;
+    --mono: "IBM Plex Mono", "JetBrains Mono", monospace;
+    --heading: "Poppins", "Space Grotesk", "Segoe UI", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--void);
+    font-family: var(--heading);
+    color: var(--text);
+  }
   .auth-wrap {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(circle at 50% 30%, rgba(245,166,35,0.06), transparent 60%), var(--void);
     padding: 24px;
   }
   .auth-card {
     width: 100%;
-    max-width: 380px;
-    background: var(--panel);
+    max-width: 420px;
+    background: linear-gradient(155deg, rgba(52,211,153,0.14), rgba(17,22,30,0.4) 40%), var(--panel);
     border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 32px 28px;
+    border-radius: 20px;
+    padding: 40px 34px 32px;
+    position: relative;
+    overflow: hidden;
   }
-  .auth-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 6px;
+  .auth-card::before {
+    content: "";
+    position: absolute;
+    top: -60px; left: -40px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(52,211,153,0.35), transparent 70%);
+    filter: blur(10px);
+    pointer-events: none;
   }
-  .auth-brand .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
-  .auth-brand span { font-family: var(--heading); font-size: 20px; font-weight: 600; color: var(--text); }
-  .auth-sub { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; }
-  .auth-tabs { display: flex; gap: 4px; margin-bottom: 22px; background: var(--panel-raised); border-radius: 8px; padding: 4px; }
+  .auth-title { font-size: 28px; font-weight: 700; margin: 0 0 6px; position: relative; }
+  .auth-sub { color: var(--text-dim); font-size: 14px; margin: 0 0 28px; position: relative; }
+
+  .auth-tabs { display: flex; gap: 4px; margin-bottom: 22px; background: var(--panel-raised); border-radius: 8px; padding: 4px; position: relative; }
   .auth-tab { flex: 1; text-align: center; padding: 9px 0; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.4px; color: var(--text-dim); border-radius: 6px; cursor: pointer; user-select: none; }
   .auth-tab.active { background: var(--accent); color: var(--void); }
-  .auth-field { margin-bottom: 14px; }
-  .auth-field label { display: block; font-family: var(--mono); font-size: 11px; color: var(--text-faint); letter-spacing: 0.4px; margin-bottom: 6px; }
-  .auth-field input {
-    width: 100%; box-sizing: border-box; background: var(--panel-raised); border: 1px solid var(--line);
-    border-radius: 6px; padding: 11px 12px; color: var(--text); font-family: var(--body, inherit); font-size: 14px;
+
+  .field-group { margin-bottom: 14px; position: relative; }
+  .field-label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .field-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel-raised); border: 1px solid var(--line);
+    border-radius: 12px; padding: 4px 4px 4px 16px;
   }
-  .auth-field input:focus { outline: none; border-color: var(--accent); }
-  .auth-submit {
-    width: 100%; margin-top: 8px; padding: 12px 0; background: var(--accent); color: var(--void);
-    border: none; border-radius: 6px; font-family: var(--mono); font-weight: 700; font-size: 13px;
-    letter-spacing: 0.4px; cursor: pointer;
+  .field-row input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text); font-size: 15px; font-family: var(--heading);
+    padding: 12px 0;
   }
-  .auth-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+  .field-row input::placeholder { color: var(--text-faint); }
+  .go-btn {
+    width: 40px; height: 40px; min-width: 40px; border-radius: 50%; border: none;
+    background: linear-gradient(135deg, #34d399, #22c1c3);
+    color: var(--void); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 16px;
+  }
+  .go-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .divider { display: flex; align-items: center; gap: 12px; color: var(--text-faint); font-size: 11px; letter-spacing: 0.5px; margin: 22px 0; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .oauth-btn {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 16px; color: var(--text); font-size: 14px; cursor: pointer; margin-bottom: 12px;
+  }
+  .oauth-btn .arrow { margin-left: auto; color: var(--text-faint); }
+  .oauth-btn svg { width: 18px; height: 18px; }
+
+  .auth-footer { text-align: center; font-size: 13px; color: var(--text-dim); margin-top: 20px; }
+  .auth-footer a { color: var(--accent); text-decoration: none; cursor: pointer; font-weight: 600; }
+
   .auth-msg { margin-top: 14px; font-size: 13px; text-align: center; min-height: 18px; }
   .auth-msg.error { color: #f5615c; }
-  .auth-msg.ok { color: var(--long, #36e0a0); }
+  .auth-msg.ok { color: #36e0a0; }
+
   .auth-form { display: none; }
   .auth-form.active { display: block; }
 </style>
@@ -60,40 +106,91 @@
 
 <div class="auth-wrap">
   <div class="auth-card">
-    <div class="auth-brand"><span class="dot"></span><span>Signals FM</span></div>
-    <div class="auth-sub">Apne account mein login karein ya naya banayein</div>
 
     <div class="auth-tabs">
       <div class="auth-tab active" id="tab-login">LOGIN</div>
       <div class="auth-tab" id="tab-signup">SIGN UP</div>
     </div>
 
+    <!-- LOGIN -->
     <form class="auth-form active" id="login-form">
-      <div class="auth-field">
-        <label>USERNAME</label>
-        <input type="text" id="login-username" autocomplete="username" required>
+      <h1 class="auth-title">Welcome back</h1>
+      <p class="auth-sub">Sign in to your account</p>
+
+      <div class="field-group">
+        <label class="field-label">Email</label>
+        <div class="field-row">
+          <input type="email" id="login-email" placeholder="username@gmail.com" autocomplete="email" required>
+        </div>
       </div>
-      <div class="auth-field">
-        <label>PASSWORD</label>
-        <input type="password" id="login-password" autocomplete="current-password" required>
+
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <div class="field-row">
+          <input type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password" required>
+          <button type="submit" class="go-btn" id="login-btn" aria-label="Login">→</button>
+        </div>
       </div>
-      <button type="submit" class="auth-submit" id="login-btn">LOGIN</button>
+
+      <div class="divider">OR</div>
+
+      <button type="button" class="oauth-btn">
+        <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.54-5.17 3.54-8.65z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.88-3c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.31 14.33c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.68H1.3A11.98 11.98 0 000 12.05c0 1.94.46 3.77 1.3 5.37l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.3 6.68l4.01 3.09c.94-2.82 3.58-5.02 6.69-5.02z"/></svg>
+        Continue with Google
+        <span class="arrow">→</span>
+      </button>
+
+      <button type="button" class="oauth-btn">
+        <svg viewBox="0 0 24 24" fill="var(--text)"><path d="M18.9 2H22l-7.6 8.7L23.4 22h-7l-5.5-6.6L4.6 22H1.5l8.2-9.3L1 2h7.2l5 6.1L18.9 2zm-1.2 18h1.7L7.4 4H5.6l12.1 16z"/></svg>
+        Continue with X
+        <span class="arrow">→</span>
+      </button>
+
+      <div class="auth-footer">Don't have an account? <a id="go-signup">Sign up</a></div>
     </form>
 
+    <!-- SIGNUP -->
     <form class="auth-form" id="signup-form">
-      <div class="auth-field">
-        <label>USERNAME</label>
-        <input type="text" id="signup-username" autocomplete="username" required>
+      <h1 class="auth-title">Create account</h1>
+      <p class="auth-sub">Sign up to get started</p>
+
+      <div class="field-group">
+        <label class="field-label">Email</label>
+        <div class="field-row">
+          <input type="email" id="signup-email" placeholder="username@gmail.com" autocomplete="email" required>
+        </div>
       </div>
-      <div class="auth-field">
-        <label>PASSWORD</label>
-        <input type="password" id="signup-password" autocomplete="new-password" required>
+
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <div class="field-row">
+          <input type="password" id="signup-password" placeholder="At least 6 characters" autocomplete="new-password" required>
+        </div>
       </div>
-      <div class="auth-field">
-        <label>CONFIRM PASSWORD</label>
-        <input type="password" id="signup-confirm" autocomplete="new-password" required>
+
+      <div class="field-group">
+        <label class="field-label">Confirm password</label>
+        <div class="field-row">
+          <input type="password" id="signup-confirm" placeholder="Re-enter your password" autocomplete="new-password" required>
+          <button type="submit" class="go-btn" id="signup-btn" aria-label="Sign up">→</button>
+        </div>
       </div>
-      <button type="submit" class="auth-submit" id="signup-btn">CREATE ACCOUNT</button>
+
+      <div class="divider">OR</div>
+
+      <button type="button" class="oauth-btn">
+        <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.54-5.17 3.54-8.65z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.88-3c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.31 14.33c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.68H1.3A11.98 11.98 0 000 12.05c0 1.94.46 3.77 1.3 5.37l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.3 6.68l4.01 3.09c.94-2.82 3.58-5.02 6.69-5.02z"/></svg>
+        Continue with Google
+        <span class="arrow">→</span>
+      </button>
+
+      <button type="button" class="oauth-btn">
+        <svg viewBox="0 0 24 24" fill="var(--text)"><path d="M18.9 2H22l-7.6 8.7L23.4 22h-7l-5.5-6.6L4.6 22H1.5l8.2-9.3L1 2h7.2l5 6.1L18.9 2zm-1.2 18h1.7L7.4 4H5.6l12.1 16z"/></svg>
+        Continue with X
+        <span class="arrow">→</span>
+      </button>
+
+      <div class="auth-footer">Already have an account? <a id="go-login">Login</a></div>
     </form>
 
     <div class="auth-msg" id="auth-msg"></div>
@@ -120,6 +217,8 @@ function showTab(which) {
 }
 tabLogin.addEventListener('click', () => showTab('login'));
 tabSignup.addEventListener('click', () => showTab('signup'));
+document.getElementById('go-signup').addEventListener('click', () => showTab('signup'));
+document.getElementById('go-login').addEventListener('click', () => showTab('login'));
 
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -132,21 +231,21 @@ loginForm.addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({
-        username: document.getElementById('login-username').value.trim(),
+        email: document.getElementById('login-email').value.trim(),
         password: document.getElementById('login-password').value,
       }),
     });
     const data = await res.json();
     if (!res.ok) {
-      msg.textContent = data.error || 'Login fail ho gaya';
+      msg.textContent = data.error || 'Login failed';
       msg.classList.add('error');
     } else {
-      msg.textContent = 'Login successful — redirect ho raha hai...';
+      msg.textContent = 'Login successful — redirecting...';
       msg.classList.add('ok');
       window.location.href = '/';
     }
   } catch (err) {
-    msg.textContent = 'Server se connect nahi ho saka';
+    msg.textContent = 'Could not connect to the server';
     msg.classList.add('error');
   } finally {
     btn.disabled = false;
@@ -161,7 +260,7 @@ signupForm.addEventListener('submit', async (e) => {
   msg.className = 'auth-msg'; msg.textContent = '';
 
   if (pw !== confirm) {
-    msg.textContent = 'Password match nahi ho raha';
+    msg.textContent = 'Passwords do not match';
     msg.classList.add('error');
     return;
   }
@@ -173,22 +272,22 @@ signupForm.addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({
-        username: document.getElementById('signup-username').value.trim(),
+        email: document.getElementById('signup-email').value.trim(),
         password: pw,
       }),
     });
     const data = await res.json();
     if (!res.ok) {
-      msg.textContent = data.error || 'Account nahi ban saka';
+      msg.textContent = data.error || 'Could not create account';
       msg.classList.add('error');
     } else {
-      msg.textContent = 'Account ban gaya! Ab login karein.';
+      msg.textContent = 'Account created! Please log in.';
       msg.classList.add('ok');
       showTab('login');
-      document.getElementById('login-username').value = document.getElementById('signup-username').value;
+      document.getElementById('login-email').value = document.getElementById('signup-email').value;
     }
   } catch (err) {
-    msg.textContent = 'Server se connect nahi ho saka';
+    msg.textContent = 'Could not connect to the server';
     msg.classList.add('error');
   } finally {
     btn.disabled = false;
