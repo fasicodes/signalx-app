@@ -125,6 +125,16 @@ CORS(app, supports_credentials=True)
 from auth import auth_bp
 app.register_blueprint(auth_bp)
 
+# App start hote hi 'users' table khud ba khud ban jaye (agar pehle se
+# maujood nahi hai). Agar DB abhi connect nahi ho pa raha (misal, MySQL
+# service abhi tak deploy nahi hui) to sirf warning print hoti hai -
+# app crash nahi hota, aur agli request par phir try hoga.
+try:
+    from db import init_db
+    init_db()
+except Exception as _db_init_err:
+    print(f"[db] WARNING: users table startup par nahi ban saki: {_db_init_err}")
+
 exchange = ccxt.okx()
 
 # In-memory cache for the "Possible Spoofing" heuristic (Ch.21). Keyed by
