@@ -3,940 +3,297 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signals FM — Multi-Channel Market Readout</title>
-<link rel="stylesheet" href="/static/style.css?v=20260804-ind-1">
+<title>Signals FM — Login</title>
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --void: #070a0f;
+    --panel: #11161e;
+    --panel-raised: #151b24;
+    --line: #27303b;
+    --text: #e9eef5;
+    --text-dim: #8b96a5;
+    --text-faint: #566171;
+    --accent: #f5a623;
+    --mono: "IBM Plex Mono", "JetBrains Mono", monospace;
+    --heading: "Poppins", "Space Grotesk", "Segoe UI", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--void);
+    font-family: var(--heading);
+    color: var(--text);
+  }
+  .auth-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .auth-card {
+    width: 100%;
+    max-width: 420px;
+    background: linear-gradient(155deg, rgba(52,211,153,0.14), rgba(17,22,30,0.4) 40%), var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 40px 34px 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .auth-card::before {
+    content: "";
+    position: absolute;
+    top: -60px; left: -40px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(52,211,153,0.35), transparent 70%);
+    filter: blur(10px);
+    pointer-events: none;
+  }
+  .auth-title { font-size: 28px; font-weight: 700; margin: 0 0 6px; position: relative; }
+  .auth-sub { color: var(--text-dim); font-size: 14px; margin: 0 0 28px; position: relative; }
+
+  .auth-tabs { display: flex; gap: 4px; margin-bottom: 22px; background: var(--panel-raised); border-radius: 8px; padding: 4px; position: relative; }
+  .auth-tab { flex: 1; text-align: center; padding: 9px 0; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.4px; color: var(--text-dim); border-radius: 6px; cursor: pointer; user-select: none; }
+  .auth-tab.active { background: var(--accent); color: var(--void); }
+
+  .field-group { margin-bottom: 14px; position: relative; }
+  .field-label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .field-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel-raised); border: 1px solid var(--line);
+    border-radius: 12px; padding: 4px 4px 4px 16px;
+  }
+  .field-row input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--text); font-size: 15px; font-family: var(--heading);
+    padding: 12px 0;
+  }
+  .field-row input::placeholder { color: var(--text-faint); }
+  .go-btn {
+    width: 40px; height: 40px; min-width: 40px; border-radius: 50%; border: none;
+    background: linear-gradient(135deg, #34d399, #22c1c3);
+    color: var(--void); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 16px;
+  }
+  .go-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .divider { display: flex; align-items: center; gap: 12px; color: var(--text-faint); font-size: 11px; letter-spacing: 0.5px; margin: 22px 0; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .oauth-btn {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 16px; color: var(--text); font-size: 14px; cursor: pointer; margin-bottom: 12px;
+  }
+  .oauth-btn .arrow { margin-left: auto; color: var(--text-faint); }
+  .oauth-btn svg { width: 18px; height: 18px; }
+
+  .auth-footer { text-align: center; font-size: 13px; color: var(--text-dim); margin-top: 20px; }
+  .auth-footer a { color: var(--accent); text-decoration: none; cursor: pointer; font-weight: 600; }
+
+  .auth-msg { margin-top: 14px; font-size: 13px; text-align: center; min-height: 18px; }
+  .auth-msg.error { color: #f5615c; }
+  .auth-msg.ok { color: #36e0a0; }
+
+  .auth-form { display: none; }
+  .auth-form.active { display: block; }
+</style>
 </head>
 <body>
 
-<div class="terminal">
+<div class="auth-wrap">
+  <div class="auth-card">
 
-  <header class="topbar">
-    <div class="brand">
-      <button type="button" class="hamburger-btn" id="hamburger-btn" aria-label="Open menu" aria-expanded="false">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-      <div class="brand-row">
-        <span class="brand-mark"></span>
-        <span class="brand-name">Signals FM</span>
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="tab-login">LOGIN</div>
+      <div class="auth-tab" id="tab-signup">SIGN UP</div>
+    </div>
+
+    <!-- LOGIN -->
+    <form class="auth-form active" id="login-form">
+      <h1 class="auth-title">Welcome back</h1>
+      <p class="auth-sub">Sign in to your account</p>
+
+      <div class="field-group">
+        <label class="field-label">Email</label>
+        <div class="field-row">
+          <input type="email" id="login-email" placeholder="username@gmail.com" autocomplete="email" required>
+        </div>
       </div>
-      <span class="brand-tagline">19-Channel Market Readout</span>
-    </div>
-    <div class="topbar-right">
-      <div class="live-clock"><span class="dot"></span><span id="clock-text">--:--:--</span></div>
-      <button type="button" id="logout-btn" style="margin-left:12px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;cursor:pointer;">LOGOUT</button>
-    </div>
-    <script>
-      document.getElementById('logout-btn').addEventListener('click', async () => {
-        await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
-        window.location.href = '/login';
-      });
-    </script>
-  </header>
 
-  <!-- Slide-out menu drawer: opens from the hamburger icon next to the
-       Signals FM logo. Fully independent of the tabs-layout inside
-       #result-box, so it never touches the RUN ANALYSIS flow. -->
-  <div class="side-drawer-backdrop" id="side-drawer-backdrop"></div>
-  <nav class="side-drawer" id="home-info-nav">
-    <div class="side-drawer-head">
-      <button type="button" class="side-drawer-back" id="side-drawer-back">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>BACK</span>
-      </button>
-    </div>
-    <div class="side-drawer-links">
-      <button class="panel-tab" id="home-nav-tab" type="button">
-        <span class="panel-tab-num">04</span>
-        <span class="panel-tab-text">HOME</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="contact" type="button">
-        <span class="panel-tab-num">05</span>
-        <span class="panel-tab-text">CONTACT US</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="about" type="button">
-        <span class="panel-tab-num">06</span>
-        <span class="panel-tab-text">ABOUT</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="privacy" type="button">
-        <span class="panel-tab-num">07</span>
-        <span class="panel-tab-text">PRIVACY POLICY</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="terms" type="button">
-        <span class="panel-tab-num">08</span>
-        <span class="panel-tab-text">TERMS &amp; CONDITIONS</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="disclaimer" type="button">
-        <span class="panel-tab-num">09</span>
-        <span class="panel-tab-text">DISCLAIMER</span>
-      </button>
-    </div>
-  </nav>
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <div class="field-row">
+          <input type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password" required>
+          <button type="submit" class="go-btn" id="login-btn" aria-label="Login">→</button>
+        </div>
+      </div>
 
-  <div class="home-shell">
+      <div class="divider">OR</div>
 
-    <div class="home-main">
-
-  <div class="control-row">
-
-    <!-- Custom coin picker: shows each coin's logo. Built on top of the
-         native <select> below, which script.js keeps in sync and still
-         reads via coinSelect.value for the /signal + /candles calls. -->
-    <div class="coin-picker" id="coin-picker">
-      <button type="button" class="coin-picker-trigger" id="coin-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
-        <img id="coin-picker-icon" class="coin-picker-icon" alt="" src="" />
-        <span id="coin-picker-label" class="coin-picker-label">BTC / USDT</span>
-        <span class="coin-picker-caret">▾</span>
+      <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/google/login'">
+        <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.54-5.17 3.54-8.65z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.88-3c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.31 14.33c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.68H1.3A11.98 11.98 0 000 12.05c0 1.94.46 3.77 1.3 5.37l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.3 6.68l4.01 3.09c.94-2.82 3.58-5.02 6.69-5.02z"/></svg>
+        Continue with Google
+        <span class="arrow">→</span>
       </button>
-      <div class="coin-picker-menu" id="coin-picker-menu" role="listbox"></div>
-    </div>
 
-    <select id="coin-select" class="coin-select coin-select-native">
-      <optgroup label="TOP 1–10">
-        <option value="BTC/USDT">BTC / USDT</option>
-        <option value="ETH/USDT">ETH / USDT</option>
-        <option value="BNB/USDT">BNB / USDT</option>
-        <option value="XRP/USDT">XRP / USDT</option>
-        <option value="SOL/USDT">SOL / USDT</option>
-        <option value="TRX/USDT">TRX / USDT</option>
-        <option value="HYPE/USDT">HYPE / USDT</option>
-        <option value="DOGE/USDT">DOGE / USDT</option>
-        <option value="ZEC/USDT">ZEC / USDT</option>
-        <option value="DOT/USDT">DOT / USDT</option>
-      </optgroup>
-      <optgroup label="TOP 11–20">
-        <option value="XLM/USDT">XLM / USDT</option>
-        <option value="XMR/USDT">XMR / USDT</option>
-        <option value="LINK/USDT">LINK / USDT</option>
-        <option value="ADA/USDT">ADA / USDT</option>
-        <option value="BCH/USDT">BCH / USDT</option>
-        <option value="GRAM/USDT">GRAM / USDT</option>
-        <option value="LTC/USDT">LTC / USDT</option>
-        <option value="SUI/USDT">SUI / USDT</option>
-        <option value="HBAR/USDT">HBAR / USDT</option>
-        <option value="FIL/USDT">FIL / USDT</option>
-      </optgroup>
-      <optgroup label="TOP 21–30">
-        <option value="AVAX/USDT">AVAX / USDT</option>
-        <option value="CRO/USDT">CRO / USDT</option>
-        <option value="NEAR/USDT">NEAR / USDT</option>
-        <option value="SHIB/USDT">SHIB / USDT</option>
-        <option value="UNI/USDT">UNI / USDT</option>
-        <option value="TAO/USDT">TAO / USDT</option>
-        <option value="ONDO/USDT">ONDO / USDT</option>
-        <option value="OKB/USDT">OKB / USDT</option>
-        <option value="ASTER/USDT">ASTER / USDT</option>
-        <option value="ATOM/USDT">ATOM / USDT</option>
-      </optgroup>
-    </select>
+      <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/x/login'">
+        <svg viewBox="0 0 24 24" fill="var(--text)"><path d="M18.9 2H22l-7.6 8.7L23.4 22h-7l-5.5-6.6L4.6 22H1.5l8.2-9.3L1 2h7.2l5 6.1L18.9 2zm-1.2 18h1.7L7.4 4H5.6l12.1 16z"/></svg>
+        Continue with X
+        <span class="arrow">→</span>
+      </button>
 
-    <button id="get-signal-btn" class="scan-btn">
-      <span class="scan-btn-text">RUN ANALYSIS</span>
-    </button>
+      <div class="auth-footer">Don't have an account? <a id="go-signup">Sign up</a></div>
+    </form>
+
+    <!-- SIGNUP -->
+    <form class="auth-form" id="signup-form">
+      <h1 class="auth-title">Create account</h1>
+      <p class="auth-sub">Sign up to get started</p>
+
+      <div class="field-group">
+        <label class="field-label">Email</label>
+        <div class="field-row">
+          <input type="email" id="signup-email" placeholder="username@gmail.com" autocomplete="email" required>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <div class="field-row">
+          <input type="password" id="signup-password" placeholder="At least 6 characters" autocomplete="new-password" required>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Confirm password</label>
+        <div class="field-row">
+          <input type="password" id="signup-confirm" placeholder="Re-enter your password" autocomplete="new-password" required>
+          <button type="submit" class="go-btn" id="signup-btn" aria-label="Sign up">→</button>
+        </div>
+      </div>
+
+      <div class="divider">OR</div>
+
+      <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/google/login'">
+        <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.54-5.17 3.54-8.65z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.88-3c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.31 14.33c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.68H1.3A11.98 11.98 0 000 12.05c0 1.94.46 3.77 1.3 5.37l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.3 6.68l4.01 3.09c.94-2.82 3.58-5.02 6.69-5.02z"/></svg>
+        Continue with Google
+        <span class="arrow">→</span>
+      </button>
+
+      <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/x/login'">
+        <svg viewBox="0 0 24 24" fill="var(--text)"><path d="M18.9 2H22l-7.6 8.7L23.4 22h-7l-5.5-6.6L4.6 22H1.5l8.2-9.3L1 2h7.2l5 6.1L18.9 2zm-1.2 18h1.7L7.4 4H5.6l12.1 16z"/></svg>
+        Continue with X
+        <span class="arrow">→</span>
+      </button>
+
+      <div class="auth-footer">Already have an account? <a id="go-login">Login</a></div>
+    </form>
+
+    <div class="auth-msg" id="auth-msg"></div>
   </div>
-
-  <p id="error-text" class="error-text hidden"></p>
-  <div id="alert-stack" class="alert-stack"></div>
-
-  <main id="result-box" class="hidden">
-
-    <!-- HERO: verdict gauge -->
-    <section class="hero">
-      <div class="gauge-wrap">
-        <svg viewBox="0 0 108 108">
-          <circle class="gauge-track" cx="54" cy="54" r="48"></circle>
-          <circle id="gauge-fill" class="gauge-fill" cx="54" cy="54" r="48"></circle>
-        </svg>
-        <div class="gauge-center">
-          <span id="gauge-verdict" class="gauge-verdict">--</span>
-          <span id="gauge-confidence" class="gauge-confidence">-- confidence</span>
-        </div>
-      </div>
-      <div class="hero-data">
-        <span class="hero-eyebrow">Mark Price</span>
-        <div id="hero-price" class="hero-price">--</div>
-        <div class="hero-sub">
-          <span>RSI <b id="hero-rsi">--</b></span>
-          <span>MACD <b id="hero-macd">--</b></span>
-        </div>
-        <span id="hero-trend-tag" class="hero-trend-tag">--</span>
-      </div>
-    </section>
-
-    <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;01</span>
-      <span class="tier-label">Core Verdict Engine</span>
-    </div>
-    <p class="tier-note">Ch.01–05 — Hawkes Process, Bayesian Classifier &amp; Conformal Prediction. This is the only tier that produces the final verdict and confidence score.</p>
-    <div id="tier-1" class="channel-grid"></div>
-
-    <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;02–03</span>
-      <span class="tier-label">Microstructure · Extended Signals · Liquidity · Live Chart</span>
-    </div>
-    <p class="tier-note">Ch.06–19 — order-book, regime, cross-asset &amp; liquidity diagnostics, plus a live price chart. Display-only: does not alter the verdict above.</p>
-
-    <!-- TAB NAVIGATION + CONTENT — side-by-side rail layout -->
-    <div class="tabs-layout">
-
-      <div class="panel-tabs">
-        <button class="panel-tab active" data-panel="microstructure" type="button">
-          <span class="panel-tab-num">01</span>
-          <span class="panel-tab-text">DASHBOARD</span>
-        </button>
-        <button class="panel-tab" data-panel="extended" type="button">
-          <span class="panel-tab-num">02</span>
-          <span class="panel-tab-text">EXTENDED SIGNALS</span>
-        </button>
-        <button class="panel-tab" data-panel="liquidity" type="button">
-          <span class="panel-tab-num">03</span>
-          <span class="panel-tab-text">LIQUIDITY SCANNER</span>
-        </button>
-        <button class="panel-tab" data-panel="livechart" type="button">
-          <span class="panel-tab-num">04</span>
-          <span class="panel-tab-text">LIVE CHART</span>
-        </button>
-      </div>
-
-      <div class="tab-content-area">
-
-        <div id="panel-microstructure" class="tab-panel active">
-          <p class="tier-note">Ch.06–10 — order-book &amp; regime diagnostics. Display-only: does not alter the verdict above.</p>
-          <div id="tier-2" class="channel-grid"></div>
-        </div>
-
-        <div id="panel-extended" class="tab-panel">
-          <p class="tier-note">Ch.11–18 — cross-asset, entropy, wavelet &amp; risk-agent panels. Display-only, exploratory.</p>
-          <div id="tier-3" class="channel-grid"></div>
-        </div>
-
-        <div id="panel-liquidity" class="tab-panel">
-          <div id="liquidity-scanner"></div>
-        </div>
-
-        <div id="panel-livechart" class="tab-panel">
-          <div class="chart-panel" id="chart-panel">
-
-            <div class="chart-header">
-              <div class="chart-header-left">
-                <button type="button" id="chart-back-btn" class="chart-back-btn" title="Exit fullscreen">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span>BACK</span>
-                </button>
-                <img id="chart-coin-icon" class="chart-coin-logo" alt="" src="" />
-                <div>
-                  <div class="chart-title" id="chart-title">BTC / USDT · 1H</div>
-                  <div class="chart-subtitle">live candlestick feed — polled from the exchange</div>
-                </div>
-              </div>
-              <div class="chart-price-block">
-                <span id="chart-live-dot" class="live-clock-dot"></span>
-                <span id="chart-price" class="chart-price">--</span>
-                <span id="chart-change" class="chart-change">--</span>
-                <button type="button" id="indicator-btn" class="indicator-btn" title="Indicators">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" fill="currentColor"/></svg>
-                  <span>INDICATORS</span>
-                  <span id="indicator-btn-count" class="indicator-btn-count">0</span>
-                </button>
-                <button type="button" id="chart-fullscreen-btn" class="chart-icon-btn" title="Fullscreen">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="indicator-panel" id="indicator-panel" hidden>
-              <div class="indicator-panel-head">
-                <div class="indicator-search-box">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                  <input type="text" id="indicator-search" class="indicator-search" placeholder="Search indicators…" autocomplete="off" spellcheck="false" />
-                  <kbd class="indicator-search-key">/</kbd>
-                </div>
-                <button type="button" id="indicator-clear-all" class="indicator-clear-all" title="Remove all indicators">CLEAR ALL</button>
-              </div>
-              <div class="indicator-active-bar">
-                <span class="indicator-active-label">ACTIVE</span>
-                <span id="indicator-active-count" class="indicator-active-count">0</span>
-                <span class="indicator-active-hint">click to toggle</span>
-              </div>
-              <div class="indicator-list" id="indicator-list"></div>
-              <div class="indicator-panel-foot">
-                <span id="indicator-list-count">20 indicators</span>
-                <span class="indicator-panel-hint">indicators apply to the current chart &amp; timeframe</span>
-              </div>
-            </div>
-            <div class="chart-tf-row" id="chart-tf-row">
-              <button class="chart-tf-btn" data-tf="1m">1m</button>
-              <button class="chart-tf-btn" data-tf="5m">5m</button>
-              <button class="chart-tf-btn" data-tf="15m">15m</button>
-              <button class="chart-tf-btn active" data-tf="1h">1h</button>
-              <button class="chart-tf-btn" data-tf="4h">4h</button>
-              <button class="chart-tf-btn" data-tf="1d">1d</button>
-              <span class="chart-tf-sep"></span>
-              <button class="chart-range-btn" data-range="1D">1D</button>
-              <button class="chart-range-btn" data-range="1M">1M</button>
-              <button class="chart-range-btn" data-range="3M">3M</button>
-              <button class="chart-range-btn" data-range="6M">6M</button>
-              <button class="chart-range-btn" data-range="1Y">1Y</button>
-              <button class="chart-range-btn" data-range="5Y">5Y</button>
-            </div>
-
-            <div class="chart-body">
-              <div class="chart-tools" id="chart-tools"><!-- populated by script.js: renderToolbar() --></div>
-              <div class="chart-canvas-wrap">
-                <div id="candle-chart" class="candle-chart"></div>
-                <svg id="indicator-overlay" class="indicator-overlay"></svg>
-                <svg id="draw-overlay" class="draw-overlay"></svg>
-              </div>
-            </div>
-
-            <div class="chart-footer">
-              <span id="chart-status">connecting…</span>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /.tab-content-area -->
-
-    </div><!-- /.tabs-layout -->
-
-  </main>
-
-  <div id="empty-state" class="empty-state">
-    <div class="empty-skeleton-grid" id="empty-skeleton-grid" aria-hidden="true">
-      <span class="skeleton-box" data-slot="0"></span><span class="skeleton-box" data-slot="1"></span><span class="skeleton-box" data-slot="2"></span>
-      <span class="skeleton-box" data-slot="3"></span><span class="skeleton-box skeleton-box-center"></span><span class="skeleton-box" data-slot="4"></span>
-      <span class="skeleton-box" data-slot="5"></span><span class="skeleton-box" data-slot="6"></span><span class="skeleton-box" data-slot="7"></span>
-    </div>
-
-    <div class="empty-core">
-      <div class="empty-radar">
-        <span class="radar-ring radar-ring-1"></span>
-        <span class="radar-ring radar-ring-2"></span>
-        <span class="radar-ring radar-ring-3"></span>
-        <span class="radar-sweep"></span>
-        <span class="radar-blip"></span>
-        <svg class="radar-candles" viewBox="0 0 60 34" aria-hidden="true">
-          <line x1="8" y1="6" x2="8" y2="28" stroke="var(--short)" stroke-width="1.4"/>
-          <rect x="5" y="16" width="6" height="10" fill="var(--short)" rx="1"/>
-          <line x1="22" y1="10" x2="22" y2="26" stroke="var(--long)" stroke-width="1.4"/>
-          <rect x="19" y="12" width="6" height="9" fill="var(--long)" rx="1"/>
-          <line x1="36" y1="4" x2="36" y2="22" stroke="var(--long)" stroke-width="1.4"/>
-          <rect x="33" y="6" width="6" height="10" fill="var(--long)" rx="1"/>
-          <line x1="50" y1="2" x2="50" y2="16" stroke="var(--long-bright)" stroke-width="1.4"/>
-          <rect x="47" y="3" width="6" height="8" fill="var(--long-bright)" rx="1"/>
-        </svg>
-      </div>
-
-      <h2 class="empty-title">Awaiting Analysis</h2>
-      <p class="empty-subtitle">Select a pair above and click <b>Run Analysis</b> to<br>initialize Tier 01–03 telemetry.</p>
-
-      <div id="empty-ticker" class="empty-ticker">
-        <span class="empty-ticker-loading">loading market snapshot…</span>
-      </div>
-    </div>
-  </div>
-
-    </div><!-- /.home-main -->
-
-  </div><!-- /.home-shell -->
-
-  <!-- Standalone info overlay: opens over the whole page when a sidebar
-       item (Contact/About/Privacy/Terms/Disclaimer) is clicked, with a
-       BACK button at the top. Fully separate from the analysis tabs. -->
-  <div class="home-info-overlay hidden" id="home-info-overlay">
-    <button type="button" class="home-info-back-btn" id="home-info-back">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>BACK</span>
-    </button>
-
-    <div class="home-info-inner">
-
-      <div class="home-info-panel" data-info="contact">
-        <div class="about-card">
-          <h2 class="about-title">Contact Us</h2>
-          <p>We welcome your inquiries.</p>
-          <p>Whether you have a question about Signals FM, require assistance, wish to provide feedback, or have a business proposal, our team is ready to support you.</p>
-
-          <h3 class="about-subhead">Get in Touch</h3>
-          <div class="contact-info-row">
-            <span class="contact-info-label">Email</span>
-            <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
-          </div>
-
-          <h3 class="about-subhead">Follow Us</h3>
-          <ul class="social-list">
-            <li><span class="social-label">TikTok</span><a href="https://www.tiktok.com/@signalfm1" target="_blank" rel="noopener">@signalfm1</a></li>
-            <li><span class="social-label">Instagram</span><a href="https://www.instagram.com/signalfm01/" target="_blank" rel="noopener">@signalfm01</a></li>
-            <li><span class="social-label">Facebook</span><a href="https://www.facebook.com/profile.php?id=61593016040987&sk=reels_tab" target="_blank" rel="noopener">Signals FM</a></li>
-            <li><span class="social-label">LinkedIn</span><a href="https://www.linkedin.com/in/signal-fm-459324427/" target="_blank" rel="noopener">Signals FM</a></li>
-          </ul>
-
-          <h3 class="about-subhead">Response Time</h3>
-          <p>We aim to respond to all inquiries within 24–48 hours, Monday to Friday.</p>
-          <p>Thank you for choosing Signals FM. We value your trust and look forward to assisting you.</p>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="about">
-        <div class="about-card">
-          <h2 class="about-title">About Us</h2>
-          <p>Welcome to Signals FM.</p>
-          <p>I am Fasiullah Ayaz, The Founder and CEO of Signals FM.</p>
-          <p>Signals FM is a web-based trading signal platform designed to assist traders by analyzing multiple market concepts and calculations to generate real-time trading signals. Our goal is to simplify market analysis and provide traders with timely insights that can support their decision-making process.</p>
-
-          <h3 class="about-subhead">Why We Built Signals FM</h3>
-          <p>Trading can be challenging, especially when traders need to analyze information from multiple sources before making a decision. Signals FM was created to make this process more efficient by bringing different analytical methods together in one place.</p>
-          <p>Whether you are just starting your trading journey or already have experience in the markets, Signals FM is designed to provide helpful insights whenever you need additional market confirmation.</p>
-
-          <h3 class="about-subhead">Our Mission</h3>
-          <p>Our mission is to make trading analysis more accessible for both beginners and experienced traders.</p>
-          <p>Instead of spending time collecting and comparing different calculations from various platforms, users can access market insights in one place through Signals FM. We aim to help traders make more informed decisions with greater confidence while keeping the process simple and efficient.</p>
-
-          <h3 class="about-subhead">Our Values</h3>
-          <p>At Signals FM, we believe in:</p>
-          <ul class="about-list">
-            <li>Simplicity and ease of use.</li>
-            <li>Continuous improvement and innovation.</li>
-            <li>Providing timely and transparent market insights.</li>
-            <li>Building tools that support traders at every experience level.</li>
-            <li>Maintaining trust through responsible and ethical practices.</li>
-          </ul>
-
-          <h3 class="about-subhead">Looking Ahead</h3>
-          <p>We are continuously working to improve Signals FM. In the future, we plan to expand our platform by adding support for additional financial markets, including cryptocurrency trading, along with new analytical tools and features to provide an even better experience for our users.</p>
-          <p>Thank you for being part of the Signals FM community. We are committed to continuously improving our platform and helping traders access smarter market insights.</p>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="privacy">
-        <div class="about-card legal-card">
-          <div class="legal-head">
-            <h2 class="about-title">Privacy Policy</h2>
-            <span class="legal-updated">Last Updated: August 2026</span>
-          </div>
-          <p>Welcome to Signals FM. We are committed to protecting your privacy and safeguarding your personal information. This Privacy Policy outlines the types of information we collect, how we use it, and the choices available to you regarding your data when you use our website.</p>
-
-          <div class="legal-section">
-            <span class="legal-section-num">01</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">How We Use Your Information</h3>
-              <p>We use the information we collect to:</p>
-              <ul class="about-list">
-                <li>Respond to inquiries and provide customer support.</li>
-                <li>Improve our website, services, and user experience.</li>
-                <li>Monitor website performance, security, and reliability.</li>
-                <li>Communicate important updates related to our services.</li>
-              </ul>
-              <p>We do not sell, rent, or trade your personal information to third parties.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">02</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Cookies</h3>
-              <p>Signals FM may use cookies and similar technologies to enhance website functionality, remember user preferences, and improve your browsing experience.</p>
-              <p>You may disable cookies through your browser settings; however, please note that some features of the website may not function as intended.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">03</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Third-Party Services</h3>
-              <p>Our website may utilize trusted third-party services, such as Google Analytics and Google AdSense (when enabled), to analyze website traffic and deliver relevant advertisements.</p>
-              <p>These third-party services may collect information in accordance with their own privacy policies.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">04</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Data Security</h3>
-              <p>We implement reasonable technical and organizational measures to protect your personal information from unauthorized access, disclosure, alteration, or misuse.</p>
-              <p>However, no method of data transmission or electronic storage is completely secure, and we cannot guarantee absolute security.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">05</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Your Rights</h3>
-              <p>You may contact us at any time to:</p>
-              <ul class="about-list">
-                <li>Request access to your personal information.</li>
-                <li>Request correction of inaccurate or incomplete data.</li>
-                <li>Request deletion of your personal data, where applicable.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">06</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to This Privacy Policy</h3>
-              <p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated revision date.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">07</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Contact Us</h3>
-              <p>If you have any questions about this Privacy Policy or how your personal information is handled, please contact us:</p>
-              <div class="contact-info-row">
-                <span class="contact-info-label">Email</span>
-                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
-              </div>
-            </div>
-          </div>
-
-          <h3 class="about-subhead">Company Leadership</h3>
-          <div class="leadership-grid">
-            <div class="leadership-card">
-              <span class="leadership-initial">FA</span>
-              <div>
-                <div class="leadership-name">Fasiullah Ayaz</div>
-                <div class="leadership-role">Chief Executive Officer (CEO)</div>
-              </div>
-            </div>
-            <div class="leadership-card">
-              <span class="leadership-initial">MQ</span>
-              <div>
-                <div class="leadership-name">Mustafa Qureshi</div>
-                <div class="leadership-role">Chief Operating Officer (COO)</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="terms">
-        <div class="about-card legal-card">
-          <div class="legal-head">
-            <h2 class="about-title">Terms &amp; Conditions</h2>
-            <span class="legal-updated">Last Updated: August 2026</span>
-          </div>
-          <p>Welcome to Signals FM. By accessing or using our website, you agree to comply with these Terms &amp; Conditions. If you do not agree with any part of these terms, please do not use our website.</p>
-
-          <div class="legal-section">
-            <span class="legal-section-num">01</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Acceptance of Terms</h3>
-              <p>By using Signals FM, you confirm that you have read, understood, and agreed to these Terms &amp; Conditions.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">02</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Our Services</h3>
-              <p>Signals FM provides trading signals and market insights generated using various analytical methods, concepts, and calculations. The information provided is intended for educational and informational purposes only.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">03</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">User Responsibilities</h3>
-              <p>By using our website, you agree to:</p>
-              <ul class="about-list">
-                <li>Use the website only for lawful purposes.</li>
-                <li>Not misuse, copy, or attempt to damage the website.</li>
-                <li>Not interfere with the website's security or functionality.</li>
-                <li>Be responsible for your own trading and investment decisions.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">04</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Intellectual Property</h3>
-              <p>All content on Signals FM, including text, graphics, logos, designs, and software, is the property of Signals FM unless otherwise stated. You may not copy, reproduce, or distribute our content without prior written permission.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">05</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">No Financial Advice</h3>
-              <p>Signals FM does not provide financial, investment, or legal advice. Trading signals are generated through analytical methods and should not be considered a guarantee of future market performance.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">06</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Limitation of Liability</h3>
-              <p>Signals FM, its owners, employees, and affiliates shall not be liable for any financial loss, trading loss, or damages resulting from the use of our website or trading signals.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">07</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Third-Party Links</h3>
-              <p>Our website may contain links to third-party websites. We are not responsible for the content, privacy practices, or services provided by those websites.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">08</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to the Service</h3>
-              <p>We reserve the right to modify, suspend, or discontinue any part of the website or its services at any time without prior notice.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">09</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to These Terms</h3>
-              <p>We may update these Terms &amp; Conditions from time to time. Continued use of the website after changes are published constitutes acceptance of the updated terms.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">10</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Contact Information</h3>
-              <p>If you have any questions regarding these Terms &amp; Conditions, please contact us:</p>
-              <div class="contact-info-row">
-                <span class="contact-info-label">Email</span>
-                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
-              </div>
-            </div>
-          </div>
-
-          <h3 class="about-subhead">Company Leadership</h3>
-          <div class="leadership-grid">
-            <div class="leadership-card">
-              <span class="leadership-initial">FA</span>
-              <div>
-                <div class="leadership-name">Fasiullah Ayaz</div>
-                <div class="leadership-role">Chief Executive Officer (CEO)</div>
-              </div>
-            </div>
-            <div class="leadership-card">
-              <span class="leadership-initial">MQ</span>
-              <div>
-                <div class="leadership-name">Mustafa Qureshi</div>
-                <div class="leadership-role">Chief Operating Officer (COO)</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="disclaimer">
-        <div class="about-card legal-card">
-          <div class="legal-head">
-            <h2 class="about-title">Disclaimer</h2>
-            <span class="legal-updated">Last Updated: August 2026</span>
-          </div>
-          <p>Welcome to Signals FM. By accessing or using our website, you agree to comply with these Terms &amp; Conditions. If you do not agree with any part of these terms, please do not use our website.</p>
-
-          <div class="legal-section">
-            <span class="legal-section-num">01</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Acceptance of Terms</h3>
-              <p>By using Signals FM, you confirm that you have read, understood, and agreed to these Terms &amp; Conditions.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">02</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Our Services</h3>
-              <p>Signals FM provides trading signals and market insights generated using various analytical methods, concepts, and calculations. The information provided is intended for educational and informational purposes only.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">03</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">User Responsibilities</h3>
-              <p>By using our website, you agree to:</p>
-              <ul class="about-list">
-                <li>Use the website only for lawful purposes.</li>
-                <li>Not misuse, copy, or attempt to damage the website.</li>
-                <li>Not interfere with the website's security or functionality.</li>
-                <li>Be responsible for your own trading and investment decisions.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">04</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Intellectual Property</h3>
-              <p>All content on Signals FM, including text, graphics, logos, designs, and software, is the property of Signals FM unless otherwise stated. You may not copy, reproduce, or distribute our content without prior written permission.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">05</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">No Financial Advice</h3>
-              <p>Signals FM does not provide financial, investment, or legal advice. Trading signals are generated through analytical methods and should not be considered a guarantee of future market performance.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">06</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Limitation of Liability</h3>
-              <p>Signals FM, its owners, employees, and affiliates shall not be liable for any financial loss, trading loss, or damages resulting from the use of our website or trading signals.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">07</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Third-Party Links</h3>
-              <p>Our website may contain links to third-party websites. We are not responsible for the content, privacy practices, or services provided by those websites.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">08</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to the Service</h3>
-              <p>We reserve the right to modify, suspend, or discontinue any part of the website or its services at any time without prior notice.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">09</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to These Terms</h3>
-              <p>We may update these Terms &amp; Conditions from time to time. Continued use of the website after changes are published constitutes acceptance of the updated terms.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">10</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Contact Information</h3>
-              <p>If you have any questions regarding these Terms &amp; Conditions, please contact us:</p>
-              <div class="contact-info-row">
-                <span class="contact-info-label">Email</span>
-                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
-              </div>
-            </div>
-          </div>
-
-          <h3 class="about-subhead">Company Leadership</h3>
-          <div class="leadership-grid">
-            <div class="leadership-card">
-              <span class="leadership-initial">FA</span>
-              <div>
-                <div class="leadership-name">Fasiullah Ayaz</div>
-                <div class="leadership-role">Chief Executive Officer (CEO)</div>
-              </div>
-            </div>
-            <div class="leadership-card">
-              <span class="leadership-initial">MQ</span>
-              <div>
-                <div class="leadership-name">Mustafa Qureshi</div>
-                <div class="leadership-role">Chief Operating Officer (COO)</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- /.home-info-inner -->
-  </div><!-- /.home-info-overlay -->
-
-  <footer class="disclaimer">
-    <span id="disclaimer-text">⚠ Probability estimates only — not financial advice. In-sample calculations, no walk-forward backtest run. Final verdict/confidence come only from Tier 01 (Hawkes + Bayesian via Conformal Prediction); Tiers 02–03 are display-only.</span>
-  </footer>
-
 </div>
 
-<script src="/static/script.js?v=20260804-ind-2"></script>
 <script>
-// Standalone controller for the homepage info sidebar (Contact/About/
-// Privacy/Terms/Disclaimer). Fully independent of script.js and the
-// #result-box tabs-layout, so it never affects the RUN ANALYSIS flow.
-(function () {
-  var navButtons = document.querySelectorAll('.home-info-tab');
-  var overlay = document.getElementById('home-info-overlay');
-  var backBtn = document.getElementById('home-info-back');
-  var panels = document.querySelectorAll('.home-info-panel');
+const tabLogin = document.getElementById('tab-login');
+const tabSignup = document.getElementById('tab-signup');
+const loginForm = document.getElementById('login-form');
+const signupForm = document.getElementById('signup-form');
+const msg = document.getElementById('auth-msg');
 
-  var hamburgerBtn = document.getElementById('hamburger-btn');
-  var drawer = document.getElementById('home-info-nav');
-  var drawerBackdrop = document.getElementById('side-drawer-backdrop');
-  var drawerBackBtn = document.getElementById('side-drawer-back');
-
-  function openDrawer() {
-    drawer.classList.add('open');
-    drawerBackdrop.classList.add('open');
-    if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'true');
+function showTab(which) {
+  msg.textContent = '';
+  msg.className = 'auth-msg';
+  if (which === 'login') {
+    tabLogin.classList.add('active'); tabSignup.classList.remove('active');
+    loginForm.classList.add('active'); signupForm.classList.remove('active');
+  } else {
+    tabSignup.classList.add('active'); tabLogin.classList.remove('active');
+    signupForm.classList.add('active'); loginForm.classList.remove('active');
   }
+}
+tabLogin.addEventListener('click', () => showTab('login'));
+tabSignup.addEventListener('click', () => showTab('signup'));
+document.getElementById('go-signup').addEventListener('click', () => showTab('signup'));
+document.getElementById('go-login').addEventListener('click', () => showTab('login'));
 
-  function closeDrawer() {
-    drawer.classList.remove('open');
-    drawerBackdrop.classList.remove('open');
-    if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'false');
-  }
-
-  if (hamburgerBtn) {
-    hamburgerBtn.addEventListener('click', function () {
-      if (drawer.classList.contains('open')) { closeDrawer(); } else { openDrawer(); }
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  msg.className = 'auth-msg'; msg.textContent = '';
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        email: document.getElementById('login-email').value.trim(),
+        password: document.getElementById('login-password').value,
+      }),
     });
-  }
-  if (drawerBackBtn) drawerBackBtn.addEventListener('click', closeDrawer);
-  if (drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
-
-  function openInfo(key) {
-    panels.forEach(function (p) {
-      p.classList.toggle('active', p.getAttribute('data-info') === key);
-    });
-    navButtons.forEach(function (b) {
-      b.classList.toggle('active', b.getAttribute('data-info') === key);
-    });
-    overlay.classList.remove('hidden');
-    overlay.scrollTop = 0;
-    document.body.classList.add('chart-fullscreen-lock');
-  }
-
-  function closeInfo() {
-    overlay.classList.add('hidden');
-    document.body.classList.remove('chart-fullscreen-lock');
-    navButtons.forEach(function (b) { b.classList.remove('active'); });
-  }
-
-  navButtons.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      closeDrawer();
-      openInfo(btn.getAttribute('data-info'));
-    });
-  });
-
-  if (backBtn) backBtn.addEventListener('click', closeInfo);
-
-  // HOME tab: gets the user back to the landing "Awaiting Analysis" view -
-  // closes the drawer, closes the info overlay if one is open, hides any
-  // previously-run result panel, shows the empty state again, and scrolls
-  // to top. Uses the same globals script.js sets up (resultBox, emptyState,
-  // errorText, clearAlerts, liquidityPollTimer) since both scripts run in
-  // the same classic (non-module) global scope.
-  var homeNavTab = document.getElementById('home-nav-tab');
-  if (homeNavTab) {
-    homeNavTab.addEventListener('click', function () {
-      closeDrawer();
-      closeInfo();
-
-      if (typeof resultBox !== 'undefined' && resultBox) {
-        resultBox.classList.add('hidden');
-      }
-      if (typeof emptyState !== 'undefined' && emptyState) {
-        emptyState.classList.remove('hidden');
-      }
-      if (typeof errorText !== 'undefined' && errorText) {
-        errorText.classList.add('hidden');
-        errorText.textContent = '';
-      }
-      if (typeof clearAlerts === 'function') {
-        clearAlerts();
-      }
-      if (typeof liquidityPollTimer !== 'undefined' && liquidityPollTimer) {
-        clearInterval(liquidityPollTimer);
-        liquidityPollTimer = null;
-      }
-      if (typeof runBtn !== 'undefined' && runBtn) {
-        runBtn.disabled = false;
-        var btnText = runBtn.querySelector('.scan-btn-text');
-        if (btnText) btnText.textContent = 'RUN ANALYSIS';
-      }
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  }
-})();
-
-// Live market snapshot strip inside the "Awaiting Analysis" panel.
-// Purely decorative/display-only - refreshes on load and every 30s,
-// never touches the RUN ANALYSIS flow or #result-box state.
-(function () {
-  var tickerEl = document.getElementById('empty-ticker');
-  var skeletonBoxes = document.querySelectorAll('#empty-skeleton-grid .skeleton-box[data-slot]');
-
-  function renderTicker(rows) {
-    if (!tickerEl) return;
-    if (!Array.isArray(rows) || !rows.length) {
-      tickerEl.innerHTML = '<span class="empty-ticker-loading">market snapshot unavailable</span>';
-      return;
+    const data = await res.json();
+    if (!res.ok) {
+      msg.textContent = data.error || 'Login failed';
+      msg.classList.add('error');
+    } else {
+      msg.textContent = 'Login successful — redirecting...';
+      msg.classList.add('ok');
+      window.location.href = '/';
     }
-    tickerEl.innerHTML = rows.map(function (row) {
-      var pct = typeof row.changePercent === 'number' ? row.changePercent : null;
-      var dir = pct === null ? '' : (pct >= 0 ? 'text-long' : 'text-short');
-      var sign = pct === null ? '' : (pct >= 0 ? '+' : '');
-      var pctText = pct === null ? '--' : (sign + pct.toFixed(2) + '%');
-      return '<span class="empty-ticker-item">' +
-        '<span class="empty-ticker-symbol">' + row.symbol + '</span>' +
-        '<span class="empty-ticker-change ' + dir + '">' + pctText + '</span>' +
-        '</span>';
-    }).join('');
+  } catch (err) {
+    msg.textContent = 'Could not connect to the server';
+    msg.classList.add('error');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+signupForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('signup-btn');
+  const pw = document.getElementById('signup-password').value;
+  const confirm = document.getElementById('signup-confirm').value;
+  msg.className = 'auth-msg'; msg.textContent = '';
+
+  if (pw !== confirm) {
+    msg.textContent = 'Passwords do not match';
+    msg.classList.add('error');
+    return;
   }
 
-  // Fills the 8 faint background boxes (the 3x3 grid minus the center
-  // radar cell) with each coin's symbol, live price and 24h % change -
-  // same data as the ticker strip, just laid out as a mini card grid.
-  function renderSkeletonGrid(rows) {
-    if (!skeletonBoxes.length) return;
-    skeletonBoxes.forEach(function (box, i) {
-      var row = Array.isArray(rows) ? rows[i] : null;
-      if (!row) {
-        box.classList.remove('is-filled');
-        box.innerHTML = '';
-        return;
-      }
-      var pct = typeof row.changePercent === 'number' ? row.changePercent : null;
-      var dir = pct === null ? '' : (pct >= 0 ? 'text-long' : 'text-short');
-      var sign = pct === null ? '' : (pct >= 0 ? '+' : '');
-      var pctText = pct === null ? '--' : (sign + pct.toFixed(2) + '%');
-      var priceText = typeof row.last === 'number'
-        ? (row.last >= 100 ? row.last.toFixed(0) : row.last.toFixed(row.last >= 1 ? 2 : 4))
-        : '--';
-      var iconUrl = (typeof coinIconUrl === 'function') ? coinIconUrl(row.symbol) : '';
-
-      box.classList.add('is-filled');
-      box.innerHTML =
-        '<span class="skeleton-box-head">' +
-          (iconUrl ? '<img class="skeleton-box-icon" src="' + iconUrl + '" alt="" onerror="this.style.display=\'none\'" />' : '') +
-          '<span class="skeleton-box-symbol">' + row.symbol + '</span>' +
-        '</span>' +
-        '<span class="skeleton-box-price">$' + priceText + '</span>' +
-        '<span class="skeleton-box-change ' + dir + '">' + pctText + '</span>';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        email: document.getElementById('signup-email').value.trim(),
+        password: pw,
+      }),
     });
+    const data = await res.json();
+    if (!res.ok) {
+      msg.textContent = data.error || 'Could not create account';
+      msg.classList.add('error');
+    } else {
+      msg.textContent = 'Account created! Please log in.';
+      msg.classList.add('ok');
+      showTab('login');
+      document.getElementById('login-email').value = document.getElementById('signup-email').value;
+    }
+  } catch (err) {
+    msg.textContent = 'Could not connect to the server';
+    msg.classList.add('error');
+  } finally {
+    btn.disabled = false;
   }
-
-  function loadTicker() {
-    fetch('/ticker')
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        renderTicker(data);
-        renderSkeletonGrid(data);
-      })
-      .catch(function () {
-        renderTicker([]);
-        renderSkeletonGrid([]);
-      });
-  }
-
-  loadTicker();
-  setInterval(loadTicker, 30000);
-})();
+});
 </script>
+
 </body>
 </html>
