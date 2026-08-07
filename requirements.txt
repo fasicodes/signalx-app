@@ -2,6 +2,7 @@ flask
 flask-cors
 PyMySQL
 cryptography
+Authlib
 pandas
 pandas-ta
 ccxt
