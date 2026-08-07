@@ -27,8 +27,8 @@ def get_db_connection():
 
 def init_db():
     """App start hote hi 'users' table khud ba khud bana deta hai agar
-    pehle se maujood nahi hai. Isse manually SQL chalane ki zaroorat
-    nahi rehti (Railway wagera par jahan query console na ho)."""
+    pehle se maujood nahi hai. Email primary identifier hai (username
+    nahi). Isse manually SQL chalane ki zaroorat nahi rehti."""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -36,12 +36,25 @@ def init_db():
                 """
                 CREATE TABLE IF NOT EXISTS users (
                     id INT PRIMARY KEY AUTO_INCREMENT,
-                    username VARCHAR(50) UNIQUE NOT NULL,
+                    email VARCHAR(255) UNIQUE NOT NULL,
                     password_hash VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            # Migration: agar purani table 'username' column ke sath ban
+            # chuki thi (naye email-based design se pehle), usay email-based
+            # structure mein badal dete hain.
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'username'")
+            has_username = cursor.fetchone() is not None
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'email'")
+            has_email = cursor.fetchone() is not None
+
+            if has_username and not has_email:
+                cursor.execute(
+                    "ALTER TABLE users CHANGE username email VARCHAR(255) UNIQUE NOT NULL"
+                )
+                print("[db] migrated: username column -> email column")
         print("[db] users table ready")
     finally:
         conn.close()
