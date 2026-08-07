@@ -22,7 +22,7 @@ from db import get_db_connection
 auth_bp = Blueprint("auth", __name__)
 
 
-@auth_bp.route("/register", methods=["POST"])
+@auth_bp.route("/api/register", methods=["POST"])
 def register():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
@@ -50,7 +50,7 @@ def register():
         conn.close()
 
 
-@auth_bp.route("/login", methods=["POST"])
+@auth_bp.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
@@ -75,13 +75,13 @@ def login():
     return jsonify({"message": "Login successful", "username": user["username"]}), 200
 
 
-@auth_bp.route("/logout", methods=["POST"])
+@auth_bp.route("/api/logout", methods=["POST"])
 def logout():
     session.clear()
     return jsonify({"message": "Logout ho gaya"}), 200
 
 
-@auth_bp.route("/me", methods=["GET"])
+@auth_bp.route("/api/me", methods=["GET"])
 def me():
     if "user_id" not in session:
         return jsonify({"error": "Login nahi hain"}), 401
