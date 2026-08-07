@@ -27,8 +27,9 @@ def get_db_connection():
 
 def init_db():
     """App start hote hi 'users' table khud ba khud bana deta hai agar
-    pehle se maujood nahi hai. Email primary identifier hai (username
-    nahi). Isse manually SQL chalane ki zaroorat nahi rehti."""
+    pehle se maujood nahi hai. Email primary identifier hai. password_hash
+    optional hai (Google/X se login karne walon ka koi password nahi hota).
+    Isse manually SQL chalane ki zaroorat nahi rehti."""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -37,7 +38,8 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS users (
                     id INT PRIMARY KEY AUTO_INCREMENT,
                     email VARCHAR(255) UNIQUE NOT NULL,
-                    password_hash VARCHAR(255) NOT NULL,
+                    password_hash VARCHAR(255) NULL,
+                    auth_provider VARCHAR(20) NOT NULL DEFAULT 'password',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -55,6 +57,18 @@ def init_db():
                     "ALTER TABLE users CHANGE username email VARCHAR(255) UNIQUE NOT NULL"
                 )
                 print("[db] migrated: username column -> email column")
+
+            # Migration: agar password_hash NOT NULL tha (purana schema),
+            # usay nullable banate hain taake OAuth users bhi save ho sakein.
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'auth_provider'")
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    "ALTER TABLE users MODIFY password_hash VARCHAR(255) NULL"
+                )
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) NOT NULL DEFAULT 'password'"
+                )
+                print("[db] migrated: added auth_provider column, password_hash now nullable")
         print("[db] users table ready")
     finally:
         conn.close()
