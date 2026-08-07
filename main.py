@@ -119,6 +119,13 @@ from hmmlearn.hmm import GaussianHMM
 from sklearn.ensemble import RandomForestClassifier
 
 app = Flask(__name__)
+
+# Railway (aur zyada tar hosting platforms) apps ko HTTP proxy ke peeche
+# chalate hain, isliye Flask ko batana zaroori hai ke asal request HTTPS
+# thi - warna OAuth redirect URIs galti se http:// ban jate hain aur
+# Google/X "redirect_uri_mismatch" error deta hai.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 CORS(app, supports_credentials=True)
 
