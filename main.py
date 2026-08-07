@@ -76,7 +76,7 @@ aur us waqt error message clear batata hai ke asal wajah kya thi.
 import os
 import time
 
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, redirect, url_for, session
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
@@ -1311,8 +1311,19 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
 # ============================================================
 # ROUTES
 # ============================================================
+@app.route("/login", methods=["GET"])
+def login_page():
+    # Agar user pehle se login hai to seedha trading interface pe bhej dein
+    if "user_id" in session:
+        return redirect(url_for("home"))
+    return render_template("login.html")
+
+
 @app.route("/", methods=["GET"])
 def home():
+    # Trading interface sirf logged-in users ko dikhega
+    if "user_id" not in session:
+        return redirect(url_for("login_page"))
     return render_template("design.html")
 
 
