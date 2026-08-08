@@ -78,6 +78,8 @@ import time
 
 from flask import Flask, jsonify, request, render_template, redirect, url_for, session
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import pandas as pd
 import numpy as np
 import ccxt
@@ -126,7 +128,20 @@ app = Flask(__name__)
 # Google/X "redirect_uri_mismatch" error deta hai.
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
+import secrets as _secrets
+
+# SECRET_KEY hamesha environment variable se aani chahiye (Railway Variables
+# mein set karein). Agar set nahi hai, to hum ek random key generate kar dete
+# hain (predictable hardcoded string rakhna security risk hai) - lekin is
+# soorat mein har restart par purane sessions/cookies invalid ho jayenge,
+# isliye SECRET_KEY zaroor set karein.
+_secret_key = os.environ.get("SECRET_KEY")
+if not _secret_key:
+    _secret_key = _secrets.token_hex(32)
+    print("[security] WARNING: SECRET_KEY env var set nahi hai - random key "
+          "generate ki gayi hai. Isay Railway Variables mein set karein "
+          "warna restart hone par sab log out ho jayenge.")
+app.secret_key = _secret_key
 
 # Session cookie settings explicitly set karna zaroori hai taake Google/X
 # OAuth redirect flow ke dauran cookie sahi se preserve ho (Railway ke
@@ -137,10 +152,20 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_HTTPONLY=True,
 )
-CORS(app, supports_credentials=True)
+# CORS ko sirf apni asal domain tak mehdood karte hain - warna koi bhi
+# doosri website aapke API/cookies tak access kar sakti thi (security risk).
+# Agar aap koi aur domain (misal custom domain) use karein, to
+# ALLOWED_ORIGIN environment variable set kar dein.
+_allowed_origin = os.environ.get("ALLOWED_ORIGIN", "https://signalx-app-production.up.railway.app")
+CORS(app, supports_credentials=True, origins=[_allowed_origin, "http://localhost:5000", "http://127.0.0.1:5000"])
 
 from auth import auth_bp
 app.register_blueprint(auth_bp)
+
+# Brute-force/spam se bachne ke liye rate limiting: login/register par
+# thori si limit lagate hain (per IP address).
+limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
+limiter.limit("10 per minute")(auth_bp)
 
 from oauth import oauth_bp, init_oauth
 init_oauth(app)
@@ -1358,6 +1383,21 @@ def home():
     return render_template("design.html")
 
 
+@app.route("/reset-password", methods=["GET"])
+def reset_password_page():
+    return render_template("reset-password.html")
+
+
+@app.route("/terms", methods=["GET"])
+def terms_page():
+    return render_template("terms.html")
+
+
+@app.route("/privacy", methods=["GET"])
+def privacy_page():
+    return render_template("privacy.html")
+
+
 @app.route("/signal", methods=["GET"])
 def signal_endpoint():
     coin = request.args.get("coin", "BTC/USDT")
@@ -1615,4 +1655,8 @@ def liquidity_endpoint():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    # Production mein debug hamesha OFF rehna chahiye - warna crash hone par
+    # poora Python code/file paths users ko dikh jate hain (security risk).
+    # Local testing ke liye FLASK_DEBUG=1 environment variable set kar sakte hain.
+    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)
