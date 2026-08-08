@@ -127,6 +127,16 @@ app = Flask(__name__)
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
+
+# Session cookie settings explicitly set karna zaroori hai taake Google/X
+# OAuth redirect flow ke dauran cookie sahi se preserve ho (Railway ke
+# proxy environment mein implicit defaults kabhi kabhi sahi kaam nahi
+# karte, jisse "state not equal" jaisi CSRF mismatch error aati hai).
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_HTTPONLY=True,
+)
 CORS(app, supports_credentials=True)
 
 from auth import auth_bp
