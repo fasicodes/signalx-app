@@ -178,7 +178,10 @@
       <div class="field-group">
         <label class="field-label">Password</label>
         <div class="field-row">
-          <input type="password" id="signup-password" placeholder="At least 6 characters" autocomplete="new-password" required>
+          <input type="password" id="signup-password" placeholder="At least 8 characters" autocomplete="new-password" required>
+        </div>
+        <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">
+          ⚠️ Create a new password for this site. This is <b>not</b> your Gmail/email account password.
         </div>
       </div>
 
@@ -186,8 +189,15 @@
         <label class="field-label">Confirm password</label>
         <div class="field-row">
           <input type="password" id="signup-confirm" placeholder="Re-enter your password" autocomplete="new-password" required>
-          <button type="submit" class="go-btn" id="signup-btn" aria-label="Sign up">→</button>
+          <button type="submit" class="go-btn" id="signup-btn" aria-label="Sign up" disabled>→</button>
         </div>
+      </div>
+
+      <div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:18px;">
+        <input type="checkbox" id="agree-terms" style="margin-top:3px; accent-color:var(--accent); cursor:pointer;">
+        <label for="agree-terms" style="font-size:12px; color:var(--text-dim); cursor:pointer; line-height:1.5;">
+          I agree to the <a href="/terms" target="_blank" style="color:var(--accent);">Terms &amp; Conditions</a> and <a href="/privacy" target="_blank" style="color:var(--accent);">Privacy Policy</a>
+        </label>
       </div>
 
       <div class="divider">OR</div>
@@ -313,8 +323,19 @@ loginForm.addEventListener('submit', async (e) => {
   }
 });
 
+const agreeCheckbox = document.getElementById('agree-terms');
+const signupBtn = document.getElementById('signup-btn');
+agreeCheckbox.addEventListener('change', () => {
+  signupBtn.disabled = !agreeCheckbox.checked;
+});
+
 signupForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!agreeCheckbox.checked) {
+    msg.textContent = 'Please agree to the Terms & Conditions to continue';
+    msg.classList.add('error');
+    return;
+  }
   const btn = document.getElementById('signup-btn');
   const pw = document.getElementById('signup-password').value;
   const confirm = document.getElementById('signup-confirm').value;
