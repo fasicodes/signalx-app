@@ -69,6 +69,30 @@ def init_db():
                     "ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) NOT NULL DEFAULT 'password'"
                 )
                 print("[db] migrated: added auth_provider column, password_hash now nullable")
+
+            # Migration: email verification aur password reset ke liye
+            # zaroori columns add karte hain (agar pehle se nahi hain).
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'email_verified'")
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 0"
+                )
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN verify_token VARCHAR(64) NULL"
+                )
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN verify_token_expires DATETIME NULL"
+                )
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN reset_token VARCHAR(64) NULL"
+                )
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN reset_token_expires DATETIME NULL"
+                )
+                # Purane users (jo already bane the) auto-verified maan lete
+                # hain taake unhe achanak lock out na hona pare.
+                cursor.execute("UPDATE users SET email_verified = 1 WHERE email_verified = 0")
+                print("[db] migrated: added email_verified/verify_token/reset_token columns")
         print("[db] users table ready")
     finally:
         conn.close()
