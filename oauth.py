@@ -43,7 +43,8 @@ def init_oauth(app):
 
 def _find_or_create_oauth_user(email, provider):
     """Email se user dhoondta hai; agar nahi milta to naya OAuth user bana
-    deta hai (password_hash NULL rehta hai)."""
+    deta hai (password_hash NULL rehta hai). Google apni taraf se email
+    already verify kar chuka hota hai, isliye email_verified = 1 rakhte hain."""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -52,7 +53,7 @@ def _find_or_create_oauth_user(email, provider):
             if user:
                 return user
             cursor.execute(
-                "INSERT INTO users (email, password_hash, auth_provider) VALUES (%s, NULL, %s)",
+                "INSERT INTO users (email, password_hash, auth_provider, email_verified) VALUES (%s, NULL, %s, 1)",
                 (email, provider),
             )
             new_id = cursor.lastrowid
