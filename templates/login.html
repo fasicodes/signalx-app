@@ -132,6 +132,10 @@
         </div>
       </div>
 
+      <div style="text-align:right; margin-bottom:14px;">
+        <a id="go-forgot" style="font-size:12px; color:var(--text-dim); cursor:pointer; text-decoration:none;">Forgot password?</a>
+      </div>
+
       <div class="divider">OR</div>
 
       <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/google/login'">
@@ -141,6 +145,22 @@
       </button>
 
       <div class="auth-footer">Don't have an account? <a id="go-signup">Sign up</a></div>
+    </form>
+
+    <!-- FORGOT PASSWORD -->
+    <form class="auth-form" id="forgot-form">
+      <h1 class="auth-title">Reset password</h1>
+      <p class="auth-sub">Enter your email and we'll send you a reset link</p>
+
+      <div class="field-group">
+        <label class="field-label">Email</label>
+        <div class="field-row">
+          <input type="email" id="forgot-email" placeholder="username@gmail.com" autocomplete="email" required>
+          <button type="submit" class="go-btn" id="forgot-btn" aria-label="Send reset link">→</button>
+        </div>
+      </div>
+
+      <div class="auth-footer"><a id="go-login-from-forgot">Back to login</a></div>
     </form>
 
     <!-- SIGNUP -->
@@ -182,6 +202,11 @@
     </form>
 
     <div class="auth-msg" id="auth-msg"></div>
+
+    <div style="text-align:center; font-size:11px; color:var(--text-faint); margin-top:24px; line-height:1.6;">
+      Trading involves risk. Signals are for informational purposes only and are not financial advice.<br>
+      By continuing you agree to our <a href="/terms" style="color:var(--text-faint);">Terms</a> &amp; <a href="/privacy" style="color:var(--text-faint);">Privacy Policy</a>.
+    </div>
   </div>
 </div>
 
@@ -190,23 +215,71 @@ const tabLogin = document.getElementById('tab-login');
 const tabSignup = document.getElementById('tab-signup');
 const loginForm = document.getElementById('login-form');
 const signupForm = document.getElementById('signup-form');
+const forgotForm = document.getElementById('forgot-form');
 const msg = document.getElementById('auth-msg');
+
+const allForms = { login: loginForm, signup: signupForm, forgot: forgotForm };
 
 function showTab(which) {
   msg.textContent = '';
   msg.className = 'auth-msg';
-  if (which === 'login') {
-    tabLogin.classList.add('active'); tabSignup.classList.remove('active');
-    loginForm.classList.add('active'); signupForm.classList.remove('active');
-  } else {
-    tabSignup.classList.add('active'); tabLogin.classList.remove('active');
-    signupForm.classList.add('active'); loginForm.classList.remove('active');
-  }
+  Object.values(allForms).forEach(f => f.classList.remove('active'));
+  allForms[which].classList.add('active');
+
+  // Top tabs sirf login/signup ke liye highlight hote hain
+  tabLogin.classList.toggle('active', which === 'login');
+  tabSignup.classList.toggle('active', which === 'signup');
 }
 tabLogin.addEventListener('click', () => showTab('login'));
 tabSignup.addEventListener('click', () => showTab('signup'));
 document.getElementById('go-signup').addEventListener('click', () => showTab('signup'));
 document.getElementById('go-login').addEventListener('click', () => showTab('login'));
+document.getElementById('go-forgot').addEventListener('click', () => showTab('forgot'));
+document.getElementById('go-login-from-forgot').addEventListener('click', () => showTab('login'));
+
+forgotForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('forgot-btn');
+  btn.disabled = true;
+  msg.className = 'auth-msg'; msg.textContent = '';
+  try {
+    const res = await fetch('/api/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ email: document.getElementById('forgot-email').value.trim() }),
+    });
+    const data = await res.json();
+    msg.textContent = data.message || data.error || 'Something went wrong';
+    msg.classList.add(res.ok ? 'ok' : 'error');
+  } catch (err) {
+    msg.textContent = 'Could not connect to the server';
+    msg.classList.add('error');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// URL params se success/error messages dikhana (email verify redirect ke baad)
+(function checkUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('verified') === '1') {
+    msg.textContent = 'Email verified! You can now log in.';
+    msg.classList.add('ok');
+  } else if (params.get('error') === 'verify_token_expired') {
+    msg.textContent = 'That verification link has expired. Please sign up again.';
+    msg.classList.add('error');
+  } else if (params.get('error') === 'invalid_verify_token') {
+    msg.textContent = 'That verification link is invalid.';
+    msg.classList.add('error');
+  } else if (params.get('error') === 'google_not_configured') {
+    msg.textContent = 'Google login is not available right now.';
+    msg.classList.add('error');
+  } else if (params.get('error') === 'google_no_email') {
+    msg.textContent = 'Could not get your email from Google.';
+    msg.classList.add('error');
+  }
+})();
 
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -269,7 +342,7 @@ signupForm.addEventListener('submit', async (e) => {
       msg.textContent = data.error || 'Could not create account';
       msg.classList.add('error');
     } else {
-      msg.textContent = 'Account created! Please log in.';
+      msg.textContent = data.message || 'Account created! Please check your email to verify your account.';
       msg.classList.add('ok');
       showTab('login');
       document.getElementById('login-email').value = document.getElementById('signup-email').value;
