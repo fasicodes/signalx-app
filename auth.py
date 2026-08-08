@@ -45,13 +45,29 @@ def register():
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            try:
-                cursor.execute(
-                    "INSERT INTO users (email, password_hash) VALUES (%s, %s)",
-                    (email, password_hash),
-                )
-            except pymysql.err.IntegrityError:
+            # Pehle check karte hain ke is email se koi account pehle se
+            # hai ya nahi (misal, Google se bana ho, password na ho).
+            cursor.execute("SELECT id, password_hash FROM users WHERE email = %s", (email,))
+            existing = cursor.fetchone()
+
+            if existing and existing.get("password_hash"):
+                # Account hai aur password bhi already set hai
                 return jsonify({"error": "An account with this email already exists"}), 409
+
+            if existing and not existing.get("password_hash"):
+                # Account Google/X se bana tha, ab isi email par password
+                # bhi link kar dete hain (jaise Instagram/Facebook karte hain)
+                cursor.execute(
+                    "UPDATE users SET password_hash = %s WHERE id = %s",
+                    (password_hash, existing["id"]),
+                )
+                return jsonify({"message": "Password added to your account", "email": email}), 200
+
+            # Bilkul naya account
+            cursor.execute(
+                "INSERT INTO users (email, password_hash, auth_provider) VALUES (%s, %s, 'password')",
+                (email, password_hash),
+            )
         return jsonify({"message": "Account created successfully", "email": email}), 201
     finally:
         conn.close()
@@ -74,7 +90,7 @@ def login():
     finally:
         conn.close()
 
-    if not user or not check_password_hash(user["password_hash"], password):
+    if not user or not user.get("password_hash") or not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Incorrect email or password"}), 401
 
     session["user_id"] = user["id"]
