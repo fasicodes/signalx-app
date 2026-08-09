@@ -248,11 +248,17 @@ def classify_condition(trade, current_price, pnl_pct, momentum):
             candidates.add("TEMPORARY_SMALL_DRAWDOWN")
 
     # --- Profit-side conditions (Conditions 1, 6, 7) ---
+    # NOTE: mirrors the drawdown side above - ANY non-negative pnl_pct
+    # gets a profit-side candidate (not just pnl_pct >= healthy_profit_pct).
+    # Previously a trade sitting at e.g. +0.1% (profitable, but below the
+    # 0.3% "healthy" floor) got NO profit-side candidate at all and fell
+    # through to CONSOLIDATION/WAIT_EVALUATING - a generic "still
+    # evaluating" message on a trade that is, in fact, already profitable.
     if pnl_pct >= 0:
         gave_back = (best_pnl - pnl_pct) if best_pnl is not None else 0
         if best_pnl is not None and best_pnl > 0 and gave_back >= THRESHOLDS["reversal_risk_drop_pct"] and momentum_favors is False:
             candidates.add("PROFIT_AT_RISK")
-        elif pnl_pct >= THRESHOLDS["healthy_profit_pct"]:
+        else:
             if momentum_favors is False:
                 candidates.add("PROFIT_MOMENTUM_WEAKENING")
             else:
