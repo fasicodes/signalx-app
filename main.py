@@ -1380,7 +1380,18 @@ def home():
     # Logged-in users ko trading interface, baaqi sabko public landing page
     if "user_id" not in session:
         return render_template("landing.html")
-    return render_template("design.html")
+    return render_template(
+        "design.html",
+        user_email=session.get("email", ""),
+        user_avatar=session.get("avatar_url"),
+    )
+
+
+@app.route("/demo-trading", methods=["GET"])
+def demo_trading_page():
+    if "user_id" not in session:
+        return redirect(url_for("login_page"))
+    return render_template("demo-trading.html")
 
 
 @app.route("/reset-password", methods=["GET"])
