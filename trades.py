@@ -206,6 +206,12 @@ def track_trade():
 
     if not asset or direction not in ("LONG", "SHORT") or not entry_price or not position_size:
         return jsonify({"error": "asset, direction, entry_price, and position_size are required"}), 400
+
+    # Asset ko whitelist ke against validate karte hain - koi bhi arbitrary
+    # string yahan se aage (aur baad mein UI mein) nahi jaani chahiye.
+    from main import AVAILABLE_COINS
+    if asset not in AVAILABLE_COINS:
+        return jsonify({"error": "Unsupported asset"}), 400
     try:
         entry_price = float(entry_price)
         position_size = float(position_size)
