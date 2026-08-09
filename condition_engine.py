@@ -51,9 +51,12 @@ THRESHOLDS = {
     "healthy_profit_pct": 0.3,       # Condition 1: minimum profit to call it "healthy"
     "reversal_risk_drop_pct": 0.8,   # Condition 7: profit given back from the peak
 
-    # Distance-to-level thresholds (as a fraction of the level's price)
-    "tp_approach_pct": 0.01,         # Condition 8: within 1% of TP
-    "sl_approach_pct": 0.01,         # Condition 9: within 1% of SL
+    # Distance-to-level thresholds - now measured as the % of the
+    # ENTRY -> level distance still remaining (not a fixed % of the raw
+    # price - see classify_condition() for why). 0.15 = "within the
+    # final 15% of the move from entry toward that level".
+    "tp_approach_pct": 0.15,         # Condition 8: final 15% of the move to TP
+    "sl_approach_pct": 0.15,         # Condition 9: final 15% of the move to SL
 
     # Momentum (RSI / MACD histogram) thresholds
     "rsi_neutral_band": (45, 55),    # inside this band == "flat" momentum
@@ -194,14 +197,23 @@ def classify_condition(trade, current_price, pnl_pct, momentum):
 
     candidates = set()
 
-    # --- Distance to SL / TP (evaluated on raw price, independent of P/L sign) ---
-    if sl:
-        sl_dist_pct = abs(current_price - sl) / sl
-        if sl_dist_pct <= THRESHOLDS["sl_approach_pct"]:
+    # --- Distance to SL / TP (measured as % of the ENTRY -> level distance
+    # already covered, not as a fixed % of the raw SL/TP price). Measuring
+    # against the raw price was a bug: when the SL/TP itself is set tight
+    # (e.g. 1-2% away from entry, common for volatility-based stops), the
+    # trade would already be "within 1% of SL" right from the start, so
+    # this condition fired immediately and - being top priority with only
+    # 1 confirmation required - stayed locked for the whole trade. ---
+    entry = trade.get("entry_price")
+    if sl and entry and entry != sl:
+        total_sl_dist = abs(entry - sl)
+        remaining_sl_dist_pct = abs(current_price - sl) / total_sl_dist
+        if remaining_sl_dist_pct <= THRESHOLDS["sl_approach_pct"]:
             candidates.add("STOP_LOSS_APPROACHING")
-    if tp:
-        tp_dist_pct = abs(current_price - tp) / tp
-        if tp_dist_pct <= THRESHOLDS["tp_approach_pct"]:
+    if tp and entry and entry != tp:
+        total_tp_dist = abs(entry - tp)
+        remaining_tp_dist_pct = abs(current_price - tp) / total_tp_dist
+        if remaining_tp_dist_pct <= THRESHOLDS["tp_approach_pct"]:
             candidates.add("TAKE_PROFIT_APPROACHING")
 
     # --- Strong opposite movement (Condition 10) ---
