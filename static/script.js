@@ -2215,12 +2215,32 @@ function renderResult(data) {
   // that tab yet — it'll be correct the moment they click it.
   if (chartTitleEl) chartTitleEl.textContent = `${data.coin || coinSelect.value} · ${currentChartTimeframe.toUpperCase()}`;
   syncChartCoinIcon();
+
+  // Active Trade Tracking: agar is coin par pehle se ek active trade nahi
+  // hai, "Track This Trade" button dikhate hain. Agar hai, to yeh naya
+  // signal sirf "CURRENT MARKET ANALYSIS" ke tor par dikhta hai, active
+  // trade ko replace nahi karta.
+  if (window.SignalXTrades) {
+    window.SignalXTrades.onSignalRendered(data, data.coin || coinSelect.value);
+  }
 }
 
 /* ---------------------------- fetch flow ---------------------------- */
 
-async function runAnalysis() {
+async function runAnalysis(forceAnalyze) {
   const coin = coinSelect.value;
+
+  // Active Trade Tracking: agar is coin par pehle se ek ACTIVE trade
+  // tracked hai, aur user ne explicitly "Analyze Market Anyway" nahi
+  // dabaya, to naya signal fetch karne ke bajaye ek prompt dikhate hain -
+  // taake user confuse na ho ke uski active trade replace ho gayi.
+  if (!forceAnalyze && window.SignalXTrades) {
+    const existing = window.SignalXTrades.getActiveTradeForCoin(coin);
+    if (existing) {
+      window.SignalXTrades.showAlreadyActivePrompt(coin, existing);
+      return;
+    }
+  }
 
   errorText.classList.add("hidden");
   errorText.textContent = "";
