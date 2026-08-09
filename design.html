@@ -121,6 +121,14 @@
         <span class="panel-tab-num">09</span>
         <span class="panel-tab-text">DISCLAIMER</span>
       </button>
+      <button class="panel-tab home-info-tab" data-info="active-trades" type="button">
+        <span class="panel-tab-num">10</span>
+        <span class="panel-tab-text">ACTIVE TRADES</span>
+      </button>
+      <button class="panel-tab home-info-tab" data-info="trade-history" type="button">
+        <span class="panel-tab-num">11</span>
+        <span class="panel-tab-text">TRADE HISTORY</span>
+      </button>
     </div>
   </nav>
 
@@ -190,6 +198,12 @@
   <div id="alert-stack" class="alert-stack"></div>
 
   <main id="result-box" class="hidden">
+
+    <!-- Active Trade Tracking injection point: shows either the
+         "Track This Trade" button (no active trade for this coin) or the
+         "ORIGINAL ACTIVE TRADE" banner (when viewing market analysis while
+         a trade is already being tracked for this coin). -->
+    <div id="trade-tracking-zone"></div>
 
     <!-- HERO: verdict gauge -->
     <section class="hero">
@@ -798,6 +812,26 @@
         </div>
       </div>
 
+      <div class="home-info-panel" data-info="active-trades">
+        <div class="about-card">
+          <h2 class="about-title">Active Trades</h2>
+          <p>Trades you're currently tracking. Signal FM keeps monitoring these until they're closed.</p>
+          <div id="active-trades-list" style="margin-top:18px;">
+            <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-info-panel" data-info="trade-history">
+        <div class="about-card">
+          <h2 class="about-title">Trade History</h2>
+          <p>Completed trades — closed by hitting target, stop loss, or manually.</p>
+          <div id="trade-history-list" style="margin-top:18px;">
+            <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /.home-info-inner -->
   </div><!-- /.home-info-overlay -->
 
@@ -982,6 +1016,374 @@
 
   loadTicker();
   setInterval(loadTicker, 30000);
+})();
+</script>
+
+<!-- ============================================================
+     ACTIVE TRADE TRACKING SYSTEM — modals + module
+     Fully self-contained; only touches result-box via
+     #trade-tracking-zone and hooks into runAnalysis/renderResult
+     through window.SignalXTrades (called from script.js).
+     ============================================================ -->
+
+<div class="side-drawer-backdrop" id="trade-modal-backdrop" style="display:none;"></div>
+
+<!-- Track This Trade — confirmation modal -->
+<div id="track-trade-modal" style="display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center;">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:380px; max-height:88vh; overflow-y:auto;">
+    <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 4px;">Track Your Trade</h3>
+    <p style="font-size:12px; color:var(--text-dim); margin:0 0 18px;">By starting tracking, you are asking Signal FM to monitor this trade using the information you provide.</p>
+
+    <div id="track-modal-fields" style="font-family:var(--mono); font-size:12.5px;"></div>
+
+    <label style="display:block; font-size:11px; color:var(--text-dim); margin:12px 0 6px;">Position Size (USD) — how much did you use for this trade?</label>
+    <input type="number" id="track-position-size" placeholder="e.g. 500" min="1" step="0.01"
+           style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:13px; margin-bottom:10px;">
+
+    <label style="display:block; font-size:11px; color:var(--text-dim); margin:0 0 6px;">Leverage (optional)</label>
+    <input type="number" id="track-leverage" placeholder="e.g. 5" min="1" step="0.1"
+           style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:13px; margin-bottom:16px;">
+
+    <div id="track-modal-msg" style="font-size:12px; margin-bottom:10px; min-height:16px;"></div>
+
+    <div style="display:flex; gap:10px;">
+      <button id="track-cancel-btn" type="button" style="flex:1; padding:11px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Cancel</button>
+      <button id="track-start-btn" type="button" style="flex:1; padding:11px 0; border-radius:7px; border:none; background:var(--long); color:#06231a; font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Start Tracking</button>
+    </div>
+  </div>
+</div>
+
+<!-- Already-active prompt: shown when RUN ANALYSIS is clicked while a trade is being tracked for that coin -->
+<div id="active-prompt-modal" style="display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center;">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:360px;">
+    <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 8px;">You already have an active trade</h3>
+    <p id="active-prompt-text" style="font-size:12.5px; color:var(--text-dim); margin:0 0 18px;"></p>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <button id="prompt-view-btn" type="button" style="padding:11px 0; border-radius:7px; border:none; background:var(--accent); color:var(--void); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">View Active Trade</button>
+      <button id="prompt-analyze-btn" type="button" style="padding:11px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:11.5px; font-weight:700; cursor:pointer;">Analyze Market Anyway<br><span style="font-weight:400; font-size:10px;">(does not replace your active trade)</span></button>
+      <button id="prompt-cancel-btn" type="button" style="padding:9px 0; border-radius:7px; border:none; background:transparent; color:var(--text-faint); font-family:var(--mono); font-size:11px; cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Trade detail modal: timeline + close trade -->
+<div id="trade-detail-modal" style="display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center;">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:440px; max-height:86vh; overflow-y:auto;">
+    <div id="trade-detail-content"></div>
+    <button id="trade-detail-close-btn" type="button" style="width:100%; margin-top:16px; padding:10px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Close</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const HOLDING_LABELS = { "1h": "1 Hour", "4h": "4 Hours", "1d": "1 Day" };
+
+  let activeTradesByCoin = {};   // { "BTC/USDT": tradeObj }
+  let lastSignalData = null;     // most recent /signal response
+  let lastSignalCoin = null;
+
+  const trackModal = document.getElementById('track-trade-modal');
+  const promptModal = document.getElementById('active-prompt-modal');
+  const detailModal = document.getElementById('trade-detail-modal');
+
+  function showModal(el) { el.style.display = 'flex'; }
+  function hideModal(el) { el.style.display = 'none'; }
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined || isNaN(n)) return '--';
+    return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  /* ---------------- fetch + refresh active trades ---------------- */
+
+  async function refreshActiveTrades() {
+    try {
+      const res = await fetch('/api/trades/active', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const trades = await res.json();
+      activeTradesByCoin = {};
+      trades.forEach(t => { activeTradesByCoin[t.asset] = t; });
+      renderTrackingZoneIfNeeded();
+    } catch (e) { /* silent - polling retries next cycle */ }
+  }
+
+  function getActiveTradeForCoin(coin) {
+    return activeTradesByCoin[coin] || null;
+  }
+
+  /* ---------------- "already active" prompt ---------------- */
+
+  function showAlreadyActivePrompt(coin, trade) {
+    document.getElementById('active-prompt-text').textContent =
+      `You're already tracking a ${trade.direction} trade on ${coin}. Getting a new signal won't replace it.`;
+    showModal(promptModal);
+
+    document.getElementById('prompt-view-btn').onclick = () => {
+      hideModal(promptModal);
+      document.querySelector('.home-info-tab[data-info="active-trades"]').click();
+    };
+    document.getElementById('prompt-analyze-btn').onclick = () => {
+      hideModal(promptModal);
+      window.runAnalysisForced ? window.runAnalysisForced() : runAnalysis(true);
+    };
+    document.getElementById('prompt-cancel-btn').onclick = () => hideModal(promptModal);
+  }
+
+  /* ---------------- result-box injection: Track button / banner ---------------- */
+
+  function onSignalRendered(data, coin) {
+    lastSignalData = data;
+    lastSignalCoin = coin;
+    renderTrackingZoneIfNeeded();
+  }
+
+  function renderTrackingZoneIfNeeded() {
+    const zone = document.getElementById('trade-tracking-zone');
+    if (!zone || !lastSignalData) return;
+
+    const existing = getActiveTradeForCoin(lastSignalCoin);
+
+    if (existing) {
+      // Clear separation: original active trade vs this fresh analysis
+      zone.innerHTML = `
+        <div style="border:1px solid var(--long); background:var(--long-dim); border-radius:10px; padding:14px 16px; margin-bottom:16px; font-family:var(--mono);">
+          <div style="font-size:10px; letter-spacing:0.5px; color:var(--long); font-weight:700; margin-bottom:8px;">ORIGINAL ACTIVE TRADE</div>
+          <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
+            <span>${existing.asset} — ${existing.direction}</span>
+            <span style="color:${existing.estimated_pnl >= 0 ? 'var(--long)' : 'var(--short)'}">${fmtMoney(existing.estimated_pnl)}</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-dim);">Entry ${fmtMoney(existing.entry_price)} · Status: ${existing.status}</div>
+          <button type="button" class="view-trade-link" data-id="${existing.id}" style="margin-top:8px; background:none; border:none; color:var(--accent); font-family:var(--mono); font-size:11px; font-weight:700; cursor:pointer; padding:0;">VIEW ACTIVE TRADE →</button>
+        </div>
+        <div style="font-size:10px; letter-spacing:0.5px; color:var(--text-faint); font-weight:700; margin-bottom:10px;">
+          CURRENT MARKET ANALYSIS <span style="font-weight:400; color:var(--text-faint);">— this does not replace your active trade</span>
+        </div>`;
+      zone.querySelector('.view-trade-link').addEventListener('click', (e) => openTradeDetail(e.target.dataset.id));
+    } else {
+      zone.innerHTML = `
+        <button id="track-this-trade-btn" type="button"
+          style="width:100%; padding:13px 0; margin-bottom:18px; border-radius:9px; border:none; background:var(--long); color:#06231a; font-family:var(--mono); font-weight:700; font-size:13px; letter-spacing:0.3px; cursor:pointer;">
+          TRACK THIS TRADE
+        </button>`;
+      document.getElementById('track-this-trade-btn').addEventListener('click', openTrackModal);
+    }
+  }
+
+  /* ---------------- Track This Trade modal ---------------- */
+
+  function openTrackModal() {
+    const d = lastSignalData;
+    const coin = lastSignalCoin;
+    if (!d || d.final_verdict === 'WAIT') {
+      alert('Current signal is WAIT — there is no directional trade to track right now.');
+      return;
+    }
+    const fields = document.getElementById('track-modal-fields');
+    fields.innerHTML = `
+      <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line-soft);"><span style="color:var(--text-dim);">Asset</span><b>${coin}</b></div>
+      <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line-soft);"><span style="color:var(--text-dim);">Direction</span><b style="color:${d.final_verdict === 'LONG' ? 'var(--long)' : 'var(--short)'}">${d.final_verdict}</b></div>
+      <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line-soft);"><span style="color:var(--text-dim);">Entry Price</span><b>${fmtMoney(d.last_price)}</b></div>
+      <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line-soft);"><span style="color:var(--text-dim);">Stop Loss</span><b style="color:var(--short)">${fmtMoney(d.stop_loss)}</b></div>
+      <div style="display:flex; justify-content:space-between; padding:6px 0;"><span style="color:var(--text-dim);">Take Profit</span><b style="color:var(--long)">${fmtMoney(d.take_profit)}</b></div>
+    `;
+    document.getElementById('track-position-size').value = '';
+    document.getElementById('track-leverage').value = '';
+    document.getElementById('track-modal-msg').textContent = '';
+    showModal(trackModal);
+  }
+
+  document.getElementById('track-cancel-btn').addEventListener('click', () => hideModal(trackModal));
+
+  document.getElementById('track-start-btn').addEventListener('click', async () => {
+    const d = lastSignalData, coin = lastSignalCoin;
+    const positionSize = parseFloat(document.getElementById('track-position-size').value);
+    const leverage = parseFloat(document.getElementById('track-leverage').value) || null;
+    const msg = document.getElementById('track-modal-msg');
+
+    if (!positionSize || positionSize <= 0) {
+      msg.textContent = 'Enter how much (USD) you used for this trade.';
+      msg.style.color = 'var(--short)';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/trades/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          asset: coin,
+          direction: d.final_verdict,
+          entry_price: d.last_price,
+          position_size: positionSize,
+          stop_loss: d.stop_loss,
+          take_profit: d.take_profit,
+          leverage: leverage,
+          holding_period_label: HOLDING_LABELS[currentChartTimeframe] || '1 Hour',
+          signal_snapshot: d,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        msg.textContent = data.error || 'Could not start tracking';
+        msg.style.color = 'var(--short)';
+        return;
+      }
+      hideModal(trackModal);
+      await refreshActiveTrades();
+      document.querySelector('.home-info-tab[data-info="active-trades"]').click();
+    } catch (e) {
+      msg.textContent = 'Could not connect to the server';
+      msg.style.color = 'var(--short)';
+    }
+  });
+
+  /* ---------------- Active Trades / Trade History panels ---------------- */
+
+  // "Risky" conditions get a warning color, everything else uses the
+  // neutral accent - this is just visual triage, the message text itself
+  // is the source of truth.
+  const _WARNING_CONDITIONS = new Set([
+    'HIGH_RISK_OPPOSITE_MOVE', 'STOP_LOSS_APPROACHING', 'PROFIT_AT_RISK', 'SETUP_INVALIDATED',
+  ]);
+  function conditionAccentColor(conditionKey) {
+    return _WARNING_CONDITIONS.has(conditionKey) ? 'var(--short)' : 'var(--accent)';
+  }
+
+  function tradeCardHtml(t, isHistory) {
+    const pnlColor = (t.estimated_pnl || 0) >= 0 ? 'var(--long)' : 'var(--short)';
+    const guidanceColor = conditionAccentColor(t.trade_condition);
+    const guidanceHtml = (!isHistory && t.condition_message) ? `
+        <div style="border-left:3px solid ${guidanceColor}; background:var(--panel); border-radius:0 6px 6px 0; padding:8px 10px; margin-bottom:10px; font-size:11.5px; line-height:1.4; color:var(--text);">
+          ${t.condition_message}
+        </div>` : '';
+    return `
+      <div style="background:var(--panel-raised); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px; font-family:var(--mono);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <span style="font-size:13px; font-weight:700;">${t.asset} · ${t.direction}</span>
+          <span style="font-size:10px; padding:2px 8px; border-radius:4px; background:${isHistory ? 'var(--panel)' : 'var(--long-dim)'}; color:${isHistory ? 'var(--text-dim)' : 'var(--long)'};">${t.status}</span>
+        </div>
+        <div style="font-size:12px; color:var(--text-dim); display:flex; justify-content:space-between; margin-bottom:4px;">
+          <span>Entry ${fmtMoney(t.entry_price)}</span>
+          <span>${isHistory ? 'Exit ' + fmtMoney(t.exit_price) : 'Now ' + fmtMoney(t.last_price)}</span>
+        </div>
+        <div style="font-size:13px; font-weight:700; color:${pnlColor}; margin-bottom:10px;">
+          ${t.estimated_pnl >= 0 ? '+' : ''}${fmtMoney(t.estimated_pnl)} (${t.estimated_pnl_percent}%)
+        </div>
+        ${guidanceHtml}
+        <button type="button" class="view-trade-link" data-id="${t.id}" style="background:none; border:none; color:var(--accent); font-size:11px; font-weight:700; cursor:pointer; padding:0;">VIEW DETAILS →</button>
+      </div>`;
+  }
+
+  async function renderActiveTradesPanel() {
+    const el = document.getElementById('active-trades-list');
+    el.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    try {
+      const res = await fetch('/api/trades/active', { credentials: 'same-origin' });
+      const trades = await res.json();
+      if (!trades.length) {
+        el.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">No active trades yet. Run an analysis and tap "Track This Trade" to start.</p>';
+        return;
+      }
+      el.innerHTML = trades.map(t => tradeCardHtml(t, false)).join('');
+      el.querySelectorAll('.view-trade-link').forEach(btn => btn.addEventListener('click', () => openTradeDetail(btn.dataset.id)));
+      activeTradesByCoin = {};
+      trades.forEach(t => { activeTradesByCoin[t.asset] = t; });
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load active trades.</p>';
+    }
+  }
+
+  async function renderTradeHistoryPanel() {
+    const el = document.getElementById('trade-history-list');
+    el.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    try {
+      const res = await fetch('/api/trades/history', { credentials: 'same-origin' });
+      const trades = await res.json();
+      if (!trades.length) {
+        el.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">No completed trades yet.</p>';
+        return;
+      }
+      el.innerHTML = trades.map(t => tradeCardHtml(t, true)).join('');
+      el.querySelectorAll('.view-trade-link').forEach(btn => btn.addEventListener('click', () => openTradeDetail(btn.dataset.id)));
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load trade history.</p>';
+    }
+  }
+
+  document.querySelector('.home-info-tab[data-info="active-trades"]').addEventListener('click', renderActiveTradesPanel);
+  document.querySelector('.home-info-tab[data-info="trade-history"]').addEventListener('click', renderTradeHistoryPanel);
+
+  /* ---------------- Trade detail modal (timeline + close) ---------------- */
+
+  async function openTradeDetail(id) {
+    const content = document.getElementById('trade-detail-content');
+    content.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    showModal(detailModal);
+    try {
+      const res = await fetch(`/api/trades/${id}`, { credentials: 'same-origin' });
+      const t = await res.json();
+      if (!res.ok) { content.innerHTML = `<p style="color:var(--short);">${t.error || 'Could not load trade'}</p>`; return; }
+
+      const pnlColor = (t.estimated_pnl || 0) >= 0 ? 'var(--long)' : 'var(--short)';
+      const timelineHtml = (t.timeline || []).map(e => `
+        <div style="padding:8px 0; border-bottom:1px solid var(--line-soft); font-size:12px;">
+          <div style="color:var(--text-faint); font-size:10px; font-family:var(--mono);">${new Date(e.timestamp).toLocaleString()}</div>
+          <div style="color:var(--text);">${e.message}</div>
+        </div>`).join('');
+
+      const guidanceColor = conditionAccentColor(t.trade_condition);
+      const guidanceHtml = (t.status === 'ACTIVE' && t.condition_message) ? `
+        <div style="border-left:3px solid ${guidanceColor}; background:var(--panel-raised); border-radius:0 8px 8px 0; padding:12px 14px; margin-bottom:16px;">
+          <div style="font-size:10px; letter-spacing:0.5px; color:${guidanceColor}; font-weight:700; margin-bottom:6px;">CURRENT GUIDANCE</div>
+          <div style="font-size:12.5px; line-height:1.5; color:var(--text);">${t.condition_message}</div>
+        </div>` : '';
+
+      content.innerHTML = `
+        <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 4px;">${t.asset} — ${t.direction}</h3>
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:14px;">Status: <b>${t.status}</b></div>
+        ${guidanceHtml}
+        <div style="font-family:var(--mono); font-size:12.5px;">
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Entry</span><b>${fmtMoney(t.entry_price)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">${t.status === 'ACTIVE' ? 'Current Price' : 'Exit Price'}</span><b>${fmtMoney(t.status === 'ACTIVE' ? t.last_price : t.exit_price)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Position Size</span><b>${fmtMoney(t.position_size)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Stop Loss</span><b style="color:var(--short)">${fmtMoney(t.stop_loss)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Take Profit</span><b style="color:var(--long)">${fmtMoney(t.take_profit)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--line-soft); margin-top:4px;"><span style="color:var(--text-dim);">Estimated P/L</span><b style="color:${pnlColor}">${fmtMoney(t.estimated_pnl)} (${t.estimated_pnl_percent}%)</b></div>
+        </div>
+        <h4 style="font-family:var(--heading); font-size:13px; margin:18px 0 8px;">Trade Timeline</h4>
+        <div>${timelineHtml || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'}</div>
+        ${t.status === 'ACTIVE' ? `<button id="close-trade-btn" data-id="${t.id}" type="button" style="width:100%; margin-top:16px; padding:11px 0; border-radius:7px; border:none; background:var(--short); color:#2a0810; font-family:var(--mono); font-weight:700; font-size:12px; cursor:pointer;">CLOSE TRADE</button>` : ''}
+      `;
+
+      const closeBtn = document.getElementById('close-trade-btn');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', async () => {
+          if (!confirm('Are you sure you want to mark this trade as closed?')) return;
+          await fetch(`/api/trades/${t.id}/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' });
+          hideModal(detailModal);
+          refreshActiveTrades();
+          renderActiveTradesPanel();
+        });
+      }
+    } catch (e) {
+      content.innerHTML = '<p style="color:var(--short);">Could not load trade details.</p>';
+    }
+  }
+
+  document.getElementById('trade-detail-close-btn').addEventListener('click', () => hideModal(detailModal));
+
+  /* ---------------- expose + init ---------------- */
+
+  window.SignalXTrades = {
+    onSignalRendered,
+    getActiveTradeForCoin,
+    showAlreadyActivePrompt,
+  };
+  window.runAnalysisForced = () => runAnalysis(true);
+
+  refreshActiveTrades();
+  setInterval(refreshActiveTrades, 15000);
 })();
 </script>
 </body>
