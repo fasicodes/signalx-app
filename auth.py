@@ -141,7 +141,7 @@ def login():
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT id, email, password_hash, email_verified FROM users WHERE email = %s",
+                "SELECT id, email, password_hash, email_verified, avatar_url FROM users WHERE email = %s",
                 (email,),
             )
             user = cursor.fetchone()
@@ -156,6 +156,7 @@ def login():
 
     session["user_id"] = user["id"]
     session["email"] = user["email"]
+    session["avatar_url"] = user.get("avatar_url")
     return jsonify({"message": "Login successful", "email": user["email"]}), 200
 
 
