@@ -93,6 +93,14 @@ def init_db():
                 # hain taake unhe achanak lock out na hona pare.
                 cursor.execute("UPDATE users SET email_verified = 1 WHERE email_verified = 0")
                 print("[db] migrated: added email_verified/verify_token/reset_token columns")
+
+            # Migration: Google profile picture store karne ke liye
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'avatar_url'")
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) NULL"
+                )
+                print("[db] migrated: added avatar_url column")
         print("[db] users table ready")
     finally:
         conn.close()
