@@ -36,6 +36,23 @@
     --serif: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
+/* Light mode overrides — toggled via html[data-theme="light"] */
+html[data-theme="light"] {
+    --void: #f4f8f6;
+    --background: #eef4f1;
+    --panel: #ffffff;
+    --panel-raised: #f2f7f4;
+    --panel-hover: #e7f0ea;
+    --line: #dbe6e0;
+    --line-soft: #e5eee9;
+    --text: #0d1c15;
+    --text-dim: #4c5f56;
+    --text-faint: #7c8d84;
+    --accent: #16a34a;
+    --accent-dim: rgba(22, 163, 74, 0.1);
+}
+
+
 html { background: var(--void); }
 
 body {
