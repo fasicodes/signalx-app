@@ -41,20 +41,26 @@ def init_oauth(app):
         print("[oauth] WARNING: GOOGLE_CLIENT_ID/SECRET not set - Google login disabled")
 
 
-def _find_or_create_oauth_user(email, provider):
+def _find_or_create_oauth_user(email, provider, avatar_url=None):
     """Email se user dhoondta hai; agar nahi milta to naya OAuth user bana
     deta hai (password_hash NULL rehta hai). Google apni taraf se email
-    already verify kar chuka hota hai, isliye email_verified = 1 rakhte hain."""
+    already verify kar chuka hota hai, isliye email_verified = 1 rakhte hain.
+    Google profile picture (avatar_url) bhi save/update karte hain."""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute("SELECT id, email FROM users WHERE email = %s", (email,))
             user = cursor.fetchone()
             if user:
+                if avatar_url:
+                    cursor.execute(
+                        "UPDATE users SET avatar_url = %s WHERE id = %s",
+                        (avatar_url, user["id"]),
+                    )
                 return user
             cursor.execute(
-                "INSERT INTO users (email, password_hash, auth_provider, email_verified) VALUES (%s, NULL, %s, 1)",
-                (email, provider),
+                "INSERT INTO users (email, password_hash, auth_provider, email_verified, avatar_url) VALUES (%s, NULL, %s, 1, %s)",
+                (email, provider, avatar_url),
             )
             new_id = cursor.lastrowid
             return {"id": new_id, "email": email}
@@ -77,10 +83,12 @@ def google_callback():
     token = oauth.google.authorize_access_token()
     userinfo = token.get("userinfo") or oauth.google.parse_id_token(token)
     email = (userinfo.get("email") or "").lower()
+    avatar_url = userinfo.get("picture")
     if not email:
         return redirect("/login?error=google_no_email")
 
-    user = _find_or_create_oauth_user(email, "google")
+    user = _find_or_create_oauth_user(email, "google", avatar_url)
     session["user_id"] = user["id"]
     session["email"] = user["email"]
+    session["avatar_url"] = avatar_url
     return redirect("/")
