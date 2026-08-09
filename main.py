@@ -1377,9 +1377,9 @@ def login_page():
 
 @app.route("/", methods=["GET"])
 def home():
-    # Trading interface sirf logged-in users ko dikhega
+    # Logged-in users ko trading interface, baaqi sabko public landing page
     if "user_id" not in session:
-        return redirect(url_for("login_page"))
+        return render_template("landing.html")
     return render_template("design.html")
 
 
