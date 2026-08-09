@@ -101,6 +101,56 @@ def init_db():
                     "ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) NULL"
                 )
                 print("[db] migrated: added avatar_url column")
+
+            # Active Trade Tracking system: active_trades + trade_events
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS active_trades (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    asset VARCHAR(30) NOT NULL,
+                    direction VARCHAR(10) NOT NULL,
+                    entry_price DOUBLE NOT NULL,
+                    position_size DOUBLE NOT NULL,
+                    stop_loss DOUBLE NULL,
+                    take_profit DOUBLE NULL,
+                    leverage DOUBLE NULL,
+                    holding_period_label VARCHAR(50) NULL,
+                    holding_period_minutes INT NULL,
+                    signal_snapshot TEXT NULL,
+                    status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+                    last_price DOUBLE NULL,
+                    estimated_pnl DOUBLE NULL,
+                    estimated_pnl_percent DOUBLE NULL,
+                    holding_period_notified TINYINT(1) NOT NULL DEFAULT 0,
+                    near_sl_notified TINYINT(1) NOT NULL DEFAULT 0,
+                    near_tp_notified TINYINT(1) NOT NULL DEFAULT 0,
+                    setup_eval_notified TINYINT(1) NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    closed_at TIMESTAMP NULL,
+                    exit_price DOUBLE NULL,
+                    exit_reason VARCHAR(50) NULL,
+                    INDEX idx_user_status (user_id, status),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS trade_events (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    trade_id INT NOT NULL,
+                    event_type VARCHAR(40) NOT NULL,
+                    message TEXT NOT NULL,
+                    price DOUBLE NULL,
+                    pnl DOUBLE NULL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_trade (trade_id),
+                    FOREIGN KEY (trade_id) REFERENCES active_trades(id) ON DELETE CASCADE
+                )
+                """
+            )
         print("[db] users table ready")
     finally:
         conn.close()
