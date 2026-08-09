@@ -66,22 +66,29 @@ THRESHOLDS = {
 
     # Confirmations required before a candidate condition can replace the
     # locked one (hysteresis). Lower = flips faster, higher = more stable.
+    # NOTE: the frontend polls /api/trades/active every 15 seconds, so
+    # each confirmation ~= 15s of sustained agreement. A count of 2 (=
+    # only 30s) was too weak for routine conditions and let the locked
+    # message flip every few minutes whenever price/momentum hovered near
+    # a boundary. Routine conditions now need 8 (~2 minutes) of sustained
+    # agreement before the message is allowed to change; only genuinely
+    # urgent/risk conditions keep a fast, low-confirmation response.
     "confirmations": {
         "STOP_LOSS_APPROACHING": 1,
         "SETUP_INVALIDATED": 1,
         "HIGH_RISK_OPPOSITE_MOVE": 2,
         "TAKE_PROFIT_APPROACHING": 1,
-        "PROFIT_AT_RISK": 2,
-        "EXTENDED_DRAWDOWN": 2,
-        "RECOVERY": 2,
-        "TEMPORARY_DRAWDOWN_PROLONGED": 2,
-        "HEALTHY_PROFIT": 2,
-        "PROFIT_MOMENTUM_WEAKENING": 2,
-        "TEMPORARY_SMALL_DRAWDOWN": 2,
-        "CONSOLIDATION": 3,
-        "WAIT_EVALUATING": 3,
+        "PROFIT_AT_RISK": 4,
+        "EXTENDED_DRAWDOWN": 4,
+        "RECOVERY": 6,
+        "TEMPORARY_DRAWDOWN_PROLONGED": 6,
+        "HEALTHY_PROFIT": 8,
+        "PROFIT_MOMENTUM_WEAKENING": 8,
+        "TEMPORARY_SMALL_DRAWDOWN": 8,
+        "CONSOLIDATION": 8,
+        "WAIT_EVALUATING": 8,
     },
-    "default_confirmations": 2,
+    "default_confirmations": 8,
 
     # How often (minutes) we're allowed to re-fetch candles for a
     # momentum snapshot. Keeps this cheap and avoids hammering the
