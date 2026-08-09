@@ -171,6 +171,9 @@ from oauth import oauth_bp, init_oauth
 init_oauth(app)
 app.register_blueprint(oauth_bp)
 
+from trades import trades_bp
+app.register_blueprint(trades_bp)
+
 # App start hote hi 'users' table khud ba khud ban jaye (agar pehle se
 # maujood nahi hai). Agar DB abhi connect nahi ho pa raha (misal, MySQL
 # service abhi tak deploy nahi hui) to sirf warning print hoti hai -
