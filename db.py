@@ -151,6 +151,22 @@ def init_db():
                 )
                 """
             )
+            # Signal FM: Unified Trade Condition Detection columns
+            # (state machine fields - see condition_engine.py)
+            cursor.execute("SHOW COLUMNS FROM active_trades LIKE 'trade_condition'")
+            if cursor.fetchone() is None:
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN trade_condition VARCHAR(40) NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN condition_message TEXT NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN condition_started_at DATETIME NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN condition_version INT NOT NULL DEFAULT 0")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN pending_condition VARCHAR(40) NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN pending_condition_count INT NOT NULL DEFAULT 0")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN worst_pnl_percent DOUBLE NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN best_pnl_percent DOUBLE NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN last_momentum_check DATETIME NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN momentum_snapshot TEXT NULL")
+                print("[db] migrated: added Signal FM condition-engine columns to active_trades")
+
         print("[db] users table ready")
     finally:
         conn.close()
