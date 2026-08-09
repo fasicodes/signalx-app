@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, session
 
 from db import get_db_connection
+import condition_engine
 
 trades_bp = Blueprint("trades", __name__)
 
@@ -111,17 +112,14 @@ def _evaluate_trade(cursor, trade):
                "The defined stop-loss level has been reached. The tracked trade is now marked as completed.")
         _add_event(cursor, trade["id"], new_status, msg, current_price, pnl)
     else:
-        # --- Near-SL / near-TP one-time warnings ---
-        if tp and not trade["near_tp_notified"]:
-            dist_pct = abs(current_price - tp) / tp
-            if dist_pct <= 0.01:
-                _add_event(cursor, trade["id"], "NEAR_TP", "Price is approaching the defined take-profit level.", current_price, pnl)
-                updates["near_tp_notified"] = 1
-        if sl and not trade["near_sl_notified"]:
-            dist_pct = abs(current_price - sl) / sl
-            if dist_pct <= 0.01:
-                _add_event(cursor, trade["id"], "NEAR_SL", "Price is approaching the defined stop-loss level. Review your risk plan carefully.", current_price, pnl)
-                updates["near_sl_notified"] = 1
+        # --- Signal FM: Unified Trade Condition Detection ---
+        # Classifies the trade into ONE primary condition (drawdown,
+        # recovery, TP/SL approaching, momentum weakening, etc.) and
+        # only changes the locked guidance message when the condition
+        # has *materially* and *repeatedly* changed - never on a single
+        # small price tick. See condition_engine.py for the full state
+        # machine. This replaces the old one-off near-TP/near-SL flags.
+        condition_engine.evaluate(cursor, trade, current_price, pnl, pnl_pct, updates)
 
         # --- Holding period reached (evaluate setup, do NOT auto-close) ---
         holding_minutes = trade.get("holding_period_minutes")
@@ -187,6 +185,10 @@ def _serialize_trade(t):
         "closed_at": t["closed_at"].isoformat() if t.get("closed_at") else None,
         "exit_price": t.get("exit_price"),
         "exit_reason": t.get("exit_reason"),
+        # Signal FM - stable primary guidance (see condition_engine.py)
+        "trade_condition": t.get("trade_condition"),
+        "condition_message": t.get("condition_message"),
+        "condition_started_at": t["condition_started_at"].isoformat() if t.get("condition_started_at") else None,
     }
 
 
