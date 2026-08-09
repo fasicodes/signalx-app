@@ -150,7 +150,21 @@ def _evaluate_trade(cursor, trade):
                         current_price, pnl,
                     )
                 else:
+                    # IMPORTANT: keep the single-guidance-message invariant.
+                    # Only setting `status` here (without touching
+                    # trade_condition/condition_message) used to leave a
+                    # stale guidance message (e.g. "stay focused, follow
+                    # your plan") displayed on a trade whose status badge
+                    # now says SETUP_INVALIDATED - two contradictory
+                    # signals shown together. Overwrite the locked
+                    # condition too so both stay in sync.
                     updates["status"] = "SETUP_INVALIDATED"
+                    updates["trade_condition"] = "SETUP_INVALIDATED"
+                    updates["condition_message"] = condition_engine.CONDITION_MESSAGES["SETUP_INVALIDATED"]
+                    updates["condition_started_at"] = datetime.utcnow()
+                    updates["condition_version"] = (trade.get("condition_version") or 0) + 1
+                    updates["pending_condition"] = None
+                    updates["pending_condition_count"] = 0
                     _add_event(
                         cursor, trade["id"], "SETUP_INVALIDATED",
                         "The original trade setup is no longer valid according to the current model. Review your risk plan before taking further action.",
