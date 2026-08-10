@@ -154,6 +154,11 @@ def login():
     if not user.get("email_verified"):
         return jsonify({"error": "Please verify your email before logging in. Check your inbox for the verification link."}), 403
 
+    # `permanent=True` makes Flask issue a real Max-Age/Expires cookie
+    # (per PERMANENT_SESSION_LIFETIME in main.py) instead of a
+    # browser-session-only cookie, so the user stays logged in after
+    # closing the browser/tab, not just across page refreshes.
+    session.permanent = True
     session["user_id"] = user["id"]
     session["email"] = user["email"]
     session["avatar_url"] = user.get("avatar_url")
