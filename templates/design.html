@@ -833,6 +833,22 @@
         <div class="about-card">
           <h2 class="about-title">Trade History</h2>
           <p>Completed trades — closed by hitting target, stop loss, or manually.</p>
+
+          <!-- Performance Summary — see #perf-summary-list below for the
+               metric cards; computed via GET /api/trades/summary
+               (qualifying trades only, per outcome_class). -->
+          <div id="perf-summary" class="perf-summary">
+            <div class="perf-summary-headrow">
+              <h3 class="perf-summary-title">Performance Summary</h3>
+              <button type="button" id="perf-summary-refresh-btn" class="perf-summary-refresh-btn">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 0 1 15.3-6.4M21 12a9 9 0 0 1-15.3 6.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 3v4.5h-4.5M6 21v-4.5h4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                SUMMARIZE TRADE HISTORY
+              </button>
+            </div>
+            <p id="perf-summary-statement" class="perf-summary-statement">Tap "Summarize Trade History" to see how you're doing overall.</p>
+            <div id="perf-summary-grid" class="perf-summary-grid"></div>
+          </div>
+
           <div id="trade-history-list" style="margin-top:18px;">
             <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
           </div>
@@ -1118,8 +1134,20 @@
   }
 
   // status -> badge class + human label (kept purely presentational;
-  // the underlying status strings/values from the backend are untouched)
-  function statusBadgeInfo(status) {
+  // the underlying status strings/values from the backend are untouched).
+  // Prefers outcome_class when present (transparency: distinguishes a
+  // manual profitable exit from a manual user-initiated loss) and falls
+  // back to the plain status for older trades closed before that field
+  // existed.
+  function statusBadgeInfo(status, outcomeClass) {
+    const byOutcome = {
+      TAKE_PROFIT:    { cls: 'win',     label: 'TAKE PROFIT' },
+      STOP_LOSS:      { cls: 'loss',    label: 'STOP LOSS' },
+      MANUAL_PROFIT:  { cls: 'win',     label: 'MANUALLY CLOSED — PROFIT' },
+      MANUAL_LOSS:    { cls: 'neutral', label: 'MANUALLY CLOSED — USER LOSS' },
+    };
+    if (outcomeClass && byOutcome[outcomeClass]) return byOutcome[outcomeClass];
+
     const map = {
       ACTIVE:            { cls: 'active',  label: 'ACTIVE' },
       TARGET_REACHED:    { cls: 'win',     label: 'TAKE PROFIT' },
@@ -1299,7 +1327,7 @@
     let pnl = Number(t.estimated_pnl) || 0;
     if (Object.is(pnl, -0)) pnl = 0;
     const up = pnl >= 0;
-    const badge = statusBadgeInfo(t.status);
+    const badge = statusBadgeInfo(t.status, t.outcome_class);
     const isLive = t.status === 'ACTIVE';
     const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
     const outcomeCls = isLive ? 'is-live' : (up ? 'is-win' : 'is-loss');
@@ -1378,7 +1406,54 @@
     } catch (e) {
       el.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load trade history.</p>';
     }
+    refreshPerfSummary();
   }
+
+  /* ---------------- Performance Summary ---------------- */
+
+  function perfMetricCardHtml(label, value, tone) {
+    return `
+      <div class="perf-metric-card ${tone || ''}">
+        <span class="perf-metric-label">${label}</span>
+        <span class="perf-metric-value">${value}</span>
+      </div>`;
+  }
+
+  async function refreshPerfSummary() {
+    const statementEl = document.getElementById('perf-summary-statement');
+    const gridEl = document.getElementById('perf-summary-grid');
+    const btn = document.getElementById('perf-summary-refresh-btn');
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+    statementEl.textContent = 'Summarizing your trade history…';
+    try {
+      const res = await fetch('/api/trades/summary', { credentials: 'same-origin' });
+      const s = await res.json();
+      if (!res.ok) { statementEl.textContent = s.error || 'Could not summarize trade history.'; return; }
+
+      const netUp = s.net_pnl >= 0;
+      statementEl.innerHTML = s.total_qualifying_trades
+        ? `Overall, you are currently <span class="${netUp ? 'up' : 'down'}">${netUp ? 'in profit of ' + fmtMoney(s.net_pnl) : 'down ' + fmtMoney(Math.abs(s.net_pnl))}</span>, across ${s.total_qualifying_trades} qualifying trade${s.total_qualifying_trades === 1 ? '' : 's'}.`
+        : 'No qualifying trades yet — Performance Summary will update once trades close via Take Profit, Stop Loss, or a manual profitable exit.';
+
+      gridEl.innerHTML = [
+        perfMetricCardHtml('Total Profit', fmtMoney(s.total_profit), 'up'),
+        perfMetricCardHtml('Total Loss', fmtMoney(s.total_loss), 'down'),
+        perfMetricCardHtml('Net P&amp;L', (s.net_pnl >= 0 ? '+' : '') + fmtMoney(s.net_pnl), netUp ? 'up' : 'down'),
+        perfMetricCardHtml('Win Rate', s.win_rate + '%', ''),
+        perfMetricCardHtml('Winning Trades', s.winning_trades, 'up'),
+        perfMetricCardHtml('Losing Trades', s.losing_trades, 'down'),
+        perfMetricCardHtml('Qualifying Trades', s.total_qualifying_trades, ''),
+      ].join('');
+    } catch (e) {
+      statementEl.textContent = 'Could not connect to the server to summarize trade history.';
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+    }
+  }
+
+  document.getElementById('perf-summary-refresh-btn').addEventListener('click', refreshPerfSummary);
 
   document.querySelector('.home-info-tab[data-info="active-trades"]').addEventListener('click', renderActiveTradesPanel);
   document.querySelector('.home-info-tab[data-info="trade-history"]').addEventListener('click', renderTradeHistoryPanel);
@@ -1397,7 +1472,7 @@
       let pnl = Number(t.estimated_pnl) || 0;
       if (Object.is(pnl, -0)) pnl = 0;
       const up = pnl >= 0;
-      const badge = statusBadgeInfo(t.status);
+      const badge = statusBadgeInfo(t.status, t.outcome_class);
       const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
       const isActive = t.status === 'ACTIVE';
 
