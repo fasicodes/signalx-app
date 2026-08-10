@@ -88,6 +88,7 @@ def google_callback():
         return redirect("/login?error=google_no_email")
 
     user = _find_or_create_oauth_user(email, "google", avatar_url)
+    session.permanent = True
     session["user_id"] = user["id"]
     session["email"] = user["email"]
     session["avatar_url"] = avatar_url
