@@ -1279,61 +1279,95 @@ main#result-box,
 ================================================================ */
 
 .trade-card {
-    background: var(--panel-raised);
+    position: relative;
+    background: linear-gradient(180deg, var(--panel-raised), var(--panel));
     border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 16px 16px 14px;
-    margin-bottom: 12px;
+    border-radius: 14px;
+    padding: 18px 18px 16px 20px;
+    margin-bottom: 14px;
     font-family: var(--mono);
+    overflow: hidden;
     transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
+.trade-card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--line-soft);
+}
+.trade-card.is-win::before { background: var(--long); }
+.trade-card.is-loss::before { background: var(--short); }
+.trade-card.is-live::before { background: var(--long); box-shadow: 0 0 10px rgba(54, 224, 160, 0.55); }
 .trade-card:hover {
-    border-color: rgba(54, 224, 160, 0.35);
-    transform: translateY(-1px);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+    border-color: rgba(54, 224, 160, 0.32);
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.32);
 }
+
 .trade-card-top {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; margin-bottom: 10px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; margin-bottom: 16px;
 }
+.trade-card-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.trade-avatar {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--heading); font-size: 12px; font-weight: 800; letter-spacing: 0.2px;
+}
+.trade-avatar.long { background: var(--long-dim); color: var(--long); }
+.trade-avatar.short { background: var(--short-dim); color: var(--short); }
+.trade-card-pair-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .trade-card-pair {
-    display: flex; align-items: center; gap: 8px;
-    font-family: var(--heading); font-size: 14px; font-weight: 700; color: var(--text);
+    font-family: var(--heading); font-size: 14.5px; font-weight: 700; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .trade-dir-badge {
-    font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
-    padding: 3px 8px; border-radius: 5px; line-height: 1.4;
+    font-family: var(--mono); font-size: 9.5px; font-weight: 800; letter-spacing: 0.6px;
+    padding: 2px 7px; border-radius: 5px; line-height: 1.5; width: fit-content;
 }
 .trade-dir-badge.long { background: var(--long-dim); color: var(--long); }
 .trade-dir-badge.short { background: var(--short-dim); color: var(--short); }
 
 .trade-status-badge {
+    flex-shrink: 0;
     font-family: var(--mono); font-size: 9.5px; font-weight: 800; letter-spacing: 0.4px;
-    padding: 3px 9px; border-radius: 5px; white-space: nowrap; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 999px; white-space: nowrap; text-transform: uppercase;
+    border: 1px solid transparent;
 }
-.trade-status-badge.active { background: var(--long-dim); color: var(--long); }
+.trade-status-badge.active { background: var(--long-dim); color: var(--long); border-color: rgba(54, 224, 160, 0.3); }
 .trade-status-badge.active .live-dot { animation: live-pulse 1.6s ease-in-out infinite; }
 .trade-status-badge.win { background: var(--long-dim); color: var(--long); }
 .trade-status-badge.loss { background: var(--short-dim); color: var(--short); }
 .trade-status-badge.neutral { background: var(--line-soft); color: var(--text-dim); }
 
-.trade-card-row {
-    display: flex; justify-content: space-between; gap: 10px;
-    font-size: 11.5px; color: var(--text-dim); margin-bottom: 4px;
+/* Entry / Current-or-Exit / P&L shown side-by-side, like a mini ticket */
+.trade-card-stats {
+    display: grid; grid-template-columns: 1fr 1fr 1.15fr;
+    background: rgba(0, 0, 0, 0.16);
+    border: 1px solid var(--line-soft);
+    border-radius: 10px;
+    padding: 11px 4px;
+    margin-bottom: 14px;
 }
-.trade-card-row b { color: var(--text); font-weight: 600; }
-
-.trade-card-pnl {
-    display: flex; align-items: baseline; gap: 6px;
-    font-size: 15px; font-weight: 800; margin: 8px 0 12px;
+html[data-theme="light"] .trade-card-stats { background: rgba(13, 28, 21, 0.03); }
+.stat-col {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 0 8px; text-align: center;
 }
-.trade-card-pnl .pnl-pct { font-size: 11px; font-weight: 700; opacity: 0.85; }
-.trade-card-pnl.up { color: var(--long); }
-.trade-card-pnl.down { color: var(--short); }
+.stat-col + .stat-col { border-left: 1px solid var(--line-soft); }
+.stat-label {
+    font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px;
+}
+.stat-value {
+    font-size: 12.5px; font-weight: 700; color: var(--text); white-space: nowrap;
+}
+.stat-value.pnl.up { color: var(--long); }
+.stat-value.pnl.down { color: var(--short); }
+.stat-value.pnl small { font-size: 9.5px; font-weight: 700; opacity: 0.85; display: block; margin-top: 1px; }
+.stat-value.live-value { color: var(--long); }
 
 .trade-card-footer { display: flex; justify-content: space-between; align-items: center; }
 .trade-closing-reason {
-    font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.3px;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; color: var(--text-faint); letter-spacing: 0.2px;
 }
 
 .view-details-btn {
@@ -1354,6 +1388,11 @@ main#result-box,
 .live-dot {
     display: inline-block; width: 6px; height: 6px; border-radius: 50%;
     background: var(--long); margin-right: 5px; vertical-align: middle;
+}
+
+@media (max-width: 480px) {
+    .trade-card-stats { grid-template-columns: 1fr 1fr; row-gap: 10px; }
+    .stat-col:nth-child(3) { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--line-soft); padding-top: 8px; }
 }
 
 /* ================================================================
