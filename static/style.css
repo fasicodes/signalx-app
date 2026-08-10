@@ -1501,6 +1501,80 @@ html[data-theme="light"] .trade-card-stats { background: rgba(13, 28, 21, 0.03);
 }
 .close-trade-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
 
+/* ================================================================
+   PERFORMANCE SUMMARY — top of Trade History
+================================================================ */
+
+.perf-summary {
+    background: linear-gradient(180deg, var(--panel-raised), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 20px 18px;
+    margin: 18px 0 22px;
+    animation: perf-summary-in 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes perf-summary-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.perf-summary-headrow {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.perf-summary-title {
+    font-family: var(--heading); font-size: 15.5px; font-weight: 700; color: var(--text);
+    margin: 0;
+}
+.perf-summary-refresh-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    /* deeper/darker Signal FM green, kept just for this premium section */
+    background: rgba(15, 122, 79, 0.14); border: 1px solid rgba(15, 122, 79, 0.45);
+    color: #21c584; border-radius: 8px; padding: 8px 13px;
+    font-family: var(--mono); font-size: 10.5px; font-weight: 800; letter-spacing: 0.4px;
+    cursor: pointer; transition: background 0.15s ease, transform 0.15s ease;
+}
+html[data-theme="light"] .perf-summary-refresh-btn { color: #0f7a4f; background: rgba(15, 122, 79, 0.08); }
+.perf-summary-refresh-btn:hover { background: rgba(15, 122, 79, 0.24); transform: translateY(-1px); }
+.perf-summary-refresh-btn:disabled { opacity: 0.65; cursor: default; transform: none; }
+.perf-summary-refresh-btn.is-loading svg { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.perf-summary-statement {
+    font-size: 13px; color: var(--text-dim); margin: 4px 0 16px; line-height: 1.5;
+}
+.perf-summary-statement .up { color: #21c584; font-weight: 700; }
+html[data-theme="light"] .perf-summary-statement .up { color: #0f7a4f; }
+.perf-summary-statement .down { color: var(--short); font-weight: 700; }
+
+.perf-summary-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+}
+.perf-metric-card {
+    background: rgba(0, 0, 0, 0.16);
+    border: 1px solid var(--line-soft);
+    border-radius: 10px;
+    padding: 12px 12px 11px;
+    display: flex; flex-direction: column; gap: 5px;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+    animation: perf-summary-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+html[data-theme="light"] .perf-metric-card { background: rgba(13, 28, 21, 0.03); }
+.perf-metric-card:hover { border-color: rgba(54, 224, 160, 0.3); transform: translateY(-1px); }
+.perf-metric-label {
+    font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+.perf-metric-value {
+    font-family: var(--heading); font-size: 16.5px; font-weight: 700; color: var(--text);
+}
+.perf-metric-card.up .perf-metric-value { color: #21c584; }
+html[data-theme="light"] .perf-metric-card.up .perf-metric-value { color: #0f7a4f; }
+.perf-metric-card.down .perf-metric-value { color: var(--short); }
+
+@media (max-width: 620px) {
+    .perf-summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.001ms !important;
