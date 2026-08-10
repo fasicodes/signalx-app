@@ -191,6 +191,27 @@ def init_db():
                 )
                 print("[db] migrated: added outcome_class column to active_trades (+ backfilled existing closed trades)")
 
+            # "User Mistake" widget: flags a MANUAL_LOSS trade where no
+            # risk-warning condition (see condition_engine.RISK_WARNING_CONDITIONS)
+            # was active when the user closed it - i.e. closed at a loss
+            # without the system having said anything about elevated risk.
+            # Purely informational: never affects Win Rate / qualifying
+            # trade stats (MANUAL_LOSS is already excluded from those).
+            cursor.execute("SHOW COLUMNS FROM active_trades LIKE 'is_user_mistake'")
+            if cursor.fetchone() is None:
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN is_user_mistake TINYINT(1) NOT NULL DEFAULT 0")
+                # Best-effort backfill for trades closed before this column
+                # existed: a MANUAL_LOSS trade counts as a user mistake if
+                # its locked trade_condition at close time was NOT one of
+                # the risk-warning conditions.
+                cursor.execute(
+                    "UPDATE active_trades SET is_user_mistake = 1 "
+                    "WHERE outcome_class = 'MANUAL_LOSS' "
+                    "AND (trade_condition IS NULL OR trade_condition NOT IN "
+                    "('HIGH_RISK_OPPOSITE_MOVE', 'STOP_LOSS_APPROACHING', 'SETUP_INVALIDATED'))"
+                )
+                print("[db] migrated: added is_user_mistake column to active_trades (+ backfilled existing closed trades)")
+
         print("[db] users table ready")
     finally:
         conn.close()
