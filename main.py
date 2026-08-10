@@ -120,6 +120,7 @@ def _ta_macd(series, fast=12, slow=26, signal=9):
 from hmmlearn.hmm import GaussianHMM
 from sklearn.ensemble import RandomForestClassifier
 
+from datetime import timedelta
 app = Flask(__name__)
 
 # Railway (aur zyada tar hosting platforms) apps ko HTTP proxy ke peeche
@@ -151,6 +152,13 @@ app.config.update(
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_HTTPONLY=True,
+    # Session persistence fix: without this, Flask issues a browser-session
+    # cookie that dies the moment the browser/tab is closed, forcing a
+    # fresh login every time. Combined with `session.permanent = True` (set
+    # at login, in auth.py/oauth.py), the cookie now carries a real
+    # Max-Age/Expires so the user stays logged in across browser restarts
+    # for up to 30 days, or until they explicitly log out.
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
 )
 # CORS ko sirf apni asal domain tak mehdood karte hain - warna koi bhi
 # doosri website aapke API/cookies tak access kar sakti thi (security risk).
