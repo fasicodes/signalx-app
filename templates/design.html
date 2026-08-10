@@ -1411,9 +1411,9 @@
 
   /* ---------------- Performance Summary ---------------- */
 
-  function perfMetricCardHtml(label, value, tone) {
+  function perfMetricCardHtml(label, value, tone, tooltip) {
     return `
-      <div class="perf-metric-card ${tone || ''}">
+      <div class="perf-metric-card ${tone || ''}" ${tooltip ? `title="${tooltip}"` : ''}>
         <span class="perf-metric-label">${label}</span>
         <span class="perf-metric-value">${value}</span>
       </div>`;
@@ -1444,6 +1444,8 @@
         perfMetricCardHtml('Winning Trades', s.winning_trades, 'up'),
         perfMetricCardHtml('Losing Trades', s.losing_trades, 'down'),
         perfMetricCardHtml('Qualifying Trades', s.total_qualifying_trades, ''),
+        perfMetricCardHtml('User Mistakes', s.user_mistake_trades, s.user_mistake_trades > 0 ? 'down' : '',
+          'Trades manually closed at a loss with no system risk-warning active at the time. Does not affect Win Rate.'),
       ].join('');
     } catch (e) {
       statementEl.textContent = 'Could not connect to the server to summarize trade history.';
