@@ -204,6 +204,7 @@ def _serialize_trade(t):
         "exit_price": t.get("exit_price"),
         "exit_reason": t.get("exit_reason"),
         "outcome_class": t.get("outcome_class"),
+        "is_user_mistake": bool(t.get("is_user_mistake")),
         # Signal FM - stable primary guidance (see condition_engine.py)
         "trade_condition": t.get("trade_condition"),
         "condition_message": t.get("condition_message"),
@@ -325,6 +326,13 @@ def trade_performance_summary():
                                         normally in /api/trades/history)
     Trades closed before this feature existed and never backfilled
     (outcome_class IS NULL) are excluded rather than guessed at here.
+
+    "User Mistake" widget: separately counts MANUAL_LOSS trades where
+    `is_user_mistake` was set (no risk-warning condition was active when
+    the user closed it - see condition_engine.RISK_WARNING_CONDITIONS and
+    close_trade() above). This is informational only and does NOT affect
+    win_rate / total_qualifying_trades, exactly like MANUAL_LOSS already
+    doesn't.
     """
     user_id = _require_login()
     if not user_id:
@@ -339,6 +347,13 @@ def trade_performance_summary():
                 (user_id,),
             )
             rows = cursor.fetchall()
+
+            cursor.execute(
+                "SELECT COUNT(*) AS cnt FROM active_trades "
+                "WHERE user_id=%s AND status != 'ACTIVE' AND outcome_class='MANUAL_LOSS' AND is_user_mistake=1",
+                (user_id,),
+            )
+            user_mistake_trades = cursor.fetchone()["cnt"]
 
         total_profit = 0.0
         total_loss = 0.0
@@ -368,6 +383,7 @@ def trade_performance_summary():
             "winning_trades": winning_trades,
             "losing_trades": losing_trades,
             "total_qualifying_trades": total_qualifying,
+            "user_mistake_trades": user_mistake_trades,
         }), 200
     finally:
         conn.close()
@@ -440,10 +456,24 @@ def close_trade(trade_id):
             # website's Performance Summary (see /api/trades/summary).
             outcome_class = "MANUAL_PROFIT" if pnl >= 0 else "MANUAL_LOSS"
 
+            # "User Mistake" widget: only relevant for a losing manual
+            # close. It's a mistake ONLY when the system had NOT already
+            # warned about elevated risk on this trade (no HIGH_RISK /
+            # STOP_LOSS_APPROACHING / SETUP_INVALIDATED condition locked
+            # at the moment of closing) - see condition_engine.RISK_WARNING_CONDITIONS.
+            # Purely informational: never affects Win Rate / qualifying
+            # trade counts, same as MANUAL_LOSS already is.
+            is_user_mistake = (
+                outcome_class == "MANUAL_LOSS"
+                and trade.get("trade_condition") not in condition_engine.RISK_WARNING_CONDITIONS
+            )
+
             cursor.execute(
                 """UPDATE active_trades SET status='MANUALLY_CLOSED', exit_price=%s, exit_reason='MANUALLY_CLOSED',
-                   estimated_pnl=%s, estimated_pnl_percent=%s, closed_at=%s, last_updated=%s, outcome_class=%s WHERE id=%s""",
-                (exit_price, pnl, pnl_pct, datetime.utcnow(), datetime.utcnow(), outcome_class, trade_id),
+                   estimated_pnl=%s, estimated_pnl_percent=%s, closed_at=%s, last_updated=%s, outcome_class=%s,
+                   is_user_mistake=%s WHERE id=%s""",
+                (exit_price, pnl, pnl_pct, datetime.utcnow(), datetime.utcnow(), outcome_class,
+                 1 if is_user_mistake else 0, trade_id),
             )
             _add_event(cursor, trade_id, "MANUALLY_CLOSED", "Trade was manually closed by the user.", exit_price, pnl)
         return jsonify({"message": "Trade closed"}), 200
