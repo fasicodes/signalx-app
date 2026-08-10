@@ -120,6 +120,18 @@ CONDITION_MESSAGES = {
 # close, market data unavailable, setup invalidated-hard-override) are
 # handled by the caller (trades.py) BEFORE this module is even called,
 # so they aren't repeated here.
+# "User Mistake" widget (Performance Summary): a manually-closed losing
+# trade only counts as a user mistake when NONE of these risk-warning
+# conditions were active at the moment of closing - i.e. the system had
+# already told the user risk was elevated / SL approaching / setup
+# invalid, so closing wasn't a mistake, it was a reasonable reaction.
+# See trades.py close_trade().
+RISK_WARNING_CONDITIONS = {
+    "HIGH_RISK_OPPOSITE_MOVE",
+    "STOP_LOSS_APPROACHING",
+    "SETUP_INVALIDATED",
+}
+
 CONDITION_PRIORITY = [
     "HIGH_RISK_OPPOSITE_MOVE",       # 10
     "STOP_LOSS_APPROACHING",         # 9
