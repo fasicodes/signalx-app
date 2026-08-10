@@ -1101,6 +1101,47 @@
     return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function fmtDateTime(iso) {
+    if (!iso) return '--';
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+    } catch (e) { return '--'; }
+  }
+
+  // status -> badge class + human label (kept purely presentational;
+  // the underlying status strings/values from the backend are untouched)
+  function statusBadgeInfo(status) {
+    const map = {
+      ACTIVE:            { cls: 'active',  label: 'ACTIVE' },
+      TARGET_REACHED:    { cls: 'win',     label: 'TAKE PROFIT' },
+      STOP_LOSS_REACHED: { cls: 'loss',    label: 'STOP LOSS REACHED' },
+      SETUP_INVALIDATED: { cls: 'loss',    label: 'SETUP INVALIDATED' },
+      MANUALLY_CLOSED:   { cls: 'neutral', label: 'MANUALLY CLOSED' },
+    };
+    return map[status] || { cls: 'neutral', label: (status || '--').replace(/_/g, ' ') };
+  }
+
+  // trade_events.event_type -> chat-bubble tone + icon (frontend-only
+  // classification; backend keeps emitting the same event_type values)
+  const EVENT_TONE = {
+    TRADE_STARTED: 'positive', SETUP_VALID: 'positive', TARGET_REACHED: 'positive',
+    HEALTHY_PROFIT: 'positive', RECOVERY: 'positive', TAKE_PROFIT_APPROACHING: 'positive',
+    TEMPORARY_SMALL_DRAWDOWN: 'warning', TEMPORARY_DRAWDOWN_PROLONGED: 'warning',
+    EXTENDED_DRAWDOWN: 'warning', PROFIT_MOMENTUM_WEAKENING: 'warning',
+    PROFIT_AT_RISK: 'warning', HOLDING_PERIOD_REACHED: 'warning',
+    STOP_LOSS_APPROACHING: 'danger', HIGH_RISK_OPPOSITE_MOVE: 'danger',
+    STOP_LOSS_REACHED: 'danger', SETUP_INVALIDATED: 'danger',
+    MANUALLY_CLOSED: 'neutral', CONSOLIDATION: 'neutral', WAIT_EVALUATING: 'neutral',
+  };
+  const TONE_ICON = {
+    positive: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    warning: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 16.5v.01M10.3 3.9L2.6 18a1.5 1.5 0 0 0 1.3 2.2h16.2a1.5 1.5 0 0 0 1.3-2.2L13.7 3.9a1.5 1.5 0 0 0-2.6 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    danger: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v6M12 16v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    neutral: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  };
+
   /* ---------------- fetch + refresh active trades ---------------- */
 
   async function refreshActiveTrades() {
@@ -1248,21 +1289,35 @@
   /* ---------------- Active Trades / Trade History panels ---------------- */
 
   function tradeCardHtml(t, isHistory) {
-    const pnlColor = (t.estimated_pnl || 0) >= 0 ? 'var(--long)' : 'var(--short)';
+    const up = (t.estimated_pnl || 0) >= 0;
+    const badge = statusBadgeInfo(t.status);
+    const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
     return `
-      <div style="background:var(--panel-raised); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px; font-family:var(--mono);">
-        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-          <span style="font-size:13px; font-weight:700;">${t.asset} · ${t.direction}</span>
-          <span style="font-size:10px; padding:2px 8px; border-radius:4px; background:${isHistory ? 'var(--panel)' : 'var(--long-dim)'}; color:${isHistory ? 'var(--text-dim)' : 'var(--long)'};">${t.status}</span>
+      <div class="trade-card">
+        <div class="trade-card-top">
+          <span class="trade-card-pair">
+            ${t.asset}
+            <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
+          </span>
+          <span class="trade-status-badge ${badge.cls}">${badge.cls === 'active' ? '<span class="live-dot"></span>' : ''}${badge.label}</span>
         </div>
-        <div style="font-size:12px; color:var(--text-dim); display:flex; justify-content:space-between; margin-bottom:4px;">
-          <span>Entry ${fmtMoney(t.entry_price)}</span>
-          <span>${isHistory ? 'Exit ' + fmtMoney(t.exit_price) : 'Now ' + fmtMoney(t.last_price)}</span>
+        <div class="trade-card-row">
+          <span>Entry</span><b>${fmtMoney(t.entry_price)}</b>
         </div>
-        <div style="font-size:13px; font-weight:700; color:${pnlColor}; margin-bottom:10px;">
-          ${t.estimated_pnl >= 0 ? '+' : ''}${fmtMoney(t.estimated_pnl)} (${t.estimated_pnl_percent}%)
+        <div class="trade-card-row">
+          <span>${isHistory ? 'Exit' : 'Current'}</span><b>${fmtMoney(isHistory ? t.exit_price : t.last_price)}</b>
         </div>
-        <button type="button" class="view-trade-link" data-id="${t.id}" style="background:none; border:none; color:var(--accent); font-size:11px; font-weight:700; cursor:pointer; padding:0;">VIEW DETAILS →</button>
+        <div class="trade-card-pnl ${up ? 'up' : 'down'}">
+          <span>${up ? '+' : ''}${fmtMoney(t.estimated_pnl)}</span>
+          <span class="pnl-pct">(${up ? '+' : ''}${t.estimated_pnl_percent}%)</span>
+        </div>
+        <div class="trade-card-footer">
+          <span class="trade-closing-reason">${isHistory ? fmtDateTime(t.closed_at) : fmtDateTime(t.created_at)}</span>
+          <button type="button" class="view-trade-link view-details-btn" data-id="${t.id}">
+            VIEW DETAILS
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
       </div>`;
   }
 
@@ -1316,28 +1371,52 @@
       const t = await res.json();
       if (!res.ok) { content.innerHTML = `<p style="color:var(--short);">${t.error || 'Could not load trade'}</p>`; return; }
 
-      const pnlColor = (t.estimated_pnl || 0) >= 0 ? 'var(--long)' : 'var(--short)';
-      const timelineHtml = (t.timeline || []).map(e => `
-        <div style="padding:8px 0; border-bottom:1px solid var(--line-soft); font-size:12px;">
-          <div style="color:var(--text-faint); font-size:10px; font-family:var(--mono);">${new Date(e.timestamp).toLocaleString()}</div>
-          <div style="color:var(--text);">${e.message}</div>
-        </div>`).join('');
+      const up = (t.estimated_pnl || 0) >= 0;
+      const badge = statusBadgeInfo(t.status);
+      const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
+      const isActive = t.status === 'ACTIVE';
+
+      const timelineHtml = (t.timeline || []).map(e => {
+        const tone = EVENT_TONE[e.event_type] || 'neutral';
+        return `
+        <div class="timeline-msg ${tone}">
+          <span class="msg-icon">${TONE_ICON[tone]}</span>
+          <span class="msg-body">
+            <span class="msg-time">${new Date(e.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            <span class="msg-text">${e.message}</span>
+          </span>
+        </div>`;
+      }).join('');
 
       content.innerHTML = `
-        <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 4px;">${t.asset} — ${t.direction}</h3>
-        <div style="font-size:11px; color:var(--text-dim); margin-bottom:14px;">Status: <b>${t.status}</b></div>
-        <div style="font-family:var(--mono); font-size:12.5px;">
-          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Entry</span><b>${fmtMoney(t.entry_price)}</b></div>
-          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">${t.status === 'ACTIVE' ? 'Current Price' : 'Exit Price'}</span><b>${fmtMoney(t.status === 'ACTIVE' ? t.last_price : t.exit_price)}</b></div>
-          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Position Size</span><b>${fmtMoney(t.position_size)}</b></div>
-          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Stop Loss</span><b style="color:var(--short)">${fmtMoney(t.stop_loss)}</b></div>
-          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Take Profit</span><b style="color:var(--long)">${fmtMoney(t.take_profit)}</b></div>
-          <div style="display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--line-soft); margin-top:4px;"><span style="color:var(--text-dim);">Estimated P/L</span><b style="color:${pnlColor}">${fmtMoney(t.estimated_pnl)} (${t.estimated_pnl_percent}%)</b></div>
+        <div class="trade-detail-header">
+          <span class="trade-detail-title">
+            ${t.asset}
+            <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
+          </span>
         </div>
-        <h4 style="font-family:var(--heading); font-size:13px; margin:18px 0 8px;">Trade Timeline</h4>
-        <div>${timelineHtml || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'}</div>
-        ${t.status === 'ACTIVE' ? `<button id="close-trade-btn" data-id="${t.id}" type="button" style="width:100%; margin-top:16px; padding:11px 0; border-radius:7px; border:none; background:var(--short); color:#2a0810; font-family:var(--mono); font-weight:700; font-size:12px; cursor:pointer;">CLOSE TRADE</button>` : ''}
+        <div class="trade-detail-status-row">
+          ${isActive
+            ? `<span class="live-tracking-badge"><span class="live-dot"></span>LIVE TRACKING</span>`
+            : `<span class="trade-status-badge ${badge.cls}">${badge.label}</span>`}
+        </div>
+        <div class="trade-stat-block">
+          <div class="trade-stat-row"><span class="label">Entry</span><span class="value">${fmtMoney(t.entry_price)}</span></div>
+          <div class="trade-stat-row"><span class="label">${isActive ? 'Current Price' : 'Exit Price'}</span><span class="value">${fmtMoney(isActive ? t.last_price : t.exit_price)}</span></div>
+          <div class="trade-stat-row"><span class="label">Position Size</span><span class="value">${fmtMoney(t.position_size)}</span></div>
+          <div class="trade-stat-row"><span class="label">Stop Loss</span><span class="value risk">${fmtMoney(t.stop_loss)}</span></div>
+          <div class="trade-stat-row"><span class="label">Take Profit</span><span class="value target">${fmtMoney(t.take_profit)}</span></div>
+          <div class="trade-stat-row pnl-row"><span class="label">Estimated P/L</span><span class="value ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(t.estimated_pnl)} (${up ? '+' : ''}${t.estimated_pnl_percent}%)</span></div>
+        </div>
+        <div class="trade-detail-subhead">Trade Timeline</div>
+        <div class="trade-timeline">${timelineHtml || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'}</div>
+        ${isActive ? `<button id="close-trade-btn" class="close-trade-btn" data-id="${t.id}" type="button">CLOSE TRADE</button>` : ''}
       `;
+
+      // auto-scroll to the newest message, but only if the user hasn't
+      // scrolled up to read older ones
+      const tl = content.querySelector('.trade-timeline');
+      if (tl) tl.scrollTop = tl.scrollHeight;
 
       const closeBtn = document.getElementById('close-trade-btn');
       if (closeBtn) {
