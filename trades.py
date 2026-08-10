@@ -107,6 +107,10 @@ def _evaluate_trade(cursor, trade):
         updates["exit_reason"] = exit_reason
         updates["exit_price"] = current_price
         updates["closed_at"] = datetime.utcnow()
+        # Performance Summary qualifying-outcome classification (see
+        # db.py migration + /api/trades/summary): TP is always a
+        # qualifying profit, SL is always a qualifying loss.
+        updates["outcome_class"] = "TAKE_PROFIT" if new_status == "TARGET_REACHED" else "STOP_LOSS"
         msg = ("The defined take-profit level has been reached. The tracked trade is now marked as completed."
                if new_status == "TARGET_REACHED" else
                "The defined stop-loss level has been reached. The tracked trade is now marked as completed.")
@@ -199,6 +203,7 @@ def _serialize_trade(t):
         "closed_at": t["closed_at"].isoformat() if t.get("closed_at") else None,
         "exit_price": t.get("exit_price"),
         "exit_reason": t.get("exit_reason"),
+        "outcome_class": t.get("outcome_class"),
         # Signal FM - stable primary guidance (see condition_engine.py)
         "trade_condition": t.get("trade_condition"),
         "condition_message": t.get("condition_message"),
@@ -307,6 +312,67 @@ def list_trade_history():
         conn.close()
 
 
+@trades_bp.route("/api/trades/summary", methods=["GET"])
+def trade_performance_summary():
+    """Performance Summary — qualifying-outcome statistics.
+
+    Only trades classified via `outcome_class` (see db.py migration +
+    _evaluate_trade / close_trade above) count toward Total Profit/Loss
+    and Win Rate:
+        TAKE_PROFIT, MANUAL_PROFIT  -> qualifying profit
+        STOP_LOSS                   -> qualifying loss
+        MANUAL_LOSS                 -> excluded from stats (still shown
+                                        normally in /api/trades/history)
+    Trades closed before this feature existed and never backfilled
+    (outcome_class IS NULL) are excluded rather than guessed at here.
+    """
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT estimated_pnl, outcome_class FROM active_trades "
+                "WHERE user_id=%s AND status != 'ACTIVE' AND outcome_class IS NOT NULL",
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+
+        total_profit = 0.0
+        total_loss = 0.0
+        winning_trades = 0
+        losing_trades = 0
+
+        for r in rows:
+            pnl = r.get("estimated_pnl") or 0.0
+            oc = r.get("outcome_class")
+            if oc in ("TAKE_PROFIT", "MANUAL_PROFIT"):
+                total_profit += max(pnl, 0.0)
+                winning_trades += 1
+            elif oc == "STOP_LOSS":
+                total_loss += abs(min(pnl, 0.0))
+                losing_trades += 1
+            # MANUAL_LOSS intentionally excluded from the Performance Summary
+
+        total_qualifying = winning_trades + losing_trades
+        net_pnl = total_profit - total_loss
+        win_rate = (winning_trades / total_qualifying * 100) if total_qualifying else 0.0
+
+        return jsonify({
+            "total_profit": round(total_profit, 2),
+            "total_loss": round(total_loss, 2),
+            "net_pnl": round(net_pnl, 2),
+            "win_rate": round(win_rate, 2),
+            "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
+            "total_qualifying_trades": total_qualifying,
+        }), 200
+    finally:
+        conn.close()
+
+
 @trades_bp.route("/api/trades/<int:trade_id>", methods=["GET"])
 def get_trade_detail(trade_id):
     user_id = _require_login()
@@ -367,10 +433,17 @@ def close_trade(trade_id):
             exit_price = float(exit_price)
             pnl, pnl_pct = _calc_pnl(trade["direction"], trade["entry_price"], exit_price, trade["position_size"])
 
+            # Performance Summary qualifying-outcome classification: a
+            # manual close only "qualifies" toward Total Profit when it
+            # was actually profitable. A manual close while losing stays
+            # fully visible in Trade History but is excluded from the
+            # website's Performance Summary (see /api/trades/summary).
+            outcome_class = "MANUAL_PROFIT" if pnl >= 0 else "MANUAL_LOSS"
+
             cursor.execute(
                 """UPDATE active_trades SET status='MANUALLY_CLOSED', exit_price=%s, exit_reason='MANUALLY_CLOSED',
-                   estimated_pnl=%s, estimated_pnl_percent=%s, closed_at=%s, last_updated=%s WHERE id=%s""",
-                (exit_price, pnl, pnl_pct, datetime.utcnow(), datetime.utcnow(), trade_id),
+                   estimated_pnl=%s, estimated_pnl_percent=%s, closed_at=%s, last_updated=%s, outcome_class=%s WHERE id=%s""",
+                (exit_price, pnl, pnl_pct, datetime.utcnow(), datetime.utcnow(), outcome_class, trade_id),
             )
             _add_event(cursor, trade_id, "MANUALLY_CLOSED", "Trade was manually closed by the user.", exit_price, pnl)
         return jsonify({"message": "Trade closed"}), 200
