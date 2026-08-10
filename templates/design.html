@@ -1098,7 +1098,14 @@
 
   function fmtMoney(n) {
     if (n === null || n === undefined || isNaN(n)) return '--';
-    return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    let num = Number(n);
+    if (Object.is(num, -0)) num = 0; // avoid a stray "-" on effectively-zero P/L
+    return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function coinInitials(asset) {
+    const base = (asset || '').split('/')[0] || '';
+    return base.slice(0, 3).toUpperCase();
   }
 
   function fmtDateTime(iso) {
@@ -1289,30 +1296,46 @@
   /* ---------------- Active Trades / Trade History panels ---------------- */
 
   function tradeCardHtml(t, isHistory) {
-    const up = (t.estimated_pnl || 0) >= 0;
+    let pnl = Number(t.estimated_pnl) || 0;
+    if (Object.is(pnl, -0)) pnl = 0;
+    const up = pnl >= 0;
     const badge = statusBadgeInfo(t.status);
+    const isLive = t.status === 'ACTIVE';
     const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
+    const outcomeCls = isLive ? 'is-live' : (up ? 'is-win' : 'is-loss');
     return `
-      <div class="trade-card">
+      <div class="trade-card ${outcomeCls}">
         <div class="trade-card-top">
-          <span class="trade-card-pair">
-            ${t.asset}
-            <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
-          </span>
+          <div class="trade-card-id">
+            <span class="trade-avatar ${dirCls}">${coinInitials(t.asset)}</span>
+            <div class="trade-card-pair-wrap">
+              <span class="trade-card-pair">${t.asset}</span>
+              <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
+            </div>
+          </div>
           <span class="trade-status-badge ${badge.cls}">${badge.cls === 'active' ? '<span class="live-dot"></span>' : ''}${badge.label}</span>
         </div>
-        <div class="trade-card-row">
-          <span>Entry</span><b>${fmtMoney(t.entry_price)}</b>
+
+        <div class="trade-card-stats">
+          <div class="stat-col">
+            <span class="stat-label">Entry</span>
+            <span class="stat-value">${fmtMoney(t.entry_price)}</span>
+          </div>
+          <div class="stat-col">
+            <span class="stat-label">${isHistory ? 'Exit' : 'Current'}</span>
+            <span class="stat-value ${isLive ? 'live-value' : ''}">${fmtMoney(isHistory ? t.exit_price : t.last_price)}</span>
+          </div>
+          <div class="stat-col">
+            <span class="stat-label">P/L</span>
+            <span class="stat-value pnl ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(pnl)}<small>${up ? '+' : ''}${t.estimated_pnl_percent}%</small></span>
+          </div>
         </div>
-        <div class="trade-card-row">
-          <span>${isHistory ? 'Exit' : 'Current'}</span><b>${fmtMoney(isHistory ? t.exit_price : t.last_price)}</b>
-        </div>
-        <div class="trade-card-pnl ${up ? 'up' : 'down'}">
-          <span>${up ? '+' : ''}${fmtMoney(t.estimated_pnl)}</span>
-          <span class="pnl-pct">(${up ? '+' : ''}${t.estimated_pnl_percent}%)</span>
-        </div>
+
         <div class="trade-card-footer">
-          <span class="trade-closing-reason">${isHistory ? fmtDateTime(t.closed_at) : fmtDateTime(t.created_at)}</span>
+          <span class="trade-closing-reason">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            ${isHistory ? fmtDateTime(t.closed_at) : fmtDateTime(t.created_at)}
+          </span>
           <button type="button" class="view-trade-link view-details-btn" data-id="${t.id}">
             VIEW DETAILS
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1371,7 +1394,9 @@
       const t = await res.json();
       if (!res.ok) { content.innerHTML = `<p style="color:var(--short);">${t.error || 'Could not load trade'}</p>`; return; }
 
-      const up = (t.estimated_pnl || 0) >= 0;
+      let pnl = Number(t.estimated_pnl) || 0;
+      if (Object.is(pnl, -0)) pnl = 0;
+      const up = pnl >= 0;
       const badge = statusBadgeInfo(t.status);
       const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
       const isActive = t.status === 'ACTIVE';
@@ -1406,7 +1431,7 @@
           <div class="trade-stat-row"><span class="label">Position Size</span><span class="value">${fmtMoney(t.position_size)}</span></div>
           <div class="trade-stat-row"><span class="label">Stop Loss</span><span class="value risk">${fmtMoney(t.stop_loss)}</span></div>
           <div class="trade-stat-row"><span class="label">Take Profit</span><span class="value target">${fmtMoney(t.take_profit)}</span></div>
-          <div class="trade-stat-row pnl-row"><span class="label">Estimated P/L</span><span class="value ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(t.estimated_pnl)} (${up ? '+' : ''}${t.estimated_pnl_percent}%)</span></div>
+          <div class="trade-stat-row pnl-row"><span class="label">Estimated P/L</span><span class="value ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(pnl)} (${up ? '+' : ''}${t.estimated_pnl_percent}%)</span></div>
         </div>
         <div class="trade-detail-subhead">Trade Timeline</div>
         <div class="trade-timeline">${timelineHtml || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'}</div>
