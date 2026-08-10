@@ -167,6 +167,30 @@ def init_db():
                 cursor.execute("ALTER TABLE active_trades ADD COLUMN momentum_snapshot TEXT NULL")
                 print("[db] migrated: added Signal FM condition-engine columns to active_trades")
 
+            # Performance Summary: qualifying-outcome classification, so
+            # Total Profit/Loss/Win-Rate can be computed without guessing
+            # from P&L sign alone. Values: TAKE_PROFIT, STOP_LOSS,
+            # MANUAL_PROFIT, MANUAL_LOSS (set when a trade closes; NULL
+            # for trades still ACTIVE or closed before this migration).
+            cursor.execute("SHOW COLUMNS FROM active_trades LIKE 'outcome_class'")
+            if cursor.fetchone() is None:
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN outcome_class VARCHAR(20) NULL")
+                # Best-effort backfill for trades closed before this column
+                # existed, using the same rules the app now applies going
+                # forward, so old history isn't excluded from the summary.
+                cursor.execute(
+                    "UPDATE active_trades SET outcome_class = "
+                    "CASE "
+                    "  WHEN status='TARGET_REACHED' THEN 'TAKE_PROFIT' "
+                    "  WHEN status='STOP_LOSS_REACHED' THEN 'STOP_LOSS' "
+                    "  WHEN status='MANUALLY_CLOSED' AND estimated_pnl >= 0 THEN 'MANUAL_PROFIT' "
+                    "  WHEN status='MANUALLY_CLOSED' AND estimated_pnl < 0 THEN 'MANUAL_LOSS' "
+                    "  ELSE outcome_class "
+                    "END "
+                    "WHERE status != 'ACTIVE' AND outcome_class IS NULL"
+                )
+                print("[db] migrated: added outcome_class column to active_trades (+ backfilled existing closed trades)")
+
         print("[db] users table ready")
     finally:
         conn.close()
