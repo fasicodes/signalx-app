@@ -1267,7 +1267,14 @@ main#result-box,
     .channel-grid { grid-template-columns: 1fr; }
     .channel-card.span-2 { grid-column: auto; }
     .topbar { flex-direction: column; gap: 8px; }
-    .topbar-right { align-self: flex-end; }
+    /* Below 400px the right-hand controls (clock, Demo Trading, theme
+       toggle, avatar) no longer fit on one row - previously
+       `align-self: flex-end` alone made this whole group overflow off
+       the right edge of the screen (looked like the avatar/profile pic
+       "jumping" to the side). Wrapping it and keeping it full-width +
+       right-aligned lets it fall onto a second line instead, staying
+       inside the viewport. */
+    .topbar-right { align-self: stretch; width: 100%; flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
     .liq-stats-grid { grid-template-columns: 1fr; }
     .panel-tab { flex: 1 1 100%; }
 }
