@@ -242,6 +242,40 @@
     <p class="tier-note">Ch.01–05 — Hawkes Process, Bayesian Classifier &amp; Conformal Prediction. This is the only tier that produces the final verdict and confidence score.</p>
     <div id="tier-1" class="channel-grid"></div>
 
+    <!-- ACCURACY SCORE — sits at the end of the verdict tier. The verdict
+         itself still comes ONLY from the 5 concepts above; this widget just
+         reads all 19 channels and shows how many currently point the same
+         way as that verdict. Refreshes every 10s on its own. -->
+    <div class="accuracy-score-card">
+      <div class="accuracy-score-head">
+        <div class="channel-id-group">
+          <span class="scope-ticks"><span style="height:4px"></span><span style="height:8px"></span><span style="height:5px"></span><span style="height:11px"></span><span style="height:6px"></span></span>
+          <div>
+            <div class="channel-id">CH.01–19</div>
+            <div class="channel-title">Accuracy Score</div>
+          </div>
+        </div>
+        <span class="channel-model">model agreement</span>
+      </div>
+
+      <div class="accuracy-gauge-row">
+        <div class="accuracy-gauge-wrap">
+          <svg viewBox="0 0 120 70">
+            <path class="accuracy-gauge-track" d="M 10 60 A 50 50 0 0 1 110 60"></path>
+            <path id="accuracy-gauge-fill" class="accuracy-gauge-fill" d="M 10 60 A 50 50 0 0 1 110 60"></path>
+            <line id="accuracy-gauge-needle" class="accuracy-gauge-needle" x1="60" y1="60" x2="60" y2="18"></line>
+            <circle cx="60" cy="60" r="4.5" class="accuracy-gauge-hub"></circle>
+          </svg>
+        </div>
+        <div class="accuracy-score-data">
+          <div id="accuracy-score-pct" class="accuracy-score-pct">--%</div>
+          <div id="accuracy-score-sub" class="accuracy-score-sub">of 19 concepts agree</div>
+        </div>
+      </div>
+
+      <div id="accuracy-history" class="accuracy-history"></div>
+    </div>
+
     <div class="tier-divider">
       <span class="tier-num">TIER&nbsp;02–03</span>
       <span class="tier-label">Microstructure · Extended Signals · Liquidity · Live Chart</span>
