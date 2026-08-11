@@ -352,6 +352,89 @@ function renderHero(data) {
   tag.textContent = `${data.coin || ""} · ${data.timeframe || ""} · ${data.trend || "--"}`.toUpperCase();
 }
 
+/* ---------------------------- accuracy score (Ch.01-19 agreement) ---------------------------- */
+// Verdict/confidence still come ONLY from the 5 core concepts (unchanged
+// backend logic) - this widget just reads concept_accuracy_pct (how many
+// of all 19 channels currently point the same way as that verdict) and
+// keeps a short rolling history, refreshing on its own every 10s.
+
+const ACCURACY_POLL_MS = 10000;
+const ACCURACY_GAUGE_ARC = Math.PI * 50; // path radius 50, half-circle
+const ACCURACY_HISTORY_MAX = 6;
+let accuracyPollTimer = null;
+let accuracyFetchInFlight = false;
+let accuracyHistory = []; // [{pct, verdict}] most-recent-last
+
+function accuracyColor(pct) {
+  if (pct >= 66) return "var(--long)";
+  if (pct >= 33) return "var(--wait)";
+  return "var(--short)";
+}
+
+function renderAccuracyScore(data) {
+  const pctEl = document.getElementById("accuracy-score-pct");
+  const subEl = document.getElementById("accuracy-score-sub");
+  const fillEl = document.getElementById("accuracy-gauge-fill");
+  const needleEl = document.getElementById("accuracy-gauge-needle");
+  const histEl = document.getElementById("accuracy-history");
+  if (!pctEl || !fillEl) return;
+
+  const pct = data.concept_accuracy_pct;
+  const verdict = (data.final_verdict || "").toUpperCase();
+
+  if (na(pct)) {
+    pctEl.textContent = "--%";
+    pctEl.style.color = "var(--wait)";
+    subEl.textContent = verdict === "WAIT" ? "no directional signal yet (WAIT)" : "waiting for a verdict";
+    fillEl.style.stroke = "var(--wait)";
+    fillEl.style.strokeDasharray = ACCURACY_GAUGE_ARC;
+    fillEl.style.strokeDashoffset = ACCURACY_GAUGE_ARC;
+    needleEl.style.transform = "rotate(0deg)";
+  } else {
+    const ratio = Math.max(0, Math.min(100, pct)) / 100;
+    const color = accuracyColor(pct);
+    pctEl.textContent = fmtPct(pct);
+    pctEl.style.color = color;
+    subEl.textContent = `${data.concept_agree_count} of ${data.concept_total} concepts support ${verdict}`;
+    fillEl.style.stroke = color;
+    fillEl.style.strokeDasharray = ACCURACY_GAUGE_ARC;
+    fillEl.style.strokeDashoffset = ACCURACY_GAUGE_ARC * (1 - ratio);
+    needleEl.style.transform = `rotate(${-90 + ratio * 180}deg)`;
+
+    accuracyHistory.push({ pct, verdict });
+    if (accuracyHistory.length > ACCURACY_HISTORY_MAX) accuracyHistory.shift();
+  }
+
+  if (histEl) {
+    histEl.innerHTML = accuracyHistory.map((h) => {
+      const height = Math.max(6, Math.round((h.pct / 100) * 34));
+      return `<div class="bar-col"><span style="height:${height}px; background:${accuracyColor(h.pct)}"></span></div>`;
+    }).join("") || `<div class="bar-col"><span style="height:2px; background:var(--line)"></span></div>`;
+  }
+}
+
+async function fetchAndRenderAccuracy(coin) {
+  if (!coin || accuracyFetchInFlight) return;
+  accuracyFetchInFlight = true;
+  try {
+    const res = await fetch(`/signal?coin=${encodeURIComponent(coin)}&timeframe=1h`);
+    const data = await res.json();
+    if (!res.ok || data.error || coin !== currentCoin) return;
+    renderAccuracyScore(data);
+  } catch (e) {
+    // Silent — a single missed poll shouldn't spam the UI; next tick retries.
+  } finally {
+    accuracyFetchInFlight = false;
+  }
+}
+
+function startAccuracyPolling() {
+  if (accuracyPollTimer) return;
+  accuracyPollTimer = setInterval(() => {
+    if (currentCoin) fetchAndRenderAccuracy(currentCoin);
+  }, ACCURACY_POLL_MS);
+}
+
 /* ---------------------------- tier 1: core verdict engine ---------------------------- */
 
 function renderTier1(data) {
@@ -2202,6 +2285,7 @@ function renderResult(data) {
   }
 
   renderHero(data);
+  renderAccuracyScore(data);
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
@@ -2247,7 +2331,10 @@ async function runAnalysis(forceAnalyze) {
   runBtn.disabled = true;
   runBtn.querySelector(".scan-btn-text").textContent = "SCANNING…";
 
-  if (coin !== currentCoin) lastLiquidityExtra = null;
+  if (coin !== currentCoin) {
+    lastLiquidityExtra = null;
+    accuracyHistory = []; // new coin -> old accuracy history no longer relevant
+  }
   currentCoin = coin;
 
   try {
@@ -2264,6 +2351,7 @@ async function runAnalysis(forceAnalyze) {
 
     fetchAndRenderLiquidity(coin);
     startLiquidityPolling();
+    startAccuracyPolling();
   } catch (err) {
     errorText.textContent = "⚠ " + err.message;
     errorText.classList.remove("hidden");
