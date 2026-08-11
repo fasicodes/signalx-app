@@ -190,12 +190,43 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 
 .coin-picker-menu {
     position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
-    width: 300px; max-height: 360px; overflow-y: auto;
+    width: 300px; max-height: 420px;
     background: var(--panel-raised); border: 1px solid var(--line);
     border-radius: 8px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-    display: none; padding: 6px;
+    display: none; flex-direction: column; padding: 8px;
 }
-.coin-picker.open .coin-picker-menu { display: block; }
+.coin-picker.open .coin-picker-menu { display: flex; }
+
+/* Search box, pinned above the tabs so it's always visible while
+   scrolling the list below. */
+.coin-picker-search-wrap { flex-shrink: 0; margin-bottom: 8px; }
+.coin-picker-search {
+    width: 100%; height: 32px; padding: 0 10px; box-sizing: border-box;
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; font-family: var(--mono); font-size: 12px;
+    outline: none; transition: border-color 0.2s ease;
+}
+.coin-picker-search:focus { border-color: var(--long); }
+.coin-picker-search::placeholder { color: var(--text-faint); }
+
+/* Forex / Crypto tabs. Hidden while the search box has a query, since
+   search results are shown across both asset types at once. */
+.coin-picker-tabs {
+    display: flex; gap: 6px; flex-shrink: 0; margin-bottom: 6px;
+}
+.coin-picker.searching .coin-picker-tabs { display: none; }
+.coin-picker-tab {
+    flex: 1; height: 30px; background: var(--panel); color: var(--text-dim);
+    border: 1px solid var(--line); border-radius: 6px; font-family: var(--mono);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.3px; cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.coin-picker-tab:hover { color: var(--text); }
+.coin-picker-tab.active {
+    background: var(--panel-hover); color: var(--long); border-color: var(--long);
+}
+
+.coin-picker-list { overflow-y: auto; }
 
 .coin-picker-group-label {
     padding: 8px 8px 4px; color: var(--text-faint); font-family: var(--mono);
@@ -215,6 +246,18 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .coin-picker-option-icon {
     width: 20px; height: 20px; border-radius: 50%; background: var(--line-soft);
     object-fit: contain; flex-shrink: 0;
+}
+
+.coin-picker-option-tag {
+    margin-left: auto; flex-shrink: 0; color: var(--text-faint);
+    font-family: var(--mono); font-size: 9px; font-weight: 700;
+    letter-spacing: 0.4px; border: 1px solid var(--line); border-radius: 4px;
+    padding: 2px 5px;
+}
+
+.coin-picker-empty {
+    padding: 16px 8px; text-align: center; color: var(--text-faint);
+    font-family: var(--mono); font-size: 12px;
 }
 
 .scan-btn {
