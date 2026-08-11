@@ -22,6 +22,9 @@ const coinPickerTrigger = document.getElementById("coin-picker-trigger");
 const coinPickerIcon    = document.getElementById("coin-picker-icon");
 const coinPickerLabel   = document.getElementById("coin-picker-label");
 const coinPickerMenu    = document.getElementById("coin-picker-menu");
+const coinPickerSearch  = document.getElementById("coin-picker-search");
+const coinPickerTabsEl  = document.getElementById("coin-picker-tabs");
+const coinPickerListEl  = document.getElementById("coin-picker-list");
 
 // live chart elements
 const chartTitleEl  = document.getElementById("chart-title");
@@ -215,59 +218,145 @@ function attachIconFallback(imgEl, ticker) {
   }, { once: true });
 }
 
+// { crypto: [{value, label}], forex: [{value, label}] } — parsed once from
+// the native <select>'s two optgroups (CRYPTO / FOREX). The picker's tabs
+// + search read from this instead of walking the DOM on every render.
+let COIN_PICKER_DATA = { crypto: [], forex: [] };
+let coinPickerActiveType = "crypto";
+
+// Forex pairs don't have a crypto-style logo — no icon request is made
+// for them, they just get the initials fallback badge directly.
+function isForexValue(value) {
+  return COIN_PICKER_DATA.forex.some((item) => item.value === value);
+}
+
+function parseCoinPickerData() {
+  const data = { crypto: [], forex: [] };
+  Array.from(coinSelect.children).forEach((group) => {
+    if (group.tagName !== "OPTGROUP") return;
+    const type = group.label.trim().toLowerCase() === "forex" ? "forex" : "crypto";
+    Array.from(group.children).forEach((option) => {
+      data[type].push({ value: option.value, label: option.textContent });
+    });
+  });
+  return data;
+}
+
+function coinPickerOptionEl(item, type) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "coin-picker-option";
+  btn.dataset.value = item.value;
+  btn.setAttribute("role", "option");
+
+  const ticker = item.value.split("/")[0];
+  const img = document.createElement("img");
+  img.className = "coin-picker-option-icon";
+  img.alt = "";
+  if (type === "forex") {
+    img.src = fallbackIconDataUrl(ticker);
+  } else {
+    img.src = coinIconUrl(ticker);
+    attachIconFallback(img, ticker);
+  }
+
+  const label = document.createElement("span");
+  label.textContent = item.label;
+
+  btn.appendChild(img);
+  btn.appendChild(label);
+
+  // In search results (both types mixed together) tag each row so it's
+  // obvious at a glance whether it's a coin or a forex pair.
+  if (coinPickerSearch.value.trim()) {
+    const tag = document.createElement("span");
+    tag.className = "coin-picker-option-tag";
+    tag.textContent = type === "forex" ? "FX" : "CRYPTO";
+    btn.appendChild(tag);
+  }
+
+  btn.addEventListener("click", () => selectCoin(item.value));
+  return btn;
+}
+
+function renderCoinPickerList() {
+  const query = coinPickerSearch.value.trim().toLowerCase();
+  coinPicker.classList.toggle("searching", !!query);
+  coinPickerListEl.innerHTML = "";
+
+  let items;
+  if (query) {
+    // Search spans both Forex and Crypto so the user can find any pair
+    // by name without first picking the right tab.
+    items = [
+      ...COIN_PICKER_DATA.crypto.map((i) => ({ ...i, type: "crypto" })),
+      ...COIN_PICKER_DATA.forex.map((i) => ({ ...i, type: "forex" })),
+    ].filter((i) => i.label.toLowerCase().replace(/\s+/g, "").includes(query.replace(/\s+/g, "")));
+  } else {
+    items = COIN_PICKER_DATA[coinPickerActiveType].map((i) => ({ ...i, type: coinPickerActiveType }));
+  }
+
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "coin-picker-empty";
+    empty.textContent = "No match found.";
+    coinPickerListEl.appendChild(empty);
+    return;
+  }
+
+  items.forEach((item) => coinPickerListEl.appendChild(coinPickerOptionEl(item, item.type)));
+  syncCoinPickerActiveOption();
+}
+
+function syncCoinPickerActiveOption() {
+  const value = coinSelect.value;
+  coinPickerListEl.querySelectorAll(".coin-picker-option").forEach((opt) => {
+    opt.classList.toggle("active", opt.dataset.value === value);
+  });
+}
+
 function buildCoinPicker() {
   if (!coinPicker || !coinSelect) return;
 
-  coinPickerMenu.innerHTML = "";
+  COIN_PICKER_DATA = parseCoinPickerData();
+  coinPickerActiveType = isForexValue(coinSelect.value) ? "forex" : "crypto";
+  updateCoinPickerTabsUI();
+  renderCoinPickerList();
+  syncCoinPickerTrigger();
+}
 
-  Array.from(coinSelect.children).forEach((group) => {
-    if (group.tagName !== "OPTGROUP") return;
+function updateCoinPickerTabsUI() {
+  coinPickerTabsEl.querySelectorAll(".coin-picker-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.type === coinPickerActiveType);
+  });
+}
 
-    const groupLabel = document.createElement("div");
-    groupLabel.className = "coin-picker-group-label";
-    groupLabel.textContent = group.label;
-    coinPickerMenu.appendChild(groupLabel);
-
-    Array.from(group.children).forEach((option) => {
-      const value = option.value;
-      const ticker = value.split("/")[0];
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "coin-picker-option";
-      btn.dataset.value = value;
-      btn.setAttribute("role", "option");
-
-      const img = document.createElement("img");
-      img.className = "coin-picker-option-icon";
-      img.alt = "";
-      img.src = coinIconUrl(ticker);
-      attachIconFallback(img, ticker);
-
-      const label = document.createElement("span");
-      label.textContent = option.textContent;
-
-      btn.appendChild(img);
-      btn.appendChild(label);
-      btn.addEventListener("click", () => selectCoin(value));
-
-      coinPickerMenu.appendChild(btn);
+if (coinPickerTabsEl) {
+  coinPickerTabsEl.querySelectorAll(".coin-picker-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      coinPickerActiveType = tab.dataset.type;
+      updateCoinPickerTabsUI();
+      renderCoinPickerList();
     });
   });
+}
 
-  syncCoinPickerTrigger();
+if (coinPickerSearch) {
+  coinPickerSearch.addEventListener("input", renderCoinPickerList);
+  coinPickerSearch.addEventListener("click", (e) => e.stopPropagation());
 }
 
 function syncCoinPickerTrigger() {
   const value = coinSelect.value;
   const ticker = value.split("/")[0];
   coinPickerLabel.textContent = value.replace("/", " / ");
-  coinPickerIcon.src = coinIconUrl(ticker);
-  attachIconFallback(coinPickerIcon, ticker);
-
-  coinPickerMenu.querySelectorAll(".coin-picker-option").forEach((opt) => {
-    opt.classList.toggle("active", opt.dataset.value === value);
-  });
+  if (isForexValue(value)) {
+    coinPickerIcon.src = fallbackIconDataUrl(ticker);
+  } else {
+    coinPickerIcon.src = coinIconUrl(ticker);
+    attachIconFallback(coinPickerIcon, ticker);
+  }
+  syncCoinPickerActiveOption();
 }
 
 // Keep the live-chart header's coin logo (top-left of the Live Chart tab,
@@ -287,8 +376,17 @@ function selectCoin(value) {
 }
 
 function openCoinPicker() {
+  // Reset search and land on whichever tab matches the currently selected
+  // pair, so reopening the picker always starts from a clean, predictable
+  // state instead of wherever the user last left the search/tab.
+  coinPickerSearch.value = "";
+  coinPickerActiveType = isForexValue(coinSelect.value) ? "forex" : "crypto";
+  updateCoinPickerTabsUI();
+  renderCoinPickerList();
+
   coinPicker.classList.add("open");
   coinPickerTrigger.setAttribute("aria-expanded", "true");
+  coinPickerSearch.focus();
 }
 function closeCoinPicker() {
   coinPicker.classList.remove("open");
@@ -901,6 +999,26 @@ function renderLiquidityScanner(data) {
 
 async function fetchAndRenderLiquidity(coin) {
   if (!coin || liquidityFetchInFlight) return;
+  if (isForexValue(coin)) {
+    // Order-book data (order flow, depth, spoofing, etc.) has no free
+    // forex source, so the Liquidity Scanner stays crypto-only — show a
+    // clear one-time message instead of silently failing every poll.
+    if (liqScannerEl) {
+      liqScannerEl.innerHTML = `
+        <div class="liq-panel">
+          <div class="liq-header">
+            <div class="liq-header-left">
+              <span class="liq-icon">⌁</span>
+              <div>
+                <div class="liq-title">Liquidity Sweep Scanner</div>
+                <div class="liq-subtitle">Crypto pairs only — forex order-book data isn't freely available.</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+    return;
+  }
   liquidityFetchInFlight = true;
   try {
     const res = await fetch(`/liquidity?coin=${encodeURIComponent(coin)}&timeframe=1h`);
@@ -916,9 +1034,10 @@ async function fetchAndRenderLiquidity(coin) {
 }
 
 function startLiquidityPolling() {
+  if (isForexValue(currentCoin)) return;
   if (liquidityPollTimer) return;
   liquidityPollTimer = setInterval(() => {
-    if (currentCoin) fetchAndRenderLiquidity(currentCoin);
+    if (currentCoin && !isForexValue(currentCoin)) fetchAndRenderLiquidity(currentCoin);
   }, LIQUIDITY_POLL_MS);
 }
 
@@ -2313,6 +2432,12 @@ function renderResult(data) {
 
 async function runAnalysis(forceAnalyze) {
   const coin = coinSelect.value;
+
+  // Forex pairs run through the same /signal endpoint now (price-action
+  // channels only - RSI/MACD, Hawkes+Bayesian verdict, HMM regime, etc.).
+  // Order-book-based channels (order flow, VPIN, depth, and the Liquidity
+  // Scanner tab) stay crypto-only since that data has no free forex
+  // source - main.py already skips those for forex automatically.
 
   // Active Trade Tracking: agar is coin par pehle se ek ACTIVE trade
   // tracked hai, aur user ne explicitly "Analyze Market Anyway" nahi
