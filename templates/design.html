@@ -145,20 +145,31 @@
 
   <div class="control-row">
 
-    <!-- Custom coin picker: shows each coin's logo. Built on top of the
-         native <select> below, which script.js keeps in sync and still
-         reads via coinSelect.value for the /signal + /candles calls. -->
+    <!-- Custom coin/pair picker: Forex/Crypto tabs + search, each coin's
+         logo shown. Built on top of the native <select> below, which
+         script.js keeps in sync and still reads via coinSelect.value for
+         the /signal + /candles calls. -->
     <div class="coin-picker" id="coin-picker">
       <button type="button" class="coin-picker-trigger" id="coin-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
         <img id="coin-picker-icon" class="coin-picker-icon" alt="" src="" />
         <span id="coin-picker-label" class="coin-picker-label">BTC / USDT</span>
         <span class="coin-picker-caret">▾</span>
       </button>
-      <div class="coin-picker-menu" id="coin-picker-menu" role="listbox"></div>
+      <div class="coin-picker-menu" id="coin-picker-menu" role="listbox">
+        <div class="coin-picker-search-wrap">
+          <input type="text" id="coin-picker-search" class="coin-picker-search"
+                 placeholder="Search coin or forex pair…" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="coin-picker-tabs" id="coin-picker-tabs">
+          <button type="button" class="coin-picker-tab active" data-type="crypto">Crypto</button>
+          <button type="button" class="coin-picker-tab" data-type="forex">Forex</button>
+        </div>
+        <div class="coin-picker-list" id="coin-picker-list"></div>
+      </div>
     </div>
 
     <select id="coin-select" class="coin-select coin-select-native">
-      <optgroup label="TOP 1–10">
+      <optgroup label="CRYPTO">
         <option value="BTC/USDT">BTC / USDT</option>
         <option value="ETH/USDT">ETH / USDT</option>
         <option value="BNB/USDT">BNB / USDT</option>
@@ -169,8 +180,6 @@
         <option value="DOGE/USDT">DOGE / USDT</option>
         <option value="ZEC/USDT">ZEC / USDT</option>
         <option value="DOT/USDT">DOT / USDT</option>
-      </optgroup>
-      <optgroup label="TOP 11–20">
         <option value="XLM/USDT">XLM / USDT</option>
         <option value="XMR/USDT">XMR / USDT</option>
         <option value="LINK/USDT">LINK / USDT</option>
@@ -181,8 +190,6 @@
         <option value="SUI/USDT">SUI / USDT</option>
         <option value="HBAR/USDT">HBAR / USDT</option>
         <option value="FIL/USDT">FIL / USDT</option>
-      </optgroup>
-      <optgroup label="TOP 21–30">
         <option value="AVAX/USDT">AVAX / USDT</option>
         <option value="CRO/USDT">CRO / USDT</option>
         <option value="NEAR/USDT">NEAR / USDT</option>
@@ -193,6 +200,38 @@
         <option value="OKB/USDT">OKB / USDT</option>
         <option value="ASTER/USDT">ASTER / USDT</option>
         <option value="ATOM/USDT">ATOM / USDT</option>
+      </optgroup>
+      <optgroup label="FOREX">
+        <option value="EUR/USD">EUR / USD</option>
+        <option value="USD/JPY">USD / JPY</option>
+        <option value="GBP/USD">GBP / USD</option>
+        <option value="USD/CHF">USD / CHF</option>
+        <option value="AUD/USD">AUD / USD</option>
+        <option value="USD/CAD">USD / CAD</option>
+        <option value="NZD/USD">NZD / USD</option>
+        <option value="EUR/JPY">EUR / JPY</option>
+        <option value="GBP/JPY">GBP / JPY</option>
+        <option value="EUR/GBP">EUR / GBP</option>
+        <option value="EUR/CHF">EUR / CHF</option>
+        <option value="AUD/JPY">AUD / JPY</option>
+        <option value="EUR/AUD">EUR / AUD</option>
+        <option value="GBP/CHF">GBP / CHF</option>
+        <option value="AUD/NZD">AUD / NZD</option>
+        <option value="NZD/JPY">NZD / JPY</option>
+        <option value="CAD/JPY">CAD / JPY</option>
+        <option value="CHF/JPY">CHF / JPY</option>
+        <option value="EUR/CAD">EUR / CAD</option>
+        <option value="GBP/CAD">GBP / CAD</option>
+        <option value="EUR/NZD">EUR / NZD</option>
+        <option value="AUD/CAD">AUD / CAD</option>
+        <option value="GBP/AUD">GBP / AUD</option>
+        <option value="GBP/NZD">GBP / NZD</option>
+        <option value="AUD/CHF">AUD / CHF</option>
+        <option value="NZD/CAD">NZD / CAD</option>
+        <option value="NZD/CHF">NZD / CHF</option>
+        <option value="CAD/CHF">CAD / CHF</option>
+        <option value="USD/TRY">USD / TRY</option>
+        <option value="USD/ZAR">USD / ZAR</option>
       </optgroup>
     </select>
 
