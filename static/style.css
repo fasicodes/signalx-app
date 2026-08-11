@@ -110,6 +110,13 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
     display: flex; align-items: center; justify-content: space-between;
     gap: 20px; min-height: 42px; margin-bottom: 10px;
     border-bottom: 1px solid var(--line); padding-bottom: 10px;
+    /* Lets the right-hand controls (clock / Demo Trading / theme toggle /
+       avatar) drop to their own line instead of overflowing off the
+       right edge of the screen whenever they don't all fit next to the
+       logo - this used to only kick in below 400px via a separate
+       override, which left it broken on the common ~412-430px phone
+       widths (avatar getting clipped off-screen). */
+    flex-wrap: wrap;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .hamburger-btn {
@@ -129,7 +136,14 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .brand-mark::after { content: "▶"; font-size: 8px; }
 .brand-name { font-family: var(--heading); font-size: 20px; font-weight: 600; letter-spacing: 0.2px; color: var(--text); }
 .brand-tagline { display: none; }
-.topbar-right { display: flex; align-items: center; gap: 10px; }
+.topbar-right {
+    display: flex; align-items: center; gap: 10px;
+    /* Right-align even when this whole block wraps to its own row, and
+       let its own children (clock/button/toggle/avatar) wrap internally
+       too if they still don't all fit - the avatar/profile pic should
+       never be pushed past the screen edge. */
+    margin-left: auto; flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; max-width: 100%;
+}
 .live-clock { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text); }
 .live-clock .dot {
     width: 7px; height: 7px; border-radius: 50%; background: var(--long);
