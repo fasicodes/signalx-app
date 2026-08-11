@@ -689,6 +689,31 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
    CHANNEL GRID / CARD
 ================================================================ */
 
+/* Accuracy Score widget — sits at the end of Tier 1, updates every 10s */
+.accuracy-score-card {
+    margin-top: 9px; margin-bottom: 4px; padding: 14px 16px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.018), transparent 55%), var(--panel);
+    border: 1px solid var(--line); border-radius: 7px;
+    display: flex; flex-direction: column; gap: 10px;
+}
+.accuracy-score-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.accuracy-gauge-row { display: flex; align-items: center; gap: 18px; }
+.accuracy-gauge-wrap { position: relative; width: 130px; flex-shrink: 0; }
+.accuracy-gauge-wrap svg { width: 100%; height: auto; overflow: visible; }
+.accuracy-gauge-track { fill: none; stroke: var(--line); stroke-width: 9; stroke-linecap: round; }
+.accuracy-gauge-fill {
+    fill: none; stroke: var(--wait); stroke-width: 9; stroke-linecap: round;
+    transition: stroke-dasharray 0.6s ease, stroke 0.6s ease;
+}
+.accuracy-gauge-needle { stroke: var(--text); stroke-width: 2; stroke-linecap: round; transform-origin: 60px 60px; transition: transform 0.6s ease; }
+.accuracy-gauge-hub { fill: var(--text-dim); }
+.accuracy-score-data { display: flex; flex-direction: column; gap: 2px; }
+.accuracy-score-pct { color: var(--text); font-family: var(--mono); font-size: 26px; font-weight: 800; line-height: 1; }
+.accuracy-score-sub { color: var(--text-dim); font-family: var(--mono); font-size: 10.5px; }
+.accuracy-history { display: flex; align-items: flex-end; gap: 5px; height: 34px; }
+.accuracy-history .bar-col { flex: 1; display: flex; align-items: flex-end; height: 100%; border-radius: 2px; overflow: hidden; background: #252c35; }
+.accuracy-history .bar-col > span { width: 100%; border-radius: 2px 2px 0 0; transition: height 0.5s ease, background 0.5s ease; }
+
 .channel-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; margin-bottom: 4px; }
 .channel-grid.single { grid-template-columns: 1fr; }
 
