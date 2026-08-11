@@ -380,6 +380,175 @@ def fractional_kelly(win_prob, reward_risk_ratio=1.5, k=0.5):
 
 
 # ============================================================
+# "ACCURACY SCORE" (Ch.01-19 agreement with the verdict)
+# ------------------------------------------------------------
+# NOTE: verdict/confidence khud AB BHI sirf 5 concepts (Hawkes +
+# Bayesian, Conformal Prediction) se bante hain - ye function usay
+# CHANGE nahi karta. Ye sirf ek ALAG display metric hai: baaqi
+# concepts (Ch.06-19) ko unke apne output se ek directional "vote"
+# (LONG / SHORT / NEUTRAL) diya jata hai, aur phir count kiya jata
+# hai ke un 19 mein se kitne is verdict ki taraf ishara kar rahe
+# hain. Kai concepts (volatility, kelly sizing, VPIN toxicity,
+# entropy, RL agent, hurst memory) apni fitrat mein directional
+# nahi hain - unhein hamesha NEUTRAL rakha gaya hai (denominator
+# mein shamil hain, lekin kabhi "agree" nahi karte) taake number
+# ghalat tareeqe se inflate na ho.
+# ============================================================
+def _concept_votes(*, buying_pressure, selling_pressure, bullish_pct, bearish_pct,
+                    ofi_data, regime_data, jump_data, meta_data, divergence_data,
+                    depth_data, vwap_data, wavelet_data, cusum_data, sweep_data):
+    votes = []
+
+    def add(ch, name, direction):
+        votes.append({"ch": ch, "name": name, "direction": direction})
+
+    # 1. Hawkes Process
+    if buying_pressure > selling_pressure:
+        add(1, "Hawkes Process", "LONG")
+    elif selling_pressure > buying_pressure:
+        add(1, "Hawkes Process", "SHORT")
+    else:
+        add(1, "Hawkes Process", "NEUTRAL")
+
+    # 2. Bayesian Classifier
+    if bullish_pct > bearish_pct:
+        add(2, "Bayesian Classifier", "LONG")
+    elif bearish_pct > bullish_pct:
+        add(2, "Bayesian Classifier", "SHORT")
+    else:
+        add(2, "Bayesian Classifier", "NEUTRAL")
+
+    # 3-5. Not directional signals of their own (volatility sizing, the
+    # verdict engine itself, risk sizing) - always neutral.
+    add(3, "Quantile Volatility", "NEUTRAL")
+    add(4, "Conformal Prediction", "NEUTRAL")
+    add(5, "Fractional Kelly", "NEUTRAL")
+
+    # 6. Order Flow Imbalance
+    ofi_score = ofi_data.get("ofi_score")
+    if ofi_score is None:
+        add(6, "Order Flow Imbalance", "NEUTRAL")
+    else:
+        add(6, "Order Flow Imbalance", "LONG" if ofi_score > 0 else ("SHORT" if ofi_score < 0 else "NEUTRAL"))
+
+    # 7. VPIN - measures toxicity/magnitude only, no direction of its own.
+    add(7, "VPIN Toxic Flow", "NEUTRAL")
+
+    # 8. HMM Regime - only has a directional read while actually Trending.
+    if regime_data.get("regime") == "Trending" and regime_data.get("state_mean_return_pct") is not None:
+        add(8, "HMM Regime", "LONG" if regime_data["state_mean_return_pct"] > 0 else "SHORT")
+    else:
+        add(8, "HMM Regime", "NEUTRAL")
+
+    # 9. Jump Diffusion - only votes when an actual jump was detected.
+    if jump_data.get("jump_detected") and jump_data.get("jump_direction"):
+        add(9, "Jump Diffusion", "LONG" if jump_data["jump_direction"] == "UP" else "SHORT")
+    else:
+        add(9, "Jump Diffusion", "NEUTRAL")
+
+    # 10. Meta-Labeling (win probability vs coin-flip)
+    win_p = meta_data.get("meta_win_probability")
+    if win_p is None:
+        add(10, "Meta-Labeling", "NEUTRAL")
+    else:
+        add(10, "Meta-Labeling", "LONG" if win_p > 50 else ("SHORT" if win_p < 50 else "NEUTRAL"))
+
+    # 11. Cross-Asset Divergence
+    interp = divergence_data.get("interpretation")
+    if interp == "ASSET_OUTPERFORMING_BENCHMARK":
+        add(11, "Cross-Asset Divergence", "LONG")
+    elif interp == "ASSET_UNDERPERFORMING_BENCHMARK":
+        add(11, "Cross-Asset Divergence", "SHORT")
+    else:
+        add(11, "Cross-Asset Divergence", "NEUTRAL")
+
+    # 12. Multi-Timeframe Entropy - measures randomness, not direction.
+    add(12, "Multi-Timeframe Entropy", "NEUTRAL")
+
+    # 13. Order Book Depth Profile (wall bias)
+    wall = depth_data.get("wall_bias")
+    if wall == "BID_WALL_HEAVIER":
+        add(13, "Order Book Depth", "LONG")
+    elif wall == "ASK_WALL_HEAVIER":
+        add(13, "Order Book Depth", "SHORT")
+    else:
+        add(13, "Order Book Depth", "NEUTRAL")
+
+    # 14. VWAP Deviation - extreme deviation implies mean-reversion the
+    # OPPOSITE way (price far above VWAP -> reversion down, and vice versa).
+    z = vwap_data.get("vwap_deviation_z")
+    if z is not None and z > 2:
+        add(14, "VWAP Deviation", "SHORT")
+    elif z is not None and z < -2:
+        add(14, "VWAP Deviation", "LONG")
+    else:
+        add(14, "VWAP Deviation", "NEUTRAL")
+
+    # 15. RL Risk Agent - sizes risk, doesn't call direction.
+    add(15, "RL Risk Agent", "NEUTRAL")
+
+    # 16. Hurst Exponent - describes memory/regime, not direction.
+    add(16, "Hurst Exponent", "NEUTRAL")
+
+    # 17. Wavelet Trend
+    wdir = wavelet_data.get("wavelet_trend_direction")
+    if wdir == "UP":
+        add(17, "Wavelet Trend", "LONG")
+    elif wdir == "DOWN":
+        add(17, "Wavelet Trend", "SHORT")
+    else:
+        add(17, "Wavelet Trend", "NEUTRAL")
+
+    # 18. CUSUM Structural Break - direction of whichever side broke.
+    if cusum_data.get("structural_break"):
+        cusum_pos = cusum_data.get("cusum_pos") or 0
+        cusum_neg = cusum_data.get("cusum_neg") or 0
+        add(18, "Structural Break", "LONG" if cusum_pos > abs(cusum_neg) else "SHORT")
+    else:
+        add(18, "Structural Break", "NEUTRAL")
+
+    # 19. Liquidity Sweep
+    sdir = sweep_data.get("sweep_direction")
+    if sdir == "SWEPT_LOW_REVERSED_UP":
+        add(19, "Liquidity Sweep", "LONG")
+    elif sdir == "SWEPT_HIGH_REVERSED_DOWN":
+        add(19, "Liquidity Sweep", "SHORT")
+    else:
+        add(19, "Liquidity Sweep", "NEUTRAL")
+
+    return votes
+
+
+def concept_accuracy_score(final_verdict, **concept_kwargs):
+    votes = _concept_votes(**concept_kwargs)
+    total = len(votes)  # always 19
+
+    if final_verdict not in ("LONG", "SHORT"):
+        # WAIT has no direction to measure agreement against.
+        for v in votes:
+            v["agrees"] = False
+        return {
+            "concept_accuracy_pct": None,
+            "concept_agree_count": 0,
+            "concept_total": total,
+            "concept_votes": votes,
+        }
+
+    agree_count = 0
+    for v in votes:
+        v["agrees"] = v["direction"] == final_verdict
+        if v["agrees"]:
+            agree_count += 1
+
+    return {
+        "concept_accuracy_pct": round((agree_count / total) * 100, 1),
+        "concept_agree_count": agree_count,
+        "concept_total": total,
+        "concept_votes": votes,
+    }
+
+
+# ============================================================
 # 6. ORDER FLOW IMBALANCE (OFI)  (v4 - UNCHANGED)
 # ============================================================
 def order_flow_imbalance(symbol="BTC/USDT", snapshot_gap_sec=1.0):
@@ -1334,6 +1503,19 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     except Exception as e:
         sweep_data = {"liquidity_sweep_detected": None, "error": str(e)}
 
+    # "Accuracy Score" - kitne 19 mein se concepts final_verdict ki
+    # taraf ishara kar rahe hain (display metric, verdict khud change
+    # nahi hota - dekho concept_accuracy_score() ke comments).
+    accuracy_data = concept_accuracy_score(
+        final_verdict,
+        buying_pressure=buying_pressure, selling_pressure=selling_pressure,
+        bullish_pct=bullish_pct, bearish_pct=bearish_pct,
+        ofi_data=ofi_data, regime_data=regime_data, jump_data=jump_data,
+        meta_data=meta_data, divergence_data=divergence_data,
+        depth_data=depth_data, vwap_data=vwap_data, wavelet_data=wavelet_data,
+        cusum_data=cusum_data, sweep_data=sweep_data,
+    )
+
     result = {
         "trend": trend,
         "buying_pressure": buying_pressure,
@@ -1365,6 +1547,12 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "wavelet_trend": wavelet_data,
         "structural_break": cusum_data,
         "liquidity_sweep": sweep_data,
+
+        # Accuracy Score widget (Ch.01-19 agreement with the verdict above)
+        "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
+        "concept_agree_count": accuracy_data["concept_agree_count"],
+        "concept_total": accuracy_data["concept_total"],
+        "concept_votes": accuracy_data["concept_votes"],
 
         "disclaimer": ("Probability estimates only - not financial advice. "
                         "In-sample calculations, no walk-forward backtest run yet. "
