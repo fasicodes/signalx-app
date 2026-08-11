@@ -220,6 +220,109 @@ AVAILABLE_COINS = [
     "TAO/USDT", "ONDO/USDT", "OKB/USDT", "ASTER/USDT", "ATOM/USDT",
 ]
 
+# Top 30 forex pairs (majors + minors/crosses + a couple of common
+# exotics), used by the new Forex tab in the coin/pair picker
+# (templates/design.html + static/script.js). NOTE: this list only
+# powers *selection* right now - the actual signal engine below
+# (get_candles / generate_signal / order-book stuff) talks to OKX via
+# ccxt, which is a crypto exchange and does not carry forex pairs. See
+# _is_forex_pair() and its use in /signal, /candles and /liquidity for
+# the friendly "coming soon" guard that keeps a Forex selection from
+# hitting the crypto-only exchange and blowing up with a raw ccxt error.
+FOREX_PAIRS = [
+    # Majors
+    "EUR/USD", "USD/JPY", "GBP/USD", "USD/CHF", "AUD/USD",
+    "USD/CAD", "NZD/USD",
+    # Minors / crosses
+    "EUR/JPY", "GBP/JPY", "EUR/GBP", "EUR/CHF", "AUD/JPY",
+    "EUR/AUD", "GBP/CHF", "AUD/NZD", "NZD/JPY", "CAD/JPY",
+    "CHF/JPY", "EUR/CAD", "GBP/CAD", "EUR/NZD", "AUD/CAD",
+    "GBP/AUD", "GBP/NZD", "AUD/CHF", "NZD/CAD", "NZD/CHF",
+    "CAD/CHF",
+    # Exotics
+    "USD/TRY", "USD/ZAR",
+]
+
+
+def _is_forex_pair(symbol):
+    """True agar symbol FOREX_PAIRS mein hai (case-insensitive)."""
+    return (symbol or "").upper() in FOREX_PAIRS
+
+
+def _forex_yf_symbol(pair):
+    """'EUR/USD' -> 'EURUSD=X' (Yahoo Finance ka forex ticker format)."""
+    base, quote = pair.upper().split("/")
+    return f"{base}{quote}=X"
+
+
+# timeframe -> (yfinance interval, yfinance lookback period). yfinance
+# supports these intervals directly; anything else (3m, 2h, 6h, 12h) is
+# built below by resampling a smaller supported interval with pandas.
+FOREX_YF_DIRECT = {
+    "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
+    "30m": ("30m", "60d"), "1h": ("60m", "730d"), "4h": ("60m", "730d"),
+    "1d": ("1d", "10y"), "1w": ("1wk", "10y"), "1M": ("1mo", "max"),
+    "3M": ("3mo", "max"),
+}
+# timeframe not directly supported by yfinance -> (base interval to
+# fetch, pandas resample rule to build the target timeframe from it).
+FOREX_RESAMPLE = {
+    "3m": ("1m", "3min"), "2h": ("60m", "2h"),
+    "6h": ("60m", "6h"), "12h": ("60m", "12h"),
+}
+
+
+def get_forex_candles(symbol, timeframe="1h", limit=200, since=None):
+    """Forex OHLC candles via Yahoo Finance (yfinance) - free, no API key.
+    NOTE: unlike the crypto/ccxt path, Yahoo has no order book, funding
+    rate, or open-interest data, so this only powers price/candle-based
+    features (chart + the price-action channels in generate_signal), not
+    the order-book channels (OFI, VPIN, depth profile, spoofing) or the
+    Liquidity Scanner, which stay crypto-only - see the /liquidity route.
+    """
+    import yfinance as yf
+
+    ticker = _forex_yf_symbol(symbol)
+    resample_rule = None
+    if timeframe in FOREX_RESAMPLE:
+        interval, period = FOREX_RESAMPLE[timeframe][0], "60d"
+        resample_rule = FOREX_RESAMPLE[timeframe][1]
+    else:
+        interval, period = FOREX_YF_DIRECT.get(timeframe, ("60m", "730d"))
+
+    data = yf.Ticker(ticker).history(period=period, interval=interval, auto_adjust=False)
+    if data is None or data.empty:
+        raise ValueError(f"No forex data available for {symbol} ({timeframe})")
+
+    data = data.reset_index()
+    time_col = "Datetime" if "Datetime" in data.columns else "Date"
+    df = pd.DataFrame({
+        "timestamp": pd.to_datetime(data[time_col], utc=True).dt.tz_localize(None),
+        "open": data["Open"].astype(float),
+        "high": data["High"].astype(float),
+        "low": data["Low"].astype(float),
+        "close": data["Close"].astype(float),
+        "volume": data["Volume"].astype(float) if "Volume" in data.columns else 0.0,
+    })
+
+    if resample_rule:
+        df = (
+            df.set_index("timestamp")
+            .resample(resample_rule)
+            .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+            .dropna()
+            .reset_index()
+        )
+
+    if since is not None:
+        since_dt = pd.to_datetime(since, unit="ms")
+        df = df[df["timestamp"] >= since_dt].reset_index(drop=True)
+
+    df = df.tail(limit).reset_index(drop=True)
+    if df.empty:
+        raise ValueError(f"No forex data available for {symbol} ({timeframe}) in the requested range")
+    return df
+
 
 def _clean_order_book(ob):
     """OKX (via ccxt) kabhi kabhi har bid/ask level mein 2 se zyada values
@@ -253,7 +356,13 @@ TIMEFRAME_SECONDS = {
 def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200, since=None):
     """Exchange se OHLCV candles fetch karta hai. `since` (ms epoch) diya
     jaye to us waqt se aage ki candles milti hain -- older-history
-    pagination isi se ban'ti hai."""
+    pagination isi se ban'ti hai.
+    Forex pairs (FOREX_PAIRS) OKX par nahi milte, wo Yahoo Finance
+    (get_forex_candles) se aate hain - dono same-shaped df return
+    karte hain isliye har caller (get_candles ke baad) ko farq nahi
+    padta symbol crypto tha ya forex."""
+    if _is_forex_pair(symbol):
+        return get_forex_candles(symbol, timeframe=timeframe, limit=limit, since=since)
     ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit, since=since)
     df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
@@ -712,7 +821,13 @@ def meta_label_filter(df, execute_threshold=0.55):
 # jitna comprehensive nahi hai.
 # ============================================================
 def cross_asset_divergence(df, symbol, lookback=50):
-    benchmark_symbol = "ETH/USDT" if symbol.upper().startswith("BTC") else "BTC/USDT"
+    if _is_forex_pair(symbol):
+        # Forex benchmark: EUR/USD is the most liquid pair and a common
+        # dollar-strength proxy; if the symbol IS EUR/USD, fall back to
+        # GBP/USD instead so we're never comparing a pair to itself.
+        benchmark_symbol = "GBP/USD" if symbol.upper() == "EUR/USD" else "EUR/USD"
+    else:
+        benchmark_symbol = "ETH/USDT" if symbol.upper().startswith("BTC") else "BTC/USDT"
     try:
         bench_df = get_candles(symbol=benchmark_symbol, timeframe="1h", limit=max(lookback + 10, 60))
     except Exception as e:
@@ -1614,6 +1729,14 @@ def signal_endpoint():
     timeframe = request.args.get("timeframe", "1h")
     orderbook = request.args.get("orderbook", "true").lower() != "false"
 
+    # Forex pairs have no free order-book/funding/OI source (that's
+    # crypto-exchange-only data) - so those channels are force-skipped
+    # for forex and generate_signal() falls back to its price-action-only
+    # channels (RSI/MACD, HMM regime, Hawkes+Bayesian verdict, etc.),
+    # same as when a user manually turns "orderbook" off for a crypto pair.
+    if _is_forex_pair(coin):
+        orderbook = False
+
     try:
         df = get_candles(symbol=coin, timeframe=timeframe)
         result = generate_signal(df, symbol=coin, include_orderbook=orderbook)
@@ -1626,7 +1749,12 @@ def signal_endpoint():
 
 @app.route("/coins", methods=["GET"])
 def available_coins():
-    return jsonify(AVAILABLE_COINS)
+    # Grouped by asset type for the picker's Forex/Crypto tabs. Old shape
+    # (a flat list) is still available at ?flat=true for any caller that
+    # relied on the previous response format.
+    if request.args.get("flat", "").lower() == "true":
+        return jsonify(AVAILABLE_COINS)
+    return jsonify({"crypto": AVAILABLE_COINS, "forex": FOREX_PAIRS})
 
 
 # ============================================================
@@ -1752,6 +1880,9 @@ def candles_endpoint():
 def liquidity_endpoint():
     coin = request.args.get("coin", "BTC/USDT")
     timeframe = request.args.get("timeframe", "1h")
+
+    if _is_forex_pair(coin):
+        return jsonify({"error": f"Forex liquidity scanner for {coin} is coming soon."}), 400
 
     try:
         df = get_candles(symbol=coin, timeframe=timeframe, limit=120)
