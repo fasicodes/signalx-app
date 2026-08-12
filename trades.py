@@ -38,12 +38,14 @@ def _require_login():
 
 
 def _get_live_price(asset):
-    """Asset ka current price nikalta hai - existing exchange connection
-    reuse karte hain (koi naya market-data system nahi banate)."""
+    """Asset ka current price nikalta hai - existing get_live_price()
+    reuse karte hain (main.py), jo crypto (OKX) aur forex (Yahoo
+    Finance) dono symbols handle karta hai - isse pehle ye seedha ccxt
+    exchange.fetch_ticker() call karta tha jo sirf crypto ke liye kaam
+    karta tha aur forex pairs par fail ho jata tha."""
     try:
-        from main import exchange
-        ticker = exchange.fetch_ticker(asset)
-        return float(ticker["last"])
+        from main import get_live_price
+        return get_live_price(asset)
     except Exception:
         return None
 
