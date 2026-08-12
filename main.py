@@ -369,6 +369,19 @@ def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200, since=None):
     return df
 
 
+def get_live_price(asset):
+    """Current price - crypto ke liye OKX ticker, forex ke liye Yahoo
+    Finance (yfinance) ka last close. trades.py (Active Trade Tracking)
+    isay reuse karta hai taake forex trades bhi track ho sakein - pehle
+    ye seedha ccxt exchange.fetch_ticker() use karta tha jo forex symbols
+    (jaise 'EUR/USD') par fail ho jata tha kyunke OKX crypto-only hai."""
+    if _is_forex_pair(asset):
+        df = get_forex_candles(asset, timeframe="1m", limit=1)
+        return float(df["close"].iloc[-1])
+    ticker = exchange.fetch_ticker(asset)
+    return float(ticker["last"])
+
+
 # ============================================================
 # 1. HAWKES PROCESS APPROXIMATION  (PURANA - UNCHANGED)
 # ============================================================
@@ -1880,9 +1893,7 @@ def candles_endpoint():
 def liquidity_endpoint():
     coin = request.args.get("coin", "BTC/USDT")
     timeframe = request.args.get("timeframe", "1h")
-
-    if _is_forex_pair(coin):
-        return jsonify({"error": f"Forex liquidity scanner for {coin} is coming soon."}), 400
+    is_forex = _is_forex_pair(coin)
 
     try:
         df = get_candles(symbol=coin, timeframe=timeframe, limit=120)
@@ -1892,12 +1903,21 @@ def liquidity_endpoint():
         traceback.print_exc()
         return jsonify({"error": f"candle fetch failed: {e}"}), 400
 
-    try:
-        ob = _clean_order_book(exchange.fetch_order_book(coin, limit=50))
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        ob = {"bids": [], "asks": [], "error": str(e)}
+    # Forex: no free order book source, so `ob` stays empty and every
+    # order-book-dependent block below (each already in its own
+    # try/except) degrades to its error/None shape instead of crashing.
+    # The price-action parts (sweep detector, CVD, jump/CUSUM) still run
+    # normally off `df`, so the main Liquidity Sweep Scanner visual and
+    # a few of the extra cards keep working for forex too.
+    if is_forex:
+        ob = {"bids": [], "asks": [], "error": "order book not available for forex"}
+    else:
+        try:
+            ob = _clean_order_book(exchange.fetch_order_book(coin, limit=50))
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            ob = {"bids": [], "asks": [], "error": str(e)}
 
     try:
         sweep_data = liquidity_sweep_detector(df)
