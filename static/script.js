@@ -199,8 +199,12 @@ function coinIconUrl(ticker) {
   return `https://assets.coincap.io/assets/icons/${slug}@2x.png`;
 }
 
-// Tiny inline SVG fallback (colored ring + ticker initials) used when a
-// coin's logo can't be fetched from the icon CDN.
+// Forex "logo" — a colored initials badge (same style as the crypto
+// fallback below). Earlier this tried flagcdn.com flag images first,
+// but that's an external CDN call that can silently fail (network
+// filtering, ad-blockers, slow load) and left the picker with NO icon
+// at all for forex rows. The inline SVG badge below has zero network
+// dependency, so it always renders.
 function fallbackIconDataUrl(ticker) {
   const initials = (ticker || "?").slice(0, 3).toUpperCase();
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
@@ -209,6 +213,14 @@ function fallbackIconDataUrl(ticker) {
       fill="#8b96a5" text-anchor="middle">${initials}</text>
   </svg>`;
   return "data:image/svg+xml;base64," + btoa(svg);
+}
+
+// Picks the right icon source for a ticker given its asset type -
+// crypto logo (with initials-badge fallback via attachIconFallback on
+// error), or the guaranteed-to-render forex initials badge.
+function iconUrlFor(ticker, type) {
+  if (type === "forex") return fallbackIconDataUrl(ticker);
+  return coinIconUrl(ticker);
 }
 
 function attachIconFallback(imgEl, ticker) {
@@ -253,12 +265,8 @@ function coinPickerOptionEl(item, type) {
   const img = document.createElement("img");
   img.className = "coin-picker-option-icon";
   img.alt = "";
-  if (type === "forex") {
-    img.src = fallbackIconDataUrl(ticker);
-  } else {
-    img.src = coinIconUrl(ticker);
-    attachIconFallback(img, ticker);
-  }
+  img.src = iconUrlFor(ticker, type);
+  attachIconFallback(img, ticker);
 
   const label = document.createElement("span");
   label.textContent = item.label;
@@ -350,12 +358,8 @@ function syncCoinPickerTrigger() {
   const value = coinSelect.value;
   const ticker = value.split("/")[0];
   coinPickerLabel.textContent = value.replace("/", " / ");
-  if (isForexValue(value)) {
-    coinPickerIcon.src = fallbackIconDataUrl(ticker);
-  } else {
-    coinPickerIcon.src = coinIconUrl(ticker);
-    attachIconFallback(coinPickerIcon, ticker);
-  }
+  coinPickerIcon.src = iconUrlFor(ticker, isForexValue(value) ? "forex" : "crypto");
+  attachIconFallback(coinPickerIcon, ticker);
   syncCoinPickerActiveOption();
 }
 
@@ -364,7 +368,7 @@ function syncCoinPickerTrigger() {
 function syncChartCoinIcon() {
   if (!chartCoinIconEl || !coinSelect) return;
   const ticker = coinSelect.value.split("/")[0];
-  chartCoinIconEl.src = coinIconUrl(ticker);
+  chartCoinIconEl.src = iconUrlFor(ticker, isForexValue(coinSelect.value) ? "forex" : "crypto");
   attachIconFallback(chartCoinIconEl, ticker);
 }
 
@@ -882,7 +886,7 @@ function renderFundingCard(extra) {
         <span class="liq-dual-label">OPEN INTEREST</span>
         <span class="liq-dual-value">${na(f.open_interest) ? "--" : Number(f.open_interest).toLocaleString()}</span>
       </div>
-    </div>` : `<div class="liq-empty-note">Perpetual market not available for this pair on OKX</div>`;
+    </div>` : `<div class="liq-empty-note">Perpetual/funding data not available for this pair</div>`;
   return liqCard({ icon: "%", title: "Funding Rate + Open Interest", subtitle: "CH.25 · perpetual swap data", body });
 }
 
@@ -1002,7 +1006,8 @@ async function fetchAndRenderLiquidity(coin) {
   if (isForexValue(coin)) {
     // Order-book data (order flow, depth, spoofing, etc.) has no free
     // forex source, so the Liquidity Scanner stays crypto-only — show a
-    // clear one-time message instead of silently failing every poll.
+    // clear one-time message instead of silently doing nothing on every
+    // poll (which is what was happening before this check existed).
     if (liqScannerEl) {
       liqScannerEl.innerHTML = `
         <div class="liq-panel">
