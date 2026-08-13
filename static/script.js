@@ -205,12 +205,34 @@ function coinIconUrl(ticker) {
 // filtering, ad-blockers, slow load) and left the picker with NO icon
 // at all for forex rows. The inline SVG badge below has zero network
 // dependency, so it always renders.
+//
+// PATCH: the badge used to use --panel-raised/--line/--text-dim for its
+// colors, which are the app's own dark panel/border/muted-text colors -
+// at 18-20px the badge was technically rendering but blended almost
+// invisibly into the dark UI (confirmed by zooming into screenshots:
+// the text was there, just unreadable). Switched to a deterministic
+// bright accent color per ticker (from FOREX_BADGE_PALETTE) with bold
+// white text, so it reads clearly like a real logo badge instead of a
+// near-invisible dark-on-dark smudge.
+const FOREX_BADGE_PALETTE = [
+  "#3b82f6", "#8b5cf6", "#ec4899", "#f97316",
+  "#14b8a6", "#eab308", "#ef4444", "#22c55e",
+];
+
+function forexBadgeColor(ticker) {
+  const t = ticker || "?";
+  let sum = 0;
+  for (let i = 0; i < t.length; i++) sum += t.charCodeAt(i);
+  return FOREX_BADGE_PALETTE[sum % FOREX_BADGE_PALETTE.length];
+}
+
 function fallbackIconDataUrl(ticker) {
   const initials = (ticker || "?").slice(0, 3).toUpperCase();
+  const bg = forexBadgeColor(ticker);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
-    <circle cx="20" cy="20" r="19" fill="#151b24" stroke="#27303b" stroke-width="1.5"/>
-    <text x="20" y="25" font-family="monospace" font-size="11" font-weight="700"
-      fill="#8b96a5" text-anchor="middle">${initials}</text>
+    <circle cx="20" cy="20" r="19" fill="${bg}"/>
+    <text x="20" y="25" font-family="monospace" font-size="11" font-weight="800"
+      fill="#ffffff" text-anchor="middle">${initials}</text>
   </svg>`;
   return "data:image/svg+xml;base64," + btoa(svg);
 }
@@ -1003,27 +1025,13 @@ function renderLiquidityScanner(data) {
 
 async function fetchAndRenderLiquidity(coin) {
   if (!coin || liquidityFetchInFlight) return;
-  if (isForexValue(coin)) {
-    // Order-book data (order flow, depth, spoofing, etc.) has no free
-    // forex source, so the Liquidity Scanner stays crypto-only — show a
-    // clear one-time message instead of silently doing nothing on every
-    // poll (which is what was happening before this check existed).
-    if (liqScannerEl) {
-      liqScannerEl.innerHTML = `
-        <div class="liq-panel">
-          <div class="liq-header">
-            <div class="liq-header-left">
-              <span class="liq-icon">⌁</span>
-              <div>
-                <div class="liq-title">Liquidity Sweep Scanner</div>
-                <div class="liq-subtitle">Crypto pairs only — forex order-book data isn't freely available.</div>
-              </div>
-            </div>
-          </div>
-        </div>`;
-    }
-    return;
-  }
+  // NOTE: forex used to be hard-blocked here before the backend's
+  // /liquidity route learned to degrade gracefully for forex (empty
+  // order book, but the price-action panels - sweep detector, CVD,
+  // jump/CUSUM - still run off candle data). Blocking it client-side
+  // meant forex never got ANY liquidity data even though the backend
+  // could already provide the price-action panels, so that guard was
+  // removed - forex now goes through the same fetch path as crypto.
   liquidityFetchInFlight = true;
   try {
     const res = await fetch(`/liquidity?coin=${encodeURIComponent(coin)}&timeframe=1h`);
