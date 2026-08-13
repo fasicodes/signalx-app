@@ -298,7 +298,7 @@ function coinPickerOptionEl(item, type) {
 
   // In search results (both types mixed together) tag each row so it's
   // obvious at a glance whether it's a coin or a forex pair.
-  if (coinPickerSearch.value.trim()) {
+  if (coinPickerSearch && coinPickerSearch.value.trim()) {
     const tag = document.createElement("span");
     tag.className = "coin-picker-option-tag";
     tag.textContent = type === "forex" ? "FX" : "CRYPTO";
@@ -310,6 +310,7 @@ function coinPickerOptionEl(item, type) {
 }
 
 function renderCoinPickerList() {
+  if (!coinPickerSearch || !coinPicker || !coinPickerListEl) return;
   const query = coinPickerSearch.value.trim().toLowerCase();
   coinPicker.classList.toggle("searching", !!query);
   coinPickerListEl.innerHTML = "";
@@ -339,6 +340,7 @@ function renderCoinPickerList() {
 }
 
 function syncCoinPickerActiveOption() {
+  if (!coinSelect || !coinPickerListEl) return;
   const value = coinSelect.value;
   coinPickerListEl.querySelectorAll(".coin-picker-option").forEach((opt) => {
     opt.classList.toggle("active", opt.dataset.value === value);
@@ -346,7 +348,7 @@ function syncCoinPickerActiveOption() {
 }
 
 function buildCoinPicker() {
-  if (!coinPicker || !coinSelect) return;
+  if (!coinPicker || !coinSelect || !coinPickerTabsEl || !coinPickerListEl || !coinPickerSearch) return;
 
   COIN_PICKER_DATA = parseCoinPickerData();
   coinPickerActiveType = isForexValue(coinSelect.value) ? "forex" : "crypto";
@@ -356,6 +358,7 @@ function buildCoinPicker() {
 }
 
 function updateCoinPickerTabsUI() {
+  if (!coinPickerTabsEl) return;
   coinPickerTabsEl.querySelectorAll(".coin-picker-tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.type === coinPickerActiveType);
   });
