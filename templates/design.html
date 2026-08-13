@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Multi-Channel Market Readout</title>
-<link rel="stylesheet" href="/static/style.css?v=20260812-fx-1">
+<link rel="stylesheet" href="/static/style.css?v=20260814-others-menu">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
@@ -377,10 +377,22 @@
                 <span id="chart-live-dot" class="live-clock-dot"></span>
                 <span id="chart-price" class="chart-price">--</span>
                 <span id="chart-change" class="chart-change">--</span>
-                <button type="button" id="pattern-toggle-btn" class="indicator-btn" title="Show candlestick patterns">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="3" height="8" stroke="currentColor" stroke-width="1.8"/><rect x="10.5" y="5" width="3" height="13" stroke="currentColor" stroke-width="1.8"/><rect x="17" y="13" width="3" height="5" stroke="currentColor" stroke-width="1.8"/></svg>
-                  <span>PATTERNS</span>
-                </button>
+                <div class="chart-others-wrap" id="chart-others-wrap">
+                  <button type="button" id="chart-others-btn" class="indicator-btn" title="Other overlays">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>
+                    <span>OTHERS</span>
+                  </button>
+                  <div class="chart-others-menu" id="chart-others-menu" hidden>
+                    <label class="chart-others-item">
+                      <input type="checkbox" id="toggle-patterns" />
+                      <span>Candlestick Patterns</span>
+                    </label>
+                    <label class="chart-others-item">
+                      <input type="checkbox" id="toggle-sr" />
+                      <span>Support / Resistance</span>
+                    </label>
+                  </div>
+                </div>
                 <button type="button" id="indicator-btn" class="indicator-btn" title="Indicators">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" fill="currentColor"/></svg>
                   <span>INDICATORS</span>
@@ -940,7 +952,7 @@
 
 </div>
 
-<script src="/static/script.js?v=20260814-pattern-toggle"></script>
+<script src="/static/script.js?v=20260814-sr-others"></script>
 <script>
 // Standalone controller for the homepage info sidebar (Contact/About/
 // Privacy/Terms/Disclaimer). Fully independent of script.js and the
