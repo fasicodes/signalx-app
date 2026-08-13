@@ -587,6 +587,76 @@ def detect_support_resistance(df, pivot_window=5, cluster_pct=0.25, max_levels=6
 
 
 # ============================================================
+# MULTI-TIMEFRAME CONFIRMATION (NEW) — pro trader hamesha pehle higher
+# timeframe (4H/1D) ka trend dekhta hai, phir chhoti timeframe (1H/15m)
+# par entry leta hai. Ye function base timeframe ke hisaab se 2 higher
+# timeframes fetch kar ke unka trend (EMA20 vs EMA50 crossover) check
+# karta hai aur final_verdict ke sath align/against hone par confidence
+# ko adjust karta hai — jaisa candlestick confirmation karta hai, verdict
+# khud kabhi flip nahi hota.
+# ============================================================
+HTF_MAP = {
+    "1m": ["1h", "4h"], "3m": ["1h", "4h"], "5m": ["1h", "4h"],
+    "15m": ["1h", "4h"], "30m": ["4h", "1d"],
+    "1h": ["4h", "1d"], "2h": ["4h", "1d"], "4h": ["1d", "1w"],
+    "6h": ["1d", "1w"], "12h": ["1d", "1w"],
+    "1d": ["1w"], "1w": [],
+}
+
+
+def higher_timeframe_trend(df):
+    """EMA20 vs EMA50 crossover + price position se ek fast trend read -
+    'UP' / 'DOWN' / 'SIDEWAYS'. Chhoti history par bhi kaam kare isliye
+    span history-length ke hisaab se adjust hota hai."""
+    close = df["close"]
+    n = len(close)
+    if n < 10:
+        return "SIDEWAYS"
+
+    fast_span = min(20, max(3, n // 3))
+    slow_span = min(50, max(fast_span + 3, n - 1))
+    ema_fast = close.ewm(span=fast_span, adjust=False).mean()
+    ema_slow = close.ewm(span=slow_span, adjust=False).mean()
+
+    last_close = float(close.iloc[-1])
+    last_fast = float(ema_fast.iloc[-1])
+    last_slow = float(ema_slow.iloc[-1])
+
+    if last_fast > last_slow and last_close > last_fast:
+        return "UP"
+    elif last_fast < last_slow and last_close < last_fast:
+        return "DOWN"
+    return "SIDEWAYS"
+
+
+def multi_timeframe_confirmation(symbol, base_timeframe, final_verdict):
+    higher_tfs = HTF_MAP.get(base_timeframe, ["4h", "1d"])
+    trends = {}
+    for tf in higher_tfs:
+        try:
+            htf_df = get_candles(symbol=symbol, timeframe=tf, limit=120)
+            trends[tf] = higher_timeframe_trend(htf_df)
+        except Exception:
+            trends[tf] = None
+
+    verdict_dir = "UP" if final_verdict == "LONG" else "DOWN" if final_verdict == "SHORT" else None
+
+    aligned = sum(1 for tr in trends.values() if verdict_dir and tr == verdict_dir)
+    against = sum(1 for tr in trends.values() if verdict_dir and tr not in (None, "SIDEWAYS") and tr != verdict_dir)
+
+    if verdict_dir is None:
+        status, adj = "NEUTRAL", 0
+    elif aligned > against:
+        status, adj = "ALIGNED", 6
+    elif against > aligned:
+        status, adj = "AGAINST", -10
+    else:
+        status, adj = "MIXED", 0
+
+    return {"higher_timeframes": trends, "status": status, "confidence_adjustment": adj}
+
+
+# ============================================================
 # 1. HAWKES PROCESS APPROXIMATION  (PURANA - UNCHANGED)
 # ============================================================
 def hawkes_pressure(df, alpha=0.6, beta=0.4, lookback=40):
@@ -1740,7 +1810,7 @@ def market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cv
 #     bante hain (Conformal Prediction), v4 jaisa hi - ISE CHANGE
 #     NAHI KIYA GAYA. Baaqi concepts sirf extra info hain. ***
 # ============================================================
-def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
+def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h"):
     if _HAS_PANDAS_TA:
         df["rsi"] = ta.rsi(df["close"], length=14)
         macd = ta.macd(df["close"])
@@ -1781,6 +1851,15 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     except Exception as e:
         candle_data = {"patterns_detected": [], "confirmation": "ERROR", "confidence_adjustment": 0, "error": str(e)}
     confidence_pct = max(5, min(97, round(confidence_pct + candle_data.get("confidence_adjustment", 0), 2)))
+
+    # --- Multi-timeframe confirmation (NEW) — higher timeframe (4H/1D)
+    # trend ke sath align/against hone par confidence +/-6-10% adjust
+    # hoti hai. final_verdict yahan bhi kabhi flip nahi hota.
+    try:
+        mtf_data = multi_timeframe_confirmation(symbol, timeframe, final_verdict)
+    except Exception as e:
+        mtf_data = {"higher_timeframes": {}, "status": "ERROR", "confidence_adjustment": 0, "error": str(e)}
+    confidence_pct = max(5, min(97, round(confidence_pct + mtf_data.get("confidence_adjustment", 0), 2)))
 
     # --- v4 ke 4 concepts (display-only, UNCHANGED) ---
     if include_orderbook:
@@ -1904,6 +1983,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "structural_break": cusum_data,
         "liquidity_sweep": sweep_data,
         "candlestick_patterns": candle_data,
+        "multi_timeframe": mtf_data,
 
         # Accuracy Score widget (Ch.01-05 concept agreement out of 5, with the verdict above)
         "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
@@ -1981,7 +2061,7 @@ def signal_endpoint():
 
     try:
         df = get_candles(symbol=coin, timeframe=timeframe)
-        result = generate_signal(df, symbol=coin, include_orderbook=orderbook)
+        result = generate_signal(df, symbol=coin, include_orderbook=orderbook, timeframe=timeframe)
         result["coin"] = coin
         result["timeframe"] = timeframe
         return jsonify(result)
