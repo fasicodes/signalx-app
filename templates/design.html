@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Multi-Channel Market Readout</title>
-<link rel="stylesheet" href="/static/style.css?v=20260812-fx-1">
+<link rel="stylesheet" href="/static/style.css?v=20260804-ind-1">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
@@ -22,7 +22,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
       <div class="brand-row">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM" style="height:32px; width:auto;">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM" style="height:26px; width:auto;">
         <span class="brand-name">Signals FM</span>
       </div>
       <span class="brand-tagline">19-Channel Market Readout</span>
@@ -90,13 +90,6 @@
        #result-box, so it never touches the RUN ANALYSIS flow. -->
   <div class="side-drawer-backdrop" id="side-drawer-backdrop"></div>
   <nav class="side-drawer" id="home-info-nav">
-    <div class="side-drawer-brand">
-      <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="side-drawer-brand-logo">
-      <div class="side-drawer-brand-text">
-        <span class="side-drawer-brand-name">Signals FM</span>
-        <span class="side-drawer-brand-tag">19-Channel Market Readout</span>
-      </div>
-    </div>
     <div class="side-drawer-head">
       <button type="button" class="side-drawer-back" id="side-drawer-back">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -105,35 +98,35 @@
     </div>
     <div class="side-drawer-links">
       <button class="panel-tab" id="home-nav-tab" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 11.5L12 4l8 7.5M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="panel-tab-num">04</span>
         <span class="panel-tab-text">HOME</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="contact" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="panel-tab-num">05</span>
         <span class="panel-tab-text">CONTACT US</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="about" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v6M12 7.5v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <span class="panel-tab-num">06</span>
         <span class="panel-tab-text">ABOUT</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="privacy" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+        <span class="panel-tab-num">07</span>
         <span class="panel-tab-text">PRIVACY POLICY</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="terms" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="panel-tab-num">08</span>
         <span class="panel-tab-text">TERMS &amp; CONDITIONS</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="disclaimer" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4M12 17v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <span class="panel-tab-num">09</span>
         <span class="panel-tab-text">DISCLAIMER</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="active-trades" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 17l5-6 4 4 7-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="6" r="1.6" fill="currentColor"/></svg></span>
+        <span class="panel-tab-num">10</span>
         <span class="panel-tab-text">ACTIVE TRADES</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="trade-history" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.6 5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 12V7M4 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="panel-tab-num">11</span>
         <span class="panel-tab-text">TRADE HISTORY</span>
       </button>
     </div>
@@ -145,31 +138,20 @@
 
   <div class="control-row">
 
-    <!-- Custom coin/pair picker: Forex/Crypto tabs + search, each coin's
-         logo shown. Built on top of the native <select> below, which
-         script.js keeps in sync and still reads via coinSelect.value for
-         the /signal + /candles calls. -->
+    <!-- Custom coin picker: shows each coin's logo. Built on top of the
+         native <select> below, which script.js keeps in sync and still
+         reads via coinSelect.value for the /signal + /candles calls. -->
     <div class="coin-picker" id="coin-picker">
       <button type="button" class="coin-picker-trigger" id="coin-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
         <img id="coin-picker-icon" class="coin-picker-icon" alt="" src="" />
         <span id="coin-picker-label" class="coin-picker-label">BTC / USDT</span>
         <span class="coin-picker-caret">▾</span>
       </button>
-      <div class="coin-picker-menu" id="coin-picker-menu" role="listbox">
-        <div class="coin-picker-search-wrap">
-          <input type="text" id="coin-picker-search" class="coin-picker-search"
-                 placeholder="Search coin or forex pair…" autocomplete="off" spellcheck="false" />
-        </div>
-        <div class="coin-picker-tabs" id="coin-picker-tabs">
-          <button type="button" class="coin-picker-tab active" data-type="crypto">Crypto</button>
-          <button type="button" class="coin-picker-tab" data-type="forex">Forex</button>
-        </div>
-        <div class="coin-picker-list" id="coin-picker-list"></div>
-      </div>
+      <div class="coin-picker-menu" id="coin-picker-menu" role="listbox"></div>
     </div>
 
     <select id="coin-select" class="coin-select coin-select-native">
-      <optgroup label="CRYPTO">
+      <optgroup label="TOP 1–10">
         <option value="BTC/USDT">BTC / USDT</option>
         <option value="ETH/USDT">ETH / USDT</option>
         <option value="BNB/USDT">BNB / USDT</option>
@@ -180,6 +162,8 @@
         <option value="DOGE/USDT">DOGE / USDT</option>
         <option value="ZEC/USDT">ZEC / USDT</option>
         <option value="DOT/USDT">DOT / USDT</option>
+      </optgroup>
+      <optgroup label="TOP 11–20">
         <option value="XLM/USDT">XLM / USDT</option>
         <option value="XMR/USDT">XMR / USDT</option>
         <option value="LINK/USDT">LINK / USDT</option>
@@ -190,6 +174,8 @@
         <option value="SUI/USDT">SUI / USDT</option>
         <option value="HBAR/USDT">HBAR / USDT</option>
         <option value="FIL/USDT">FIL / USDT</option>
+      </optgroup>
+      <optgroup label="TOP 21–30">
         <option value="AVAX/USDT">AVAX / USDT</option>
         <option value="CRO/USDT">CRO / USDT</option>
         <option value="NEAR/USDT">NEAR / USDT</option>
@@ -200,38 +186,6 @@
         <option value="OKB/USDT">OKB / USDT</option>
         <option value="ASTER/USDT">ASTER / USDT</option>
         <option value="ATOM/USDT">ATOM / USDT</option>
-      </optgroup>
-      <optgroup label="FOREX">
-        <option value="EUR/USD">EUR / USD</option>
-        <option value="USD/JPY">USD / JPY</option>
-        <option value="GBP/USD">GBP / USD</option>
-        <option value="USD/CHF">USD / CHF</option>
-        <option value="AUD/USD">AUD / USD</option>
-        <option value="USD/CAD">USD / CAD</option>
-        <option value="NZD/USD">NZD / USD</option>
-        <option value="EUR/JPY">EUR / JPY</option>
-        <option value="GBP/JPY">GBP / JPY</option>
-        <option value="EUR/GBP">EUR / GBP</option>
-        <option value="EUR/CHF">EUR / CHF</option>
-        <option value="AUD/JPY">AUD / JPY</option>
-        <option value="EUR/AUD">EUR / AUD</option>
-        <option value="GBP/CHF">GBP / CHF</option>
-        <option value="AUD/NZD">AUD / NZD</option>
-        <option value="NZD/JPY">NZD / JPY</option>
-        <option value="CAD/JPY">CAD / JPY</option>
-        <option value="CHF/JPY">CHF / JPY</option>
-        <option value="EUR/CAD">EUR / CAD</option>
-        <option value="GBP/CAD">GBP / CAD</option>
-        <option value="EUR/NZD">EUR / NZD</option>
-        <option value="AUD/CAD">AUD / CAD</option>
-        <option value="GBP/AUD">GBP / AUD</option>
-        <option value="GBP/NZD">GBP / NZD</option>
-        <option value="AUD/CHF">AUD / CHF</option>
-        <option value="NZD/CAD">NZD / CAD</option>
-        <option value="NZD/CHF">NZD / CHF</option>
-        <option value="CAD/CHF">CAD / CHF</option>
-        <option value="USD/TRY">USD / TRY</option>
-        <option value="USD/ZAR">USD / ZAR</option>
       </optgroup>
     </select>
 
@@ -280,40 +234,6 @@
     </div>
     <p class="tier-note">Ch.01–05 — Hawkes Process, Bayesian Classifier &amp; Conformal Prediction. This is the only tier that produces the final verdict and confidence score.</p>
     <div id="tier-1" class="channel-grid"></div>
-
-    <!-- ACCURACY SCORE — sits at the end of the verdict tier. The verdict
-         itself still comes ONLY from the 5 concepts above; this widget just
-         reads all 19 channels and shows how many currently point the same
-         way as that verdict. Refreshes every 10s on its own. -->
-    <div class="accuracy-score-card">
-      <div class="accuracy-score-head">
-        <div class="channel-id-group">
-          <span class="scope-ticks"><span style="height:4px"></span><span style="height:8px"></span><span style="height:5px"></span><span style="height:11px"></span><span style="height:6px"></span></span>
-          <div>
-            <div class="channel-id">CH.01–19</div>
-            <div class="channel-title">Accuracy Score</div>
-          </div>
-        </div>
-        <span class="channel-model">model agreement</span>
-      </div>
-
-      <div class="accuracy-gauge-row">
-        <div class="accuracy-gauge-wrap">
-          <svg viewBox="0 0 120 70">
-            <path class="accuracy-gauge-track" d="M 10 60 A 50 50 0 0 1 110 60"></path>
-            <path id="accuracy-gauge-fill" class="accuracy-gauge-fill" d="M 10 60 A 50 50 0 0 1 110 60"></path>
-            <line id="accuracy-gauge-needle" class="accuracy-gauge-needle" x1="60" y1="60" x2="60" y2="18"></line>
-            <circle cx="60" cy="60" r="4.5" class="accuracy-gauge-hub"></circle>
-          </svg>
-        </div>
-        <div class="accuracy-score-data">
-          <div id="accuracy-score-pct" class="accuracy-score-pct">--%</div>
-          <div id="accuracy-score-sub" class="accuracy-score-sub">of 19 concepts agree</div>
-        </div>
-      </div>
-
-      <div id="accuracy-history" class="accuracy-history"></div>
-    </div>
 
     <div class="tier-divider">
       <span class="tier-num">TIER&nbsp;02–03</span>
@@ -906,22 +826,6 @@
         <div class="about-card">
           <h2 class="about-title">Trade History</h2>
           <p>Completed trades — closed by hitting target, stop loss, or manually.</p>
-
-          <!-- Performance Summary — see #perf-summary-list below for the
-               metric cards; computed via GET /api/trades/summary
-               (qualifying trades only, per outcome_class). -->
-          <div id="perf-summary" class="perf-summary">
-            <div class="perf-summary-headrow">
-              <h3 class="perf-summary-title">Performance Summary</h3>
-              <button type="button" id="perf-summary-refresh-btn" class="perf-summary-refresh-btn">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 0 1 15.3-6.4M21 12a9 9 0 0 1-15.3 6.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 3v4.5h-4.5M6 21v-4.5h4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                SUMMARIZE TRADE HISTORY
-              </button>
-            </div>
-            <p id="perf-summary-statement" class="perf-summary-statement">Tap "Summarize Trade History" to see how you're doing overall.</p>
-            <div id="perf-summary-grid" class="perf-summary-grid"></div>
-          </div>
-
           <div id="trade-history-list" style="margin-top:18px;">
             <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
           </div>
@@ -937,7 +841,7 @@
 
 </div>
 
-<script src="/static/script.js?v=20260812-fx-1"></script>
+<script src="/static/script.js?v=20260804-ind-2"></script>
 <script>
 // Standalone controller for the homepage info sidebar (Contact/About/
 // Privacy/Terms/Disclaimer). Fully independent of script.js and the
@@ -1125,8 +1029,8 @@
 <div class="side-drawer-backdrop" id="trade-modal-backdrop" style="display:none;"></div>
 
 <!-- Track This Trade — confirmation modal -->
-<div id="track-trade-modal" class="trade-modal-overlay" style="display:none; position:fixed; inset:0; z-index:900; align-items:center; justify-content:center;">
-  <div class="trade-modal-card" style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:380px; max-height:88vh; overflow-y:auto;">
+<div id="track-trade-modal" style="display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center;">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:380px; max-height:88vh; overflow-y:auto;">
     <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 4px;">Track Your Trade</h3>
     <p style="font-size:12px; color:var(--text-dim); margin:0 0 18px;">By starting tracking, you are asking Signal FM to monitor this trade using the information you provide.</p>
 
@@ -1150,8 +1054,8 @@
 </div>
 
 <!-- Already-active prompt: shown when RUN ANALYSIS is clicked while a trade is being tracked for that coin -->
-<div id="active-prompt-modal" class="trade-modal-overlay" style="display:none; position:fixed; inset:0; z-index:900; align-items:center; justify-content:center;">
-  <div class="trade-modal-card" style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:360px;">
+<div id="active-prompt-modal" style="display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center;">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:360px;">
     <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 8px;">You already have an active trade</h3>
     <p id="active-prompt-text" style="font-size:12.5px; color:var(--text-dim); margin:0 0 18px;"></p>
     <div style="display:flex; flex-direction:column; gap:10px;">
@@ -1163,8 +1067,8 @@
 </div>
 
 <!-- Trade detail modal: timeline + close trade -->
-<div id="trade-detail-modal" class="trade-modal-overlay" style="display:none; position:fixed; inset:0; z-index:900; align-items:center; justify-content:center;">
-  <div class="trade-modal-card" style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:440px; max-height:86vh; overflow-y:auto;">
+<div id="trade-detail-modal" style="display:none; position:fixed; inset:0; z-index:200; align-items:center; justify-content:center;">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:440px; max-height:86vh; overflow-y:auto;">
     <div id="trade-detail-content"></div>
     <button id="trade-detail-close-btn" type="button" style="width:100%; margin-top:16px; padding:10px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Close</button>
   </div>
@@ -1187,68 +1091,8 @@
 
   function fmtMoney(n) {
     if (n === null || n === undefined || isNaN(n)) return '--';
-    let num = Number(n);
-    if (Object.is(num, -0)) num = 0; // avoid a stray "-" on effectively-zero P/L
-    return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-
-  function coinInitials(asset) {
-    const base = (asset || '').split('/')[0] || '';
-    return base.slice(0, 3).toUpperCase();
-  }
-
-  function fmtDateTime(iso) {
-    if (!iso) return '--';
-    try {
-      return new Date(iso).toLocaleString(undefined, {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      });
-    } catch (e) { return '--'; }
-  }
-
-  // status -> badge class + human label (kept purely presentational;
-  // the underlying status strings/values from the backend are untouched).
-  // Prefers outcome_class when present (transparency: distinguishes a
-  // manual profitable exit from a manual user-initiated loss) and falls
-  // back to the plain status for older trades closed before that field
-  // existed.
-  function statusBadgeInfo(status, outcomeClass) {
-    const byOutcome = {
-      TAKE_PROFIT:    { cls: 'win',     label: 'TAKE PROFIT' },
-      STOP_LOSS:      { cls: 'loss',    label: 'STOP LOSS' },
-      MANUAL_PROFIT:  { cls: 'win',     label: 'MANUALLY CLOSED — PROFIT' },
-      MANUAL_LOSS:    { cls: 'neutral', label: 'MANUALLY CLOSED — USER LOSS' },
-    };
-    if (outcomeClass && byOutcome[outcomeClass]) return byOutcome[outcomeClass];
-
-    const map = {
-      ACTIVE:            { cls: 'active',  label: 'ACTIVE' },
-      TARGET_REACHED:    { cls: 'win',     label: 'TAKE PROFIT' },
-      STOP_LOSS_REACHED: { cls: 'loss',    label: 'STOP LOSS REACHED' },
-      SETUP_INVALIDATED: { cls: 'loss',    label: 'SETUP INVALIDATED' },
-      MANUALLY_CLOSED:   { cls: 'neutral', label: 'MANUALLY CLOSED' },
-    };
-    return map[status] || { cls: 'neutral', label: (status || '--').replace(/_/g, ' ') };
-  }
-
-  // trade_events.event_type -> chat-bubble tone + icon (frontend-only
-  // classification; backend keeps emitting the same event_type values)
-  const EVENT_TONE = {
-    TRADE_STARTED: 'positive', SETUP_VALID: 'positive', TARGET_REACHED: 'positive',
-    HEALTHY_PROFIT: 'positive', RECOVERY: 'positive', TAKE_PROFIT_APPROACHING: 'positive',
-    TEMPORARY_SMALL_DRAWDOWN: 'warning', TEMPORARY_DRAWDOWN_PROLONGED: 'warning',
-    EXTENDED_DRAWDOWN: 'warning', PROFIT_MOMENTUM_WEAKENING: 'warning',
-    PROFIT_AT_RISK: 'warning', HOLDING_PERIOD_REACHED: 'warning',
-    STOP_LOSS_APPROACHING: 'danger', HIGH_RISK_OPPOSITE_MOVE: 'danger',
-    STOP_LOSS_REACHED: 'danger', SETUP_INVALIDATED: 'danger',
-    MANUALLY_CLOSED: 'neutral', CONSOLIDATION: 'neutral', WAIT_EVALUATING: 'neutral',
-  };
-  const TONE_ICON = {
-    positive: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    warning: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 16.5v.01M10.3 3.9L2.6 18a1.5 1.5 0 0 0 1.3 2.2h16.2a1.5 1.5 0 0 0 1.3-2.2L13.7 3.9a1.5 1.5 0 0 0-2.6 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    danger: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v6M12 16v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    neutral: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
-  };
 
   /* ---------------- fetch + refresh active trades ---------------- */
 
@@ -1396,52 +1240,38 @@
 
   /* ---------------- Active Trades / Trade History panels ---------------- */
 
+  // "Risky" conditions get a warning color, everything else uses the
+  // neutral accent - this is just visual triage, the message text itself
+  // is the source of truth.
+  const _WARNING_CONDITIONS = new Set([
+    'HIGH_RISK_OPPOSITE_MOVE', 'STOP_LOSS_APPROACHING', 'PROFIT_AT_RISK', 'SETUP_INVALIDATED',
+  ]);
+  function conditionAccentColor(conditionKey) {
+    return _WARNING_CONDITIONS.has(conditionKey) ? 'var(--short)' : 'var(--accent)';
+  }
+
   function tradeCardHtml(t, isHistory) {
-    let pnl = Number(t.estimated_pnl) || 0;
-    if (Object.is(pnl, -0)) pnl = 0;
-    const up = pnl >= 0;
-    const badge = statusBadgeInfo(t.status, t.outcome_class);
-    const isLive = t.status === 'ACTIVE';
-    const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
-    const outcomeCls = isLive ? 'is-live' : (up ? 'is-win' : 'is-loss');
+    const pnlColor = (t.estimated_pnl || 0) >= 0 ? 'var(--long)' : 'var(--short)';
+    const guidanceColor = conditionAccentColor(t.trade_condition);
+    const guidanceHtml = (!isHistory && t.condition_message) ? `
+        <div style="border-left:3px solid ${guidanceColor}; background:var(--panel); border-radius:0 6px 6px 0; padding:8px 10px; margin-bottom:10px; font-size:11.5px; line-height:1.4; color:var(--text);">
+          ${t.condition_message}
+        </div>` : '';
     return `
-      <div class="trade-card ${outcomeCls}">
-        <div class="trade-card-top">
-          <div class="trade-card-id">
-            <span class="trade-avatar ${dirCls}">${coinInitials(t.asset)}</span>
-            <div class="trade-card-pair-wrap">
-              <span class="trade-card-pair">${t.asset}</span>
-              <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
-            </div>
-          </div>
-          <span class="trade-status-badge ${badge.cls}">${badge.cls === 'active' ? '<span class="live-dot"></span>' : ''}${badge.label}</span>
+      <div style="background:var(--panel-raised); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px; font-family:var(--mono);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <span style="font-size:13px; font-weight:700;">${t.asset} · ${t.direction}</span>
+          <span style="font-size:10px; padding:2px 8px; border-radius:4px; background:${isHistory ? 'var(--panel)' : 'var(--long-dim)'}; color:${isHistory ? 'var(--text-dim)' : 'var(--long)'};">${t.status}</span>
         </div>
-
-        <div class="trade-card-stats">
-          <div class="stat-col">
-            <span class="stat-label">Entry</span>
-            <span class="stat-value">${fmtMoney(t.entry_price)}</span>
-          </div>
-          <div class="stat-col">
-            <span class="stat-label">${isHistory ? 'Exit' : 'Current'}</span>
-            <span class="stat-value ${isLive ? 'live-value' : ''}">${fmtMoney(isHistory ? t.exit_price : t.last_price)}</span>
-          </div>
-          <div class="stat-col">
-            <span class="stat-label">P/L</span>
-            <span class="stat-value pnl ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(pnl)}<small>${up ? '+' : ''}${t.estimated_pnl_percent}%</small></span>
-          </div>
+        <div style="font-size:12px; color:var(--text-dim); display:flex; justify-content:space-between; margin-bottom:4px;">
+          <span>Entry ${fmtMoney(t.entry_price)}</span>
+          <span>${isHistory ? 'Exit ' + fmtMoney(t.exit_price) : 'Now ' + fmtMoney(t.last_price)}</span>
         </div>
-
-        <div class="trade-card-footer">
-          <span class="trade-closing-reason">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            ${isHistory ? fmtDateTime(t.closed_at) : fmtDateTime(t.created_at)}
-          </span>
-          <button type="button" class="view-trade-link view-details-btn" data-id="${t.id}">
-            VIEW DETAILS
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
+        <div style="font-size:13px; font-weight:700; color:${pnlColor}; margin-bottom:10px;">
+          ${t.estimated_pnl >= 0 ? '+' : ''}${fmtMoney(t.estimated_pnl)} (${t.estimated_pnl_percent}%)
         </div>
+        ${guidanceHtml}
+        <button type="button" class="view-trade-link" data-id="${t.id}" style="background:none; border:none; color:var(--accent); font-size:11px; font-weight:700; cursor:pointer; padding:0;">VIEW DETAILS →</button>
       </div>`;
   }
 
@@ -1479,56 +1309,7 @@
     } catch (e) {
       el.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load trade history.</p>';
     }
-    refreshPerfSummary();
   }
-
-  /* ---------------- Performance Summary ---------------- */
-
-  function perfMetricCardHtml(label, value, tone, tooltip) {
-    return `
-      <div class="perf-metric-card ${tone || ''}" ${tooltip ? `title="${tooltip}"` : ''}>
-        <span class="perf-metric-label">${label}</span>
-        <span class="perf-metric-value">${value}</span>
-      </div>`;
-  }
-
-  async function refreshPerfSummary() {
-    const statementEl = document.getElementById('perf-summary-statement');
-    const gridEl = document.getElementById('perf-summary-grid');
-    const btn = document.getElementById('perf-summary-refresh-btn');
-    btn.disabled = true;
-    btn.classList.add('is-loading');
-    statementEl.textContent = 'Summarizing your trade history…';
-    try {
-      const res = await fetch('/api/trades/summary', { credentials: 'same-origin' });
-      const s = await res.json();
-      if (!res.ok) { statementEl.textContent = s.error || 'Could not summarize trade history.'; return; }
-
-      const netUp = s.net_pnl >= 0;
-      statementEl.innerHTML = s.total_qualifying_trades
-        ? `Overall, you are currently <span class="${netUp ? 'up' : 'down'}">${netUp ? 'in profit of ' + fmtMoney(s.net_pnl) : 'down ' + fmtMoney(Math.abs(s.net_pnl))}</span>, across ${s.total_qualifying_trades} qualifying trade${s.total_qualifying_trades === 1 ? '' : 's'}.`
-        : 'No qualifying trades yet — Performance Summary will update once trades close via Take Profit, Stop Loss, or a manual profitable exit.';
-
-      gridEl.innerHTML = [
-        perfMetricCardHtml('Total Profit', fmtMoney(s.total_profit), 'up'),
-        perfMetricCardHtml('Total Loss', fmtMoney(s.total_loss), 'down'),
-        perfMetricCardHtml('Net P&amp;L', (s.net_pnl >= 0 ? '+' : '') + fmtMoney(s.net_pnl), netUp ? 'up' : 'down'),
-        perfMetricCardHtml('Win Rate', s.win_rate + '%', ''),
-        perfMetricCardHtml('Winning Trades', s.winning_trades, 'up'),
-        perfMetricCardHtml('Losing Trades', s.losing_trades, 'down'),
-        perfMetricCardHtml('Qualifying Trades', s.total_qualifying_trades, ''),
-        perfMetricCardHtml('User Mistakes', s.user_mistake_trades, s.user_mistake_trades > 0 ? 'down' : '',
-          'Trades manually closed at a loss with no system risk-warning active at the time. Does not affect Win Rate.'),
-      ].join('');
-    } catch (e) {
-      statementEl.textContent = 'Could not connect to the server to summarize trade history.';
-    } finally {
-      btn.disabled = false;
-      btn.classList.remove('is-loading');
-    }
-  }
-
-  document.getElementById('perf-summary-refresh-btn').addEventListener('click', refreshPerfSummary);
 
   document.querySelector('.home-info-tab[data-info="active-trades"]').addEventListener('click', renderActiveTradesPanel);
   document.querySelector('.home-info-tab[data-info="trade-history"]').addEventListener('click', renderTradeHistoryPanel);
@@ -1544,54 +1325,36 @@
       const t = await res.json();
       if (!res.ok) { content.innerHTML = `<p style="color:var(--short);">${t.error || 'Could not load trade'}</p>`; return; }
 
-      let pnl = Number(t.estimated_pnl) || 0;
-      if (Object.is(pnl, -0)) pnl = 0;
-      const up = pnl >= 0;
-      const badge = statusBadgeInfo(t.status, t.outcome_class);
-      const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
-      const isActive = t.status === 'ACTIVE';
+      const pnlColor = (t.estimated_pnl || 0) >= 0 ? 'var(--long)' : 'var(--short)';
+      const timelineHtml = (t.timeline || []).map(e => `
+        <div style="padding:8px 0; border-bottom:1px solid var(--line-soft); font-size:12px;">
+          <div style="color:var(--text-faint); font-size:10px; font-family:var(--mono);">${new Date(e.timestamp).toLocaleString()}</div>
+          <div style="color:var(--text);">${e.message}</div>
+        </div>`).join('');
 
-      const timelineHtml = (t.timeline || []).map(e => {
-        const tone = EVENT_TONE[e.event_type] || 'neutral';
-        return `
-        <div class="timeline-msg ${tone}">
-          <span class="msg-icon">${TONE_ICON[tone]}</span>
-          <span class="msg-body">
-            <span class="msg-time">${new Date(e.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-            <span class="msg-text">${e.message}</span>
-          </span>
-        </div>`;
-      }).join('');
+      const guidanceColor = conditionAccentColor(t.trade_condition);
+      const guidanceHtml = (t.status === 'ACTIVE' && t.condition_message) ? `
+        <div style="border-left:3px solid ${guidanceColor}; background:var(--panel-raised); border-radius:0 8px 8px 0; padding:12px 14px; margin-bottom:16px;">
+          <div style="font-size:10px; letter-spacing:0.5px; color:${guidanceColor}; font-weight:700; margin-bottom:6px;">CURRENT GUIDANCE</div>
+          <div style="font-size:12.5px; line-height:1.5; color:var(--text);">${t.condition_message}</div>
+        </div>` : '';
 
       content.innerHTML = `
-        <div class="trade-detail-header">
-          <span class="trade-detail-title">
-            ${t.asset}
-            <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
-          </span>
+        <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 4px;">${t.asset} — ${t.direction}</h3>
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:14px;">Status: <b>${t.status}</b></div>
+        ${guidanceHtml}
+        <div style="font-family:var(--mono); font-size:12.5px;">
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Entry</span><b>${fmtMoney(t.entry_price)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">${t.status === 'ACTIVE' ? 'Current Price' : 'Exit Price'}</span><b>${fmtMoney(t.status === 'ACTIVE' ? t.last_price : t.exit_price)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Position Size</span><b>${fmtMoney(t.position_size)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Stop Loss</span><b style="color:var(--short)">${fmtMoney(t.stop_loss)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:5px 0;"><span style="color:var(--text-dim);">Take Profit</span><b style="color:var(--long)">${fmtMoney(t.take_profit)}</b></div>
+          <div style="display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--line-soft); margin-top:4px;"><span style="color:var(--text-dim);">Estimated P/L</span><b style="color:${pnlColor}">${fmtMoney(t.estimated_pnl)} (${t.estimated_pnl_percent}%)</b></div>
         </div>
-        <div class="trade-detail-status-row">
-          ${isActive
-            ? `<span class="live-tracking-badge"><span class="live-dot"></span>LIVE TRACKING</span>`
-            : `<span class="trade-status-badge ${badge.cls}">${badge.label}</span>`}
-        </div>
-        <div class="trade-stat-block">
-          <div class="trade-stat-row"><span class="label">Entry</span><span class="value">${fmtMoney(t.entry_price)}</span></div>
-          <div class="trade-stat-row"><span class="label">${isActive ? 'Current Price' : 'Exit Price'}</span><span class="value">${fmtMoney(isActive ? t.last_price : t.exit_price)}</span></div>
-          <div class="trade-stat-row"><span class="label">Position Size</span><span class="value">${fmtMoney(t.position_size)}</span></div>
-          <div class="trade-stat-row"><span class="label">Stop Loss</span><span class="value risk">${fmtMoney(t.stop_loss)}</span></div>
-          <div class="trade-stat-row"><span class="label">Take Profit</span><span class="value target">${fmtMoney(t.take_profit)}</span></div>
-          <div class="trade-stat-row pnl-row"><span class="label">Estimated P/L</span><span class="value ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(pnl)} (${up ? '+' : ''}${t.estimated_pnl_percent}%)</span></div>
-        </div>
-        <div class="trade-detail-subhead">Trade Timeline</div>
-        <div class="trade-timeline">${timelineHtml || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'}</div>
-        ${isActive ? `<button id="close-trade-btn" class="close-trade-btn" data-id="${t.id}" type="button">CLOSE TRADE</button>` : ''}
+        <h4 style="font-family:var(--heading); font-size:13px; margin:18px 0 8px;">Trade Timeline</h4>
+        <div>${timelineHtml || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'}</div>
+        ${t.status === 'ACTIVE' ? `<button id="close-trade-btn" data-id="${t.id}" type="button" style="width:100%; margin-top:16px; padding:11px 0; border-radius:7px; border:none; background:var(--short); color:#2a0810; font-family:var(--mono); font-weight:700; font-size:12px; cursor:pointer;">CLOSE TRADE</button>` : ''}
       `;
-
-      // auto-scroll to the newest message, but only if the user hasn't
-      // scrolled up to read older ones
-      const tl = content.querySelector('.trade-timeline');
-      if (tl) tl.scrollTop = tl.scrollHeight;
 
       const closeBtn = document.getElementById('close-trade-btn');
       if (closeBtn) {
