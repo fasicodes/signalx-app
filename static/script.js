@@ -2535,6 +2535,72 @@ function restartChartPolling(coin) {
   }, 5000);
 }
 
+/* ---------------------------- risk-reward / position size calculator ---------------------------- */
+
+let rrLatestSignal = null;
+const rrBalanceEl = document.getElementById("rr-balance");
+const rrRiskPctEl = document.getElementById("rr-risk-pct");
+
+function renderRiskRewardCalc(data) {
+  rrLatestSignal = data;
+  const verdict = (data.final_verdict || "").toUpperCase();
+  const noteEl = document.getElementById("rr-calc-note");
+
+  if (verdict === "WAIT" || na(data.stop_loss) || na(data.take_profit)) {
+    ["rr-out-entry", "rr-out-sl", "rr-out-tp", "rr-out-rr", "rr-out-riskamt", "rr-out-possize"].forEach((id) => {
+      document.getElementById(id).textContent = "--";
+    });
+    if (noteEl) noteEl.textContent = "No directional trade to size (WAIT verdict) — calculator activates on LONG/SHORT.";
+    return;
+  }
+
+  if (rrRiskPctEl && !rrRiskPctEl.value && !na(data.suggested_risk_pct)) {
+    rrRiskPctEl.placeholder = `${fmtNum(data.suggested_risk_pct, 2)} (suggested)`;
+  }
+  if (noteEl) noteEl.textContent = "Entry/SL/TP auto-filled from the current signal. Enter your balance to see exact position size.";
+
+  recalcRiskReward();
+}
+
+function recalcRiskReward() {
+  const data = rrLatestSignal;
+  if (!data) return;
+  const verdict = (data.final_verdict || "").toUpperCase();
+  if (verdict === "WAIT" || na(data.stop_loss) || na(data.take_profit)) return;
+
+  const entry = data.last_price;
+  const sl = data.stop_loss;
+  const tp = data.take_profit;
+
+  document.getElementById("rr-out-entry").textContent = fmtPrice(entry);
+  document.getElementById("rr-out-sl").textContent = fmtPrice(sl);
+  document.getElementById("rr-out-tp").textContent = fmtPrice(tp);
+
+  const riskPerUnit = Math.abs(entry - sl);
+  const rewardPerUnit = Math.abs(tp - entry);
+  const rrRatio = riskPerUnit > 0 ? rewardPerUnit / riskPerUnit : null;
+  document.getElementById("rr-out-rr").textContent = rrRatio != null ? `1 : ${rrRatio.toFixed(2)}` : "--";
+
+  const balance = parseFloat(rrBalanceEl && rrBalanceEl.value);
+  const riskPct = parseFloat(rrRiskPctEl && rrRiskPctEl.value) || data.suggested_risk_pct;
+
+  if (!balance || balance <= 0 || !riskPct || riskPerUnit <= 0) {
+    document.getElementById("rr-out-riskamt").textContent = "--";
+    document.getElementById("rr-out-possize").textContent = "--";
+    return;
+  }
+
+  const riskAmount = balance * (riskPct / 100);
+  const positionUnits = riskAmount / riskPerUnit;
+  const positionValue = positionUnits * entry;
+
+  document.getElementById("rr-out-riskamt").textContent = `$${riskAmount.toFixed(2)}`;
+  document.getElementById("rr-out-possize").textContent = `${positionUnits.toFixed(6)} units (~$${positionValue.toFixed(2)})`;
+}
+
+if (rrBalanceEl) rrBalanceEl.addEventListener("input", recalcRiskReward);
+if (rrRiskPctEl) rrRiskPctEl.addEventListener("input", recalcRiskReward);
+
 /* ---------------------------- main render ---------------------------- */
 
 function renderResult(data) {
@@ -2550,6 +2616,7 @@ function renderResult(data) {
 
   renderHero(data);
   renderAccuracyScore(data);
+  renderRiskRewardCalc(data);
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
