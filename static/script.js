@@ -770,6 +770,17 @@ function renderTier3(data) {
       </div>`
   }));
 
+  const candle = data.candlestick_patterns || {};
+  const candleTone = candle.confirmation === "CONFIRMS" ? "long" : candle.confirmation === "CONTRADICTS" ? "short" : "flat";
+  const detected = candle.patterns_detected || [];
+  cards.push(channelCard({
+    id: 28, title: "Candlestick Pattern Confirmation", model: "OHLC shape math",
+    body: `
+      ${badge(candle.confirmation || "NONE", candleTone)}
+      <div class="channel-detail">${detected.length ? detected.join(", ") : "no pattern on recent candles"}</div>
+      ${candle.confidence_adjustment ? `<div class="channel-detail ${candle.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${candle.confidence_adjustment > 0 ? "+" : ""}${candle.confidence_adjustment}%</div>` : ""}`
+  }));
+
   tier3El.innerHTML = cards.join("");
 }
 
@@ -1071,6 +1082,7 @@ function startLiquidityPolling() {
 
 let lwChart = null;
 let lwCandleSeries = null;
+let lwPatternMarkers = null;
 let chartPollTimer = null;
 let currentChartTimeframe = "1h";
 let chartLimit = 300;
@@ -1086,6 +1098,27 @@ const CHART_RANGE_PRESETS = {
   "1Y": { tf: "1d", limit: 366 },
   "5Y": { tf: "1w", limit: 262 },
 };
+
+// Candlestick pattern markers — accumulated across paged history so
+// scroll-back keeps older markers visible alongside newly loaded ones.
+let chartPatterns = [];
+const PATTERN_MARKER_STYLE = {
+  bullish: { color: "#36e0a0", position: "belowBar", shape: "arrowUp" },
+  bearish: { color: "#ff526b", position: "aboveBar", shape: "arrowDown" },
+  neutral: { color: "#8b96a5", position: "inBar", shape: "circle" },
+};
+
+function applyPatternMarkers() {
+  if (!lwPatternMarkers) return;
+  const markers = chartPatterns
+    .slice()
+    .sort((a, b) => a.time - b.time)
+    .map((p) => {
+      const style = PATTERN_MARKER_STYLE[p.bias] || PATTERN_MARKER_STYLE.neutral;
+      return { time: p.time, position: style.position, color: style.color, shape: style.shape, text: p.pattern };
+    });
+  lwPatternMarkers.setMarkers(markers);
+}
 
 function ensureChartInitialized() {
   if (lwChart || !candleChartEl || typeof LightweightCharts === "undefined") return;
@@ -1117,6 +1150,12 @@ function ensureChartInitialized() {
     wickUpColor: "#36e0a0",
     wickDownColor: "#ff526b",
   });
+
+  // Candlestick pattern markers (Doji/Hammer/Engulfing/etc.) — v5 API
+  // requires a dedicated markers primitive instead of series.setMarkers().
+  if (typeof LightweightCharts.createSeriesMarkers === "function") {
+    lwPatternMarkers = LightweightCharts.createSeriesMarkers(lwCandleSeries, []);
+  }
 
   lwChart.subscribeClick(handleChartClick);
   lwChart.subscribeCrosshairMove(handleChartCrosshairMove);
@@ -2305,6 +2344,9 @@ async function loadChartData() {
     lwChart.timeScale().fitContent();
     refreshIndicators();
 
+    chartPatterns = data.patterns || [];
+    applyPatternMarkers();
+
     // drawings are per-coin — switching pairs clears the board, but stay
     // put when only the timeframe changes for the same coin.
     if (drawingsCoinKey !== coin) {
@@ -2366,6 +2408,9 @@ async function maybeLoadOlderCandles() {
       lwChart.timeScale().setVisibleLogicalRange({ from: savedRange.from + addedCount, to: savedRange.to + addedCount });
     }
     renderDrawings();
+
+    chartPatterns = [...(data.patterns || []), ...chartPatterns];
+    applyPatternMarkers();
   } catch (err) {
     // silent — a failed older-history fetch shouldn't disrupt the live chart
   } finally {
