@@ -1051,6 +1051,29 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .chart-others-item:hover { background: var(--panel-hover); }
 .chart-others-item input { accent-color: var(--long); width: 14px; height: 14px; cursor: pointer; }
 
+.rr-calc-card {
+  background: var(--panel, #11161e); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 18px; margin: 14px 0;
+}
+.rr-calc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.rr-calc-inputs { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.rr-input-group { display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; color: var(--text-faint, #8b96a5); flex: 1; min-width: 160px; }
+.rr-input-group input {
+  background: var(--bg, #0b0e13); border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 10px; color: var(--text, #cfd6de); font-size: 13px; font-family: inherit;
+}
+.rr-input-group input:focus { outline: none; border-color: var(--long); }
+.rr-calc-outputs {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;
+}
+.rr-out-item {
+  background: var(--panel-hover, #171d27); border-radius: 8px; padding: 9px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.rr-out-label { font-size: 10px; letter-spacing: 0.04em; color: var(--text-faint, #8b96a5); }
+.rr-out-value { font-size: 14px; font-weight: 600; color: var(--text, #cfd6de); }
+.rr-calc-note { font-size: 11px; color: var(--text-faint, #8b96a5); margin: 10px 0 0; }
+
 .indicator-panel {
     position: absolute; top: 50px; right: 14px; z-index: 40;
     width: 348px; max-height: 440px; display: flex; flex-direction: column;
