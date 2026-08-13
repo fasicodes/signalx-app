@@ -482,7 +482,7 @@ function renderHero(data) {
   tag.textContent = `${data.coin || ""} · ${data.timeframe || ""} · ${data.trend || "--"}`.toUpperCase();
 }
 
-/* ---------------------------- accuracy score (Ch.01-19 agreement) ---------------------------- */
+/* ---------------------------- accuracy score (Ch.01-05 signaling-concept agreement) ---------------------------- */
 // Verdict/confidence still come ONLY from the 5 core concepts (unchanged
 // backend logic) - this widget just reads concept_accuracy_pct (how many
 // of all 19 channels currently point the same way as that verdict) and
