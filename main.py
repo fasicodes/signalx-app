@@ -643,10 +643,26 @@ def _concept_votes(*, buying_pressure, selling_pressure, bullish_pct, bearish_pc
 
 def concept_accuracy_score(final_verdict, **concept_kwargs):
     votes = _concept_votes(**concept_kwargs)
-    total = len(votes)  # always 19
 
-    if final_verdict not in ("LONG", "SHORT"):
-        # WAIT has no direction to measure agreement against.
+    # Only Tier 1 (Ch.01-05 - Hawkes Process, Bayesian Classifier,
+    # Quantile Volatility, Conformal Prediction, Fractional Kelly) is the
+    # tier that actually produces the final verdict (see tier note in
+    # design.html: "This is the only tier that produces the final verdict
+    # and confidence score."). Ch.06-19 are display-only diagnostics and
+    # must NOT dilute the accuracy score.
+    #
+    # Within that tier, Quantile Volatility / Conformal Prediction /
+    # Fractional Kelly (ch 3-5) are structurally always NEUTRAL - they
+    # size risk/volatility, they don't call a direction - so they never
+    # actually "give a signal". Only concepts that cast a real LONG/SHORT
+    # vote are counted, so the score reflects agreement among the
+    # concepts that are actually signaling.
+    is_signal = lambda v: v["ch"] <= 5 and v["direction"] in ("LONG", "SHORT")
+    total = sum(1 for v in votes if is_signal(v))
+
+    if final_verdict not in ("LONG", "SHORT") or total == 0:
+        # WAIT has no direction to measure agreement against, or none of
+        # the 5 Tier-1 concepts are currently signaling.
         for v in votes:
             v["agrees"] = False
         return {
@@ -658,7 +674,7 @@ def concept_accuracy_score(final_verdict, **concept_kwargs):
 
     agree_count = 0
     for v in votes:
-        v["agrees"] = v["direction"] == final_verdict
+        v["agrees"] = is_signal(v) and v["direction"] == final_verdict
         if v["agrees"]:
             agree_count += 1
 
@@ -1631,9 +1647,9 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     except Exception as e:
         sweep_data = {"liquidity_sweep_detected": None, "error": str(e)}
 
-    # "Accuracy Score" - kitne 19 mein se concepts final_verdict ki
-    # taraf ishara kar rahe hain (display metric, verdict khud change
-    # nahi hota - dekho concept_accuracy_score() ke comments).
+    # "Accuracy Score" - kitne Tier-1 (Ch.01-05) signaling concepts
+    # final_verdict ki taraf ishara kar rahe hain (display metric, verdict
+    # khud change nahi hota - dekho concept_accuracy_score() ke comments).
     accuracy_data = concept_accuracy_score(
         final_verdict,
         buying_pressure=buying_pressure, selling_pressure=selling_pressure,
@@ -1676,7 +1692,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "structural_break": cusum_data,
         "liquidity_sweep": sweep_data,
 
-        # Accuracy Score widget (Ch.01-19 agreement with the verdict above)
+        # Accuracy Score widget (Ch.01-05 signaling-concept agreement with the verdict above)
         "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
         "concept_agree_count": accuracy_data["concept_agree_count"],
         "concept_total": accuracy_data["concept_total"],
