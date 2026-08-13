@@ -36,6 +36,7 @@ const chartTfRow    = document.getElementById("chart-tf-row");
 const candleChartEl = document.getElementById("candle-chart");
 const chartPanelEl  = document.getElementById("chart-panel");
 const chartFullscreenBtn = document.getElementById("chart-fullscreen-btn");
+const patternToggleBtn = document.getElementById("pattern-toggle-btn");
 const chartBackBtn = document.getElementById("chart-back-btn");
 const chartToolsEl = document.getElementById("chart-tools");
 const drawOverlayEl = document.getElementById("draw-overlay");
@@ -1099,9 +1100,11 @@ const CHART_RANGE_PRESETS = {
   "5Y": { tf: "1w", limit: 262 },
 };
 
-// Candlestick pattern markers — accumulated across paged history so
-// scroll-back keeps older markers visible alongside newly loaded ones.
+// Candlestick pattern markers — hidden by default, only rendered on the
+// chart when the user presses the PATTERNS button (Zainab's request: "sirf
+// tab arrow/name show ho jab user button press kare").
 let chartPatterns = [];
+let showPatternMarkers = false;
 const PATTERN_MARKER_STYLE = {
   bullish: { color: "#36e0a0", position: "belowBar", shape: "arrowUp" },
   bearish: { color: "#ff526b", position: "aboveBar", shape: "arrowDown" },
@@ -1110,6 +1113,10 @@ const PATTERN_MARKER_STYLE = {
 
 function applyPatternMarkers() {
   if (!lwPatternMarkers) return;
+  if (!showPatternMarkers) {
+    lwPatternMarkers.setMarkers([]);
+    return;
+  }
   const markers = chartPatterns
     .slice()
     .sort((a, b) => a.time - b.time)
@@ -1118,6 +1125,14 @@ function applyPatternMarkers() {
       return { time: p.time, position: style.position, color: style.color, shape: style.shape, text: p.pattern };
     });
   lwPatternMarkers.setMarkers(markers);
+}
+
+if (patternToggleBtn) {
+  patternToggleBtn.addEventListener("click", () => {
+    showPatternMarkers = !showPatternMarkers;
+    patternToggleBtn.classList.toggle("active", showPatternMarkers);
+    applyPatternMarkers();
+  });
 }
 
 function ensureChartInitialized() {
