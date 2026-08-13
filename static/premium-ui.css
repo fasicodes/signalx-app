@@ -628,10 +628,15 @@ body { padding: 14px 18px 28px; }
   .accuracy-history { height: 54px !important; }
 }
 
-/* Accuracy Score visibility/layout fix */
+/* Accuracy Score visibility/layout fix (v2 - flex-based, self-contained,
+   no reliance on the old .accuracy-score-card grid/grid-area rules which
+   were written for a different, non-wrapped DOM shape and were fighting
+   this one, pushing the gauge to the far right with everything else
+   collapsed to zero width). */
 .accuracy-score-card--hero {
   display: block !important;
   width: 100% !important;
+  max-width: 100% !important;
   margin: 18px 0 20px !important;
   padding: 18px 20px !important;
   border: 1px solid var(--line) !important;
@@ -641,45 +646,77 @@ body { padding: 14px 18px 28px; }
   position: relative !important;
   z-index: 2 !important;
   min-height: 150px !important;
+  overflow: hidden !important;
 }
+.accuracy-score-card--hero * { box-sizing: border-box !important; }
 .accuracy-score-card--hero .accuracy-score-head {
-  display:flex !important;
-  align-items:flex-start !important;
-  justify-content:space-between !important;
-  margin-bottom:12px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  margin: 0 0 14px 0 !important;
 }
 .accuracy-score-card--hero .accuracy-score-main {
-  display:grid !important;
-  grid-template-columns:minmax(240px,.8fr) minmax(0,1.8fr) !important;
-  gap:24px !important;
-  align-items:center !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 24px !important;
+  width: 100% !important;
 }
 .accuracy-score-card--hero .accuracy-gauge-row {
-  display:flex !important;
-  align-items:center !important;
-  gap:18px !important;
+  display: flex !important;
+  flex: 1 1 260px !important;
+  min-width: 220px !important;
+  max-width: 100% !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 18px !important;
+  margin: 0 !important;
 }
 .accuracy-score-card--hero .accuracy-gauge-wrap {
-  width:145px !important;
-  flex:0 0 145px !important;
+  position: relative !important;
+  width: 120px !important;
+  flex: 0 0 120px !important;
+}
+.accuracy-score-card--hero .accuracy-gauge-wrap svg {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+.accuracy-score-card--hero .accuracy-score-data {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  min-width: 0 !important;
 }
 .accuracy-score-card--hero .accuracy-score-pct {
-  font-size:32px !important;
+  font-size: 30px !important;
+  line-height: 1.1 !important;
+}
+.accuracy-score-card--hero .accuracy-score-sub {
+  overflow-wrap: anywhere !important;
 }
 .accuracy-score-card--hero .accuracy-history {
-  display:flex !important;
-  min-height:70px !important;
-  height:70px !important;
-  align-items:flex-end !important;
-  gap:8px !important;
+  display: flex !important;
+  flex: 1 1 260px !important;
+  min-width: 200px !important;
+  min-height: 60px !important;
+  height: 60px !important;
+  align-items: flex-end !important;
+  gap: 8px !important;
+  margin: 0 !important;
 }
-@media (max-width:900px){
-  .accuracy-score-card--hero .accuracy-score-main{grid-template-columns:1fr !important;}
+@media (max-width: 900px) {
+  .accuracy-score-card--hero .accuracy-gauge-row,
+  .accuracy-score-card--hero .accuracy-history {
+    flex-basis: 100% !important;
+  }
 }
-@media (max-width:520px){
-  .accuracy-score-card--hero{padding:14px !important;}
-  .accuracy-score-card--hero .accuracy-gauge-row{flex-wrap:wrap;}
-  .accuracy-score-card--hero .accuracy-gauge-wrap{width:125px !important;flex-basis:125px !important;}
+@media (max-width: 520px) {
+  .accuracy-score-card--hero { padding: 14px !important; }
+  .accuracy-score-card--hero .accuracy-gauge-wrap { width: 105px !important; flex: 0 0 105px !important; }
 }
 
 /* ===== FINAL TIER 01 LAYOUT FIX =====
