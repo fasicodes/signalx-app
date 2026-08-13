@@ -36,7 +36,10 @@ const chartTfRow    = document.getElementById("chart-tf-row");
 const candleChartEl = document.getElementById("candle-chart");
 const chartPanelEl  = document.getElementById("chart-panel");
 const chartFullscreenBtn = document.getElementById("chart-fullscreen-btn");
-const patternToggleBtn = document.getElementById("pattern-toggle-btn");
+const chartOthersBtn = document.getElementById("chart-others-btn");
+const chartOthersMenu = document.getElementById("chart-others-menu");
+const togglePatternsEl = document.getElementById("toggle-patterns");
+const toggleSrEl = document.getElementById("toggle-sr");
 const chartBackBtn = document.getElementById("chart-back-btn");
 const chartToolsEl = document.getElementById("chart-tools");
 const drawOverlayEl = document.getElementById("draw-overlay");
@@ -1100,11 +1103,15 @@ const CHART_RANGE_PRESETS = {
   "5Y": { tf: "1w", limit: 262 },
 };
 
-// Candlestick pattern markers — hidden by default, only rendered on the
-// chart when the user presses the PATTERNS button (Zainab's request: "sirf
-// tab arrow/name show ho jab user button press kare").
+// Candlestick pattern markers + Support/Resistance lines — both hidden by
+// default, only rendered when the user opens the OTHERS menu and checks
+// the box (Zainab's request: sirf tab dikhein jab user on kare).
 let chartPatterns = [];
+let srLevels = [];
 let showPatternMarkers = false;
+let showSrLevels = false;
+let srPriceLines = [];
+
 const PATTERN_MARKER_STYLE = {
   bullish: { color: "#36e0a0", position: "belowBar", shape: "arrowUp" },
   bearish: { color: "#ff526b", position: "aboveBar", shape: "arrowDown" },
@@ -1127,11 +1134,52 @@ function applyPatternMarkers() {
   lwPatternMarkers.setMarkers(markers);
 }
 
-if (patternToggleBtn) {
-  patternToggleBtn.addEventListener("click", () => {
-    showPatternMarkers = !showPatternMarkers;
-    patternToggleBtn.classList.toggle("active", showPatternMarkers);
+function applySrLevels() {
+  if (!lwCandleSeries) return;
+  srPriceLines.forEach((line) => {
+    try { lwCandleSeries.removePriceLine(line); } catch (e) { /* already gone */ }
+  });
+  srPriceLines = [];
+  if (!showSrLevels) return;
+
+  srLevels.forEach((lvl) => {
+    const color = lvl.type === "resistance" ? "#ff526b" : "#36e0a0";
+    const line = lwCandleSeries.createPriceLine({
+      price: lvl.price,
+      color,
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: `${lvl.type === "resistance" ? "R" : "S"} · ${lvl.touches}x`,
+    });
+    srPriceLines.push(line);
+  });
+}
+
+if (chartOthersBtn && chartOthersMenu) {
+  chartOthersBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const willShow = chartOthersMenu.hidden;
+    chartOthersMenu.hidden = !willShow;
+    chartOthersBtn.classList.toggle("active", willShow);
+  });
+  document.addEventListener("click", (e) => {
+    if (!chartOthersMenu.hidden && !chartOthersMenu.contains(e.target) && e.target !== chartOthersBtn) {
+      chartOthersMenu.hidden = true;
+      chartOthersBtn.classList.remove("active");
+    }
+  });
+}
+if (togglePatternsEl) {
+  togglePatternsEl.addEventListener("change", () => {
+    showPatternMarkers = togglePatternsEl.checked;
     applyPatternMarkers();
+  });
+}
+if (toggleSrEl) {
+  toggleSrEl.addEventListener("change", () => {
+    showSrLevels = toggleSrEl.checked;
+    applySrLevels();
   });
 }
 
@@ -2361,6 +2409,9 @@ async function loadChartData() {
 
     chartPatterns = data.patterns || [];
     applyPatternMarkers();
+
+    srLevels = data.support_resistance || [];
+    applySrLevels();
 
     // drawings are per-coin — switching pairs clears the board, but stay
     // put when only the timeframe changes for the same coin.
