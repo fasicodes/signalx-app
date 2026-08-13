@@ -11,6 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='premium-ui.css') }}?v=20260814-premium-1">
 </head>
 <body>
 
@@ -1623,5 +1625,7 @@
   setInterval(refreshActiveTrades, 15000);
 })();
 </script>
+
+<script src="{{ url_for('static', filename='premium-ui.js') }}?v=20260814-premium-1"></script>
 </body>
 </html>
