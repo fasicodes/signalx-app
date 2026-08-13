@@ -377,6 +377,7 @@ if (coinPickerSearch) {
 }
 
 function syncCoinPickerTrigger() {
+  if (!coinSelect || !coinPickerLabel || !coinPickerIcon) return;
   const value = coinSelect.value;
   const ticker = value.split("/")[0];
   coinPickerLabel.textContent = value.replace("/", " / ");
@@ -402,6 +403,7 @@ function selectCoin(value) {
 }
 
 function openCoinPicker() {
+  if (!coinPicker || !coinPickerTrigger || !coinPickerSearch || !coinSelect) return;
   // Reset search and land on whichever tab matches the currently selected
   // pair, so reopening the picker always starts from a clean, predictable
   // state instead of wherever the user last left the search/tab.
@@ -415,6 +417,7 @@ function openCoinPicker() {
   coinPickerSearch.focus();
 }
 function closeCoinPicker() {
+  if (!coinPicker || !coinPickerTrigger) return;
   coinPicker.classList.remove("open");
   coinPickerTrigger.setAttribute("aria-expanded", "false");
 }
