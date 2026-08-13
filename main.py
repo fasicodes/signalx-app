@@ -383,6 +383,148 @@ def get_live_price(asset):
 
 
 # ============================================================
+# CANDLESTICK PATTERN DETECTION (NEW) — purely deterministic OHLC math,
+# jaisa ek human trader chart par shape dekh kar Doji/Hammer/Engulfing
+# waghera pehchanta hai, waisa hi yahan open/high/low/close ke ratios
+# se check hota hai. Koi ML/guess nahi — agar shart poori hoti hai to
+# pattern confirm hota hai, warna nahi.
+#
+# `detect_candlestick_patterns()` poore df par scan karta hai (chart
+# par marker lagane ke liye /candles endpoint isay use karta hai).
+# `candlestick_confirmation()` sirf sabse recent candles check karta
+# hai aur generate_signal() ke final_verdict ko CONFIRM/CONTRADICT
+# karta hai — verdict khud kabhi flip nahi hota, sirf confidence_pct
+# thodi si (+/-) adjust hoti hai (jaisa pehle discuss hua tha: pattern
+# ko "confirmation filter" ki tarah use karna, standalone signal nahi).
+# ============================================================
+def detect_candlestick_patterns(df, trend_window=10):
+    n = len(df)
+    patterns = []
+    if n < 3:
+        return patterns
+
+    o = df["open"].values
+    h = df["high"].values
+    l = df["low"].values
+    c = df["close"].values
+    has_time = "timestamp" in df.columns
+    t = df["timestamp"].values if has_time else None
+
+    for i in range(2, n):
+        body = abs(c[i] - o[i])
+        rng = h[i] - l[i]
+        if rng <= 0:
+            continue
+        upper_wick = h[i] - max(o[i], c[i])
+        lower_wick = min(o[i], c[i]) - l[i]
+        bullish = c[i] > o[i]
+        bearish = c[i] < o[i]
+
+        start = max(0, i - trend_window)
+        prior_closes = c[start:i]
+        uptrend = len(prior_closes) >= 2 and prior_closes[-1] > prior_closes[0]
+        downtrend = len(prior_closes) >= 2 and prior_closes[-1] < prior_closes[0]
+
+        found = None
+
+        # --- Single-candle patterns ---
+        if body <= 0.1 * rng:
+            found = ("Doji", "neutral")
+        elif body > 0 and lower_wick >= 2 * body and upper_wick <= 0.3 * body:
+            if downtrend:
+                found = ("Hammer", "bullish")
+            elif uptrend:
+                found = ("Hanging Man", "bearish")
+        elif body > 0 and upper_wick >= 2 * body and lower_wick <= 0.3 * body:
+            if downtrend:
+                found = ("Inverted Hammer", "bullish")
+            elif uptrend:
+                found = ("Shooting Star", "bearish")
+
+        # --- Two-candle patterns (override single-candle if found) ---
+        po, pc = o[i - 1], c[i - 1]
+        prev_bearish = pc < po
+        prev_bullish = pc > po
+        if prev_bearish and bullish and o[i] <= pc and c[i] >= po:
+            found = ("Bullish Engulfing", "bullish")
+        elif prev_bullish and bearish and o[i] >= pc and c[i] <= po:
+            found = ("Bearish Engulfing", "bearish")
+        elif prev_bearish and bullish and o[i] < pc and po > c[i] > (po + pc) / 2:
+            found = ("Piercing Line", "bullish")
+        elif prev_bullish and bearish and o[i] > pc and po < c[i] < (po + pc) / 2:
+            found = ("Dark Cloud Cover", "bearish")
+
+        # --- Three-candle patterns (highest priority) ---
+        o1, c1 = o[i - 2], c[i - 2]
+        o2, c2 = o[i - 1], c[i - 1]
+        b1 = abs(c1 - o1)
+        b2 = abs(c2 - o2)
+        r1 = h[i - 2] - l[i - 2]
+        first_bearish_big = (c1 < o1) and r1 > 0 and b1 >= 0.5 * r1
+        first_bullish_big = (c1 > o1) and r1 > 0 and b1 >= 0.5 * r1
+        star_small = (b2 <= 0.4 * b1) if b1 > 0 else False
+
+        if first_bearish_big and star_small and bullish and c[i] > (o1 + c1) / 2:
+            found = ("Morning Star", "bullish")
+        elif first_bullish_big and star_small and bearish and c[i] < (o1 + c1) / 2:
+            found = ("Evening Star", "bearish")
+        elif (c1 > o1) and (c2 > o2) and bullish and c2 > c1 and c[i] > c2 and o2 > o1 and o[i] > o2:
+            found = ("Three White Soldiers", "bullish")
+        elif (c1 < o1) and (c2 < o2) and bearish and c2 < c1 and c[i] < c2 and o2 < o1 and o[i] < o2:
+            found = ("Three Black Crows", "bearish")
+
+        if found:
+            pattern_name, bias = found
+            entry = {"index": i, "pattern": pattern_name, "bias": bias}
+            if has_time:
+                try:
+                    entry["time"] = int(pd.Timestamp(t[i]).timestamp())
+                except Exception:
+                    pass
+            patterns.append(entry)
+
+    return patterns
+
+
+def candlestick_confirmation(df, final_verdict, lookback=3):
+    """Sirf sabse recent `lookback` candles check karta hai - final_verdict
+    ko flip NAHI karta, sirf confidence_pct ko CONFIRM par thoda barhata
+    hai aur CONTRADICT par thoda ghatata hai (max +/-8%, clamp 5-97%
+    generate_signal() mein hota hai)."""
+    all_patterns = detect_candlestick_patterns(df)
+    n = len(df)
+    recent = [p for p in all_patterns if p["index"] >= n - lookback]
+
+    if not recent or final_verdict == "WAIT":
+        return {
+            "patterns_detected": [p["pattern"] for p in recent],
+            "confirmation": "NONE" if not recent else "NEUTRAL",
+            "confidence_adjustment": 0,
+        }
+
+    bullish_count = sum(1 for p in recent if p["bias"] == "bullish")
+    bearish_count = sum(1 for p in recent if p["bias"] == "bearish")
+
+    agrees_bullish = final_verdict == "LONG" and bullish_count > bearish_count
+    agrees_bearish = final_verdict == "SHORT" and bearish_count > bullish_count
+    disagrees_bullish = final_verdict == "LONG" and bearish_count > bullish_count
+    disagrees_bearish = final_verdict == "SHORT" and bullish_count > bearish_count
+
+    if agrees_bullish or agrees_bearish:
+        adj, status = 8, "CONFIRMS"
+    elif disagrees_bullish or disagrees_bearish:
+        adj, status = -8, "CONTRADICTS"
+    else:
+        adj, status = 0, "NEUTRAL"
+
+    return {
+        "patterns_detected": [p["pattern"] for p in recent],
+        "confirmation": status,
+        "confidence_adjustment": adj,
+    }
+
+
+# ============================================================
 # 1. HAWKES PROCESS APPROXIMATION  (PURANA - UNCHANGED)
 # ============================================================
 def hawkes_pressure(df, alpha=0.6, beta=0.4, lookback=40):
@@ -1569,6 +1711,15 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     suggested_risk_pct = fractional_kelly(win_prob)
     trend = "Bullish" if bullish_pct > bearish_pct else "Bearish"
 
+    # --- Candlestick pattern confirmation (NEW) — confidence ko +/-8%
+    # adjust karta hai agar recent candle shapes verdict ke sath match
+    # ya contradict karein. final_verdict yahan kabhi flip nahi hota.
+    try:
+        candle_data = candlestick_confirmation(df, final_verdict)
+    except Exception as e:
+        candle_data = {"patterns_detected": [], "confirmation": "ERROR", "confidence_adjustment": 0, "error": str(e)}
+    confidence_pct = max(5, min(97, round(confidence_pct + candle_data.get("confidence_adjustment", 0), 2)))
+
     # --- v4 ke 4 concepts (display-only, UNCHANGED) ---
     if include_orderbook:
         try:
@@ -1690,6 +1841,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "wavelet_trend": wavelet_data,
         "structural_break": cusum_data,
         "liquidity_sweep": sweep_data,
+        "candlestick_patterns": candle_data,
 
         # Accuracy Score widget (Ch.01-05 concept agreement out of 5, with the verdict above)
         "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
@@ -1877,10 +2029,23 @@ def candles_endpoint():
         prev_price = float(df["close"].iloc[-2]) if len(df) > 1 else last_price
         change_pct = round(((last_price - prev_price) / prev_price) * 100, 3) if prev_price else 0.0
 
+        # Candlestick pattern markers (Doji, Hammer, Engulfing, etc.) — chart
+        # tab par candles ke upar/neeche visually dikhane ke liye, taake
+        # user human-trader ki tarah pattern ko chart par dekh sake.
+        try:
+            raw_patterns = detect_candlestick_patterns(df)
+            patterns = [
+                {"time": p["time"], "pattern": p["pattern"], "bias": p["bias"]}
+                for p in raw_patterns if "time" in p
+            ]
+        except Exception:
+            patterns = []
+
         return jsonify({
             "coin": coin,
             "timeframe": timeframe,
             "candles": candles,
+            "patterns": patterns,
             "last_price": round(last_price, 8),
             "change_pct": change_pct,
             "server_time": int(time.time()),
