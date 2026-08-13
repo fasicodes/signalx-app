@@ -488,7 +488,7 @@ function renderHero(data) {
 // of all 19 channels currently point the same way as that verdict) and
 // keeps a short rolling history, refreshing on its own every 10s.
 
-const ACCURACY_POLL_MS = 10000;
+const ACCURACY_POLL_MS = 5000;
 const ACCURACY_GAUGE_ARC = Math.PI * 50; // path radius 50, half-circle
 const ACCURACY_HISTORY_MAX = 6;
 let accuracyPollTimer = null;
@@ -546,14 +546,17 @@ function renderAccuracyScore(data) {
 async function fetchAndRenderAccuracy(coin) {
   if (!coin || accuracyFetchInFlight) return;
   accuracyFetchInFlight = true;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ACCURACY_POLL_MS - 500);
   try {
-    const res = await fetch(`/signal?coin=${encodeURIComponent(coin)}&timeframe=1h`);
+    const res = await fetch(`/signal?coin=${encodeURIComponent(coin)}&timeframe=1h`, { signal: controller.signal });
     const data = await res.json();
     if (!res.ok || data.error || coin !== currentCoin) return;
     renderAccuracyScore(data);
   } catch (e) {
     // Silent — a single missed poll shouldn't spam the UI; next tick retries.
   } finally {
+    clearTimeout(timeoutId);
     accuracyFetchInFlight = false;
   }
 }
