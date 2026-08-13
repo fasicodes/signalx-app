@@ -1,1644 +1,2271 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signals FM — Multi-Channel Market Readout</title>
-<link rel="stylesheet" href="/static/style.css?v=20260814-others-menu">
-<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+"""
+Trading Signal Backend + Frontend - v7
+---------------------------------------------------
+IMPORTANT: FINAL VERDICT + CONFIDENCE ka logic v4 jaisa hi hai
+(sirf Hawkes Process + Bayesian Classifier, Conformal Prediction ke
+zariye combine hote hain). Neeche wale 9 NAYE concepts verdict ko
+BILKUL touch nahi karte - ye sirf extra "display panels" hain, jaisa
+v4 mein OFI/VPIN/HMM/Jump/Meta add hue thay.
 
-<link rel="stylesheet" href="{{ url_for('static', filename='premium-ui.css') }}?v=20260814-premium-2">
-</head>
-<body>
+v7 mein sirf ye add hua hai:
+  - /candles endpoint -> naye "LIVE CHART" tab (frontend) ke liye
+    OHLCV candle series return karta hai, taake ek live candlestick
+    chart bana ja sake. Verdict/confidence logic ko bilkul touch
+    nahi kiya gaya.
 
-<div class="terminal">
+PURANE 5 concepts (WAISAY HI, koi change nahi):
+  1. Hawkes Process        -> Buying/Selling Pressure (0-10)
+  2. Bayesian Classifier   -> Bullish% / Bearish%
+  3. Quantile Volatility   -> Expected move, SL/TP
+  4. Conformal Prediction  -> Confidence%, Trade/Skip (WAIT)   <-- VERDICT YAHAN SE BANTA HAI
+  5. Fractional Kelly      -> Suggested Risk%
 
-  <header class="topbar">
-    <div class="brand">
-      <button type="button" class="hamburger-btn" id="hamburger-btn" aria-label="Open menu" aria-expanded="false">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-      <div class="brand-row">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM" style="height:32px; width:auto;">
-        <span class="brand-name">Signals FM</span>
-      </div>
-      <span class="brand-tagline">19-Channel Market Readout</span>
-    </div>
-    <div class="topbar-right">
-      <div class="live-clock"><span class="dot"></span><span id="clock-text">--:--:--</span></div>
+v4 ke 4 concepts (display-only, verdict ko touch nahi karte):
+  6. Order Flow Imbalance (OFI)
+  7. VPIN (Toxic Flow)
+  8. HMM Regime Detection
+  9. Jump Diffusion Detector
+  10. Meta-Labeling (ML filter)
 
-      <a href="/demo-trading" style="margin-left:12px;background:var(--panel-raised);border:1px solid var(--line);color:var(--accent);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">DEMO TRADING</a>
+v6 ke 9 concepts (display-only, verdict ko touch nahi karte):
+  11. Cross-Asset Flow & Intermarket Divergence
+  12. Multi-Timeframe Permutation Entropy
+  13. Order Book Depth Profiling (L2 Slope)
+  14. Volume-Synchronized VWAP Deviation & Toxicity
+  15. RL-style Dynamic Risk Agent (simplified heuristic)
+  16. Adaptive Hurst Exponent
+  17. Wavelet Transform Noise Filtering
+  18. Structural Break Detection (CUSUM)
+  19. Liquidity Sweep / Stop-Cluster Detection
 
-      <button type="button" id="theme-toggle-btn" title="Toggle light/dark mode" style="margin-left:10px;width:34px;height:34px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-        <svg id="theme-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-      </button>
+Folder structure honi chahiye:
+  main.py
+  templates/design.html
+  static/style.css
+  static/script.js
+  Procfile
+  requirements.txt
 
-      <div style="position:relative; margin-left:10px;">
-        <button type="button" id="avatar-btn" style="width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--panel-raised);cursor:pointer;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:var(--mono);font-size:12px;font-weight:700;">
-          {% if user_avatar %}
-            <img src="{{ user_avatar }}" alt="{{ user_email }}" style="width:100%;height:100%;object-fit:cover;">
-          {% else %}
-            {{ (user_email or "?")[0]|upper }}
-          {% endif %}
-        </button>
-        <div id="avatar-menu" style="display:none; position:absolute; right:0; top:42px; background:var(--panel); border:1px solid var(--line); border-radius:8px; min-width:200px; box-shadow:0 12px 30px rgba(0,0,0,0.4); z-index:50; overflow:hidden;">
-          <div style="padding:12px 14px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:11px; color:var(--text-dim); word-break:break-all;">{{ user_email }}</div>
-          <button type="button" id="logout-btn" style="width:100%; text-align:left; background:none; border:none; color:var(--short); padding:11px 14px; font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Logout</button>
-        </div>
-      </div>
-    </div>
-    <script>
-      document.getElementById('avatar-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        const menu = document.getElementById('avatar-menu');
-        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-      });
-      document.addEventListener('click', () => {
-        document.getElementById('avatar-menu').style.display = 'none';
-      });
+Chalane ka tareeqa (local):
+    pip install flask flask-cors pandas pandas-ta ccxt numpy hmmlearn scikit-learn PyWavelets --break-system-packages
+    python main.py
 
-      // Light/Dark toggle (shared preference key with landing/login pages)
-      (function() {
-        const root = document.documentElement;
-        const btn = document.getElementById('theme-toggle-btn');
-        const icon = document.getElementById('theme-toggle-icon');
-        const sunPath = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
-        const moonPath = '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
-        function applyTheme(t) {
-          root.setAttribute('data-theme', t);
-          icon.innerHTML = t === 'dark' ? sunPath : moonPath;
-          localStorage.setItem('signalsfm-theme', t);
+URL: http://localhost:5000/
+
+IMPORTANT DISCLAIMER (sach mein padhein):
+Ye tamam concepts statistically "sound-looking" hain lekin koi bhi is code
+mein NO real backtesting / walk-forward validation nahi ho rahi. Isliye
+"accuracy %" ka koi guaranteed number nahi diya ja sakta. Neeche har naye
+function ke comment mein iski asli limitation likhi hui hai.
+
+---------------------------------------------------------------------------
+PATCH NOTE (is file mein): /liquidity route ko resilient bana diya gaya hai.
+Pehle is route ke andar kuch calculations (sweep detector, hawkes pressure,
+zones, spoofing, crash risk) bina try/except ke seedha call ho rahe thay -
+agar in mein se kisi ek mein bhi koi chhota runtime error aata (jaise
+order-book empty, ya edge-case data), to POORA route 400 (Bad Request)
+return kar deta tha, chahe baaqi sab data theek se mil raha hota.
+Ab har sub-calculation apne alag try/except mein hai (waisa hi jaisa
+generate_signal() mein already ho raha hai) - agar ek panel fail ho to
+sirf wo panel "N/A"/None dikhata hai, baaqi route normally kaam karta hai.
+Sirf candle-fetch fail hone par (invalid coin/timeframe) hi 400 aata hai,
+aur us waqt error message clear batata hai ke asal wajah kya thi.
+---------------------------------------------------------------------------
+"""
+
+import os
+import time
+
+from flask import Flask, jsonify, request, render_template, redirect, url_for, session
+from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import pandas as pd
+import numpy as np
+import ccxt
+
+# pandas-ta is optional: it is not published for every Python version, so we
+# ship a numpy/pandas fallback for the two indicators generate_signal() needs
+# (RSI + MACD) that produces equivalent columns. The verdict/confidence logic
+# itself is untouched either way.
+try:
+    import pandas_ta as ta
+    _HAS_PANDAS_TA = True
+except ImportError:  # pragma: no cover - exercised only when pandas-ta is absent
+    ta = None
+    _HAS_PANDAS_TA = False
+
+
+def _ta_rsi(series, length=14):
+    """Wilder-smoothed RSI (same formula as pandas_ta.rsi)."""
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1.0 / length, min_periods=length, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / length, min_periods=length, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - 100 / (1 + rs)
+    return rsi.where((avg_loss != 0) | (avg_gain != 0), 100.0)
+
+
+def _ta_macd(series, fast=12, slow=26, signal=9):
+    """EMA-based MACD (same formula as pandas_ta.macd)."""
+    ema_fast = series.ewm(span=fast, adjust=False).mean()
+    ema_slow = series.ewm(span=slow, adjust=False).mean()
+    macd = ema_fast - ema_slow
+    signal_line = macd.ewm(span=signal, adjust=False).mean()
+    return macd, signal_line
+
+# v4 ke naye concepts ke liye extra libraries
+from hmmlearn.hmm import GaussianHMM
+from sklearn.ensemble import RandomForestClassifier
+
+from datetime import timedelta
+app = Flask(__name__)
+
+# Railway (aur zyada tar hosting platforms) apps ko HTTP proxy ke peeche
+# chalate hain, isliye Flask ko batana zaroori hai ke asal request HTTPS
+# thi - warna OAuth redirect URIs galti se http:// ban jate hain aur
+# Google/X "redirect_uri_mismatch" error deta hai.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+import secrets as _secrets
+
+# SECRET_KEY hamesha environment variable se aani chahiye (Railway Variables
+# mein set karein). Agar set nahi hai, to hum ek random key generate kar dete
+# hain (predictable hardcoded string rakhna security risk hai) - lekin is
+# soorat mein har restart par purane sessions/cookies invalid ho jayenge,
+# isliye SECRET_KEY zaroor set karein.
+_secret_key = os.environ.get("SECRET_KEY")
+if not _secret_key:
+    _secret_key = _secrets.token_hex(32)
+    print("[security] WARNING: SECRET_KEY env var set nahi hai - random key "
+          "generate ki gayi hai. Isay Railway Variables mein set karein "
+          "warna restart hone par sab log out ho jayenge.")
+app.secret_key = _secret_key
+
+# Session cookie settings explicitly set karna zaroori hai taake Google/X
+# OAuth redirect flow ke dauran cookie sahi se preserve ho (Railway ke
+# proxy environment mein implicit defaults kabhi kabhi sahi kaam nahi
+# karte, jisse "state not equal" jaisi CSRF mismatch error aati hai).
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_HTTPONLY=True,
+    # Session persistence fix: without this, Flask issues a browser-session
+    # cookie that dies the moment the browser/tab is closed, forcing a
+    # fresh login every time. Combined with `session.permanent = True` (set
+    # at login, in auth.py/oauth.py), the cookie now carries a real
+    # Max-Age/Expires so the user stays logged in across browser restarts
+    # for up to 30 days, or until they explicitly log out.
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
+# CORS ko sirf apni asal domain tak mehdood karte hain - warna koi bhi
+# doosri website aapke API/cookies tak access kar sakti thi (security risk).
+# Agar aap koi aur domain (misal custom domain) use karein, to
+# ALLOWED_ORIGIN environment variable set kar dein.
+_allowed_origin = os.environ.get("ALLOWED_ORIGIN", "https://signalx-app-production.up.railway.app")
+CORS(app, supports_credentials=True, origins=[_allowed_origin, "http://localhost:5000", "http://127.0.0.1:5000"])
+
+from auth import auth_bp
+app.register_blueprint(auth_bp)
+
+# Brute-force/spam se bachne ke liye rate limiting: login/register par
+# thori si limit lagate hain (per IP address).
+limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
+limiter.limit("10 per minute")(auth_bp)
+
+from oauth import oauth_bp, init_oauth
+init_oauth(app)
+app.register_blueprint(oauth_bp)
+
+from trades import trades_bp
+app.register_blueprint(trades_bp)
+
+# App start hote hi 'users' table khud ba khud ban jaye (agar pehle se
+# maujood nahi hai). Agar DB abhi connect nahi ho pa raha (misal, MySQL
+# service abhi tak deploy nahi hui) to sirf warning print hoti hai -
+# app crash nahi hota, aur agli request par phir try hoga.
+try:
+    from db import init_db
+    init_db()
+except Exception as _db_init_err:
+    print(f"[db] WARNING: users table startup par nahi ban saki: {_db_init_err}")
+
+exchange = ccxt.okx()
+
+# In-memory cache for the "Possible Spoofing" heuristic (Ch.21). Keyed by
+# symbol, holds the last order-book snapshot so the NEXT /liquidity request
+# can compare against it and see which large resting orders vanished.
+# NOTE: this is per-process memory - fine for a single Railway dyno, but
+# resets on restart and won't be shared across multiple workers/instances.
+_OB_SNAPSHOT_CACHE = {}
+
+# NOTE: exchange OKX hai. Neeche wali AVAILABLE_COINS list frontend (design.html)
+# ke coin-select dropdown se match karti hai. Agar koi coin OKX par USDT pair
+# ke sath list nahi hai to /signal us coin ke liye error return karega
+# (fetch_ohlcv exception -> already try/except mein handled hai neeche).
+# LEO (UNUS SED LEO) is list mein NAHI hai kyunke wo Bitfinex ka apna token
+# hai aur OKX par generally available nahi hota - iski jagah DOT (Polkadot)
+# rakha gaya hai.
+AVAILABLE_COINS = [
+    # TOP 1-10
+    "BTC/USDT", "ETH/USDT", "BNB/USDT", "XRP/USDT", "SOL/USDT",
+    "TRX/USDT", "HYPE/USDT", "DOGE/USDT", "ZEC/USDT", "DOT/USDT",
+    # TOP 11-20
+    "XLM/USDT", "XMR/USDT", "LINK/USDT", "ADA/USDT", "BCH/USDT",
+    "GRAM/USDT", "LTC/USDT", "SUI/USDT", "HBAR/USDT", "FIL/USDT",
+    # TOP 21-30
+    "AVAX/USDT", "CRO/USDT", "NEAR/USDT", "SHIB/USDT", "UNI/USDT",
+    "TAO/USDT", "ONDO/USDT", "OKB/USDT", "ASTER/USDT", "ATOM/USDT",
+]
+
+# Top 30 forex pairs (majors + minors/crosses + a couple of common
+# exotics), used by the new Forex tab in the coin/pair picker
+# (templates/design.html + static/script.js). NOTE: this list only
+# powers *selection* right now - the actual signal engine below
+# (get_candles / generate_signal / order-book stuff) talks to OKX via
+# ccxt, which is a crypto exchange and does not carry forex pairs. See
+# _is_forex_pair() and its use in /signal, /candles and /liquidity for
+# the friendly "coming soon" guard that keeps a Forex selection from
+# hitting the crypto-only exchange and blowing up with a raw ccxt error.
+FOREX_PAIRS = [
+    # Majors
+    "EUR/USD", "USD/JPY", "GBP/USD", "USD/CHF", "AUD/USD",
+    "USD/CAD", "NZD/USD",
+    # Minors / crosses
+    "EUR/JPY", "GBP/JPY", "EUR/GBP", "EUR/CHF", "AUD/JPY",
+    "EUR/AUD", "GBP/CHF", "AUD/NZD", "NZD/JPY", "CAD/JPY",
+    "CHF/JPY", "EUR/CAD", "GBP/CAD", "EUR/NZD", "AUD/CAD",
+    "GBP/AUD", "GBP/NZD", "AUD/CHF", "NZD/CAD", "NZD/CHF",
+    "CAD/CHF",
+    # Exotics
+    "USD/TRY", "USD/ZAR",
+]
+
+
+def _is_forex_pair(symbol):
+    """True agar symbol FOREX_PAIRS mein hai (case-insensitive)."""
+    return (symbol or "").upper() in FOREX_PAIRS
+
+
+def _forex_yf_symbol(pair):
+    """'EUR/USD' -> 'EURUSD=X' (Yahoo Finance ka forex ticker format)."""
+    base, quote = pair.upper().split("/")
+    return f"{base}{quote}=X"
+
+
+# timeframe -> (yfinance interval, yfinance lookback period). yfinance
+# supports these intervals directly; anything else (3m, 2h, 6h, 12h) is
+# built below by resampling a smaller supported interval with pandas.
+FOREX_YF_DIRECT = {
+    "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
+    "30m": ("30m", "60d"), "1h": ("60m", "730d"), "4h": ("60m", "730d"),
+    "1d": ("1d", "10y"), "1w": ("1wk", "10y"), "1M": ("1mo", "max"),
+    "3M": ("3mo", "max"),
+}
+# timeframe not directly supported by yfinance -> (base interval to
+# fetch, pandas resample rule to build the target timeframe from it).
+FOREX_RESAMPLE = {
+    "3m": ("1m", "3min"), "2h": ("60m", "2h"),
+    "6h": ("60m", "6h"), "12h": ("60m", "12h"),
+}
+
+
+def get_forex_candles(symbol, timeframe="1h", limit=200, since=None):
+    """Forex OHLC candles via Yahoo Finance (yfinance) - free, no API key.
+    NOTE: unlike the crypto/ccxt path, Yahoo has no order book, funding
+    rate, or open-interest data, so this only powers price/candle-based
+    features (chart + the price-action channels in generate_signal), not
+    the order-book channels (OFI, VPIN, depth profile, spoofing) or the
+    Liquidity Scanner, which stay crypto-only - see the /liquidity route.
+    """
+    import yfinance as yf
+
+    ticker = _forex_yf_symbol(symbol)
+    resample_rule = None
+    if timeframe in FOREX_RESAMPLE:
+        interval, period = FOREX_RESAMPLE[timeframe][0], "60d"
+        resample_rule = FOREX_RESAMPLE[timeframe][1]
+    else:
+        interval, period = FOREX_YF_DIRECT.get(timeframe, ("60m", "730d"))
+
+    data = yf.Ticker(ticker).history(period=period, interval=interval, auto_adjust=False)
+    if data is None or data.empty:
+        raise ValueError(f"No forex data available for {symbol} ({timeframe})")
+
+    data = data.reset_index()
+    time_col = "Datetime" if "Datetime" in data.columns else "Date"
+    df = pd.DataFrame({
+        "timestamp": pd.to_datetime(data[time_col], utc=True).dt.tz_localize(None),
+        "open": data["Open"].astype(float),
+        "high": data["High"].astype(float),
+        "low": data["Low"].astype(float),
+        "close": data["Close"].astype(float),
+        "volume": data["Volume"].astype(float) if "Volume" in data.columns else 0.0,
+    })
+
+    if resample_rule:
+        df = (
+            df.set_index("timestamp")
+            .resample(resample_rule)
+            .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+            .dropna()
+            .reset_index()
+        )
+
+    if since is not None:
+        since_dt = pd.to_datetime(since, unit="ms")
+        df = df[df["timestamp"] >= since_dt].reset_index(drop=True)
+
+    df = df.tail(limit).reset_index(drop=True)
+    if df.empty:
+        raise ValueError(f"No forex data available for {symbol} ({timeframe}) in the requested range")
+    return df
+
+
+def _clean_order_book(ob):
+    """OKX (via ccxt) kabhi kabhi har bid/ask level mein 2 se zyada values
+    bhejta hai (e.g. [price, amount, extra_field]). Neeche code mein
+    `for price, vol in bids` jaisi unpacking sirf exactly 2 values
+    expect karti hai, isliye poore book ko yahan strictly [price, amount]
+    tak trim kar dete hain taake koi bhi downstream function crash na ho."""
+    def clean_side(levels):
+        cleaned = []
+        for lvl in levels or []:
+            if len(lvl) >= 2:
+                cleaned.append([float(lvl[0]), float(lvl[1])])
+        return cleaned
+
+    return {
+        "bids": clean_side(ob.get("bids")),
+        "asks": clean_side(ob.get("asks")),
+    }
+
+
+# seconds per candle, used to work out a `since` timestamp when the
+# frontend asks for older history ("before" a given time) so infinite
+# scroll-back can page further into the past instead of hitting a wall.
+TIMEFRAME_SECONDS = {
+    "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800,
+    "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "12h": 43200,
+    "1d": 86400, "1w": 604800, "1M": 2592000, "3M": 7776000,
+}
+
+
+def get_candles(symbol="BTC/USDT", timeframe="1h", limit=200, since=None):
+    """Exchange se OHLCV candles fetch karta hai. `since` (ms epoch) diya
+    jaye to us waqt se aage ki candles milti hain -- older-history
+    pagination isi se ban'ti hai.
+    Forex pairs (FOREX_PAIRS) OKX par nahi milte, wo Yahoo Finance
+    (get_forex_candles) se aate hain - dono same-shaped df return
+    karte hain isliye har caller (get_candles ke baad) ko farq nahi
+    padta symbol crypto tha ya forex."""
+    if _is_forex_pair(symbol):
+        return get_forex_candles(symbol, timeframe=timeframe, limit=limit, since=since)
+    ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit, since=since)
+    df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    return df
+
+
+def get_live_price(asset):
+    """Current price - crypto ke liye OKX ticker, forex ke liye Yahoo
+    Finance (yfinance) ka last close. trades.py (Active Trade Tracking)
+    isay reuse karta hai taake forex trades bhi track ho sakein - pehle
+    ye seedha ccxt exchange.fetch_ticker() use karta tha jo forex symbols
+    (jaise 'EUR/USD') par fail ho jata tha kyunke OKX crypto-only hai."""
+    if _is_forex_pair(asset):
+        df = get_forex_candles(asset, timeframe="1m", limit=1)
+        return float(df["close"].iloc[-1])
+    ticker = exchange.fetch_ticker(asset)
+    return float(ticker["last"])
+
+
+# ============================================================
+# CANDLESTICK PATTERN DETECTION (NEW) — purely deterministic OHLC math,
+# jaisa ek human trader chart par shape dekh kar Doji/Hammer/Engulfing
+# waghera pehchanta hai, waisa hi yahan open/high/low/close ke ratios
+# se check hota hai. Koi ML/guess nahi — agar shart poori hoti hai to
+# pattern confirm hota hai, warna nahi.
+#
+# `detect_candlestick_patterns()` poore df par scan karta hai (chart
+# par marker lagane ke liye /candles endpoint isay use karta hai).
+# `candlestick_confirmation()` sirf sabse recent candles check karta
+# hai aur generate_signal() ke final_verdict ko CONFIRM/CONTRADICT
+# karta hai — verdict khud kabhi flip nahi hota, sirf confidence_pct
+# thodi si (+/-) adjust hoti hai (jaisa pehle discuss hua tha: pattern
+# ko "confirmation filter" ki tarah use karna, standalone signal nahi).
+# ============================================================
+def detect_candlestick_patterns(df, trend_window=10):
+    n = len(df)
+    patterns = []
+    if n < 3:
+        return patterns
+
+    o = df["open"].values
+    h = df["high"].values
+    l = df["low"].values
+    c = df["close"].values
+    has_time = "timestamp" in df.columns
+    t = df["timestamp"].values if has_time else None
+
+    for i in range(2, n):
+        body = abs(c[i] - o[i])
+        rng = h[i] - l[i]
+        if rng <= 0:
+            continue
+        upper_wick = h[i] - max(o[i], c[i])
+        lower_wick = min(o[i], c[i]) - l[i]
+        bullish = c[i] > o[i]
+        bearish = c[i] < o[i]
+
+        start = max(0, i - trend_window)
+        prior_closes = c[start:i]
+        uptrend = len(prior_closes) >= 2 and prior_closes[-1] > prior_closes[0]
+        downtrend = len(prior_closes) >= 2 and prior_closes[-1] < prior_closes[0]
+
+        found = None
+
+        # --- Single-candle patterns ---
+        if body <= 0.1 * rng:
+            found = ("Doji", "neutral")
+        elif body > 0 and lower_wick >= 2 * body and upper_wick <= 0.3 * body:
+            if downtrend:
+                found = ("Hammer", "bullish")
+            elif uptrend:
+                found = ("Hanging Man", "bearish")
+        elif body > 0 and upper_wick >= 2 * body and lower_wick <= 0.3 * body:
+            if downtrend:
+                found = ("Inverted Hammer", "bullish")
+            elif uptrend:
+                found = ("Shooting Star", "bearish")
+
+        # --- Two-candle patterns (override single-candle if found) ---
+        po, pc = o[i - 1], c[i - 1]
+        prev_bearish = pc < po
+        prev_bullish = pc > po
+        if prev_bearish and bullish and o[i] <= pc and c[i] >= po:
+            found = ("Bullish Engulfing", "bullish")
+        elif prev_bullish and bearish and o[i] >= pc and c[i] <= po:
+            found = ("Bearish Engulfing", "bearish")
+        elif prev_bearish and bullish and o[i] < pc and po > c[i] > (po + pc) / 2:
+            found = ("Piercing Line", "bullish")
+        elif prev_bullish and bearish and o[i] > pc and po < c[i] < (po + pc) / 2:
+            found = ("Dark Cloud Cover", "bearish")
+
+        # --- Three-candle patterns (highest priority) ---
+        o1, c1 = o[i - 2], c[i - 2]
+        o2, c2 = o[i - 1], c[i - 1]
+        b1 = abs(c1 - o1)
+        b2 = abs(c2 - o2)
+        r1 = h[i - 2] - l[i - 2]
+        first_bearish_big = (c1 < o1) and r1 > 0 and b1 >= 0.5 * r1
+        first_bullish_big = (c1 > o1) and r1 > 0 and b1 >= 0.5 * r1
+        star_small = (b2 <= 0.4 * b1) if b1 > 0 else False
+
+        if first_bearish_big and star_small and bullish and c[i] > (o1 + c1) / 2:
+            found = ("Morning Star", "bullish")
+        elif first_bullish_big and star_small and bearish and c[i] < (o1 + c1) / 2:
+            found = ("Evening Star", "bearish")
+        elif (c1 > o1) and (c2 > o2) and bullish and c2 > c1 and c[i] > c2 and o2 > o1 and o[i] > o2:
+            found = ("Three White Soldiers", "bullish")
+        elif (c1 < o1) and (c2 < o2) and bearish and c2 < c1 and c[i] < c2 and o2 < o1 and o[i] < o2:
+            found = ("Three Black Crows", "bearish")
+
+        if found:
+            pattern_name, bias = found
+            entry = {"index": i, "pattern": pattern_name, "bias": bias}
+            if has_time:
+                try:
+                    entry["time"] = int(pd.Timestamp(t[i]).timestamp())
+                except Exception:
+                    pass
+            patterns.append(entry)
+
+    return patterns
+
+
+def candlestick_confirmation(df, final_verdict, lookback=3):
+    """Sirf sabse recent `lookback` candles check karta hai - final_verdict
+    ko flip NAHI karta, sirf confidence_pct ko CONFIRM par thoda barhata
+    hai aur CONTRADICT par thoda ghatata hai (max +/-8%, clamp 5-97%
+    generate_signal() mein hota hai)."""
+    all_patterns = detect_candlestick_patterns(df)
+    n = len(df)
+    recent = [p for p in all_patterns if p["index"] >= n - lookback]
+
+    if not recent or final_verdict == "WAIT":
+        return {
+            "patterns_detected": [p["pattern"] for p in recent],
+            "confirmation": "NONE" if not recent else "NEUTRAL",
+            "confidence_adjustment": 0,
         }
-        applyTheme(localStorage.getItem('signalsfm-theme') || 'dark');
-        btn.addEventListener('click', () => {
-          applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-        });
-      })();
 
-      document.getElementById('logout-btn').addEventListener('click', async () => {
-        await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
-        window.location.href = '/login';
-      });
-    </script>
-  </header>
-
-  <!-- Slide-out menu drawer: opens from the hamburger icon next to the
-       Signals FM logo. Fully independent of the tabs-layout inside
-       #result-box, so it never touches the RUN ANALYSIS flow. -->
-  <div class="side-drawer-backdrop" id="side-drawer-backdrop"></div>
-  <nav class="side-drawer" id="home-info-nav">
-    <div class="side-drawer-brand">
-      <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="side-drawer-brand-logo">
-      <div class="side-drawer-brand-text">
-        <span class="side-drawer-brand-name">Signals FM</span>
-        <span class="side-drawer-brand-tag">19-Channel Market Readout</span>
-      </div>
-    </div>
-    <div class="side-drawer-head">
-      <button type="button" class="side-drawer-back" id="side-drawer-back">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>BACK</span>
-      </button>
-    </div>
-    <div class="side-drawer-links">
-      <button class="panel-tab" id="home-nav-tab" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 11.5L12 4l8 7.5M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">HOME</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="contact" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">CONTACT US</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="about" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v6M12 7.5v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">ABOUT</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="privacy" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">PRIVACY POLICY</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="terms" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">TERMS &amp; CONDITIONS</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="disclaimer" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4M12 17v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">DISCLAIMER</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="active-trades" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 17l5-6 4 4 7-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="6" r="1.6" fill="currentColor"/></svg></span>
-        <span class="panel-tab-text">ACTIVE TRADES</span>
-      </button>
-      <button class="panel-tab home-info-tab" data-info="trade-history" type="button">
-        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.6 5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 12V7M4 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">TRADE HISTORY</span>
-      </button>
-    </div>
-  </nav>
-
-  <div class="home-shell">
-
-    <div class="home-main">
-
-  <div class="control-row">
-
-    <!-- Custom coin/pair picker: Forex/Crypto tabs + search, each coin's
-         logo shown. Built on top of the native <select> below, which
-         script.js keeps in sync and still reads via coinSelect.value for
-         the /signal + /candles calls. -->
-    <div class="coin-picker" id="coin-picker">
-      <button type="button" class="coin-picker-trigger" id="coin-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
-        <img id="coin-picker-icon" class="coin-picker-icon" alt="" src="" />
-        <span id="coin-picker-label" class="coin-picker-label">BTC / USDT</span>
-        <span class="coin-picker-caret">▾</span>
-      </button>
-      <div class="coin-picker-menu" id="coin-picker-menu" role="listbox">
-        <div class="coin-picker-search-wrap">
-          <input type="text" id="coin-picker-search" class="coin-picker-search"
-                 placeholder="Search coin or forex pair…" autocomplete="off" spellcheck="false" />
-        </div>
-        <div class="coin-picker-tabs" id="coin-picker-tabs">
-          <button type="button" class="coin-picker-tab active" data-type="crypto">Crypto</button>
-          <button type="button" class="coin-picker-tab" data-type="forex">Forex</button>
-        </div>
-        <div class="coin-picker-list" id="coin-picker-list"></div>
-      </div>
-    </div>
-
-    <select id="coin-select" class="coin-select coin-select-native">
-      <optgroup label="CRYPTO">
-        <option value="BTC/USDT">BTC / USDT</option>
-        <option value="ETH/USDT">ETH / USDT</option>
-        <option value="BNB/USDT">BNB / USDT</option>
-        <option value="XRP/USDT">XRP / USDT</option>
-        <option value="SOL/USDT">SOL / USDT</option>
-        <option value="TRX/USDT">TRX / USDT</option>
-        <option value="HYPE/USDT">HYPE / USDT</option>
-        <option value="DOGE/USDT">DOGE / USDT</option>
-        <option value="ZEC/USDT">ZEC / USDT</option>
-        <option value="DOT/USDT">DOT / USDT</option>
-        <option value="XLM/USDT">XLM / USDT</option>
-        <option value="XMR/USDT">XMR / USDT</option>
-        <option value="LINK/USDT">LINK / USDT</option>
-        <option value="ADA/USDT">ADA / USDT</option>
-        <option value="BCH/USDT">BCH / USDT</option>
-        <option value="GRAM/USDT">GRAM / USDT</option>
-        <option value="LTC/USDT">LTC / USDT</option>
-        <option value="SUI/USDT">SUI / USDT</option>
-        <option value="HBAR/USDT">HBAR / USDT</option>
-        <option value="FIL/USDT">FIL / USDT</option>
-        <option value="AVAX/USDT">AVAX / USDT</option>
-        <option value="CRO/USDT">CRO / USDT</option>
-        <option value="NEAR/USDT">NEAR / USDT</option>
-        <option value="SHIB/USDT">SHIB / USDT</option>
-        <option value="UNI/USDT">UNI / USDT</option>
-        <option value="TAO/USDT">TAO / USDT</option>
-        <option value="ONDO/USDT">ONDO / USDT</option>
-        <option value="OKB/USDT">OKB / USDT</option>
-        <option value="ASTER/USDT">ASTER / USDT</option>
-        <option value="ATOM/USDT">ATOM / USDT</option>
-      </optgroup>
-      <optgroup label="FOREX">
-        <option value="EUR/USD">EUR / USD</option>
-        <option value="USD/JPY">USD / JPY</option>
-        <option value="GBP/USD">GBP / USD</option>
-        <option value="USD/CHF">USD / CHF</option>
-        <option value="AUD/USD">AUD / USD</option>
-        <option value="USD/CAD">USD / CAD</option>
-        <option value="NZD/USD">NZD / USD</option>
-        <option value="EUR/JPY">EUR / JPY</option>
-        <option value="GBP/JPY">GBP / JPY</option>
-        <option value="EUR/GBP">EUR / GBP</option>
-        <option value="EUR/CHF">EUR / CHF</option>
-        <option value="AUD/JPY">AUD / JPY</option>
-        <option value="EUR/AUD">EUR / AUD</option>
-        <option value="GBP/CHF">GBP / CHF</option>
-        <option value="AUD/NZD">AUD / NZD</option>
-        <option value="NZD/JPY">NZD / JPY</option>
-        <option value="CAD/JPY">CAD / JPY</option>
-        <option value="CHF/JPY">CHF / JPY</option>
-        <option value="EUR/CAD">EUR / CAD</option>
-        <option value="GBP/CAD">GBP / CAD</option>
-        <option value="EUR/NZD">EUR / NZD</option>
-        <option value="AUD/CAD">AUD / CAD</option>
-        <option value="GBP/AUD">GBP / AUD</option>
-        <option value="GBP/NZD">GBP / NZD</option>
-        <option value="AUD/CHF">AUD / CHF</option>
-        <option value="NZD/CAD">NZD / CAD</option>
-        <option value="NZD/CHF">NZD / CHF</option>
-        <option value="CAD/CHF">CAD / CHF</option>
-        <option value="USD/TRY">USD / TRY</option>
-        <option value="USD/ZAR">USD / ZAR</option>
-      </optgroup>
-    </select>
-
-    <button id="get-signal-btn" class="scan-btn">
-      <span class="scan-btn-text">RUN ANALYSIS</span>
-    </button>
-  </div>
-
-  <p id="error-text" class="error-text hidden"></p>
-  <div id="alert-stack" class="alert-stack"></div>
-
-  <main id="result-box" class="hidden">
-
-    <!-- Active Trade Tracking injection point: shows either the
-         "Track This Trade" button (no active trade for this coin) or the
-         "ORIGINAL ACTIVE TRADE" banner (when viewing market analysis while
-         a trade is already being tracked for this coin). -->
-    <div id="trade-tracking-zone"></div>
-
-    <!-- HERO: verdict gauge -->
-    <section class="hero">
-      <div class="gauge-wrap">
-        <svg viewBox="0 0 108 108">
-          <circle class="gauge-track" cx="54" cy="54" r="48"></circle>
-          <circle id="gauge-fill" class="gauge-fill" cx="54" cy="54" r="48"></circle>
-        </svg>
-        <div class="gauge-center">
-          <span id="gauge-verdict" class="gauge-verdict">--</span>
-          <span id="gauge-confidence" class="gauge-confidence">-- confidence</span>
-        </div>
-      </div>
-      <div class="hero-data">
-        <span class="hero-eyebrow">Mark Price</span>
-        <div id="hero-price" class="hero-price">--</div>
-        <div class="hero-sub">
-          <span>RSI <b id="hero-rsi">--</b></span>
-          <span>MACD <b id="hero-macd">--</b></span>
-        </div>
-        <span id="hero-trend-tag" class="hero-trend-tag">--</span>
-      </div>
-    </section>
-
-    <!-- PROMINENT ACCURACY SCORE -->
-    <section class="accuracy-score-card accuracy-score-card--hero" aria-label="Accuracy Score">
-      <div class="accuracy-score-head">
-        <div class="channel-id-group">
-          <span class="scope-ticks"><span style="height:4px"></span><span style="height:8px"></span><span style="height:5px"></span><span style="height:11px"></span><span style="height:6px"></span></span>
-          <div>
-            <div class="channel-id">CH.01–05</div>
-            <div class="channel-title">Accuracy Score</div>
-          </div>
-        </div>
-        <span class="channel-model">MODEL AGREEMENT</span>
-      </div>
-      <div class="accuracy-score-main">
-        <div class="accuracy-gauge-row">
-          <div class="accuracy-gauge-wrap">
-            <svg viewBox="0 0 120 70" aria-hidden="true">
-              <path class="accuracy-gauge-track" d="M 10 60 A 50 50 0 0 1 110 60"></path>
-              <path id="accuracy-gauge-fill" class="accuracy-gauge-fill" d="M 10 60 A 50 50 0 0 1 110 60"></path>
-              <line id="accuracy-gauge-needle" class="accuracy-gauge-needle" x1="60" y1="60" x2="60" y2="18"></line>
-              <circle cx="60" cy="60" r="4.5" class="accuracy-gauge-hub"></circle>
-            </svg>
-          </div>
-          <div class="accuracy-score-data">
-            <div id="accuracy-score-pct" class="accuracy-score-pct">--%</div>
-            <div id="accuracy-score-sub" class="accuracy-score-sub">waiting for a verdict</div>
-          </div>
-        </div>
-        <div id="accuracy-history" class="accuracy-history" aria-label="Accuracy history"></div>
-      </div>
-    </section>
-
-    <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;01</span>
-      <span class="tier-label">Core Verdict Engine</span>
-    </div>
-    <p class="tier-note">Ch.01–05 — Hawkes Process, Bayesian Classifier &amp; Conformal Prediction. This is the only tier that produces the final verdict and confidence score.</p>
-    <div id="tier-1" class="channel-grid"></div>
-
-    <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;02–03</span>
-      <span class="tier-label">Microstructure · Extended Signals · Liquidity · Live Chart</span>
-    </div>
-    <p class="tier-note">Ch.06–19 — order-book, regime, cross-asset &amp; liquidity diagnostics, plus a live price chart. Display-only: does not alter the verdict above.</p>
-
-    <!-- TAB NAVIGATION + CONTENT — side-by-side rail layout -->
-    <div class="tabs-layout">
-
-      <div class="panel-tabs">
-        <button class="panel-tab active" data-panel="microstructure" type="button">
-          <span class="panel-tab-num">01</span>
-          <span class="panel-tab-text">DASHBOARD</span>
-        </button>
-        <button class="panel-tab" data-panel="extended" type="button">
-          <span class="panel-tab-num">02</span>
-          <span class="panel-tab-text">EXTENDED SIGNALS</span>
-        </button>
-        <button class="panel-tab" data-panel="liquidity" type="button">
-          <span class="panel-tab-num">03</span>
-          <span class="panel-tab-text">LIQUIDITY SCANNER</span>
-        </button>
-        <button class="panel-tab" data-panel="livechart" type="button">
-          <span class="panel-tab-num">04</span>
-          <span class="panel-tab-text">LIVE CHART</span>
-        </button>
-      </div>
-
-      <div class="tab-content-area">
-
-        <div id="panel-microstructure" class="tab-panel active">
-          <p class="tier-note">Ch.06–10 — order-book &amp; regime diagnostics. Display-only: does not alter the verdict above.</p>
-          <div id="tier-2" class="channel-grid"></div>
-        </div>
-
-        <div id="panel-extended" class="tab-panel">
-          <p class="tier-note">Ch.11–18 — cross-asset, entropy, wavelet &amp; risk-agent panels. Display-only, exploratory.</p>
-          <div id="tier-3" class="channel-grid"></div>
-        </div>
-
-        <div id="panel-liquidity" class="tab-panel">
-          <div id="liquidity-scanner"></div>
-        </div>
-
-        <div id="panel-livechart" class="tab-panel">
-          <div class="chart-panel" id="chart-panel">
-
-            <div class="chart-header">
-              <div class="chart-header-left">
-                <button type="button" id="chart-back-btn" class="chart-back-btn" title="Exit fullscreen">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span>BACK</span>
-                </button>
-                <img id="chart-coin-icon" class="chart-coin-logo" alt="" src="" />
-                <div>
-                  <div class="chart-title" id="chart-title">BTC / USDT · 1H</div>
-                  <div class="chart-subtitle">live candlestick feed — polled from the exchange</div>
-                </div>
-              </div>
-              <div class="chart-price-block">
-                <span id="chart-live-dot" class="live-clock-dot"></span>
-                <span id="chart-price" class="chart-price">--</span>
-                <span id="chart-change" class="chart-change">--</span>
-                <div class="chart-others-wrap" id="chart-others-wrap">
-                  <button type="button" id="chart-others-btn" class="indicator-btn" title="Other overlays">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>
-                    <span>OTHERS</span>
-                  </button>
-                  <div class="chart-others-menu" id="chart-others-menu" hidden>
-                    <label class="chart-others-item">
-                      <input type="checkbox" id="toggle-patterns" />
-                      <span>Candlestick Patterns</span>
-                    </label>
-                    <label class="chart-others-item">
-                      <input type="checkbox" id="toggle-sr" />
-                      <span>Support / Resistance</span>
-                    </label>
-                  </div>
-                </div>
-                <button type="button" id="indicator-btn" class="indicator-btn" title="Indicators">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" fill="currentColor"/></svg>
-                  <span>INDICATORS</span>
-                  <span id="indicator-btn-count" class="indicator-btn-count">0</span>
-                </button>
-                <button type="button" id="chart-fullscreen-btn" class="chart-icon-btn" title="Fullscreen">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="indicator-panel" id="indicator-panel" hidden>
-              <div class="indicator-panel-head">
-                <div class="indicator-search-box">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                  <input type="text" id="indicator-search" class="indicator-search" placeholder="Search indicators…" autocomplete="off" spellcheck="false" />
-                  <kbd class="indicator-search-key">/</kbd>
-                </div>
-                <button type="button" id="indicator-clear-all" class="indicator-clear-all" title="Remove all indicators">CLEAR ALL</button>
-              </div>
-              <div class="indicator-active-bar">
-                <span class="indicator-active-label">ACTIVE</span>
-                <span id="indicator-active-count" class="indicator-active-count">0</span>
-                <span class="indicator-active-hint">click to toggle</span>
-              </div>
-              <div class="indicator-list" id="indicator-list"></div>
-              <div class="indicator-panel-foot">
-                <span id="indicator-list-count">20 indicators</span>
-                <span class="indicator-panel-hint">indicators apply to the current chart &amp; timeframe</span>
-              </div>
-            </div>
-            <div class="chart-tf-row" id="chart-tf-row">
-              <button class="chart-tf-btn" data-tf="1m">1m</button>
-              <button class="chart-tf-btn" data-tf="5m">5m</button>
-              <button class="chart-tf-btn" data-tf="15m">15m</button>
-              <button class="chart-tf-btn active" data-tf="1h">1h</button>
-              <button class="chart-tf-btn" data-tf="4h">4h</button>
-              <button class="chart-tf-btn" data-tf="1d">1d</button>
-              <span class="chart-tf-sep"></span>
-              <button class="chart-range-btn" data-range="1D">1D</button>
-              <button class="chart-range-btn" data-range="1M">1M</button>
-              <button class="chart-range-btn" data-range="3M">3M</button>
-              <button class="chart-range-btn" data-range="6M">6M</button>
-              <button class="chart-range-btn" data-range="1Y">1Y</button>
-              <button class="chart-range-btn" data-range="5Y">5Y</button>
-            </div>
-
-            <div class="chart-body">
-              <div class="chart-tools" id="chart-tools"><!-- populated by script.js: renderToolbar() --></div>
-              <div class="chart-canvas-wrap">
-                <div id="candle-chart" class="candle-chart"></div>
-                <svg id="indicator-overlay" class="indicator-overlay"></svg>
-                <svg id="draw-overlay" class="draw-overlay"></svg>
-              </div>
-            </div>
-
-            <div class="chart-footer">
-              <span id="chart-status">connecting…</span>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /.tab-content-area -->
-
-    </div><!-- /.tabs-layout -->
-
-  </main>
-
-  <div id="empty-state" class="empty-state">
-    <div class="empty-skeleton-grid" id="empty-skeleton-grid" aria-hidden="true">
-      <span class="skeleton-box" data-slot="0"></span><span class="skeleton-box" data-slot="1"></span><span class="skeleton-box" data-slot="2"></span>
-      <span class="skeleton-box" data-slot="3"></span><span class="skeleton-box skeleton-box-center"></span><span class="skeleton-box" data-slot="4"></span>
-      <span class="skeleton-box" data-slot="5"></span><span class="skeleton-box" data-slot="6"></span><span class="skeleton-box" data-slot="7"></span>
-    </div>
-
-    <div class="empty-core">
-      <div class="empty-radar">
-        <span class="radar-ring radar-ring-1"></span>
-        <span class="radar-ring radar-ring-2"></span>
-        <span class="radar-ring radar-ring-3"></span>
-        <span class="radar-sweep"></span>
-        <span class="radar-blip"></span>
-        <svg class="radar-candles" viewBox="0 0 60 34" aria-hidden="true">
-          <line x1="8" y1="6" x2="8" y2="28" stroke="var(--short)" stroke-width="1.4"/>
-          <rect x="5" y="16" width="6" height="10" fill="var(--short)" rx="1"/>
-          <line x1="22" y1="10" x2="22" y2="26" stroke="var(--long)" stroke-width="1.4"/>
-          <rect x="19" y="12" width="6" height="9" fill="var(--long)" rx="1"/>
-          <line x1="36" y1="4" x2="36" y2="22" stroke="var(--long)" stroke-width="1.4"/>
-          <rect x="33" y="6" width="6" height="10" fill="var(--long)" rx="1"/>
-          <line x1="50" y1="2" x2="50" y2="16" stroke="var(--long-bright)" stroke-width="1.4"/>
-          <rect x="47" y="3" width="6" height="8" fill="var(--long-bright)" rx="1"/>
-        </svg>
-      </div>
-
-      <h2 class="empty-title">Awaiting Analysis</h2>
-      <p class="empty-subtitle">Select a pair above and click <b>Run Analysis</b> to<br>initialize Tier 01–03 telemetry.</p>
-
-      <div id="empty-ticker" class="empty-ticker">
-        <span class="empty-ticker-loading">loading market snapshot…</span>
-      </div>
-    </div>
-  </div>
-
-    </div><!-- /.home-main -->
-
-  </div><!-- /.home-shell -->
-
-  <!-- Standalone info overlay: opens over the whole page when a sidebar
-       item (Contact/About/Privacy/Terms/Disclaimer) is clicked, with a
-       BACK button at the top. Fully separate from the analysis tabs. -->
-  <div class="home-info-overlay hidden" id="home-info-overlay">
-    <button type="button" class="home-info-back-btn" id="home-info-back">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>BACK</span>
-    </button>
-
-    <div class="home-info-inner">
-
-      <div class="home-info-panel" data-info="contact">
-        <div class="about-card">
-          <h2 class="about-title">Contact Us</h2>
-          <p>We welcome your inquiries.</p>
-          <p>Whether you have a question about Signals FM, require assistance, wish to provide feedback, or have a business proposal, our team is ready to support you.</p>
-
-          <h3 class="about-subhead">Get in Touch</h3>
-          <div class="contact-info-row">
-            <span class="contact-info-label">Email</span>
-            <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
-          </div>
-
-          <h3 class="about-subhead">Follow Us</h3>
-          <ul class="social-list">
-            <li><span class="social-label">TikTok</span><a href="https://www.tiktok.com/@signalfm1" target="_blank" rel="noopener">@signalfm1</a></li>
-            <li><span class="social-label">Instagram</span><a href="https://www.instagram.com/signalfm01/" target="_blank" rel="noopener">@signalfm01</a></li>
-            <li><span class="social-label">Facebook</span><a href="https://www.facebook.com/profile.php?id=61593016040987&sk=reels_tab" target="_blank" rel="noopener">Signals FM</a></li>
-            <li><span class="social-label">LinkedIn</span><a href="https://www.linkedin.com/in/signal-fm-459324427/" target="_blank" rel="noopener">Signals FM</a></li>
-          </ul>
-
-          <h3 class="about-subhead">Response Time</h3>
-          <p>We aim to respond to all inquiries within 24–48 hours, Monday to Friday.</p>
-          <p>Thank you for choosing Signals FM. We value your trust and look forward to assisting you.</p>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="about">
-        <div class="about-card">
-          <h2 class="about-title">About Us</h2>
-          <p>Welcome to Signals FM.</p>
-          <p>I am Fasiullah Ayaz, The Founder and CEO of Signals FM.</p>
-          <p>Signals FM is a web-based trading signal platform designed to assist traders by analyzing multiple market concepts and calculations to generate real-time trading signals. Our goal is to simplify market analysis and provide traders with timely insights that can support their decision-making process.</p>
-
-          <h3 class="about-subhead">Why We Built Signals FM</h3>
-          <p>Trading can be challenging, especially when traders need to analyze information from multiple sources before making a decision. Signals FM was created to make this process more efficient by bringing different analytical methods together in one place.</p>
-          <p>Whether you are just starting your trading journey or already have experience in the markets, Signals FM is designed to provide helpful insights whenever you need additional market confirmation.</p>
-
-          <h3 class="about-subhead">Our Mission</h3>
-          <p>Our mission is to make trading analysis more accessible for both beginners and experienced traders.</p>
-          <p>Instead of spending time collecting and comparing different calculations from various platforms, users can access market insights in one place through Signals FM. We aim to help traders make more informed decisions with greater confidence while keeping the process simple and efficient.</p>
-
-          <h3 class="about-subhead">Our Values</h3>
-          <p>At Signals FM, we believe in:</p>
-          <ul class="about-list">
-            <li>Simplicity and ease of use.</li>
-            <li>Continuous improvement and innovation.</li>
-            <li>Providing timely and transparent market insights.</li>
-            <li>Building tools that support traders at every experience level.</li>
-            <li>Maintaining trust through responsible and ethical practices.</li>
-          </ul>
-
-          <h3 class="about-subhead">Looking Ahead</h3>
-          <p>We are continuously working to improve Signals FM. In the future, we plan to expand our platform by adding support for additional financial markets, including cryptocurrency trading, along with new analytical tools and features to provide an even better experience for our users.</p>
-          <p>Thank you for being part of the Signals FM community. We are committed to continuously improving our platform and helping traders access smarter market insights.</p>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="privacy">
-        <div class="about-card legal-card">
-          <div class="legal-head">
-            <h2 class="about-title">Privacy Policy</h2>
-            <span class="legal-updated">Last Updated: August 2026</span>
-          </div>
-          <p>Welcome to Signals FM. We are committed to protecting your privacy and safeguarding your personal information. This Privacy Policy outlines the types of information we collect, how we use it, and the choices available to you regarding your data when you use our website.</p>
-
-          <div class="legal-section">
-            <span class="legal-section-num">01</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">How We Use Your Information</h3>
-              <p>We use the information we collect to:</p>
-              <ul class="about-list">
-                <li>Respond to inquiries and provide customer support.</li>
-                <li>Improve our website, services, and user experience.</li>
-                <li>Monitor website performance, security, and reliability.</li>
-                <li>Communicate important updates related to our services.</li>
-              </ul>
-              <p>We do not sell, rent, or trade your personal information to third parties.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">02</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Cookies</h3>
-              <p>Signals FM may use cookies and similar technologies to enhance website functionality, remember user preferences, and improve your browsing experience.</p>
-              <p>You may disable cookies through your browser settings; however, please note that some features of the website may not function as intended.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">03</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Third-Party Services</h3>
-              <p>Our website may utilize trusted third-party services, such as Google Analytics and Google AdSense (when enabled), to analyze website traffic and deliver relevant advertisements.</p>
-              <p>These third-party services may collect information in accordance with their own privacy policies.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">04</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Data Security</h3>
-              <p>We implement reasonable technical and organizational measures to protect your personal information from unauthorized access, disclosure, alteration, or misuse.</p>
-              <p>However, no method of data transmission or electronic storage is completely secure, and we cannot guarantee absolute security.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">05</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Your Rights</h3>
-              <p>You may contact us at any time to:</p>
-              <ul class="about-list">
-                <li>Request access to your personal information.</li>
-                <li>Request correction of inaccurate or incomplete data.</li>
-                <li>Request deletion of your personal data, where applicable.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">06</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to This Privacy Policy</h3>
-              <p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated revision date.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">07</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Contact Us</h3>
-              <p>If you have any questions about this Privacy Policy or how your personal information is handled, please contact us:</p>
-              <div class="contact-info-row">
-                <span class="contact-info-label">Email</span>
-                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
-              </div>
-            </div>
-          </div>
-
-          <h3 class="about-subhead">Company Leadership</h3>
-          <div class="leadership-grid">
-            <div class="leadership-card">
-              <span class="leadership-initial">FA</span>
-              <div>
-                <div class="leadership-name">Fasiullah Ayaz</div>
-                <div class="leadership-role">Chief Executive Officer (CEO)</div>
-              </div>
-            </div>
-            <div class="leadership-card">
-              <span class="leadership-initial">MQ</span>
-              <div>
-                <div class="leadership-name">Mustafa Qureshi</div>
-                <div class="leadership-role">Chief Operating Officer (COO)</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="terms">
-        <div class="about-card legal-card">
-          <div class="legal-head">
-            <h2 class="about-title">Terms &amp; Conditions</h2>
-            <span class="legal-updated">Last Updated: August 2026</span>
-          </div>
-          <p>Welcome to Signals FM. By accessing or using our website, you agree to comply with these Terms &amp; Conditions. If you do not agree with any part of these terms, please do not use our website.</p>
-
-          <div class="legal-section">
-            <span class="legal-section-num">01</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Acceptance of Terms</h3>
-              <p>By using Signals FM, you confirm that you have read, understood, and agreed to these Terms &amp; Conditions.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">02</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Our Services</h3>
-              <p>Signals FM provides trading signals and market insights generated using various analytical methods, concepts, and calculations. The information provided is intended for educational and informational purposes only.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">03</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">User Responsibilities</h3>
-              <p>By using our website, you agree to:</p>
-              <ul class="about-list">
-                <li>Use the website only for lawful purposes.</li>
-                <li>Not misuse, copy, or attempt to damage the website.</li>
-                <li>Not interfere with the website's security or functionality.</li>
-                <li>Be responsible for your own trading and investment decisions.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">04</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Intellectual Property</h3>
-              <p>All content on Signals FM, including text, graphics, logos, designs, and software, is the property of Signals FM unless otherwise stated. You may not copy, reproduce, or distribute our content without prior written permission.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">05</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">No Financial Advice</h3>
-              <p>Signals FM does not provide financial, investment, or legal advice. Trading signals are generated through analytical methods and should not be considered a guarantee of future market performance.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">06</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Limitation of Liability</h3>
-              <p>Signals FM, its owners, employees, and affiliates shall not be liable for any financial loss, trading loss, or damages resulting from the use of our website or trading signals.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">07</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Third-Party Links</h3>
-              <p>Our website may contain links to third-party websites. We are not responsible for the content, privacy practices, or services provided by those websites.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">08</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to the Service</h3>
-              <p>We reserve the right to modify, suspend, or discontinue any part of the website or its services at any time without prior notice.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">09</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to These Terms</h3>
-              <p>We may update these Terms &amp; Conditions from time to time. Continued use of the website after changes are published constitutes acceptance of the updated terms.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">10</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Contact Information</h3>
-              <p>If you have any questions regarding these Terms &amp; Conditions, please contact us:</p>
-              <div class="contact-info-row">
-                <span class="contact-info-label">Email</span>
-                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
-              </div>
-            </div>
-          </div>
-
-          <h3 class="about-subhead">Company Leadership</h3>
-          <div class="leadership-grid">
-            <div class="leadership-card">
-              <span class="leadership-initial">FA</span>
-              <div>
-                <div class="leadership-name">Fasiullah Ayaz</div>
-                <div class="leadership-role">Chief Executive Officer (CEO)</div>
-              </div>
-            </div>
-            <div class="leadership-card">
-              <span class="leadership-initial">MQ</span>
-              <div>
-                <div class="leadership-name">Mustafa Qureshi</div>
-                <div class="leadership-role">Chief Operating Officer (COO)</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="disclaimer">
-        <div class="about-card legal-card">
-          <div class="legal-head">
-            <h2 class="about-title">Disclaimer</h2>
-            <span class="legal-updated">Last Updated: August 2026</span>
-          </div>
-          <p>Welcome to Signals FM. By accessing or using our website, you agree to comply with these Terms &amp; Conditions. If you do not agree with any part of these terms, please do not use our website.</p>
-
-          <div class="legal-section">
-            <span class="legal-section-num">01</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Acceptance of Terms</h3>
-              <p>By using Signals FM, you confirm that you have read, understood, and agreed to these Terms &amp; Conditions.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">02</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Our Services</h3>
-              <p>Signals FM provides trading signals and market insights generated using various analytical methods, concepts, and calculations. The information provided is intended for educational and informational purposes only.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">03</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">User Responsibilities</h3>
-              <p>By using our website, you agree to:</p>
-              <ul class="about-list">
-                <li>Use the website only for lawful purposes.</li>
-                <li>Not misuse, copy, or attempt to damage the website.</li>
-                <li>Not interfere with the website's security or functionality.</li>
-                <li>Be responsible for your own trading and investment decisions.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">04</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Intellectual Property</h3>
-              <p>All content on Signals FM, including text, graphics, logos, designs, and software, is the property of Signals FM unless otherwise stated. You may not copy, reproduce, or distribute our content without prior written permission.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">05</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">No Financial Advice</h3>
-              <p>Signals FM does not provide financial, investment, or legal advice. Trading signals are generated through analytical methods and should not be considered a guarantee of future market performance.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">06</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Limitation of Liability</h3>
-              <p>Signals FM, its owners, employees, and affiliates shall not be liable for any financial loss, trading loss, or damages resulting from the use of our website or trading signals.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">07</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Third-Party Links</h3>
-              <p>Our website may contain links to third-party websites. We are not responsible for the content, privacy practices, or services provided by those websites.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">08</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to the Service</h3>
-              <p>We reserve the right to modify, suspend, or discontinue any part of the website or its services at any time without prior notice.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">09</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Changes to These Terms</h3>
-              <p>We may update these Terms &amp; Conditions from time to time. Continued use of the website after changes are published constitutes acceptance of the updated terms.</p>
-            </div>
-          </div>
-
-          <div class="legal-section">
-            <span class="legal-section-num">10</span>
-            <div class="legal-section-body">
-              <h3 class="about-subhead">Contact Information</h3>
-              <p>If you have any questions regarding these Terms &amp; Conditions, please contact us:</p>
-              <div class="contact-info-row">
-                <span class="contact-info-label">Email</span>
-                <a href="mailto:signalfm01@gmail.com" class="contact-info-value">signalfm01@gmail.com</a>
-              </div>
-            </div>
-          </div>
-
-          <h3 class="about-subhead">Company Leadership</h3>
-          <div class="leadership-grid">
-            <div class="leadership-card">
-              <span class="leadership-initial">FA</span>
-              <div>
-                <div class="leadership-name">Fasiullah Ayaz</div>
-                <div class="leadership-role">Chief Executive Officer (CEO)</div>
-              </div>
-            </div>
-            <div class="leadership-card">
-              <span class="leadership-initial">MQ</span>
-              <div>
-                <div class="leadership-name">Mustafa Qureshi</div>
-                <div class="leadership-role">Chief Operating Officer (COO)</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="active-trades">
-        <div class="about-card">
-          <h2 class="about-title">Active Trades</h2>
-          <p>Trades you're currently tracking. Signal FM keeps monitoring these until they're closed.</p>
-          <div id="active-trades-list" style="margin-top:18px;">
-            <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="home-info-panel" data-info="trade-history">
-        <div class="about-card">
-          <h2 class="about-title">Trade History</h2>
-          <p>Completed trades — closed by hitting target, stop loss, or manually.</p>
-
-          <!-- Performance Summary — see #perf-summary-list below for the
-               metric cards; computed via GET /api/trades/summary
-               (qualifying trades only, per outcome_class). -->
-          <div id="perf-summary" class="perf-summary">
-            <div class="perf-summary-headrow">
-              <h3 class="perf-summary-title">Performance Summary</h3>
-              <button type="button" id="perf-summary-refresh-btn" class="perf-summary-refresh-btn">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 0 1 15.3-6.4M21 12a9 9 0 0 1-15.3 6.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 3v4.5h-4.5M6 21v-4.5h4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                SUMMARIZE TRADE HISTORY
-              </button>
-            </div>
-            <p id="perf-summary-statement" class="perf-summary-statement">Tap "Summarize Trade History" to see how you're doing overall.</p>
-            <div id="perf-summary-grid" class="perf-summary-grid"></div>
-          </div>
-
-          <div id="trade-history-list" style="margin-top:18px;">
-            <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- /.home-info-inner -->
-  </div><!-- /.home-info-overlay -->
-
-  <footer class="disclaimer">
-    <span id="disclaimer-text">⚠ Probability estimates only — not financial advice. In-sample calculations, no walk-forward backtest run. Final verdict/confidence come only from Tier 01 (Hawkes + Bayesian via Conformal Prediction); Tiers 02–03 are display-only.</span>
-  </footer>
-
-</div>
-
-<script src="/static/script.js?v=20260814-sr-others"></script>
-<script>
-// Standalone controller for the homepage info sidebar (Contact/About/
-// Privacy/Terms/Disclaimer). Fully independent of script.js and the
-// #result-box tabs-layout, so it never affects the RUN ANALYSIS flow.
-(function () {
-  var navButtons = document.querySelectorAll('.home-info-tab');
-  var overlay = document.getElementById('home-info-overlay');
-  var backBtn = document.getElementById('home-info-back');
-  var panels = document.querySelectorAll('.home-info-panel');
-
-  var hamburgerBtn = document.getElementById('hamburger-btn');
-  var drawer = document.getElementById('home-info-nav');
-  var drawerBackdrop = document.getElementById('side-drawer-backdrop');
-  var drawerBackBtn = document.getElementById('side-drawer-back');
-
-  function openDrawer() {
-    drawer.classList.add('open');
-    drawerBackdrop.classList.add('open');
-    if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'true');
-  }
-
-  function closeDrawer() {
-    drawer.classList.remove('open');
-    drawerBackdrop.classList.remove('open');
-    if (hamburgerBtn) hamburgerBtn.setAttribute('aria-expanded', 'false');
-  }
-
-  if (hamburgerBtn) {
-    hamburgerBtn.addEventListener('click', function () {
-      if (drawer.classList.contains('open')) { closeDrawer(); } else { openDrawer(); }
-    });
-  }
-  if (drawerBackBtn) drawerBackBtn.addEventListener('click', closeDrawer);
-  if (drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
-
-  function openInfo(key) {
-    panels.forEach(function (p) {
-      p.classList.toggle('active', p.getAttribute('data-info') === key);
-    });
-    navButtons.forEach(function (b) {
-      b.classList.toggle('active', b.getAttribute('data-info') === key);
-    });
-    overlay.classList.remove('hidden');
-    overlay.scrollTop = 0;
-    document.body.classList.add('chart-fullscreen-lock');
-  }
-
-  function closeInfo() {
-    overlay.classList.add('hidden');
-    document.body.classList.remove('chart-fullscreen-lock');
-    navButtons.forEach(function (b) { b.classList.remove('active'); });
-  }
-
-  navButtons.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      closeDrawer();
-      openInfo(btn.getAttribute('data-info'));
-    });
-  });
-
-  if (backBtn) backBtn.addEventListener('click', closeInfo);
-
-  // HOME tab: gets the user back to the landing "Awaiting Analysis" view -
-  // closes the drawer, closes the info overlay if one is open, hides any
-  // previously-run result panel, shows the empty state again, and scrolls
-  // to top. Uses the same globals script.js sets up (resultBox, emptyState,
-  // errorText, clearAlerts, liquidityPollTimer) since both scripts run in
-  // the same classic (non-module) global scope.
-  var homeNavTab = document.getElementById('home-nav-tab');
-  if (homeNavTab) {
-    homeNavTab.addEventListener('click', function () {
-      closeDrawer();
-      closeInfo();
-
-      if (typeof resultBox !== 'undefined' && resultBox) {
-        resultBox.classList.add('hidden');
-      }
-      if (typeof emptyState !== 'undefined' && emptyState) {
-        emptyState.classList.remove('hidden');
-      }
-      if (typeof errorText !== 'undefined' && errorText) {
-        errorText.classList.add('hidden');
-        errorText.textContent = '';
-      }
-      if (typeof clearAlerts === 'function') {
-        clearAlerts();
-      }
-      if (typeof liquidityPollTimer !== 'undefined' && liquidityPollTimer) {
-        clearInterval(liquidityPollTimer);
-        liquidityPollTimer = null;
-      }
-      if (typeof runBtn !== 'undefined' && runBtn) {
-        runBtn.disabled = false;
-        var btnText = runBtn.querySelector('.scan-btn-text');
-        if (btnText) btnText.textContent = 'RUN ANALYSIS';
-      }
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  }
-})();
-
-// Live market snapshot strip inside the "Awaiting Analysis" panel.
-// Purely decorative/display-only - refreshes on load and every 30s,
-// never touches the RUN ANALYSIS flow or #result-box state.
-(function () {
-  var tickerEl = document.getElementById('empty-ticker');
-  var skeletonBoxes = document.querySelectorAll('#empty-skeleton-grid .skeleton-box[data-slot]');
-
-  function renderTicker(rows) {
-    if (!tickerEl) return;
-    if (!Array.isArray(rows) || !rows.length) {
-      tickerEl.innerHTML = '<span class="empty-ticker-loading">market snapshot unavailable</span>';
-      return;
-    }
-    tickerEl.innerHTML = rows.map(function (row) {
-      var pct = typeof row.changePercent === 'number' ? row.changePercent : null;
-      var dir = pct === null ? '' : (pct >= 0 ? 'text-long' : 'text-short');
-      var sign = pct === null ? '' : (pct >= 0 ? '+' : '');
-      var pctText = pct === null ? '--' : (sign + pct.toFixed(2) + '%');
-      return '<span class="empty-ticker-item">' +
-        '<span class="empty-ticker-symbol">' + row.symbol + '</span>' +
-        '<span class="empty-ticker-change ' + dir + '">' + pctText + '</span>' +
-        '</span>';
-    }).join('');
-  }
-
-  // Fills the 8 faint background boxes (the 3x3 grid minus the center
-  // radar cell) with each coin's symbol, live price and 24h % change -
-  // same data as the ticker strip, just laid out as a mini card grid.
-  function renderSkeletonGrid(rows) {
-    if (!skeletonBoxes.length) return;
-    skeletonBoxes.forEach(function (box, i) {
-      var row = Array.isArray(rows) ? rows[i] : null;
-      if (!row) {
-        box.classList.remove('is-filled');
-        box.innerHTML = '';
-        return;
-      }
-      var pct = typeof row.changePercent === 'number' ? row.changePercent : null;
-      var dir = pct === null ? '' : (pct >= 0 ? 'text-long' : 'text-short');
-      var sign = pct === null ? '' : (pct >= 0 ? '+' : '');
-      var pctText = pct === null ? '--' : (sign + pct.toFixed(2) + '%');
-      var priceText = typeof row.last === 'number'
-        ? (row.last >= 100 ? row.last.toFixed(0) : row.last.toFixed(row.last >= 1 ? 2 : 4))
-        : '--';
-      var iconUrl = (typeof coinIconUrl === 'function') ? coinIconUrl(row.symbol) : '';
-
-      box.classList.add('is-filled');
-      box.innerHTML =
-        '<span class="skeleton-box-head">' +
-          (iconUrl ? '<img class="skeleton-box-icon" src="' + iconUrl + '" alt="" onerror="this.style.display=\'none\'" />' : '') +
-          '<span class="skeleton-box-symbol">' + row.symbol + '</span>' +
-        '</span>' +
-        '<span class="skeleton-box-price">$' + priceText + '</span>' +
-        '<span class="skeleton-box-change ' + dir + '">' + pctText + '</span>';
-    });
-  }
-
-  function loadTicker() {
-    fetch('/ticker')
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        renderTicker(data);
-        renderSkeletonGrid(data);
-      })
-      .catch(function () {
-        renderTicker([]);
-        renderSkeletonGrid([]);
-      });
-  }
-
-  loadTicker();
-  setInterval(loadTicker, 30000);
-})();
-</script>
-
-<!-- ============================================================
-     ACTIVE TRADE TRACKING SYSTEM — modals + module
-     Fully self-contained; only touches result-box via
-     #trade-tracking-zone and hooks into runAnalysis/renderResult
-     through window.SignalXTrades (called from script.js).
-     ============================================================ -->
-
-<div class="side-drawer-backdrop" id="trade-modal-backdrop" style="display:none;"></div>
-
-<!-- Track This Trade — confirmation modal -->
-<div id="track-trade-modal" class="trade-modal-overlay" style="display:none; position:fixed; inset:0; z-index:900; align-items:center; justify-content:center;">
-  <div class="trade-modal-card" style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:380px; max-height:88vh; overflow-y:auto;">
-    <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 4px;">Track Your Trade</h3>
-    <p style="font-size:12px; color:var(--text-dim); margin:0 0 18px;">By starting tracking, you are asking Signal FM to monitor this trade using the information you provide.</p>
-
-    <div id="track-modal-fields" style="font-family:var(--mono); font-size:12.5px;"></div>
-
-    <label style="display:block; font-size:11px; color:var(--text-dim); margin:12px 0 6px;">Position Size (USD) — how much did you use for this trade?</label>
-    <input type="number" id="track-position-size" placeholder="e.g. 500" min="1" step="0.01"
-           style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:13px; margin-bottom:10px;">
-
-    <label style="display:block; font-size:11px; color:var(--text-dim); margin:0 0 6px;">Leverage (optional)</label>
-    <input type="number" id="track-leverage" placeholder="e.g. 5" min="1" step="0.1"
-           style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:13px; margin-bottom:16px;">
-
-    <div id="track-modal-msg" style="font-size:12px; margin-bottom:10px; min-height:16px;"></div>
-
-    <div style="display:flex; gap:10px;">
-      <button id="track-cancel-btn" type="button" style="flex:1; padding:11px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Cancel</button>
-      <button id="track-start-btn" type="button" style="flex:1; padding:11px 0; border-radius:7px; border:none; background:var(--long); color:#06231a; font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Start Tracking</button>
-    </div>
-  </div>
-</div>
-
-<!-- Already-active prompt: shown when RUN ANALYSIS is clicked while a trade is being tracked for that coin -->
-<div id="active-prompt-modal" class="trade-modal-overlay" style="display:none; position:fixed; inset:0; z-index:900; align-items:center; justify-content:center;">
-  <div class="trade-modal-card" style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:360px;">
-    <h3 style="font-family:var(--heading); font-size:16px; margin:0 0 8px;">You already have an active trade</h3>
-    <p id="active-prompt-text" style="font-size:12.5px; color:var(--text-dim); margin:0 0 18px;"></p>
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <button id="prompt-view-btn" type="button" style="padding:11px 0; border-radius:7px; border:none; background:var(--accent); color:var(--void); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">View Active Trade</button>
-      <button id="prompt-analyze-btn" type="button" style="padding:11px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:11.5px; font-weight:700; cursor:pointer;">Analyze Market Anyway<br><span style="font-weight:400; font-size:10px;">(does not replace your active trade)</span></button>
-      <button id="prompt-cancel-btn" type="button" style="padding:9px 0; border-radius:7px; border:none; background:transparent; color:var(--text-faint); font-family:var(--mono); font-size:11px; cursor:pointer;">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- Trade detail modal: timeline + close trade -->
-<div id="trade-detail-modal" class="trade-modal-overlay" style="display:none; position:fixed; inset:0; z-index:900; align-items:center; justify-content:center;">
-  <div class="trade-modal-card" style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:440px; max-height:86vh; overflow-y:auto;">
-    <div id="trade-detail-content"></div>
-    <button id="trade-detail-close-btn" type="button" style="width:100%; margin-top:16px; padding:10px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Close</button>
-  </div>
-</div>
-
-<script>
-(function () {
-  const HOLDING_LABELS = { "1h": "1 Hour", "4h": "4 Hours", "1d": "1 Day" };
-
-  let activeTradesByCoin = {};   // { "BTC/USDT": tradeObj }
-  let lastSignalData = null;     // most recent /signal response
-  let lastSignalCoin = null;
-
-  const trackModal = document.getElementById('track-trade-modal');
-  const promptModal = document.getElementById('active-prompt-modal');
-  const detailModal = document.getElementById('trade-detail-modal');
-
-  function showModal(el) { el.style.display = 'flex'; }
-  function hideModal(el) { el.style.display = 'none'; }
-
-  function fmtMoney(n) {
-    if (n === null || n === undefined || isNaN(n)) return '--';
-    let num = Number(n);
-    if (Object.is(num, -0)) num = 0; // avoid a stray "-" on effectively-zero P/L
-    return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
-  function coinInitials(asset) {
-    const base = (asset || '').split('/')[0] || '';
-    return base.slice(0, 3).toUpperCase();
-  }
-
-  function fmtDateTime(iso) {
-    if (!iso) return '--';
-    try {
-      return new Date(iso).toLocaleString(undefined, {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-      });
-    } catch (e) { return '--'; }
-  }
-
-  // status -> badge class + human label (kept purely presentational;
-  // the underlying status strings/values from the backend are untouched).
-  // Prefers outcome_class when present (transparency: distinguishes a
-  // manual profitable exit from a manual user-initiated loss) and falls
-  // back to the plain status for older trades closed before that field
-  // existed.
-  function statusBadgeInfo(status, outcomeClass) {
-    const byOutcome = {
-      TAKE_PROFIT:    { cls: 'win',     label: 'TAKE PROFIT' },
-      STOP_LOSS:      { cls: 'loss',    label: 'STOP LOSS' },
-      MANUAL_PROFIT:  { cls: 'win',     label: 'MANUALLY CLOSED — PROFIT' },
-      MANUAL_LOSS:    { cls: 'neutral', label: 'MANUALLY CLOSED — USER LOSS' },
-    };
-    if (outcomeClass && byOutcome[outcomeClass]) return byOutcome[outcomeClass];
-
-    const map = {
-      ACTIVE:            { cls: 'active',  label: 'ACTIVE' },
-      TARGET_REACHED:    { cls: 'win',     label: 'TAKE PROFIT' },
-      STOP_LOSS_REACHED: { cls: 'loss',    label: 'STOP LOSS REACHED' },
-      SETUP_INVALIDATED: { cls: 'loss',    label: 'SETUP INVALIDATED' },
-      MANUALLY_CLOSED:   { cls: 'neutral', label: 'MANUALLY CLOSED' },
-    };
-    return map[status] || { cls: 'neutral', label: (status || '--').replace(/_/g, ' ') };
-  }
-
-  // trade_events.event_type -> chat-bubble tone + icon (frontend-only
-  // classification; backend keeps emitting the same event_type values)
-  const EVENT_TONE = {
-    TRADE_STARTED: 'positive', SETUP_VALID: 'positive', TARGET_REACHED: 'positive',
-    HEALTHY_PROFIT: 'positive', RECOVERY: 'positive', TAKE_PROFIT_APPROACHING: 'positive',
-    TEMPORARY_SMALL_DRAWDOWN: 'warning', TEMPORARY_DRAWDOWN_PROLONGED: 'warning',
-    EXTENDED_DRAWDOWN: 'warning', PROFIT_MOMENTUM_WEAKENING: 'warning',
-    PROFIT_AT_RISK: 'warning', HOLDING_PERIOD_REACHED: 'warning',
-    STOP_LOSS_APPROACHING: 'danger', HIGH_RISK_OPPOSITE_MOVE: 'danger',
-    STOP_LOSS_REACHED: 'danger', SETUP_INVALIDATED: 'danger',
-    MANUALLY_CLOSED: 'neutral', CONSOLIDATION: 'neutral', WAIT_EVALUATING: 'neutral',
-  };
-  const TONE_ICON = {
-    positive: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    warning: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 16.5v.01M10.3 3.9L2.6 18a1.5 1.5 0 0 0 1.3 2.2h16.2a1.5 1.5 0 0 0 1.3-2.2L13.7 3.9a1.5 1.5 0 0 0-2.6 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    danger: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v6M12 16v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    neutral: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
-  };
-
-  /* ---------------- fetch + refresh active trades ---------------- */
-
-  async function refreshActiveTrades() {
-    try {
-      const res = await fetch('/api/trades/active', { credentials: 'same-origin' });
-      if (!res.ok) return;
-      const trades = await res.json();
-      activeTradesByCoin = {};
-      trades.forEach(t => { activeTradesByCoin[t.asset] = t; });
-      renderTrackingZoneIfNeeded();
-    } catch (e) { /* silent - polling retries next cycle */ }
-  }
-
-  function getActiveTradeForCoin(coin) {
-    return activeTradesByCoin[coin] || null;
-  }
-
-  /* ---------------- "already active" prompt ---------------- */
-
-  function showAlreadyActivePrompt(coin, trade) {
-    document.getElementById('active-prompt-text').textContent =
-      `You're already tracking a ${trade.direction} trade on ${coin}. Getting a new signal won't replace it.`;
-    showModal(promptModal);
-
-    document.getElementById('prompt-view-btn').onclick = () => {
-      hideModal(promptModal);
-      document.querySelector('.home-info-tab[data-info="active-trades"]').click();
-    };
-    document.getElementById('prompt-analyze-btn').onclick = () => {
-      hideModal(promptModal);
-      window.runAnalysisForced ? window.runAnalysisForced() : runAnalysis(true);
-    };
-    document.getElementById('prompt-cancel-btn').onclick = () => hideModal(promptModal);
-  }
-
-  /* ---------------- result-box injection: Track button / banner ---------------- */
-
-  function onSignalRendered(data, coin) {
-    lastSignalData = data;
-    lastSignalCoin = coin;
-    renderTrackingZoneIfNeeded();
-  }
-
-  function renderTrackingZoneIfNeeded() {
-    const zone = document.getElementById('trade-tracking-zone');
-    if (!zone || !lastSignalData) return;
-
-    const existing = getActiveTradeForCoin(lastSignalCoin);
-
-    if (existing) {
-      // Clear separation: original active trade vs this fresh analysis
-      zone.innerHTML = `
-        <div style="border:1px solid var(--long); background:var(--long-dim); border-radius:10px; padding:14px 16px; margin-bottom:16px; font-family:var(--mono);">
-          <div style="font-size:10px; letter-spacing:0.5px; color:var(--long); font-weight:700; margin-bottom:8px;">ORIGINAL ACTIVE TRADE</div>
-          <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
-            <span>${existing.asset} — ${existing.direction}</span>
-            <span style="color:${existing.estimated_pnl >= 0 ? 'var(--long)' : 'var(--short)'}">${fmtMoney(existing.estimated_pnl)}</span>
-          </div>
-          <div style="font-size:11px; color:var(--text-dim);">Entry ${fmtMoney(existing.entry_price)} · Status: ${existing.status}</div>
-          <button type="button" class="view-trade-link" data-id="${existing.id}" style="margin-top:8px; background:none; border:none; color:var(--accent); font-family:var(--mono); font-size:11px; font-weight:700; cursor:pointer; padding:0;">VIEW ACTIVE TRADE →</button>
-        </div>
-        <div style="font-size:10px; letter-spacing:0.5px; color:var(--text-faint); font-weight:700; margin-bottom:10px;">
-          CURRENT MARKET ANALYSIS <span style="font-weight:400; color:var(--text-faint);">— this does not replace your active trade</span>
-        </div>`;
-      zone.querySelector('.view-trade-link').addEventListener('click', (e) => openTradeDetail(e.target.dataset.id));
-    } else {
-      zone.innerHTML = `
-        <button id="track-this-trade-btn" type="button"
-          style="width:100%; padding:13px 0; margin-bottom:18px; border-radius:9px; border:none; background:var(--long); color:#06231a; font-family:var(--mono); font-weight:700; font-size:13px; letter-spacing:0.3px; cursor:pointer;">
-          TRACK THIS TRADE
-        </button>`;
-      document.getElementById('track-this-trade-btn').addEventListener('click', openTrackModal);
-    }
-  }
-
-  /* ---------------- Track This Trade modal ---------------- */
-
-  function openTrackModal() {
-    const d = lastSignalData;
-    const coin = lastSignalCoin;
-    if (!d || d.final_verdict === 'WAIT') {
-      alert('Current signal is WAIT — there is no directional trade to track right now.');
-      return;
-    }
-    const fields = document.getElementById('track-modal-fields');
-    fields.innerHTML = `
-      <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line-soft);"><span style="color:var(--text-dim);">Asset</span><b>${coin}</b></div>
-      <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line-soft);"><span style="color:var(--text-dim);">Direction</span><b style="color:${d.final_verdict === 'LONG' ? 'var(--long)' : 'var(--short)'}">${d.final_verdict}</b></div>
-      <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line-soft);"><span style="color:var(--text-dim);">Entry Price</span><b>${fmtMoney(d.last_price)}</b></div>
-      <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line-soft);"><span style="color:var(--text-dim);">Stop Loss</span><b style="color:var(--short)">${fmtMoney(d.stop_loss)}</b></div>
-      <div style="display:flex; justify-content:space-between; padding:6px 0;"><span style="color:var(--text-dim);">Take Profit</span><b style="color:var(--long)">${fmtMoney(d.take_profit)}</b></div>
-    `;
-    document.getElementById('track-position-size').value = '';
-    document.getElementById('track-leverage').value = '';
-    document.getElementById('track-modal-msg').textContent = '';
-    showModal(trackModal);
-  }
-
-  document.getElementById('track-cancel-btn').addEventListener('click', () => hideModal(trackModal));
-
-  document.getElementById('track-start-btn').addEventListener('click', async () => {
-    const d = lastSignalData, coin = lastSignalCoin;
-    const positionSize = parseFloat(document.getElementById('track-position-size').value);
-    const leverage = parseFloat(document.getElementById('track-leverage').value) || null;
-    const msg = document.getElementById('track-modal-msg');
-
-    if (!positionSize || positionSize <= 0) {
-      msg.textContent = 'Enter how much (USD) you used for this trade.';
-      msg.style.color = 'var(--short)';
-      return;
+    bullish_count = sum(1 for p in recent if p["bias"] == "bullish")
+    bearish_count = sum(1 for p in recent if p["bias"] == "bearish")
+
+    agrees_bullish = final_verdict == "LONG" and bullish_count > bearish_count
+    agrees_bearish = final_verdict == "SHORT" and bearish_count > bullish_count
+    disagrees_bullish = final_verdict == "LONG" and bearish_count > bullish_count
+    disagrees_bearish = final_verdict == "SHORT" and bullish_count > bearish_count
+
+    if agrees_bullish or agrees_bearish:
+        adj, status = 8, "CONFIRMS"
+    elif disagrees_bullish or disagrees_bearish:
+        adj, status = -8, "CONTRADICTS"
+    else:
+        adj, status = 0, "NEUTRAL"
+
+    return {
+        "patterns_detected": [p["pattern"] for p in recent],
+        "confirmation": status,
+        "confidence_adjustment": adj,
     }
 
-    try {
-      const res = await fetch('/api/trades/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          asset: coin,
-          direction: d.final_verdict,
-          entry_price: d.last_price,
-          position_size: positionSize,
-          stop_loss: d.stop_loss,
-          take_profit: d.take_profit,
-          leverage: leverage,
-          holding_period_label: HOLDING_LABELS[currentChartTimeframe] || '1 Hour',
-          signal_snapshot: d,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        msg.textContent = data.error || 'Could not start tracking';
-        msg.style.color = 'var(--short)';
-        return;
-      }
-      hideModal(trackModal);
-      await refreshActiveTrades();
-      document.querySelector('.home-info-tab[data-info="active-trades"]').click();
-    } catch (e) {
-      msg.textContent = 'Could not connect to the server';
-      msg.style.color = 'var(--short)';
+
+# ============================================================
+# SUPPORT / RESISTANCE DETECTION (NEW) — swing-high/swing-low pivots
+# clustered into horizontal levels, jaisa ek trader chart par manually
+# S/R lines draw karta hai. Purely price-action based hai (candle
+# highs/lows se), order book se ALAG hai (jo already CH.13 mein hai).
+# ============================================================
+def detect_support_resistance(df, pivot_window=5, cluster_pct=0.25, max_levels=6):
+    """`pivot_window` candles ke andar sabse high/low point ko swing
+    pivot maana jata hai. Phir qareeb-qareeb (cluster_pct %) wale pivots
+    ko ek level mein group kiya jata hai — jitni baar price ne wahan
+    touch kiya (`touches`), utni strength zyada. Current price se upar
+    wale levels 'resistance', neeche wale 'support' hain."""
+    n = len(df)
+    if n < (pivot_window * 2 + 3):
+        return []
+
+    high = df["high"].values
+    low = df["low"].values
+    close = df["close"].values
+    current_price = float(close[-1])
+
+    pivots = []
+    for i in range(pivot_window, n - pivot_window):
+        window_high = high[i - pivot_window:i + pivot_window + 1]
+        window_low = low[i - pivot_window:i + pivot_window + 1]
+        if high[i] == window_high.max():
+            pivots.append(float(high[i]))
+        if low[i] == window_low.min():
+            pivots.append(float(low[i]))
+
+    if not pivots:
+        return []
+
+    pivots.sort()
+    clusters = []
+    for price in pivots:
+        placed = False
+        for cluster in clusters:
+            if abs(price - cluster["avg"]) / cluster["avg"] * 100 <= cluster_pct:
+                cluster["prices"].append(price)
+                cluster["avg"] = sum(cluster["prices"]) / len(cluster["prices"])
+                placed = True
+                break
+        if not placed:
+            clusters.append({"avg": price, "prices": [price]})
+
+    levels = []
+    for cluster in clusters:
+        touches = len(cluster["prices"])
+        if touches < 2:
+            continue
+        price = round(cluster["avg"], 8)
+        levels.append({
+            "price": price,
+            "type": "resistance" if price > current_price else "support",
+            "touches": touches,
+        })
+
+    levels.sort(key=lambda x: x["touches"], reverse=True)
+    return levels[:max_levels]
+
+
+# ============================================================
+# 1. HAWKES PROCESS APPROXIMATION  (PURANA - UNCHANGED)
+# ============================================================
+def hawkes_pressure(df, alpha=0.6, beta=0.4, lookback=40):
+    returns = df["close"].pct_change().dropna().tail(lookback).reset_index(drop=True)
+    move_threshold = returns.abs().quantile(0.70)
+
+    buy_event_times = []
+    sell_event_times = []
+    for t, r in enumerate(returns):
+        if r > move_threshold:
+            buy_event_times.append(t)
+        elif r < -move_threshold:
+            sell_event_times.append(t)
+
+    now = len(returns) - 1
+    mu = 0.1
+
+    def intensity(event_times):
+        total = mu
+        for ti in event_times:
+            total += alpha * np.exp(-beta * (now - ti))
+        return total
+
+    buy_intensity = intensity(buy_event_times)
+    sell_intensity = intensity(sell_event_times)
+    max_possible = mu + alpha * len(returns)
+    buying_pressure = min(10, round((buy_intensity / max_possible) * 10, 1))
+    selling_pressure = min(10, round((sell_intensity / max_possible) * 10, 1))
+    return buying_pressure, selling_pressure
+
+
+# ============================================================
+# 2. BAYESIAN CLASSIFIER (Naive Bayes)  (PURANA - UNCHANGED)
+# ============================================================
+def bayesian_bullish_bearish(df):
+    data = df.copy()
+    data["rsi_bucket"] = pd.cut(data["rsi"], bins=[0, 35, 65, 100], labels=["low", "mid", "high"])
+    data["macd_state"] = np.where(data["macd"] > data["macd_signal"], "bullish", "bearish")
+    data["next_up"] = data["close"].shift(-1) > data["close"]
+
+    current = data.iloc[-1]
+    current_bucket = current["rsi_bucket"]
+    current_macd_state = current["macd_state"]
+
+    matching_rows = data[
+        (data["rsi_bucket"] == current_bucket) &
+        (data["macd_state"] == current_macd_state)
+    ].dropna(subset=["next_up"])
+
+    if len(matching_rows) >= 5:
+        bullish_prob = matching_rows["next_up"].mean()
+    else:
+        bullish_prob = data["next_up"].dropna().mean()
+
+    bullish_pct = round(float(bullish_prob) * 100, 1)
+    bearish_pct = round(100 - bullish_pct, 1)
+    return bullish_pct, bearish_pct
+
+
+# ============================================================
+# 3. QUANTILE VOLATILITY  (PURANA - UNCHANGED)
+# ============================================================
+def quantile_volatility(df, current_price, direction):
+    returns = df["close"].pct_change().dropna()
+    extreme_move = returns.abs().quantile(0.95)
+    typical_move = returns.abs().quantile(0.50)
+
+    if direction == "LONG":
+        stop_loss = current_price * (1 - extreme_move)
+        take_profit = current_price * (1 + extreme_move * 1.5)
+    elif direction == "SHORT":
+        stop_loss = current_price * (1 + extreme_move)
+        take_profit = current_price * (1 - extreme_move * 1.5)
+    else:
+        stop_loss, take_profit = None, None
+
+    return {
+        "expected_volatility_pct": round(float(typical_move) * 100, 2),
+        "extreme_volatility_95_pct": round(float(extreme_move) * 100, 2),
+        "stop_loss": round(float(stop_loss), 2) if stop_loss else None,
+        "take_profit": round(float(take_profit), 2) if take_profit else None,
     }
-  });
 
-  /* ---------------- Active Trades / Trade History panels ---------------- */
 
-  function tradeCardHtml(t, isHistory) {
-    let pnl = Number(t.estimated_pnl) || 0;
-    if (Object.is(pnl, -0)) pnl = 0;
-    const up = pnl >= 0;
-    const badge = statusBadgeInfo(t.status, t.outcome_class);
-    const isLive = t.status === 'ACTIVE';
-    const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
-    const outcomeCls = isLive ? 'is-live' : (up ? 'is-win' : 'is-loss');
-    return `
-      <div class="trade-card ${outcomeCls}">
-        <div class="trade-card-top">
-          <div class="trade-card-id">
-            <span class="trade-avatar ${dirCls}">${coinInitials(t.asset)}</span>
-            <div class="trade-card-pair-wrap">
-              <span class="trade-card-pair">${t.asset}</span>
-              <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
-            </div>
-          </div>
-          <span class="trade-status-badge ${badge.cls}">${badge.cls === 'active' ? '<span class="live-dot"></span>' : ''}${badge.label}</span>
-        </div>
+# ============================================================
+# 4. CONFORMAL PREDICTION  (PURANA - UNCHANGED)
+# *** FINAL VERDICT + CONFIDENCE ka asal source yahi hai ***
+# ============================================================
+def conformal_confidence(bullish_pct, buying_pressure, selling_pressure):
+    bayesian_says_long = bullish_pct > 50
+    hawkes_says_long = buying_pressure > selling_pressure
 
-        <div class="trade-card-stats">
-          <div class="stat-col">
-            <span class="stat-label">Entry</span>
-            <span class="stat-value">${fmtMoney(t.entry_price)}</span>
-          </div>
-          <div class="stat-col">
-            <span class="stat-label">${isHistory ? 'Exit' : 'Current'}</span>
-            <span class="stat-value ${isLive ? 'live-value' : ''}">${fmtMoney(isHistory ? t.exit_price : t.last_price)}</span>
-          </div>
-          <div class="stat-col">
-            <span class="stat-label">P/L</span>
-            <span class="stat-value pnl ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(pnl)}<small>${up ? '+' : ''}${t.estimated_pnl_percent}%</small></span>
-          </div>
-        </div>
+    votes_long = sum([bayesian_says_long, hawkes_says_long])
+    votes_short = 2 - votes_long
+    agreement = max(votes_long, votes_short) / 2
+    bayesian_strength = abs(bullish_pct - 50) / 50
 
-        <div class="trade-card-footer">
-          <span class="trade-closing-reason">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            ${isHistory ? fmtDateTime(t.closed_at) : fmtDateTime(t.created_at)}
-          </span>
-          <button type="button" class="view-trade-link view-details-btn" data-id="${t.id}">
-            VIEW DETAILS
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </div>
-      </div>`;
-  }
+    confidence = (agreement * 0.6) + (bayesian_strength * 0.4)
+    confidence = min(max(confidence, 0), 1)
+    decision = "SKIP" if confidence < 0.55 else "TRADE"
 
-  async function renderActiveTradesPanel() {
-    const el = document.getElementById('active-trades-list');
-    el.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
-    try {
-      const res = await fetch('/api/trades/active', { credentials: 'same-origin' });
-      const trades = await res.json();
-      if (!trades.length) {
-        el.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">No active trades yet. Run an analysis and tap "Track This Trade" to start.</p>';
-        return;
-      }
-      el.innerHTML = trades.map(t => tradeCardHtml(t, false)).join('');
-      el.querySelectorAll('.view-trade-link').forEach(btn => btn.addEventListener('click', () => openTradeDetail(btn.dataset.id)));
-      activeTradesByCoin = {};
-      trades.forEach(t => { activeTradesByCoin[t.asset] = t; });
-    } catch (e) {
-      el.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load active trades.</p>';
+    return round(confidence * 100, 1), decision
+
+
+# ============================================================
+# 5. FRACTIONAL KELLY  (PURANA - UNCHANGED)
+# ============================================================
+def fractional_kelly(win_prob, reward_risk_ratio=1.5, k=0.5):
+    b = reward_risk_ratio
+    p = win_prob
+    q = 1 - p
+    f_star = (b * p - q) / b
+    f_star = max(f_star, 0)
+    fractional = f_star * k
+    fractional = min(fractional, 0.05)
+    return round(fractional * 100, 2)
+
+
+# ============================================================
+# "ACCURACY SCORE" (Ch.01-19 agreement with the verdict)
+# ------------------------------------------------------------
+# NOTE: verdict/confidence khud AB BHI sirf 5 concepts (Hawkes +
+# Bayesian, Conformal Prediction) se bante hain - ye function usay
+# CHANGE nahi karta. Ye sirf ek ALAG display metric hai: baaqi
+# concepts (Ch.06-19) ko unke apne output se ek directional "vote"
+# (LONG / SHORT / NEUTRAL) diya jata hai, aur phir count kiya jata
+# hai ke un 19 mein se kitne is verdict ki taraf ishara kar rahe
+# hain. Kai concepts (volatility, kelly sizing, VPIN toxicity,
+# entropy, RL agent, hurst memory) apni fitrat mein directional
+# nahi hain - unhein hamesha NEUTRAL rakha gaya hai (denominator
+# mein shamil hain, lekin kabhi "agree" nahi karte) taake number
+# ghalat tareeqe se inflate na ho.
+# ============================================================
+def _concept_votes(*, buying_pressure, selling_pressure, bullish_pct, bearish_pct,
+                    ofi_data, regime_data, jump_data, meta_data, divergence_data,
+                    depth_data, vwap_data, wavelet_data, cusum_data, sweep_data):
+    votes = []
+
+    def add(ch, name, direction):
+        votes.append({"ch": ch, "name": name, "direction": direction})
+
+    # 1. Hawkes Process
+    if buying_pressure > selling_pressure:
+        add(1, "Hawkes Process", "LONG")
+    elif selling_pressure > buying_pressure:
+        add(1, "Hawkes Process", "SHORT")
+    else:
+        add(1, "Hawkes Process", "NEUTRAL")
+
+    # 2. Bayesian Classifier
+    if bullish_pct > bearish_pct:
+        add(2, "Bayesian Classifier", "LONG")
+    elif bearish_pct > bullish_pct:
+        add(2, "Bayesian Classifier", "SHORT")
+    else:
+        add(2, "Bayesian Classifier", "NEUTRAL")
+
+    # 3-5. Not directional signals of their own (volatility sizing, the
+    # verdict engine itself, risk sizing) - always neutral.
+    add(3, "Quantile Volatility", "NEUTRAL")
+    add(4, "Conformal Prediction", "NEUTRAL")
+    add(5, "Fractional Kelly", "NEUTRAL")
+
+    # 6. Order Flow Imbalance
+    ofi_score = ofi_data.get("ofi_score")
+    if ofi_score is None:
+        add(6, "Order Flow Imbalance", "NEUTRAL")
+    else:
+        add(6, "Order Flow Imbalance", "LONG" if ofi_score > 0 else ("SHORT" if ofi_score < 0 else "NEUTRAL"))
+
+    # 7. VPIN - measures toxicity/magnitude only, no direction of its own.
+    add(7, "VPIN Toxic Flow", "NEUTRAL")
+
+    # 8. HMM Regime - only has a directional read while actually Trending.
+    if regime_data.get("regime") == "Trending" and regime_data.get("state_mean_return_pct") is not None:
+        add(8, "HMM Regime", "LONG" if regime_data["state_mean_return_pct"] > 0 else "SHORT")
+    else:
+        add(8, "HMM Regime", "NEUTRAL")
+
+    # 9. Jump Diffusion - only votes when an actual jump was detected.
+    if jump_data.get("jump_detected") and jump_data.get("jump_direction"):
+        add(9, "Jump Diffusion", "LONG" if jump_data["jump_direction"] == "UP" else "SHORT")
+    else:
+        add(9, "Jump Diffusion", "NEUTRAL")
+
+    # 10. Meta-Labeling (win probability vs coin-flip)
+    win_p = meta_data.get("meta_win_probability")
+    if win_p is None:
+        add(10, "Meta-Labeling", "NEUTRAL")
+    else:
+        add(10, "Meta-Labeling", "LONG" if win_p > 50 else ("SHORT" if win_p < 50 else "NEUTRAL"))
+
+    # 11. Cross-Asset Divergence
+    interp = divergence_data.get("interpretation")
+    if interp == "ASSET_OUTPERFORMING_BENCHMARK":
+        add(11, "Cross-Asset Divergence", "LONG")
+    elif interp == "ASSET_UNDERPERFORMING_BENCHMARK":
+        add(11, "Cross-Asset Divergence", "SHORT")
+    else:
+        add(11, "Cross-Asset Divergence", "NEUTRAL")
+
+    # 12. Multi-Timeframe Entropy - measures randomness, not direction.
+    add(12, "Multi-Timeframe Entropy", "NEUTRAL")
+
+    # 13. Order Book Depth Profile (wall bias)
+    wall = depth_data.get("wall_bias")
+    if wall == "BID_WALL_HEAVIER":
+        add(13, "Order Book Depth", "LONG")
+    elif wall == "ASK_WALL_HEAVIER":
+        add(13, "Order Book Depth", "SHORT")
+    else:
+        add(13, "Order Book Depth", "NEUTRAL")
+
+    # 14. VWAP Deviation - extreme deviation implies mean-reversion the
+    # OPPOSITE way (price far above VWAP -> reversion down, and vice versa).
+    z = vwap_data.get("vwap_deviation_z")
+    if z is not None and z > 2:
+        add(14, "VWAP Deviation", "SHORT")
+    elif z is not None and z < -2:
+        add(14, "VWAP Deviation", "LONG")
+    else:
+        add(14, "VWAP Deviation", "NEUTRAL")
+
+    # 15. RL Risk Agent - sizes risk, doesn't call direction.
+    add(15, "RL Risk Agent", "NEUTRAL")
+
+    # 16. Hurst Exponent - describes memory/regime, not direction.
+    add(16, "Hurst Exponent", "NEUTRAL")
+
+    # 17. Wavelet Trend
+    wdir = wavelet_data.get("wavelet_trend_direction")
+    if wdir == "UP":
+        add(17, "Wavelet Trend", "LONG")
+    elif wdir == "DOWN":
+        add(17, "Wavelet Trend", "SHORT")
+    else:
+        add(17, "Wavelet Trend", "NEUTRAL")
+
+    # 18. CUSUM Structural Break - direction of whichever side broke.
+    if cusum_data.get("structural_break"):
+        cusum_pos = cusum_data.get("cusum_pos") or 0
+        cusum_neg = cusum_data.get("cusum_neg") or 0
+        add(18, "Structural Break", "LONG" if cusum_pos > abs(cusum_neg) else "SHORT")
+    else:
+        add(18, "Structural Break", "NEUTRAL")
+
+    # 19. Liquidity Sweep
+    sdir = sweep_data.get("sweep_direction")
+    if sdir == "SWEPT_LOW_REVERSED_UP":
+        add(19, "Liquidity Sweep", "LONG")
+    elif sdir == "SWEPT_HIGH_REVERSED_DOWN":
+        add(19, "Liquidity Sweep", "SHORT")
+    else:
+        add(19, "Liquidity Sweep", "NEUTRAL")
+
+    return votes
+
+
+def concept_accuracy_score(final_verdict, **concept_kwargs):
+    votes = _concept_votes(**concept_kwargs)
+
+    # Fixed denominator: the 5 Tier-1 concepts (Ch.01-05 - Hawkes Process,
+    # Bayesian Classifier, Quantile Volatility, Conformal Prediction,
+    # Fractional Kelly) - this is the only tier that actually produces the
+    # final verdict (see tier note in design.html). Ch.06-19 are
+    # display-only diagnostics and must NOT be part of the score.
+    tier1_votes = [v for v in votes if v["ch"] <= 5]
+    total = len(tier1_votes)  # always 5
+
+    if final_verdict not in ("LONG", "SHORT"):
+        # WAIT has no direction to measure agreement against.
+        for v in votes:
+            v["agrees"] = False
+        return {
+            "concept_accuracy_pct": None,
+            "concept_agree_count": 0,
+            "concept_total": total,
+            "concept_votes": votes,
+        }
+
+    # Quantile Volatility / Conformal Prediction / Fractional Kelly (ch
+    # 3-5) are structurally always NEUTRAL - they size risk/volatility off
+    # of final_verdict rather than casting their own opposing direction,
+    # so a NEUTRAL vote counts as supporting the verdict, not disagreeing
+    # with it. Only a concept that actively voted the OPPOSITE direction
+    # counts against the score.
+    agree_count = 0
+    for v in votes:
+        is_tier1 = v["ch"] <= 5
+        opposes = v["direction"] in ("LONG", "SHORT") and v["direction"] != final_verdict
+        v["agrees"] = is_tier1 and not opposes
+        if v["agrees"]:
+            agree_count += 1
+
+    return {
+        "concept_accuracy_pct": round((agree_count / total) * 100, 1),
+        "concept_agree_count": agree_count,
+        "concept_total": total,
+        "concept_votes": votes,
     }
-  }
 
-  async function renderTradeHistoryPanel() {
-    const el = document.getElementById('trade-history-list');
-    el.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
-    try {
-      const res = await fetch('/api/trades/history', { credentials: 'same-origin' });
-      const trades = await res.json();
-      if (!trades.length) {
-        el.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">No completed trades yet.</p>';
-        return;
-      }
-      el.innerHTML = trades.map(t => tradeCardHtml(t, true)).join('');
-      el.querySelectorAll('.view-trade-link').forEach(btn => btn.addEventListener('click', () => openTradeDetail(btn.dataset.id)));
-    } catch (e) {
-      el.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load trade history.</p>';
+
+# ============================================================
+# 6. ORDER FLOW IMBALANCE (OFI)  (v4 - UNCHANGED)
+# ============================================================
+def order_flow_imbalance(symbol="BTC/USDT", snapshot_gap_sec=1.0):
+    ob1 = _clean_order_book(exchange.fetch_order_book(symbol, limit=5))
+    time.sleep(snapshot_gap_sec)
+    ob2 = _clean_order_book(exchange.fetch_order_book(symbol, limit=5))
+
+    bid1_price, bid1_size = ob1["bids"][0]
+    ask1_price, ask1_size = ob1["asks"][0]
+    bid2_price, bid2_size = ob2["bids"][0]
+    ask2_price, ask2_size = ob2["asks"][0]
+
+    bid_flow = bid2_size if bid2_price >= bid1_price else -bid1_size
+    ask_flow = ask2_size if ask2_price <= ask1_price else -ask1_size
+    ofi_raw = bid_flow - ask_flow
+
+    scale = max(abs(bid1_size), abs(ask1_size), 1e-9)
+    ofi_score = round(float(np.clip((ofi_raw / scale) * 5, -10, 10)), 2)
+
+    return {"ofi_score": ofi_score, "ofi_raw": round(float(ofi_raw), 4)}
+
+
+# ============================================================
+# 7. VPIN - TOXIC FLOW DETECTION  (v4 - UNCHANGED)
+# ============================================================
+def vpin_toxicity(symbol="BTC/USDT", trade_limit=500, n_buckets=20):
+    trades = exchange.fetch_trades(symbol, limit=trade_limit)
+    if not trades:
+        return {"vpin_score": None, "toxicity": "NO_DATA"}
+
+    df = pd.DataFrame(trades)
+    if "side" not in df.columns or "amount" not in df.columns:
+        return {"vpin_score": None, "toxicity": "NO_DATA"}
+
+    df = df.dropna(subset=["side", "amount"])
+    total_volume = df["amount"].sum()
+    if total_volume <= 0:
+        return {"vpin_score": None, "toxicity": "NO_DATA"}
+
+    bucket_size = total_volume / n_buckets
+    df["cum_vol"] = df["amount"].cumsum()
+    df["bucket"] = (df["cum_vol"] // bucket_size).astype(int)
+
+    imbalances = []
+    for _, group in df.groupby("bucket"):
+        buy_vol = group.loc[group["side"] == "buy", "amount"].sum()
+        sell_vol = group.loc[group["side"] == "sell", "amount"].sum()
+        bucket_total = buy_vol + sell_vol
+        if bucket_total > 0:
+            imbalances.append(abs(buy_vol - sell_vol) / bucket_total)
+
+    if not imbalances:
+        return {"vpin_score": None, "toxicity": "NO_DATA"}
+
+    vpin_score = round(float(np.mean(imbalances)), 3)
+    if vpin_score > 0.6:
+        toxicity = "HIGH_TOXICITY"
+    elif vpin_score > 0.35:
+        toxicity = "MODERATE_TOXICITY"
+    else:
+        toxicity = "LOW_TOXICITY"
+
+    return {"vpin_score": vpin_score, "toxicity": toxicity}
+
+
+# ============================================================
+# 8. HMM REGIME DETECTION  (v4 - UNCHANGED)
+# ============================================================
+def hmm_regime(df, n_states=2):
+    returns = df["close"].pct_change().dropna()
+    volatility = returns.rolling(5).std()
+
+    features = pd.concat([returns, volatility], axis=1)
+    features.columns = ["returns", "volatility"]
+    features = features.dropna()
+
+    if len(features) < 30:
+        return {"regime": "INSUFFICIENT_DATA", "state": None}
+
+    X = features.values
+    model = GaussianHMM(n_components=n_states, covariance_type="diag", n_iter=100, random_state=42)
+    model.fit(X)
+    hidden_states = model.predict(X)
+
+    current_state = int(hidden_states[-1])
+    state_mean_returns = model.means_[:, 0]
+    trending_state = int(np.argmax(np.abs(state_mean_returns)))
+    regime = "Trending" if current_state == trending_state else "Ranging"
+
+    return {
+        "regime": regime,
+        "state": current_state,
+        "state_mean_return_pct": round(float(state_mean_returns[current_state]) * 100, 3),
     }
-    refreshPerfSummary();
-  }
 
-  /* ---------------- Performance Summary ---------------- */
 
-  function perfMetricCardHtml(label, value, tone, tooltip) {
-    return `
-      <div class="perf-metric-card ${tone || ''}" ${tooltip ? `title="${tooltip}"` : ''}>
-        <span class="perf-metric-label">${label}</span>
-        <span class="perf-metric-value">${value}</span>
-      </div>`;
-  }
+# ============================================================
+# 9. JUMP DIFFUSION / HAWKES-JUMP DETECTOR  (v4 - UNCHANGED)
+# ============================================================
+def jump_diffusion_detector(df, lookback=100, jump_zscore=3.0):
+    returns = df["close"].pct_change().dropna().tail(lookback)
+    if len(returns) < 10:
+        return {"jump_detected": False, "jump_zscore": None, "jump_direction": None}
 
-  async function refreshPerfSummary() {
-    const statementEl = document.getElementById('perf-summary-statement');
-    const gridEl = document.getElementById('perf-summary-grid');
-    const btn = document.getElementById('perf-summary-refresh-btn');
-    btn.disabled = true;
-    btn.classList.add('is-loading');
-    statementEl.textContent = 'Summarizing your trade history…';
-    try {
-      const res = await fetch('/api/trades/summary', { credentials: 'same-origin' });
-      const s = await res.json();
-      if (!res.ok) { statementEl.textContent = s.error || 'Could not summarize trade history.'; return; }
+    mean_r = returns.mean()
+    std_r = returns.std()
+    latest_return = returns.iloc[-1]
+    z = float((latest_return - mean_r) / std_r) if std_r > 0 else 0.0
 
-      const netUp = s.net_pnl >= 0;
-      statementEl.innerHTML = s.total_qualifying_trades
-        ? `Overall, you are currently <span class="${netUp ? 'up' : 'down'}">${netUp ? 'in profit of ' + fmtMoney(s.net_pnl) : 'down ' + fmtMoney(Math.abs(s.net_pnl))}</span>, across ${s.total_qualifying_trades} qualifying trade${s.total_qualifying_trades === 1 ? '' : 's'}.`
-        : 'No qualifying trades yet — Performance Summary will update once trades close via Take Profit, Stop Loss, or a manual profitable exit.';
+    is_jump = abs(z) > jump_zscore
+    jump_direction = "UP" if latest_return > 0 else "DOWN"
 
-      gridEl.innerHTML = [
-        perfMetricCardHtml('Total Profit', fmtMoney(s.total_profit), 'up'),
-        perfMetricCardHtml('Total Loss', fmtMoney(s.total_loss), 'down'),
-        perfMetricCardHtml('Net P&amp;L', (s.net_pnl >= 0 ? '+' : '') + fmtMoney(s.net_pnl), netUp ? 'up' : 'down'),
-        perfMetricCardHtml('Win Rate', s.win_rate + '%', ''),
-        perfMetricCardHtml('Winning Trades', s.winning_trades, 'up'),
-        perfMetricCardHtml('Losing Trades', s.losing_trades, 'down'),
-        perfMetricCardHtml('Qualifying Trades', s.total_qualifying_trades, ''),
-        perfMetricCardHtml('User Mistakes', s.user_mistake_trades, s.user_mistake_trades > 0 ? 'down' : '',
-          'Trades manually closed at a loss with no system risk-warning active at the time. Does not affect Win Rate.'),
-      ].join('');
-    } catch (e) {
-      statementEl.textContent = 'Could not connect to the server to summarize trade history.';
-    } finally {
-      btn.disabled = false;
-      btn.classList.remove('is-loading');
+    return {
+        "jump_detected": bool(is_jump),
+        "jump_zscore": round(z, 2),
+        "jump_direction": jump_direction if is_jump else None,
     }
-  }
 
-  document.getElementById('perf-summary-refresh-btn').addEventListener('click', refreshPerfSummary);
 
-  document.querySelector('.home-info-tab[data-info="active-trades"]').addEventListener('click', renderActiveTradesPanel);
-  document.querySelector('.home-info-tab[data-info="trade-history"]').addEventListener('click', renderTradeHistoryPanel);
+# ============================================================
+# 10. META-LABELING (Secondary ML Classifier)  (v4 - UNCHANGED)
+# ============================================================
+def meta_label_filter(df, execute_threshold=0.55):
+    data = df.copy()
+    data["macd_diff"] = data["macd"] - data["macd_signal"]
+    data["future_return"] = data["close"].shift(-3) / data["close"] - 1
+    data["label"] = (data["future_return"] > 0).astype(int)
+    data = data.dropna(subset=["rsi", "macd_diff", "label"])
 
-  /* ---------------- Trade detail modal (timeline + close) ---------------- */
+    if len(data) < 30:
+        return {"meta_win_probability": None, "meta_decision": "INSUFFICIENT_DATA"}
 
-  async function openTradeDetail(id) {
-    const content = document.getElementById('trade-detail-content');
-    content.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
-    showModal(detailModal);
-    try {
-      const res = await fetch(`/api/trades/${id}`, { credentials: 'same-origin' });
-      const t = await res.json();
-      if (!res.ok) { content.innerHTML = `<p style="color:var(--short);">${t.error || 'Could not load trade'}</p>`; return; }
+    feature_cols = ["rsi", "macd_diff"]
+    X = data[feature_cols].values
+    y = data["label"].values
 
-      let pnl = Number(t.estimated_pnl) || 0;
-      if (Object.is(pnl, -0)) pnl = 0;
-      const up = pnl >= 0;
-      const badge = statusBadgeInfo(t.status, t.outcome_class);
-      const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
-      const isActive = t.status === 'ACTIVE';
+    current_row = df.dropna(subset=["rsi", "macd", "macd_signal"]).iloc[-1]
+    current_features = np.array([[current_row["rsi"], current_row["macd"] - current_row["macd_signal"]]])
 
-      const timelineHtml = (t.timeline || []).map(e => {
-        const tone = EVENT_TONE[e.event_type] || 'neutral';
-        return `
-        <div class="timeline-msg ${tone}">
-          <span class="msg-icon">${TONE_ICON[tone]}</span>
-          <span class="msg-body">
-            <span class="msg-time">${new Date(e.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-            <span class="msg-text">${e.message}</span>
-          </span>
-        </div>`;
-      }).join('');
+    model = RandomForestClassifier(n_estimators=150, max_depth=4, random_state=42)
+    model.fit(X, y)
+    win_prob = float(model.predict_proba(current_features)[0][1])
+    decision = "EXECUTE" if win_prob >= execute_threshold else "SKIP"
 
-      content.innerHTML = `
-        <div class="trade-detail-header">
-          <span class="trade-detail-title">
-            ${t.asset}
-            <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
-          </span>
-        </div>
-        <div class="trade-detail-status-row">
-          ${isActive
-            ? `<span class="live-tracking-badge"><span class="live-dot"></span>LIVE TRACKING</span>`
-            : `<span class="trade-status-badge ${badge.cls}">${badge.label}</span>`}
-        </div>
-        <div class="trade-stat-block">
-          <div class="trade-stat-row"><span class="label">Entry</span><span class="value">${fmtMoney(t.entry_price)}</span></div>
-          <div class="trade-stat-row"><span class="label">${isActive ? 'Current Price' : 'Exit Price'}</span><span class="value">${fmtMoney(isActive ? t.last_price : t.exit_price)}</span></div>
-          <div class="trade-stat-row"><span class="label">Position Size</span><span class="value">${fmtMoney(t.position_size)}</span></div>
-          <div class="trade-stat-row"><span class="label">Stop Loss</span><span class="value risk">${fmtMoney(t.stop_loss)}</span></div>
-          <div class="trade-stat-row"><span class="label">Take Profit</span><span class="value target">${fmtMoney(t.take_profit)}</span></div>
-          <div class="trade-stat-row pnl-row"><span class="label">Estimated P/L</span><span class="value ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(pnl)} (${up ? '+' : ''}${t.estimated_pnl_percent}%)</span></div>
-        </div>
-        <div class="trade-detail-subhead">Trade Timeline</div>
-        <div class="trade-timeline">${timelineHtml || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'}</div>
-        ${isActive ? `<button id="close-trade-btn" class="close-trade-btn" data-id="${t.id}" type="button">CLOSE TRADE</button>` : ''}
-      `;
-
-      // auto-scroll to the newest message, but only if the user hasn't
-      // scrolled up to read older ones
-      const tl = content.querySelector('.trade-timeline');
-      if (tl) tl.scrollTop = tl.scrollHeight;
-
-      const closeBtn = document.getElementById('close-trade-btn');
-      if (closeBtn) {
-        closeBtn.addEventListener('click', async () => {
-          if (!confirm('Are you sure you want to mark this trade as closed?')) return;
-          await fetch(`/api/trades/${t.id}/close`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' });
-          hideModal(detailModal);
-          refreshActiveTrades();
-          renderActiveTradesPanel();
-        });
-      }
-    } catch (e) {
-      content.innerHTML = '<p style="color:var(--short);">Could not load trade details.</p>';
+    return {
+        "meta_win_probability": round(win_prob * 100, 1),
+        "meta_decision": decision,
+        "meta_threshold_used_pct": round(execute_threshold * 100, 1),
     }
-  }
 
-  document.getElementById('trade-detail-close-btn').addEventListener('click', () => hideModal(detailModal));
 
-  /* ---------------- expose + init ---------------- */
+# ============================================================
+# 11. CROSS-ASSET FLOW & INTERMARKET DIVERGENCE  <-- (v6)
+# Formula: Divergence_t = Z-Score(P_asset,t) - Z-Score(P_benchmark,t)
+#
+# LIMITATION (honestly): Doc mein "Total Crypto Market Cap" ya "DXY"
+# jaisa proper benchmark maanga gaya tha - ye ccxt/exchange REST se
+# directly available nahi hota (ye ek index hai, tradable pair nahi).
+# Simple proxy use kiya: agar primary asset BTC nahi to BTC benchmark,
+# agar primary khud BTC hai to ETH benchmark. Asal market-wide index
+# jitna comprehensive nahi hai.
+# ============================================================
+def cross_asset_divergence(df, symbol, lookback=50):
+    if _is_forex_pair(symbol):
+        # Forex benchmark: EUR/USD is the most liquid pair and a common
+        # dollar-strength proxy; if the symbol IS EUR/USD, fall back to
+        # GBP/USD instead so we're never comparing a pair to itself.
+        benchmark_symbol = "GBP/USD" if symbol.upper() == "EUR/USD" else "EUR/USD"
+    else:
+        benchmark_symbol = "ETH/USDT" if symbol.upper().startswith("BTC") else "BTC/USDT"
+    try:
+        bench_df = get_candles(symbol=benchmark_symbol, timeframe="1h", limit=max(lookback + 10, 60))
+    except Exception as e:
+        return {"divergence_score": None, "benchmark": benchmark_symbol, "error": str(e)}
 
-  window.SignalXTrades = {
-    onSignalRendered,
-    getActiveTradeForCoin,
-    showAlreadyActivePrompt,
-  };
-  window.runAnalysisForced = () => runAnalysis(true);
+    asset_returns = df["close"].pct_change().dropna().tail(lookback)
+    bench_returns = bench_df["close"].pct_change().dropna().tail(lookback)
 
-  refreshActiveTrades();
-  setInterval(refreshActiveTrades, 15000);
-})();
-</script>
+    n = min(len(asset_returns), len(bench_returns))
+    if n < 10:
+        return {"divergence_score": None, "benchmark": benchmark_symbol}
 
-<script src="{{ url_for('static', filename='premium-ui.js') }}?v=20260814-premium-2"></script>
-</body>
-</html>
+    asset_returns = asset_returns.tail(n).reset_index(drop=True)
+    bench_returns = bench_returns.tail(n).reset_index(drop=True)
+
+    asset_z = (asset_returns.iloc[-1] - asset_returns.mean()) / (asset_returns.std() + 1e-9)
+    bench_z = (bench_returns.iloc[-1] - bench_returns.mean()) / (bench_returns.std() + 1e-9)
+    divergence = round(float(asset_z - bench_z), 3)
+
+    if divergence > 1.0:
+        interpretation = "ASSET_OUTPERFORMING_BENCHMARK"
+    elif divergence < -1.0:
+        interpretation = "ASSET_UNDERPERFORMING_BENCHMARK"
+    else:
+        interpretation = "IN_SYNC_WITH_BENCHMARK"
+
+    return {"divergence_score": divergence, "benchmark": benchmark_symbol, "interpretation": interpretation}
+
+
+# ============================================================
+# 12. MULTI-TIMEFRAME PERMUTATION ENTROPY  <-- (v6)
+# Formula: H(d) = - sum( P(pi) * log2(P(pi)) )
+#
+# LIMITATION (honestly): "Multi-Timeframe" naam hai lekin proper version
+# alag timeframes (1h+4h+1d) alag se fetch kar ke combine karta - extra
+# API calls + latency add karta. Yahan sirf ek hi timeframe par mukhtalif
+# "order" (pattern length 3,4,5) try kar ke average liya - single-
+# timeframe multi-order proxy hai.
+# ============================================================
+def _permutation_entropy(series, order=3, delay=1):
+    n = len(series)
+    counts = {}
+    for i in range(n - (order - 1) * delay):
+        window = series[i:i + order * delay:delay]
+        pattern = tuple(np.argsort(window))
+        counts[pattern] = counts.get(pattern, 0) + 1
+    total = sum(counts.values())
+    if total == 0:
+        return None
+    probs = np.array([c / total for c in counts.values()])
+    pe = -np.sum(probs * np.log2(probs))
+    max_entropy = np.log2(np.math.factorial(order))
+    return pe / max_entropy if max_entropy > 0 else None
+
+
+def multi_timeframe_entropy(df, orders=(3, 4, 5), lookback=100):
+    returns = df["close"].pct_change().dropna().tail(lookback).values
+    if len(returns) < 20:
+        return {"entropy_avg": None, "regime": "INSUFFICIENT_DATA"}
+
+    entropies = []
+    for order in orders:
+        try:
+            pe = _permutation_entropy(returns, order=order)
+            if pe is not None:
+                entropies.append(pe)
+        except Exception:
+            continue
+
+    if not entropies:
+        return {"entropy_avg": None, "regime": "INSUFFICIENT_DATA"}
+
+    avg_entropy = round(float(np.mean(entropies)), 3)
+    if avg_entropy < 0.60:
+        regime = "LOW_ENTROPY_TRENDING"
+    elif avg_entropy > 0.85:
+        regime = "HIGH_ENTROPY_CHOPPY"
+    else:
+        regime = "MODERATE_ENTROPY"
+
+    return {"entropy_avg": avg_entropy, "regime": regime}
+
+
+# ============================================================
+# 13. ORDER BOOK DEPTH PROFILING (L2 SLOPE)  <-- (v6)
+# Formula: DepthSlope_t = sum( w_i * (BidVol_i - AskVol_i) / Distance_i )
+#
+# LIMITATION (honestly): Doc mein "L2/L3" likha tha - individual order-
+# level (L3) data retail-facing REST APIs se generally milta hi nahi.
+# Yahan sirf L2 (aggregated price-level) depth use ho raha hai, "L3"
+# sirf naam mein hai.
+# ============================================================
+def order_book_depth_profile(symbol="BTC/USDT", depth=10, order_book=None):
+    try:
+        ob = order_book if order_book is not None else exchange.fetch_order_book(symbol, limit=depth)
+        ob = _clean_order_book(ob)
+    except Exception as e:
+        return {"depth_slope": None, "error": str(e)}
+
+    bids = ob.get("bids", [])[:depth]
+    asks = ob.get("asks", [])[:depth]
+    if not bids or not asks:
+        return {"depth_slope": None}
+
+    mid_price = (bids[0][0] + asks[0][0]) / 2
+    weighted_sum = 0.0
+
+    for i, (price, vol) in enumerate(bids):
+        distance = max(abs(mid_price - price), 1e-9)
+        weighted_sum += (1.0 / (i + 1)) * (vol / distance)
+
+    for i, (price, vol) in enumerate(asks):
+        distance = max(abs(price - mid_price), 1e-9)
+        weighted_sum -= (1.0 / (i + 1)) * (vol / distance)
+
+    depth_slope = round(float(weighted_sum), 4)
+    if depth_slope > 0:
+        wall_bias = "BID_WALL_HEAVIER"
+    elif depth_slope < 0:
+        wall_bias = "ASK_WALL_HEAVIER"
+    else:
+        wall_bias = "BALANCED"
+
+    return {"depth_slope": depth_slope, "wall_bias": wall_bias, "depth_levels_used": len(bids)}
+
+
+# ============================================================
+# 14. VOLUME-SYNCHRONIZED VWAP DEVIATION & TOXICITY  <-- (v6)
+# Formula: VWAP_Dev_t = (P_t - VWAP_t) / (sigma_VWAP * sqrt(t))
+#
+# LIMITATION (honestly): "Volume-synchronized" ka matlab hota hai VWAP
+# fixed VOLUME-bars par based ho, time-bars par nahi. Simplicity ke
+# liye already-fetched time-based OHLCV candles hi use ho rahe hain -
+# asal volume-bar resampling nahi ho rahi.
+# ============================================================
+def vwap_deviation(df, vpin_score=None):
+    typical_price = (df["high"] + df["low"] + df["close"]) / 3
+    cum_vol = df["volume"].cumsum()
+    cum_vol_price = (typical_price * df["volume"]).cumsum()
+
+    if cum_vol.iloc[-1] == 0:
+        return {"vwap_deviation_z": None, "signal": "NO_DATA"}
+
+    vwap = cum_vol_price / cum_vol
+    deviation_series = df["close"] - vwap
+    std_dev = deviation_series.std()
+
+    if std_dev == 0 or np.isnan(std_dev):
+        return {"vwap_deviation_z": None, "signal": "NO_DATA"}
+
+    z = float(deviation_series.iloc[-1] / std_dev)
+    toxic_reversion_flag = bool(vpin_score is not None and vpin_score > 0.6 and abs(z) > 2)
+    signal = "MEAN_REVERSION_LIKELY" if abs(z) > 2 else "NO_EXTREME_DEVIATION"
+
+    return {"vwap_deviation_z": round(z, 2), "signal": signal, "toxic_reversion_flag": toxic_reversion_flag}
+
+
+# ============================================================
+# 15. RL-STYLE DYNAMIC RISK & ALLOCATION AGENT  <-- (v6)
+# Formula (doc): Q(s,a) <- Q(s,a) + alpha[R + gamma*max_a' Q(s',a') - Q(s,a)]
+#
+# LIMITATION (honestly, IMPORTANT): Ye ASAL Q-Learning training loop
+# NAHI hai. Real RL agent ke liye actual trade outcomes (reward) ka
+# feedback chahiye hota hai over many episodes, jo is stateless
+# request/response API mein maujood nahi. Yahan sirf ek SIMPLIFIED
+# HEURISTIC hai jo current volatility "state" ke mutabiq risk scale
+# karta hai - "Q-Learning" sirf naam ke tor par hai, koi training
+# nahi ho rahi.
+# ============================================================
+def rl_risk_agent(volatility_pct, base_risk_pct):
+    if volatility_pct < 1.0:
+        state = "LOW_VOL"
+        multiplier = 1.2
+    elif volatility_pct < 3.0:
+        state = "MED_VOL"
+        multiplier = 1.0
+    else:
+        state = "HIGH_VOL"
+        multiplier = 0.6
+
+    adjusted_risk = round(min(base_risk_pct * multiplier, 5.0), 2)
+    return {"rl_state": state, "rl_risk_multiplier": multiplier, "rl_adjusted_risk_pct": adjusted_risk}
+
+
+# ============================================================
+# 16. ADAPTIVE HURST EXPONENT  <-- (v6)
+# Formula: E[|R(t+tau) - R(t)|] proportional to tau^H
+#
+# LIMITATION (honestly): Chote lags (2-19) aur ek hi estimator (simple
+# variance-scaling method) use ho raha hai - proper Hurst estimation
+# ke liye zyada data + multiple estimators (DFA, GHE) cross-check
+# karna chahiye. Chota sample noisy H de sakta hai.
+# ============================================================
+def hurst_exponent(df, lookback=100):
+    prices = df["close"].tail(lookback).values
+    if len(prices) < 30:
+        return {"hurst": None, "memory": "INSUFFICIENT_DATA"}
+
+    log_returns = np.diff(np.log(prices))
+    lags = list(range(2, 20))
+    tau = []
+    for lag in lags:
+        diffs = log_returns[lag:] - log_returns[:-lag]
+        tau.append(np.sqrt(np.std(diffs)))
+
+    tau = np.array(tau)
+    valid = tau > 0
+    if valid.sum() < 5:
+        return {"hurst": None, "memory": "INSUFFICIENT_DATA"}
+
+    log_lags = np.log(np.array(lags)[valid])
+    log_tau = np.log(tau[valid])
+    poly = np.polyfit(log_lags, log_tau, 1)
+    hurst = round(float(poly[0] * 2), 3)
+
+    if hurst > 0.55:
+        memory = "TRENDING_PERSISTENT"
+    elif hurst < 0.45:
+        memory = "MEAN_REVERTING"
+    else:
+        memory = "RANDOM_WALK"
+
+    return {"hurst": hurst, "memory": memory}
+
+
+# ============================================================
+# 17. WAVELET TRANSFORM NOISE FILTERING  <-- (v6)
+# Formula: W_f(a,b) = (1/sqrt(|a|)) * integral( f(t) * psi*((t-b)/a) dt )
+#
+# LIMITATION (honestly): Wavelet denoising boundary/edge-effects ka
+# shikar hoti hai - series ka bilkul AAKHRI hissa (jahan hume trend
+# chahiye) sabse zyada is distortion ka shikar hota hai. Requires
+# PyWavelets (pywt) library.
+# ============================================================
+def wavelet_denoise_trend(df, wavelet="db4", level=2):
+    prices = df["close"].tail(128).values
+    if len(prices) < 32:
+        return {"wavelet_trend_direction": None, "signal": "INSUFFICIENT_DATA"}
+
+    try:
+        import pywt
+        coeffs = pywt.wavedec(prices, wavelet, level=level)
+        threshold = np.std(coeffs[-1]) * 0.6745
+        denoised_coeffs = [coeffs[0]] + [pywt.threshold(c, threshold, mode="soft") for c in coeffs[1:]]
+        denoised = pywt.waverec(denoised_coeffs, wavelet)[:len(prices)]
+
+        trend_slope = float(denoised[-1] - denoised[-5]) if len(denoised) >= 5 else 0.0
+        direction = "UP" if trend_slope > 0 else ("DOWN" if trend_slope < 0 else "FLAT")
+
+        return {
+            "wavelet_denoised_last": round(float(denoised[-1]), 2),
+            "wavelet_trend_direction": direction,
+            "wavelet_trend_slope": round(trend_slope, 4),
+        }
+    except ImportError:
+        return {"wavelet_denoised_last": None, "signal": "PYWT_NOT_INSTALLED"}
+    except Exception as e:
+        return {"wavelet_denoised_last": None, "error": str(e)}
+
+
+# ============================================================
+# 18. STRUCTURAL BREAK DETECTION (CUSUM TEST)  <-- (v6)
+# Formula: S_t = max(0, S_{t-1} + (dy_t - mu0) - threshold)
+#
+# LIMITATION (honestly): threshold_k manually chuna gaya hai (data se
+# calibrate nahi hua), isliye false-positive break-detection rate
+# unknown hai bina proper backtesting ke.
+# ============================================================
+def cusum_structural_break(df, lookback=100, threshold_k=0.5):
+    returns = df["close"].pct_change().dropna().tail(lookback)
+    if len(returns) < 20:
+        return {"structural_break": False, "cusum_pos": None, "cusum_neg": None}
+
+    mu0 = returns.mean()
+    std = returns.std()
+    threshold = threshold_k * std
+
+    s_pos, s_neg = 0.0, 0.0
+    recent_breaks = 0
+    for r in returns:
+        s_pos = max(0.0, s_pos + (r - mu0) - threshold)
+        s_neg = min(0.0, s_neg + (r - mu0) + threshold)
+        if s_pos > 4 * std or abs(s_neg) > 4 * std:
+            recent_breaks += 1
+            s_pos, s_neg = 0.0, 0.0
+
+    structural_break_detected = (s_pos > 4 * std) or (abs(s_neg) > 4 * std)
+
+    return {
+        "structural_break": bool(structural_break_detected),
+        "cusum_pos": round(float(s_pos), 6),
+        "cusum_neg": round(float(s_neg), 6),
+        "recent_break_count": recent_breaks,
+    }
+
+
+# ============================================================
+# 19. LIQUIDITY SWEEP / STOP-CLUSTER DETECTION  <-- (v6)
+# Formula: LiquidityPoolScore = sum( Volume_orders / |P_current - P_level| )
+#
+# LIMITATION (honestly): "Historical highs/lows" sirf isi fetch kiye
+# gaye OHLCV window (last ~50-200 candles) se liye ja rahe hain - asal
+# institutional stop-hunt levels aksar bohot purane (weekly/monthly)
+# highs-lows par hote hain jo yahan capture nahi ho rahe. Order-book
+# cluster wala hissa is function mein duplicate nahi kiya - wo pehle
+# se hi concept #13 (Depth Profiling) mein cover ho raha hai.
+# ============================================================
+def liquidity_sweep_detector(df, lookback=50):
+    recent = df.tail(lookback)
+    swing_high = float(recent["high"].max())
+    swing_low = float(recent["low"].min())
+    current_price = float(df["close"].iloc[-1])
+
+    dist_to_high_pct = round(abs(current_price - swing_high) / current_price * 100, 2)
+    dist_to_low_pct = round(abs(current_price - swing_low) / current_price * 100, 2)
+
+    sweep_detected = False
+    sweep_direction = None
+
+    last_candle = df.iloc[-1]
+    prev_candles = df.iloc[-lookback:-1]
+
+    if not prev_candles.empty:
+        prev_high = prev_candles["high"].max()
+        prev_low = prev_candles["low"].min()
+
+        if last_candle["high"] > prev_high and last_candle["close"] < prev_high:
+            sweep_detected = True
+            sweep_direction = "SWEPT_HIGH_REVERSED_DOWN"
+        elif last_candle["low"] < prev_low and last_candle["close"] > prev_low:
+            sweep_detected = True
+            sweep_direction = "SWEPT_LOW_REVERSED_UP"
+
+    return {
+        "swing_high": round(swing_high, 2),
+        "swing_low": round(swing_low, 2),
+        "distance_to_high_pct": dist_to_high_pct,
+        "distance_to_low_pct": dist_to_low_pct,
+        "liquidity_sweep_detected": sweep_detected,
+        "sweep_direction": sweep_direction,
+    }
+
+
+# ============================================================
+# 20. LIQUIDITY MAGNET + LIKELY TARGET  <-- (v8, LIQUIDITY SCANNER)
+# Formula: Magnet = argmax(Price_i * Volume_i) across order-book levels
+#          LikelyTarget = argmax( (Price_i * Volume_i) / Distance_i ),
+#          nudged toward whichever side liquidity_sweep_detector already
+#          flagged as the "continuation" direction.
+#
+# LIMITATION (honestly): ye sirf currently-fetched top-N order-book levels
+# se ban raha hai (retail REST depth) - asal "liquidity magnet" institutional
+# desks bohot zyada depth + historical resting-order data se banate hain.
+# ============================================================
+def liquidity_magnet_and_target(current_price, order_book, sweep_data=None, depth=25):
+    bids = order_book.get("bids", [])[:depth]
+    asks = order_book.get("asks", [])[:depth]
+    if not bids or not asks:
+        return {"magnet": None, "likely_target": None}
+
+    clusters = [{"price": p, "usd": p * v, "side": "SUPPORT"} for p, v in bids]
+    clusters += [{"price": p, "usd": p * v, "side": "RESISTANCE"} for p, v in asks]
+
+    magnet = max(clusters, key=lambda c: c["usd"])
+    magnet_out = {
+        "price": round(magnet["price"], 6),
+        "usd_size": round(magnet["usd"], 2),
+        "side": magnet["side"],
+        "distance_pct": round(abs(current_price - magnet["price"]) / current_price * 100, 3),
+    }
+
+    def score(c):
+        dist = max(abs(current_price - c["price"]), 1e-9)
+        s = c["usd"] / dist
+        sweep_dir = (sweep_data or {}).get("sweep_direction")
+        if sweep_dir == "SWEPT_LOW_REVERSED_UP" and c["side"] == "RESISTANCE":
+            s *= 1.25
+        if sweep_dir == "SWEPT_HIGH_REVERSED_DOWN" and c["side"] == "SUPPORT":
+            s *= 1.25
+        return s
+
+    ranked = sorted(clusters, key=score, reverse=True)
+    best = ranked[0]
+    runner_up = ranked[1] if len(ranked) > 1 else ranked[0]
+    s1, s2 = score(best), score(runner_up)
+    dominance = (s1 - s2) / s1 if s1 > 0 else 0.0
+    target_score = round(60 + dominance * 39, 1)
+
+    target_out = {
+        "price": round(best["price"], 6),
+        "score": target_score,
+        "type": "Resistance Sweep" if best["side"] == "RESISTANCE" else "Support Sweep",
+        "distance_pct": round(abs(current_price - best["price"]) / current_price * 100, 3),
+    }
+    return {"magnet": magnet_out, "likely_target": target_out}
+
+
+# ============================================================
+# 21. POSSIBLE SPOOFING DETECTOR  <-- (v8, LIQUIDITY SCANNER)
+# Formula: flags a resting order-book level whose size drops by
+#          >= cancel_ratio between two polls without price trading
+#          through it.
+#
+# LIMITATION (honestly): asal spoofing detection order-by-order (L3)
+# add/cancel event stream aur trade-tape matching maangta hai. Yahan
+# sirf do polled L2 snapshots compare ho rahe hain - ye "order vanish
+# hua" dikha sakta hai, lekin ye fill tha ya genuine cancel, ye REST
+# API se pakka nahi bataya ja sakta. Isliye heuristic/exploratory hai.
+# ============================================================
+def possible_spoofing_detector(symbol, order_book, top_n=5, min_elapsed_sec=3, cancel_ratio=0.6):
+    now = time.time()
+    bids = order_book.get("bids", [])[:top_n]
+    asks = order_book.get("asks", [])[:top_n]
+    if not bids or not asks:
+        return {"available": False, "spoof_detected": False}
+
+    current_levels = {round(p, 6): v for p, v in (bids + asks)}
+    mid = (bids[0][0] + asks[0][0]) / 2
+
+    prev = _OB_SNAPSHOT_CACHE.get(symbol)
+    _OB_SNAPSHOT_CACHE[symbol] = {"levels": current_levels, "ts": now, "mid": mid}
+
+    if not prev or (now - prev["ts"]) < min_elapsed_sec:
+        return {"available": True, "spoof_detected": False, "note": "Collecting baseline snapshot..."}
+
+    vanished = []
+    for price, vol in prev["levels"].items():
+        if vol <= 0:
+            continue
+        current_vol = current_levels.get(price, 0.0)
+        drop_ratio = (vol - current_vol) / vol
+        if drop_ratio >= cancel_ratio:
+            vanished.append({
+                "price": round(price, 6),
+                "usd_size_before": round(price * vol, 2),
+                "cancelled_pct": round(min(drop_ratio, 1.0) * 100, 1),
+                "seconds_ago": round(now - prev["ts"], 1),
+            })
+
+    vanished.sort(key=lambda v: v["usd_size_before"], reverse=True)
+    top = vanished[0] if vanished else None
+    spoof_score = round(min(100, len(vanished) * 25 + (top["cancelled_pct"] * 0.3 if top else 0)), 1)
+
+    return {
+        "available": True,
+        "spoof_detected": bool(vanished),
+        "spoof_score": spoof_score,
+        "top_vanished_level": top,
+        "vanished_count": len(vanished),
+    }
+
+
+# ============================================================
+# 22. MARKET STRENGTH SCORE  <-- (v8, LIQUIDITY SCANNER)
+# Blends Hawkes pressure, OFI and depth-slope into a single 0-100 dial.
+# Purely a display convenience - does NOT feed into the Tier 01 verdict.
+# ============================================================
+def market_strength_score(buying_pressure, selling_pressure, ofi_score, depth_slope, vpin_score):
+    bp = ((buying_pressure or 0) - (selling_pressure or 0)) / 10.0
+    ofi_n = (ofi_score or 0) / 10.0
+    depth_n = float(np.tanh((depth_slope or 0) / 5.0))
+    toxicity_penalty = min(0.4, (vpin_score or 0) * 0.3)
+
+    raw = (bp * 0.4 + ofi_n * 0.35 + depth_n * 0.25) * (1 - toxicity_penalty)
+    score = round(float(np.clip(50 + raw * 50, 0, 100)), 1)
+
+    if score >= 70:
+        label = "STRONG"
+    elif score >= 55:
+        label = "MODERATE BULLISH"
+    elif score > 45:
+        label = "NEUTRAL"
+    elif score >= 30:
+        label = "MODERATE BEARISH"
+    else:
+        label = "WEAK"
+
+    bias = "BUY" if score >= 55 else ("SELL" if score <= 45 else "NEUTRAL")
+    return {"score": score, "label": label, "bias": bias}
+
+
+# ============================================================
+# 23. TRAP & SQUEEZE RISK  <-- (v8, LIQUIDITY SCANNER)
+# Heuristic 0-100 bars for Bull Trap / Bear Trap / Short Squeeze / Long
+# Squeeze, combining the sweep direction, OFI and order-book wall bias.
+# ============================================================
+def trap_and_squeeze_risk(sweep_data, ofi_data, depth_data, funding_data=None):
+    ofi = ofi_data.get("ofi_score") or 0
+    wall = depth_data.get("wall_bias")
+    sweep_dir = sweep_data.get("sweep_direction")
+
+    bull_trap = bear_trap = short_squeeze = long_squeeze = 0
+
+    if sweep_dir == "SWEPT_HIGH_REVERSED_DOWN":
+        bull_trap += 55
+        if ofi < 0:
+            bull_trap += 25
+        if wall == "ASK_WALL_HEAVIER":
+            bull_trap += 10
+
+    if sweep_dir == "SWEPT_LOW_REVERSED_UP":
+        bear_trap += 55
+        if ofi > 0:
+            bear_trap += 25
+        if wall == "BID_WALL_HEAVIER":
+            bear_trap += 10
+
+    if ofi > 3 and wall == "ASK_WALL_HEAVIER":
+        short_squeeze += 50
+    if ofi < -3 and wall == "BID_WALL_HEAVIER":
+        long_squeeze += 50
+
+    if funding_data and funding_data.get("available") and funding_data.get("funding_rate_pct") is not None:
+        fr = funding_data["funding_rate_pct"]
+        if fr < 0:
+            short_squeeze += 25
+        elif fr > 0.05:
+            long_squeeze += 20
+
+    clip = lambda v: int(min(100, max(0, v)))
+    return {
+        "bull_trap": clip(bull_trap),
+        "bear_trap": clip(bear_trap),
+        "short_squeeze": clip(short_squeeze),
+        "long_squeeze": clip(long_squeeze),
+    }
+
+
+# ============================================================
+# 24. LIQUIDITY TARGET ZONES  <-- (v8, LIQUIDITY SCANNER)
+# Top buy/sell walls straight from the order book, scored relative to
+# the largest resting order currently visible.
+# ============================================================
+def liquidity_target_zones(order_book, current_price, n_levels=4, scan_depth=25):
+    bids_all = order_book.get("bids", [])[:scan_depth]
+    asks_all = order_book.get("asks", [])[:scan_depth]
+    if not bids_all or not asks_all:
+        return []
+
+    max_usd = max([p * v for p, v in (bids_all + asks_all)] or [1])
+
+    bids = sorted(bids_all, key=lambda x: x[0] * x[1], reverse=True)[:n_levels]
+    asks = sorted(asks_all, key=lambda x: x[0] * x[1], reverse=True)[:n_levels]
+
+    zones = []
+    for price, vol in bids:
+        usd = price * vol
+        zones.append({
+            "price": round(price, 6), "side": "BUY_WALL", "usd_size": round(usd, 2),
+            "score": round(min(99, (usd / max_usd) * 99), 1),
+            "distance_pct": round((current_price - price) / current_price * 100, 3),
+        })
+    for price, vol in asks:
+        usd = price * vol
+        zones.append({
+            "price": round(price, 6), "side": "SELL_WALL", "usd_size": round(usd, 2),
+            "score": round(min(99, (usd / max_usd) * 99), 1),
+            "distance_pct": round((price - current_price) / current_price * 100, 3),
+        })
+    zones.sort(key=lambda z: z["score"], reverse=True)
+    return zones
+
+
+# ============================================================
+# 25. FUNDING RATE + OPEN INTEREST  <-- (v8, LIQUIDITY SCANNER)
+#
+# LIMITATION (honestly): OKX ye sirf PERPETUAL SWAP instruments ke liye
+# deta hai, spot pairs ke liye nahi. Har coin ka perp OKX par available
+# nahi hota (e.g. kuch chhoti-cap coins) - un ke liye ye gracefully
+# "available: false" return karta hai, page crash nahi hoti.
+# ============================================================
+def funding_open_interest(symbol):
+    perp_symbol = symbol if ":" in symbol else f"{symbol}:USDT"
+
+    funding_rate_pct, next_funding_ts = None, None
+    try:
+        funding = exchange.fetch_funding_rate(perp_symbol)
+        rate = funding.get("fundingRate")
+        if rate is not None:
+            funding_rate_pct = round(float(rate) * 100, 4)
+        next_funding_ts = funding.get("fundingTimestamp")
+    except Exception:
+        pass
+
+    open_interest = None
+    try:
+        oi = exchange.fetch_open_interest(perp_symbol)
+        oi_value = oi.get("openInterestAmount") or oi.get("openInterestValue") or oi.get("openInterest")
+        if oi_value is not None:
+            open_interest = round(float(oi_value), 2)
+    except Exception:
+        pass
+
+    return {
+        "available": funding_rate_pct is not None or open_interest is not None,
+        "funding_rate_pct": funding_rate_pct,
+        "open_interest": open_interest,
+        "next_funding_ts": next_funding_ts,
+        "perp_symbol": perp_symbol,
+    }
+
+
+# ============================================================
+# 26. CVD (CUMULATIVE VOLUME DELTA)  <-- (v8, LIQUIDITY SCANNER)
+# Formula: delta_i = +Volume_i agar close_i >= open_i warna -Volume_i;
+#          CVD_t = cumsum(delta)
+#
+# LIMITATION (honestly): asal CVD taker buy-volume minus taker
+# sell-volume se banta hai (trade-by-trade tape se). Yahan candle
+# direction (green/red) ko proxy ke taur par use kiya gaya hai kyunke
+# taker-side per-trade data har candle ke liye fetch karna bohot
+# zyada API calls maangta - ye ek approximation hai, exact CVD nahi.
+# ============================================================
+def cvd_volume_delta(df, lookback=50):
+    recent = df.tail(lookback).copy()
+    recent["delta"] = np.where(recent["close"] >= recent["open"], recent["volume"], -recent["volume"])
+    recent["cvd"] = recent["delta"].cumsum()
+    series = [round(float(v), 4) for v in recent["cvd"].tolist()][-30:]
+    cvd_now = series[-1] if series else 0.0
+    cvd_prev = series[-6] if len(series) >= 6 else (series[0] if series else 0.0)
+    trend = "RISING" if cvd_now > cvd_prev else ("FALLING" if cvd_now < cvd_prev else "FLAT")
+    return {"cvd": round(cvd_now, 2), "trend": trend, "series": series}
+
+
+# ============================================================
+# 27. MARKET CRASH RISK  <-- (v8, LIQUIDITY SCANNER)
+# Heuristic 0-100 composite of existing down-side stress signals
+# (jump diffusion, structural break, VPIN toxicity, OFI, sweep, CVD).
+#
+# LIMITATION (honestly): ye koi calibrated/backtested crash-prediction
+# model NAHI hai - sirf maujooda display-only signals ko ek weighted
+# checklist mein combine kiya gaya hai. Sirf awareness ke liye hai,
+# trading decision ke liye nahi.
+# ============================================================
+def market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cvd_data):
+    score = 0
+    factors = []
+
+    if jump_data.get("jump_detected") and jump_data.get("jump_direction") == "DOWN":
+        score += 30
+        factors.append("Downside price jump detected (Ch.09)")
+    if cusum_data.get("structural_break"):
+        score += 20
+        factors.append("Structural break in returns (Ch.18)")
+
+    vpin = vpin_data.get("vpin_score")
+    if vpin is not None and vpin > 0.6:
+        score += 20
+        factors.append("High toxic order flow (VPIN)")
+
+    ofi = ofi_data.get("ofi_score")
+    if ofi is not None and ofi < -4:
+        score += 15
+        factors.append("Heavy sell-side order flow")
+
+    if sweep_data.get("sweep_direction") == "SWEPT_HIGH_REVERSED_DOWN":
+        score += 10
+        factors.append("Liquidity sweep reversal at highs")
+
+    if cvd_data.get("trend") == "FALLING":
+        score += 5
+        factors.append("Falling cumulative volume delta")
+
+    score = min(100, score)
+    if score >= 65:
+        label = "ELEVATED"
+    elif score >= 35:
+        label = "WATCH"
+    else:
+        label = "LOW"
+
+    return {"score": score, "label": label, "factors": factors}
+
+
+# ============================================================
+# MASTER FUNCTION - sab 19 concepts combine karta hai
+# *** FINAL VERDICT + CONFIDENCE ab bhi SIRF Hawkes + Bayesian se
+#     bante hain (Conformal Prediction), v4 jaisa hi - ISE CHANGE
+#     NAHI KIYA GAYA. Baaqi concepts sirf extra info hain. ***
+# ============================================================
+def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
+    if _HAS_PANDAS_TA:
+        df["rsi"] = ta.rsi(df["close"], length=14)
+        macd = ta.macd(df["close"])
+        df["macd"] = macd["MACD_12_26_9"]
+        df["macd_signal"] = macd["MACDs_12_26_9"]
+    else:
+        df["rsi"] = _ta_rsi(df["close"], 14)
+        macd_line, macd_signal_line = _ta_macd(df["close"])
+        df["macd"] = macd_line
+        df["macd_signal"] = macd_signal_line
+    df = df.dropna(subset=["rsi", "macd", "macd_signal"]).reset_index(drop=True)
+
+    latest = df.iloc[-1]
+    current_price = float(latest["close"])
+
+    # --- Purane 5 concepts (VERDICT YAHAN SE BANTA HAI - UNCHANGED) ---
+    buying_pressure, selling_pressure = hawkes_pressure(df)
+    bullish_pct, bearish_pct = bayesian_bullish_bearish(df)
+    confidence_pct, trade_decision = conformal_confidence(bullish_pct, buying_pressure, selling_pressure)
+
+    if trade_decision == "SKIP":
+        final_verdict = "WAIT"
+    elif bullish_pct > bearish_pct:
+        final_verdict = "LONG"
+    else:
+        final_verdict = "SHORT"
+
+    volatility_data = quantile_volatility(df, current_price, final_verdict)
+    win_prob = max(bullish_pct, bearish_pct) / 100
+    suggested_risk_pct = fractional_kelly(win_prob)
+    trend = "Bullish" if bullish_pct > bearish_pct else "Bearish"
+
+    # --- Candlestick pattern confirmation (NEW) — confidence ko +/-8%
+    # adjust karta hai agar recent candle shapes verdict ke sath match
+    # ya contradict karein. final_verdict yahan kabhi flip nahi hota.
+    try:
+        candle_data = candlestick_confirmation(df, final_verdict)
+    except Exception as e:
+        candle_data = {"patterns_detected": [], "confirmation": "ERROR", "confidence_adjustment": 0, "error": str(e)}
+    confidence_pct = max(5, min(97, round(confidence_pct + candle_data.get("confidence_adjustment", 0), 2)))
+
+    # --- v4 ke 4 concepts (display-only, UNCHANGED) ---
+    if include_orderbook:
+        try:
+            ofi_data = order_flow_imbalance(symbol)
+        except Exception as e:
+            ofi_data = {"ofi_score": None, "ofi_raw": None, "error": str(e)}
+        try:
+            vpin_data = vpin_toxicity(symbol)
+        except Exception as e:
+            vpin_data = {"vpin_score": None, "toxicity": "ERROR", "error": str(e)}
+    else:
+        ofi_data = {"ofi_score": None, "ofi_raw": None}
+        vpin_data = {"vpin_score": None, "toxicity": "SKIPPED"}
+
+    regime_data = hmm_regime(df)
+    jump_data = jump_diffusion_detector(df)
+    meta_data = meta_label_filter(df)
+
+    fake_breakout_warning = False
+    if ofi_data.get("ofi_score") is not None:
+        if final_verdict == "LONG" and ofi_data["ofi_score"] < 0:
+            fake_breakout_warning = True
+        elif final_verdict == "SHORT" and ofi_data["ofi_score"] > 0:
+            fake_breakout_warning = True
+
+    # --- v6 ke 9 concepts (display-only, verdict ko touch nahi karte) ---
+    try:
+        divergence_data = cross_asset_divergence(df, symbol)
+    except Exception as e:
+        divergence_data = {"divergence_score": None, "error": str(e)}
+
+    try:
+        entropy_data = multi_timeframe_entropy(df)
+    except Exception as e:
+        entropy_data = {"entropy_avg": None, "error": str(e)}
+
+    if include_orderbook:
+        try:
+            depth_data = order_book_depth_profile(symbol)
+        except Exception as e:
+            depth_data = {"depth_slope": None, "error": str(e)}
+    else:
+        depth_data = {"depth_slope": None, "wall_bias": "SKIPPED"}
+
+    try:
+        vwap_data = vwap_deviation(df, vpin_score=vpin_data.get("vpin_score"))
+    except Exception as e:
+        vwap_data = {"vwap_deviation_z": None, "error": str(e)}
+
+    try:
+        rl_data = rl_risk_agent(
+            volatility_pct=volatility_data.get("expected_volatility_pct", 1.0),
+            base_risk_pct=suggested_risk_pct,
+        )
+    except Exception as e:
+        rl_data = {"rl_state": None, "error": str(e)}
+
+    try:
+        hurst_data = hurst_exponent(df)
+    except Exception as e:
+        hurst_data = {"hurst": None, "error": str(e)}
+
+    try:
+        wavelet_data = wavelet_denoise_trend(df)
+    except Exception as e:
+        wavelet_data = {"wavelet_trend_direction": None, "error": str(e)}
+
+    try:
+        cusum_data = cusum_structural_break(df)
+    except Exception as e:
+        cusum_data = {"structural_break": None, "error": str(e)}
+
+    try:
+        sweep_data = liquidity_sweep_detector(df)
+    except Exception as e:
+        sweep_data = {"liquidity_sweep_detected": None, "error": str(e)}
+
+    # "Accuracy Score" - kitne Tier-1 (Ch.01-05) concepts final_verdict ki
+    # taraf ishara kar rahe hain, out of 5 (display metric, verdict khud
+    # change nahi hota - dekho concept_accuracy_score() ke comments).
+    accuracy_data = concept_accuracy_score(
+        final_verdict,
+        buying_pressure=buying_pressure, selling_pressure=selling_pressure,
+        bullish_pct=bullish_pct, bearish_pct=bearish_pct,
+        ofi_data=ofi_data, regime_data=regime_data, jump_data=jump_data,
+        meta_data=meta_data, divergence_data=divergence_data,
+        depth_data=depth_data, vwap_data=vwap_data, wavelet_data=wavelet_data,
+        cusum_data=cusum_data, sweep_data=sweep_data,
+    )
+
+    result = {
+        "trend": trend,
+        "buying_pressure": buying_pressure,
+        "selling_pressure": selling_pressure,
+        "bullish_pct": bullish_pct,
+        "bearish_pct": bearish_pct,
+        "confidence_pct": confidence_pct,
+        "suggested_risk_pct": suggested_risk_pct,
+        "final_verdict": final_verdict,
+        "last_price": round(current_price, 2),
+        "rsi": round(float(latest["rsi"]), 2),
+        "macd": round(float(latest["macd"]), 4),
+
+        # v4 concepts (display-only)
+        "order_flow": ofi_data,
+        "toxic_flow": vpin_data,
+        "market_regime": regime_data,
+        "jump_shock": jump_data,
+        "meta_label": meta_data,
+        "fake_breakout_warning": fake_breakout_warning,
+
+        # v6 concepts (display-only)
+        "intermarket_divergence": divergence_data,
+        "entropy": entropy_data,
+        "depth_profile": depth_data,
+        "vwap_deviation": vwap_data,
+        "rl_risk_agent": rl_data,
+        "hurst": hurst_data,
+        "wavelet_trend": wavelet_data,
+        "structural_break": cusum_data,
+        "liquidity_sweep": sweep_data,
+        "candlestick_patterns": candle_data,
+
+        # Accuracy Score widget (Ch.01-05 concept agreement out of 5, with the verdict above)
+        "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
+        "concept_agree_count": accuracy_data["concept_agree_count"],
+        "concept_total": accuracy_data["concept_total"],
+        "concept_votes": accuracy_data["concept_votes"],
+
+        "disclaimer": ("Probability estimates only - not financial advice. "
+                        "In-sample calculations, no walk-forward backtest run yet. "
+                        "Final verdict/confidence come ONLY from Hawkes+Bayesian "
+                        "(Conformal Prediction); all other panels are display-only."),
+    }
+    result.update(volatility_data)
+    return result
+
+
+# ============================================================
+# ROUTES
+# ============================================================
+@app.route("/login", methods=["GET"])
+def login_page():
+    # Agar user pehle se login hai to seedha trading interface pe bhej dein
+    if "user_id" in session:
+        return redirect(url_for("home"))
+    return render_template("login.html")
+
+
+@app.route("/", methods=["GET"])
+def home():
+    # Logged-in users ko trading interface, baaqi sabko public landing page
+    if "user_id" not in session:
+        return render_template("landing.html")
+    return render_template(
+        "design.html",
+        user_email=session.get("email", ""),
+        user_avatar=session.get("avatar_url"),
+    )
+
+
+@app.route("/demo-trading", methods=["GET"])
+def demo_trading_page():
+    if "user_id" not in session:
+        return redirect(url_for("login_page"))
+    return render_template("demo-trading.html")
+
+
+@app.route("/reset-password", methods=["GET"])
+def reset_password_page():
+    return render_template("reset-password.html")
+
+
+@app.route("/terms", methods=["GET"])
+def terms_page():
+    return render_template("terms.html")
+
+
+@app.route("/privacy", methods=["GET"])
+def privacy_page():
+    return render_template("privacy.html")
+
+
+@app.route("/signal", methods=["GET"])
+def signal_endpoint():
+    coin = request.args.get("coin", "BTC/USDT")
+    timeframe = request.args.get("timeframe", "1h")
+    orderbook = request.args.get("orderbook", "true").lower() != "false"
+
+    # Forex pairs have no free order-book/funding/OI source (that's
+    # crypto-exchange-only data) - so those channels are force-skipped
+    # for forex and generate_signal() falls back to its price-action-only
+    # channels (RSI/MACD, HMM regime, Hawkes+Bayesian verdict, etc.),
+    # same as when a user manually turns "orderbook" off for a crypto pair.
+    if _is_forex_pair(coin):
+        orderbook = False
+
+    try:
+        df = get_candles(symbol=coin, timeframe=timeframe)
+        result = generate_signal(df, symbol=coin, include_orderbook=orderbook)
+        result["coin"] = coin
+        result["timeframe"] = timeframe
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/coins", methods=["GET"])
+def available_coins():
+    # Grouped by asset type for the picker's Forex/Crypto tabs. Old shape
+    # (a flat list) is still available at ?flat=true for any caller that
+    # relied on the previous response format.
+    if request.args.get("flat", "").lower() == "true":
+        return jsonify(AVAILABLE_COINS)
+    return jsonify({"crypto": AVAILABLE_COINS, "forex": FOREX_PAIRS})
+
+
+# ============================================================
+# NEW: /ticker  -->  homepage "Awaiting Analysis" strip ke liye
+# chand top coins ka live last price + 24h % change deta hai.
+# Display-only hai, /signal verdict logic ko bilkul touch nahi karta.
+# ============================================================
+TICKER_SYMBOLS = [
+    "BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT",
+    "ADA/USDT", "DOT/USDT", "XLM/USDT", "DOGE/USDT",
+]
+
+
+@app.route("/ticker", methods=["GET"])
+def ticker_strip():
+    try:
+        tickers = exchange.fetch_tickers(TICKER_SYMBOLS)
+        out = []
+        for sym in TICKER_SYMBOLS:
+            t = tickers.get(sym)
+            if not t:
+                continue
+            out.append({
+                "symbol": sym.split("/")[0],
+                "last": t.get("last"),
+                "changePercent": t.get("percentage"),
+            })
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ============================================================
+# NEW (v7): /candles  -->  "LIVE CHART" tab ke liye OHLCV series
+#
+# Frontend har chand second baad (poll) chhote limit ke sath is
+# endpoint ko dobara call karta hai taake chart ka AAKHRI candle aur
+# current price update hote rahein - is tarah "live" feel milti hai.
+# Note: ye ek naya display-only endpoint hai, /signal ke verdict
+# logic ko bilkul touch nahi karta.
+# ============================================================
+@app.route("/candles", methods=["GET"])
+def candles_endpoint():
+    coin = request.args.get("coin", "BTC/USDT")
+    timeframe = request.args.get("timeframe", "1h")
+    try:
+        limit = int(request.args.get("limit", 200))
+    except ValueError:
+        limit = 200
+    limit = max(2, min(limit, 1000))
+
+    # infinite scroll-back: frontend sends the oldest candle time it
+    # already has as `before` (unix seconds) and we page further into
+    # the past from there instead of always returning the latest window.
+    before = request.args.get("before")
+    since_ms = None
+    if before:
+        try:
+            before_ts = int(before)
+            tf_secs = TIMEFRAME_SECONDS.get(timeframe, 3600)
+            since_ms = max(0, (before_ts - limit * tf_secs) * 1000)
+        except ValueError:
+            since_ms = None
+
+    try:
+        df = get_candles(symbol=coin, timeframe=timeframe, limit=limit, since=since_ms)
+        if before and since_ms is not None:
+            before_cutoff = pd.to_datetime(int(before), unit="s")
+            df = df[df["timestamp"] < before_cutoff]
+
+        if df.empty:
+            # no more history available further back — let the frontend
+            # know cleanly instead of erroring out.
+            return jsonify({
+                "coin": coin, "timeframe": timeframe, "candles": [],
+                "last_price": None, "change_pct": 0.0,
+                "server_time": int(time.time()),
+            })
+
+        candles = [
+            {
+                "time": int(row.timestamp.timestamp()),
+                "open": round(float(row.open), 8),
+                "high": round(float(row.high), 8),
+                "low": round(float(row.low), 8),
+                "close": round(float(row.close), 8),
+                "volume": round(float(row.volume), 8),
+            }
+            for row in df.itertuples()
+        ]
+        last_price = float(df["close"].iloc[-1])
+        prev_price = float(df["close"].iloc[-2]) if len(df) > 1 else last_price
+        change_pct = round(((last_price - prev_price) / prev_price) * 100, 3) if prev_price else 0.0
+
+        # Candlestick pattern markers (Doji, Hammer, Engulfing, etc.) — chart
+        # tab par candles ke upar/neeche visually dikhane ke liye, taake
+        # user human-trader ki tarah pattern ko chart par dekh sake.
+        try:
+            raw_patterns = detect_candlestick_patterns(df)
+            patterns = [
+                {"time": p["time"], "pattern": p["pattern"], "bias": p["bias"]}
+                for p in raw_patterns if "time" in p
+            ]
+        except Exception:
+            patterns = []
+
+        try:
+            support_resistance = detect_support_resistance(df)
+        except Exception:
+            support_resistance = []
+
+        return jsonify({
+            "coin": coin,
+            "timeframe": timeframe,
+            "candles": candles,
+            "patterns": patterns,
+            "support_resistance": support_resistance,
+            "last_price": round(last_price, 8),
+            "change_pct": change_pct,
+            "server_time": int(time.time()),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ============================================================
+# NEW (v8): /liquidity  -->  "LIQUIDITY SCANNER" tab (Ch.19-27) ke liye
+#
+# Ye endpoint /signal se ALAG rakha gaya hai jaan-boojh kar: /signal
+# heavy hai (HMM fit + RandomForest fit har baar), jabke ye endpoint
+# har ~12-15 sec par frontend se auto-poll ho sakta hai taake scanner
+# "dynamic"/live mehsoos ho, bina baar-baar poore 19-channel analysis
+# ko dobara chalaye. Verdict/confidence logic ko bilkul touch nahi karta.
+#
+# PATCH: har sub-calculation ab apne alag try/except mein hai (jaisa
+# generate_signal() mein pehle se ho raha tha) - taake ek panel ka
+# fail hona poore route ko 400 na de de. Sirf candle-fetch fail hone
+# par (invalid coin/timeframe) 400 aata hai, aur us waqt exact wajah
+# error message mein saaf batayi jati hai.
+# ============================================================
+@app.route("/liquidity", methods=["GET"])
+def liquidity_endpoint():
+    coin = request.args.get("coin", "BTC/USDT")
+    timeframe = request.args.get("timeframe", "1h")
+    is_forex = _is_forex_pair(coin)
+
+    try:
+        df = get_candles(symbol=coin, timeframe=timeframe, limit=120)
+        current_price = float(df["close"].iloc[-1])
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"candle fetch failed: {e}"}), 400
+
+    # Forex: no free order book source, so `ob` stays empty and every
+    # order-book-dependent block below (each already in its own
+    # try/except) degrades to its error/None shape instead of crashing.
+    # The price-action parts (sweep detector, CVD, jump/CUSUM) still run
+    # normally off `df`, so the main Liquidity Sweep Scanner visual and
+    # a few of the extra cards keep working for forex too.
+    if is_forex:
+        ob = {"bids": [], "asks": [], "error": "order book not available for forex"}
+    else:
+        try:
+            ob = _clean_order_book(exchange.fetch_order_book(coin, limit=50))
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            ob = {"bids": [], "asks": [], "error": str(e)}
+
+    try:
+        sweep_data = liquidity_sweep_detector(df)
+    except Exception as e:
+        sweep_data = {"liquidity_sweep_detected": None, "error": str(e)}
+
+    try:
+        buying_pressure, selling_pressure = hawkes_pressure(df)
+    except Exception as e:
+        buying_pressure, selling_pressure = None, None
+
+    try:
+        ofi_data = order_flow_imbalance(coin, snapshot_gap_sec=0.6)
+    except Exception as e:
+        ofi_data = {"ofi_score": None, "error": str(e)}
+
+    try:
+        depth_data = order_book_depth_profile(coin, depth=20, order_book=ob)
+    except Exception as e:
+        depth_data = {"depth_slope": None, "wall_bias": None, "error": str(e)}
+
+    try:
+        vpin_data = vpin_toxicity(coin)
+    except Exception as e:
+        vpin_data = {"vpin_score": None, "error": str(e)}
+
+    try:
+        jump_data = jump_diffusion_detector(df)
+    except Exception as e:
+        jump_data = {"jump_detected": None, "error": str(e)}
+
+    try:
+        cusum_data = cusum_structural_break(df)
+    except Exception as e:
+        cusum_data = {"structural_break": None, "error": str(e)}
+
+    try:
+        cvd_data = cvd_volume_delta(df)
+    except Exception as e:
+        cvd_data = {"cvd": None, "trend": None, "series": [], "error": str(e)}
+
+    try:
+        funding_data = funding_open_interest(coin)
+    except Exception as e:
+        funding_data = {"available": False, "error": str(e)}
+
+    try:
+        magnet_target = liquidity_magnet_and_target(current_price, ob, sweep_data=sweep_data)
+    except Exception as e:
+        magnet_target = {"magnet": None, "likely_target": None, "error": str(e)}
+
+    try:
+        strength_data = market_strength_score(
+            buying_pressure, selling_pressure,
+            ofi_data.get("ofi_score"), depth_data.get("depth_slope"), vpin_data.get("vpin_score"),
+        )
+    except Exception as e:
+        strength_data = {"score": None, "label": None, "error": str(e)}
+
+    try:
+        trap_squeeze_data = trap_and_squeeze_risk(sweep_data, ofi_data, depth_data, funding_data)
+    except Exception as e:
+        trap_squeeze_data = {"bull_trap": 0, "bear_trap": 0, "short_squeeze": 0, "long_squeeze": 0, "error": str(e)}
+
+    try:
+        zones = liquidity_target_zones(ob, current_price)
+    except Exception as e:
+        zones = []
+
+    try:
+        spoof_data = possible_spoofing_detector(coin, ob)
+    except Exception as e:
+        spoof_data = {"available": False, "spoof_detected": False, "error": str(e)}
+
+    try:
+        crash_data = market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cvd_data)
+    except Exception as e:
+        crash_data = {"score": None, "label": None, "factors": [], "error": str(e)}
+
+    return jsonify({
+        "coin": coin,
+        "last_price": round(current_price, 6),
+        "liquidity_sweep": sweep_data,
+        "magnet": magnet_target.get("magnet"),
+        "likely_target": magnet_target.get("likely_target"),
+        "market_strength": strength_data,
+        "possible_spoofing": spoof_data,
+        "trap_squeeze": trap_squeeze_data,
+        "liquidity_zones": zones,
+        "funding_open_interest": funding_data,
+        "cvd": cvd_data,
+        "crash_risk": crash_data,
+        "server_time": int(time.time()),
+    })
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    # Production mein debug hamesha OFF rehna chahiye - warna crash hone par
+    # poora Python code/file paths users ko dikh jate hain (security risk).
+    # Local testing ke liye FLASK_DEBUG=1 environment variable set kar sakte hain.
+    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)
