@@ -6,98 +6,214 @@
 <title>Signals FM — Demo Trading</title>
 <link rel="stylesheet" href="/static/style.css?v=20260804-ind-1">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  body { align-items: stretch; }
-  .demo-wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px; width: 100%; }
-  .demo-top { display:flex; align-items:center; justify-content:space-between; margin-bottom: 22px; flex-wrap: wrap; gap:12px; }
-  .demo-top h1 { font-family: var(--heading); font-size: 22px; margin: 0; display:flex; align-items:center; gap:10px; }
-  .back-link { font-family: var(--mono); font-size: 12px; color: var(--text-dim); text-decoration:none; display:flex; align-items:center; gap:6px; }
-  .badge-demo { font-family: var(--mono); font-size: 10px; color: var(--wait); background: var(--wait-dim); padding: 4px 9px; border-radius: 5px; }
+/* ── Page overrides on top of style.css ──────────────── */
+body { align-items: stretch; }
 
-  .demo-grid { display:grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items:start; }
-  @media (max-width: 880px) { .demo-grid { grid-template-columns: 1fr; } }
+.demo-wrap {
+  max-width: 1120px; margin: 0 auto;
+  padding: 28px 24px 72px; width: 100%;
+}
 
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
-  .panel h2 { font-family: var(--heading); font-size: 14px; margin: 0 0 16px; color: var(--text-dim); }
+/* ── Top bar ─────────────────────────────────────────── */
+.demo-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 28px; flex-wrap: wrap; gap: 14px;
+}
+.demo-heading {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--heading); font-size: 20px; font-weight: 700;
+  color: var(--text); margin: 0;
+}
+.demo-heading img { height: 26px; width: auto; }
+.badge-sim {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 800;
+  letter-spacing: .6px; text-transform: uppercase;
+  color: var(--wait); background: var(--wait-dim);
+  border: 1px solid rgba(255,200,87,.2);
+  padding: 4px 10px; border-radius: 6px;
+}
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 11.5px; color: var(--text-dim);
+  text-decoration: none; border: 1px solid var(--line);
+  padding: 7px 14px; border-radius: 7px;
+  transition: color .15s, border-color .15s;
+}
+.back-link:hover { color: var(--text); border-color: var(--line-soft); }
 
-  .balance-row { display:grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 20px; }
-  .bstat { background: var(--panel-raised); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; }
-  .bstat .k { font-family: var(--mono); font-size: 9.5px; color: var(--text-faint); text-transform:uppercase; letter-spacing:0.4px; }
-  .bstat .v { font-family: var(--mono); font-size: 17px; font-weight:700; margin-top:4px; }
+/* ── Layout grid ─────────────────────────────────────── */
+.demo-grid {
+  display: grid; grid-template-columns: 1.35fr 1fr;
+  gap: 20px; align-items: start;
+}
+@media (max-width: 880px) { .demo-grid { grid-template-columns: 1fr; } }
 
-  .coin-row { display:flex; align-items:center; justify-content:space-between; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
-  .coin-row:last-child { border-bottom: none; }
-  .coin-name { font-family: var(--mono); font-weight:700; font-size:13px; }
-  .coin-price { font-family: var(--mono); font-size: 13px; }
-  .coin-change.pos { color: var(--long); } .coin-change.neg { color: var(--short); }
+/* ── Panel card ──────────────────────────────────────── */
+.demo-panel {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 22px;
+}
+.demo-panel-title {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .7px; text-transform: uppercase;
+  color: var(--text-faint); margin: 0 0 18px;
+}
 
-  select, input[type=number] {
-    width: 100%; background: var(--panel-raised); border: 1px solid var(--line); border-radius: 7px;
-    color: var(--text); padding: 10px 12px; font-family: var(--mono); font-size: 13px; margin-bottom: 12px;
-  }
-  label { font-family: var(--mono); font-size: 11px; color: var(--text-dim); display:block; margin-bottom:6px; }
-  .trade-btns { display:flex; gap: 10px; }
-  .trade-btns button {
-    flex: 1; padding: 12px 0; border-radius: 8px; border: none; font-family: var(--mono); font-weight:700; font-size:12.5px; cursor:pointer;
-  }
-  .btn-buy { background: var(--long); color: #06231a; }
-  .btn-sell { background: var(--short); color: #2a0810; }
-  .trade-msg { font-size: 12px; margin-top: 10px; min-height: 16px; }
-  .trade-msg.ok { color: var(--long); }
-  .trade-msg.error { color: var(--short); }
+/* ── Live prices list ────────────────────────────────── */
+.coin-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--line-soft);
+}
+.coin-row:last-child { border-bottom: none; }
+.coin-left { display: flex; align-items: center; gap: 8px; }
+.coin-icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--panel-raised); display: flex; align-items: center;
+  justify-content: center; font-family: var(--mono); font-size: 8px;
+  font-weight: 800; color: var(--text-dim); flex-shrink: 0;
+}
+.coin-name { font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--text); }
+.coin-price { font-family: var(--mono); font-size: 13px; color: var(--text); font-weight: 600; }
+.coin-change { font-family: var(--mono); font-size: 11.5px; font-weight: 700; }
+.coin-change.pos { color: var(--long); }
+.coin-change.neg { color: var(--short); }
 
-  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
-  th { text-align:left; color: var(--text-faint); font-size: 10px; text-transform:uppercase; letter-spacing:0.4px; padding-bottom: 10px; }
-  td { padding: 9px 0; border-top: 1px solid var(--line-soft); }
-  .empty-state { color: var(--text-faint); font-size: 12.5px; padding: 20px 0; text-align:center; }
-  .reset-link { font-family: var(--mono); font-size: 11px; color: var(--text-faint); text-decoration:none; cursor:pointer; }
+/* ── Stats row ───────────────────────────────────────── */
+.balance-row {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 10px; margin-bottom: 20px;
+}
+.bstat {
+  background: var(--panel-raised); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px;
+}
+.bstat .k {
+  font-family: var(--mono); font-size: 9px; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-faint);
+}
+.bstat .v { font-family: var(--mono); font-size: 16px; font-weight: 800; margin-top: 4px; }
+
+/* ── Form controls ───────────────────────────────────── */
+.field-label {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .5px; text-transform: uppercase;
+  color: var(--text-dim); display: block; margin-bottom: 6px;
+}
+.demo-select, .demo-input {
+  width: 100%; background: var(--panel-raised); border: 1px solid var(--line);
+  border-radius: 8px; color: var(--text); padding: 10px 12px;
+  font-family: var(--mono); font-size: 13px; margin-bottom: 14px;
+  outline: none; transition: border-color .2s;
+  -webkit-appearance: none; appearance: none;
+}
+.demo-select:focus, .demo-input:focus { border-color: var(--long); }
+
+/* ── Trade buttons ───────────────────────────────────── */
+.trade-btns { display: flex; gap: 10px; }
+.trade-btns button {
+  flex: 1; padding: 12px 0; border-radius: 9px; border: none;
+  font-family: var(--mono); font-weight: 800; font-size: 12.5px;
+  letter-spacing: .4px; cursor: pointer; transition: filter .18s, transform .12s;
+}
+.trade-btns button:hover { filter: brightness(1.1); }
+.trade-btns button:active { transform: scale(.97); }
+.btn-buy  { background: var(--long);  color: #051a10; }
+.btn-sell { background: var(--short); color: #1f0409; }
+
+/* ── Trade feedback ──────────────────────────────────── */
+.trade-msg { font-family: var(--mono); font-size: 11.5px; margin-top: 10px; min-height: 16px; }
+.trade-msg.ok    { color: var(--long); }
+.trade-msg.error { color: var(--short); }
+
+/* ── Positions table ─────────────────────────────────── */
+.pos-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+.pos-table th {
+  text-align: left; color: var(--text-faint); font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: .5px; padding-bottom: 10px; font-weight: 700;
+}
+.pos-table td { padding: 9px 0; border-top: 1px solid var(--line-soft); color: var(--text); }
+.pos-empty { color: var(--text-faint); font-family: var(--mono); font-size: 12px; padding: 20px 0; text-align: center; }
+
+.reset-link {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .3px;
+  color: var(--text-faint); text-decoration: none; cursor: pointer;
+  transition: color .15s;
+}
+.reset-link:hover { color: var(--short); }
 </style>
 </head>
 <body>
 
 <div class="demo-wrap">
-  <div class="demo-top">
-    <h1><img src="{{ url_for('static', filename='logo.png') }}" alt="" style="height:24px;"> Demo Trading <span class="badge-demo">SIMULATED · NOT REAL MONEY</span></h1>
+  <!-- Top bar -->
+  <div class="demo-topbar">
+    <h1 class="demo-heading">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="">
+      Demo Trading
+      <span class="badge-sim">SIMULATED · NOT REAL MONEY</span>
+    </h1>
     <a href="/" class="back-link">← Back to dashboard</a>
   </div>
 
   <div class="demo-grid">
-    <div class="panel">
-      <h2>Live Prices</h2>
-      <div id="coin-list"><div class="empty-state">Loading live prices…</div></div>
+
+    <!-- Live prices -->
+    <div class="demo-panel">
+      <div class="demo-panel-title">Live Prices</div>
+      <div id="coin-list"><div class="pos-empty">Loading live prices…</div></div>
     </div>
 
-    <div>
-      <div class="panel" style="margin-bottom:16px;">
-        <h2>Demo Portfolio</h2>
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <!-- Portfolio stats + trade form -->
+      <div class="demo-panel">
+        <div class="demo-panel-title">Demo Portfolio</div>
         <div class="balance-row">
-          <div class="bstat"><div class="k">Cash (USD)</div><div class="v" id="stat-cash">$0.00</div></div>
-          <div class="bstat"><div class="k">Holdings Value</div><div class="v" id="stat-holdings">$0.00</div></div>
-          <div class="bstat"><div class="k">Total P/L</div><div class="v" id="stat-pl">$0.00</div></div>
+          <div class="bstat">
+            <div class="k">Cash (USD)</div>
+            <div class="v" id="stat-cash">$0.00</div>
+          </div>
+          <div class="bstat">
+            <div class="k">Holdings</div>
+            <div class="v" id="stat-holdings">$0.00</div>
+          </div>
+          <div class="bstat">
+            <div class="k">Total P/L</div>
+            <div class="v" id="stat-pl">$0.00</div>
+          </div>
         </div>
 
-        <label>Coin</label>
-        <select id="trade-coin"></select>
-        <label>Amount (USD)</label>
-        <input type="number" id="trade-amount" placeholder="e.g. 500" min="1" step="0.01">
+        <label class="field-label">Select Coin</label>
+        <select class="demo-select" id="trade-coin"></select>
+
+        <label class="field-label">Amount (USD)</label>
+        <input class="demo-input" type="number" id="trade-amount" placeholder="e.g. 500" min="1" step="0.01">
+
         <div class="trade-btns">
-          <button class="btn-buy" id="buy-btn">BUY</button>
-          <button class="btn-sell" id="sell-btn">SELL</button>
+          <button class="btn-buy"  id="buy-btn">▲ BUY</button>
+          <button class="btn-sell" id="sell-btn">▼ SELL</button>
         </div>
         <div class="trade-msg" id="trade-msg"></div>
       </div>
 
-      <div class="panel">
-        <h2>Your Positions</h2>
-        <table id="positions-table">
-          <thead><tr><th>Coin</th><th>Qty</th><th>Avg Cost</th><th>Value</th></tr></thead>
+      <!-- Open positions -->
+      <div class="demo-panel">
+        <div class="demo-panel-title">Your Positions</div>
+        <table class="pos-table" id="positions-table">
+          <thead>
+            <tr>
+              <th>Coin</th><th>Qty</th><th>Avg Cost</th><th>Value</th>
+            </tr>
+          </thead>
           <tbody id="positions-body"></tbody>
         </table>
-        <div style="text-align:right; margin-top:12px;">
-          <a class="reset-link" id="reset-link">Reset demo portfolio</a>
+        <div style="text-align:right;margin-top:14px;">
+          <a class="reset-link" id="reset-link">↺ Reset portfolio</a>
         </div>
       </div>
+
     </div>
   </div>
 </div>
