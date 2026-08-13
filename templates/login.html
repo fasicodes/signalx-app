@@ -5,232 +5,294 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Login</title>
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --void: #070a0f;
-    --panel: #11161e;
-    --panel-raised: #151b24;
-    --line: #27303b;
-    --text: #e9eef5;
-    --text-dim: #8b96a5;
-    --text-faint: #566171;
-    --accent: #f5a623;
-    --mono: "IBM Plex Mono", "JetBrains Mono", monospace;
-    --heading: "Poppins", "Space Grotesk", "Segoe UI", Arial, sans-serif;
-  }
-  html[data-theme="light"] {
-    --void: #f4f8f6; --panel: #ffffff; --panel-raised: #eef4f1; --line: #dbe6e0;
-    --text: #0d1c15; --text-dim: #4c5f56; --text-faint: #7c8d84; --accent: #16a34a;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--void);
-    font-family: var(--heading);
-    color: var(--text);
-  }
-  .auth-wrap {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }
-  .auth-card {
-    width: 100%;
-    max-width: 420px;
-    background: linear-gradient(155deg, rgba(52,211,153,0.14), rgba(17,22,30,0.4) 40%), var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    padding: 40px 34px 32px;
-    position: relative;
-    overflow: hidden;
-  }
-  .auth-card::before {
-    content: "";
-    position: absolute;
-    top: -60px; left: -40px;
-    width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(52,211,153,0.35), transparent 70%);
-    filter: blur(10px);
-    pointer-events: none;
-  }
-  .auth-title { font-size: 28px; font-weight: 700; margin: 0 0 6px; position: relative; }
-  .auth-sub { color: var(--text-dim); font-size: 14px; margin: 0 0 28px; position: relative; }
+/* ── Tokens ─────────────────────────────────────────── */
+:root {
+  --bg:#06090c; --surface:#0f151c; --surface2:#141c26;
+  --border:#1e2a38; --border2:#263548;
+  --text:#dce8f5; --text2:#7a93aa; --text3:#3d5268;
+  --green:#00e5a0; --green-dim:rgba(0,229,160,.12); --red:#ff4d6a;
+  --mono:"IBM Plex Mono",monospace; --display:"Syne",sans-serif; --body:"Inter",sans-serif;
+}
+html[data-theme="light"] {
+  --bg:#f0f4f8; --surface:#ffffff; --surface2:#f4f7fb;
+  --border:#d1dce8; --border2:#b8c8d8;
+  --text:#0d1f2d; --text2:#4a6070; --text3:#8fa4b4;
+  --green:#00995f; --green-dim:rgba(0,153,95,.1); --red:#cc2241;
+}
 
-  .auth-tabs { display: flex; gap: 4px; margin-bottom: 22px; background: var(--panel-raised); border-radius: 8px; padding: 4px; position: relative; }
-  .auth-tab { flex: 1; text-align: center; padding: 9px 0; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.4px; color: var(--text-dim); border-radius: 6px; cursor: pointer; user-select: none; }
-  .auth-tab.active { background: var(--accent); color: var(--void); }
+/* ── Base ────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;}
+body {
+  margin:0; min-height:100vh;
+  display:flex; align-items:center; justify-content:center;
+  padding:24px; background:var(--bg); color:var(--text);
+  font-family:var(--body); -webkit-font-smoothing:antialiased;
+  /* subtle grid */
+  background-image:
+    linear-gradient(var(--border) 1px,transparent 1px),
+    linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:44px 44px;
+  background-color:var(--bg);
+  position:relative;
+}
+body::before {
+  content:""; position:fixed; inset:0; pointer-events:none;
+  background:radial-gradient(circle at 20% 30%,rgba(0,229,160,.07),transparent 40%);
+}
 
-  .field-group { margin-bottom: 14px; position: relative; }
-  .field-label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
-  .field-row {
-    display: flex; align-items: center; gap: 10px;
-    background: var(--panel-raised); border: 1px solid var(--line);
-    border-radius: 12px; padding: 4px 4px 4px 16px;
-  }
-  .field-row input {
-    flex: 1; background: transparent; border: none; outline: none;
-    color: var(--text); font-size: 15px; font-family: var(--heading);
-    padding: 12px 0;
-  }
-  .field-row input::placeholder { color: var(--text-faint); }
-  .go-btn {
-    width: 40px; height: 40px; min-width: 40px; border-radius: 50%; border: none;
-    background: linear-gradient(135deg, #34d399, #22c1c3);
-    color: var(--void); display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 16px;
-  }
-  .go-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* ── Theme toggle ────────────────────────────────────── */
+.theme-btn {
+  position:fixed; top:18px; right:18px; z-index:20;
+  width:36px; height:36px; border-radius:8px;
+  border:1px solid var(--border); background:var(--surface);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--text2); transition:all .15s;
+}
+.theme-btn:hover{color:var(--text); border-color:var(--border2);}
+.theme-btn svg{width:15px;height:15px;}
 
-  .divider { display: flex; align-items: center; gap: 12px; color: var(--text-faint); font-size: 11px; letter-spacing: 0.5px; margin: 22px 0; }
-  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+/* ── Auth card ───────────────────────────────────────── */
+.auth-card {
+  position:relative; z-index:1;
+  width:100%; max-width:430px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:20px; padding:36px 32px 28px;
+  box-shadow:0 32px 72px rgba(0,0,0,.55);
+}
+.auth-card::before {
+  content:""; position:absolute; top:-70px; left:-50px;
+  width:260px; height:260px;
+  background:radial-gradient(circle,rgba(0,229,160,.2),transparent 65%);
+  pointer-events:none; z-index:0;
+}
 
-  .oauth-btn {
-    width: 100%; display: flex; align-items: center; gap: 12px;
-    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 12px;
-    padding: 13px 16px; color: var(--text); font-size: 14px; cursor: pointer; margin-bottom: 12px;
-  }
-  .oauth-btn .arrow { margin-left: auto; color: var(--text-faint); }
-  .oauth-btn svg { width: 18px; height: 18px; }
+/* ── Brand row ───────────────────────────────────────── */
+.brand-row{display:flex;align-items:center;gap:10px;margin-bottom:24px;position:relative;z-index:1;}
+.brand-row img{height:30px;width:auto;}
+.brand-name{font-family:var(--display);font-size:16px;font-weight:800;color:var(--text);}
 
-  .auth-footer { text-align: center; font-size: 13px; color: var(--text-dim); margin-top: 20px; }
-  .auth-footer a { color: var(--accent); text-decoration: none; cursor: pointer; font-weight: 600; }
+/* ── Tab switcher ────────────────────────────────────── */
+.auth-tabs {
+  display:flex; gap:4px; padding:4px;
+  background:var(--surface2); border-radius:9px;
+  margin-bottom:22px; position:relative; z-index:1;
+}
+.auth-tab {
+  flex:1; text-align:center; padding:9px 0;
+  font-family:var(--mono); font-size:11.5px; font-weight:700;
+  letter-spacing:.5px; color:var(--text2); border-radius:6px;
+  cursor:pointer; user-select:none; transition:all .18s;
+}
+.auth-tab.active{background:var(--green); color:#02130b;}
 
-  .auth-msg { margin-top: 14px; font-size: 13px; text-align: center; min-height: 18px; }
-  .auth-msg.error { color: #f5615c; }
-  .auth-msg.ok { color: #36e0a0; }
+/* ── Form titles ─────────────────────────────────────── */
+.auth-title{
+  font-family:var(--display); font-size:23px; font-weight:800;
+  letter-spacing:-.4px; margin:0 0 5px; position:relative; z-index:1;
+}
+.auth-sub{color:var(--text2);font-size:13.5px;margin:0 0 24px;position:relative;z-index:1;}
 
-  .auth-form { display: none; }
-  .auth-form.active { display: block; }
+/* ── Fields ──────────────────────────────────────────── */
+.field-group{margin-bottom:14px;position:relative;z-index:1;}
+.field-label{
+  display:block; font-family:var(--mono); font-size:10.5px;
+  font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  color:var(--text2); margin-bottom:7px;
+}
+.field-row{
+  display:flex; align-items:center; gap:8px;
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:11px; padding:4px 4px 4px 14px;
+  transition:border-color .2s, box-shadow .2s;
+}
+.field-row:focus-within{border-color:var(--green); box-shadow:0 0 0 3px rgba(0,229,160,.1);}
+.field-row input{
+  flex:1; background:transparent; border:none; outline:none;
+  color:var(--text); font-family:var(--body); font-size:14.5px;
+  padding:10px 0;
+}
+.field-row input::placeholder{color:var(--text3);}
+.go-btn{
+  width:38px; height:38px; min-width:38px; border-radius:8px; border:none;
+  background:var(--green); color:#02130b;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-size:15px; font-weight:700;
+  transition:filter .18s;
+}
+.go-btn:hover{filter:brightness(1.1);}
+.go-btn:disabled{opacity:.45; cursor:not-allowed; filter:none;}
+
+/* ── Forgot link ─────────────────────────────────────── */
+.forgot-row{text-align:right;margin-bottom:14px;position:relative;z-index:1;}
+.forgot-link{font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;text-decoration:none;transition:color .15s;}
+.forgot-link:hover{color:var(--green);}
+
+/* ── Divider ─────────────────────────────────────────── */
+.divider{
+  display:flex;align-items:center;gap:12px;
+  color:var(--text3);font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.5px;margin:20px 0;position:relative;z-index:1;
+}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border);}
+
+/* ── OAuth button ────────────────────────────────────── */
+.oauth-btn{
+  width:100%;display:flex;align-items:center;gap:12px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:11px;
+  padding:12px 16px;color:var(--text);font-family:var(--body);font-size:14px;
+  cursor:pointer;margin-bottom:10px;transition:border-color .18s,background .18s;
+}
+.oauth-btn:hover{background:var(--surface);border-color:var(--border2);}
+.oauth-btn svg{width:18px;height:18px;flex-shrink:0;}
+.oauth-btn .arrow{margin-left:auto;color:var(--text3);}
+
+/* ── Footer link ─────────────────────────────────────── */
+.auth-footer{text-align:center;font-size:13px;color:var(--text2);margin-top:18px;position:relative;z-index:1;}
+.auth-footer a{color:var(--green);cursor:pointer;font-weight:600;text-decoration:none;}
+.auth-footer a:hover{text-decoration:underline;}
+
+/* ── Checkbox area ───────────────────────────────────── */
+.terms-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;position:relative;z-index:1;}
+.terms-row input{margin-top:3px;accent-color:var(--green);cursor:pointer;flex-shrink:0;}
+.terms-row label{font-size:12px;color:var(--text2);cursor:pointer;line-height:1.55;}
+.terms-row a{color:var(--green);text-decoration:none;}
+
+/* ── Password hint ───────────────────────────────────── */
+.pw-hint{font-family:var(--mono);font-size:10.5px;color:var(--text3);margin-top:5px;}
+
+/* ── Message ─────────────────────────────────────────── */
+.auth-msg{font-family:var(--mono);font-size:12px;text-align:center;min-height:18px;margin-top:12px;position:relative;z-index:1;line-height:1.5;}
+.auth-msg.error{color:var(--red);}
+.auth-msg.ok{color:var(--green);}
+
+/* ── Disclaimer ──────────────────────────────────────── */
+.auth-disclaimer{
+  text-align:center;font-family:var(--mono);font-size:10px;
+  color:var(--text3);margin-top:22px;line-height:1.7;
+  position:relative;z-index:1;
+}
+.auth-disclaimer a{color:var(--text3);text-decoration:none;}
+.auth-disclaimer a:hover{color:var(--text2);}
+
+/* ── Form visibility ─────────────────────────────────── */
+.auth-form{display:none;}
+.auth-form.active{display:block;}
 </style>
 </head>
 <body>
 
-<button type="button" id="theme-toggle-btn" title="Toggle light/dark mode" style="position:fixed; top:20px; right:20px; width:38px;height:38px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;">
-  <svg id="theme-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+<button class="theme-btn" id="theme-toggle-btn" aria-label="Toggle theme">
+  <svg id="theme-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
 </button>
 
-<div class="auth-wrap">
-  <div class="auth-card">
+<div class="auth-card">
 
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:22px;">
-      <img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM" style="height:32px; width:auto;">
-      <span style="font-family:var(--heading); font-size:17px; font-weight:700;">Signals FM</span>
-    </div>
-
-    <div class="auth-tabs">
-      <div class="auth-tab active" id="tab-login">LOGIN</div>
-      <div class="auth-tab" id="tab-signup">SIGN UP</div>
-    </div>
-
-    <!-- LOGIN -->
-    <form class="auth-form active" id="login-form">
-      <h1 class="auth-title">Welcome back</h1>
-      <p class="auth-sub">Sign in to your account</p>
-
-      <div class="field-group">
-        <label class="field-label">Email</label>
-        <div class="field-row">
-          <input type="email" id="login-email" placeholder="username@gmail.com" autocomplete="email" required>
-        </div>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label">Password</label>
-        <div class="field-row">
-          <input type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password" required>
-          <button type="submit" class="go-btn" id="login-btn" aria-label="Login">→</button>
-        </div>
-      </div>
-
-      <div style="text-align:right; margin-bottom:14px;">
-        <a id="go-forgot" style="font-size:12px; color:var(--text-dim); cursor:pointer; text-decoration:none;">Forgot password?</a>
-      </div>
-
-      <div class="divider">OR</div>
-
-      <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/google/login'">
-        <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.54-5.17 3.54-8.65z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.88-3c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.31 14.33c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.68H1.3A11.98 11.98 0 000 12.05c0 1.94.46 3.77 1.3 5.37l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.3 6.68l4.01 3.09c.94-2.82 3.58-5.02 6.69-5.02z"/></svg>
-        Continue with Google
-        <span class="arrow">→</span>
-      </button>
-
-      <div class="auth-footer">Don't have an account? <a id="go-signup">Sign up</a></div>
-    </form>
-
-    <!-- FORGOT PASSWORD -->
-    <form class="auth-form" id="forgot-form">
-      <h1 class="auth-title">Reset password</h1>
-      <p class="auth-sub">Enter your email and we'll send you a reset link</p>
-
-      <div class="field-group">
-        <label class="field-label">Email</label>
-        <div class="field-row">
-          <input type="email" id="forgot-email" placeholder="username@gmail.com" autocomplete="email" required>
-          <button type="submit" class="go-btn" id="forgot-btn" aria-label="Send reset link">→</button>
-        </div>
-      </div>
-
-      <div class="auth-footer"><a id="go-login-from-forgot">Back to login</a></div>
-    </form>
-
-    <!-- SIGNUP -->
-    <form class="auth-form" id="signup-form">
-      <h1 class="auth-title">Create account</h1>
-      <p class="auth-sub">Sign up to get started</p>
-
-      <div class="field-group">
-        <label class="field-label">Email</label>
-        <div class="field-row">
-          <input type="email" id="signup-email" placeholder="username@gmail.com" autocomplete="email" required>
-        </div>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label">Password</label>
-        <div class="field-row">
-          <input type="password" id="signup-password" placeholder="At least 8 characters" autocomplete="new-password" required>
-        </div>
-        <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">
-          ⚠️ Create a new password for this site. This is <b>not</b> your Gmail/email account password.
-        </div>
-      </div>
-
-      <div class="field-group">
-        <label class="field-label">Confirm password</label>
-        <div class="field-row">
-          <input type="password" id="signup-confirm" placeholder="Re-enter your password" autocomplete="new-password" required>
-          <button type="submit" class="go-btn" id="signup-btn" aria-label="Sign up" disabled>→</button>
-        </div>
-      </div>
-
-      <div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:18px;">
-        <input type="checkbox" id="agree-terms" style="margin-top:3px; accent-color:var(--accent); cursor:pointer;">
-        <label for="agree-terms" style="font-size:12px; color:var(--text-dim); cursor:pointer; line-height:1.5;">
-          I agree to the <a href="/terms" target="_blank" style="color:var(--accent);">Terms &amp; Conditions</a> and <a href="/privacy" target="_blank" style="color:var(--accent);">Privacy Policy</a>
-        </label>
-      </div>
-
-      <div class="divider">OR</div>
-
-      <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/google/login'">
-        <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.54-5.17 3.54-8.65z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.88-3c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.31 14.33c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.68H1.3A11.98 11.98 0 000 12.05c0 1.94.46 3.77 1.3 5.37l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.3 6.68l4.01 3.09c.94-2.82 3.58-5.02 6.69-5.02z"/></svg>
-        Continue with Google
-        <span class="arrow">→</span>
-      </button>
-
-      <div class="auth-footer">Already have an account? <a id="go-login">Login</a></div>
-    </form>
-
-    <div class="auth-msg" id="auth-msg"></div>
-
-    <div style="text-align:center; font-size:11px; color:var(--text-faint); margin-top:24px; line-height:1.6;">
-      Trading involves risk. Signals are for informational purposes only and are not financial advice.<br>
-      By continuing you agree to our <a href="/terms" style="color:var(--text-faint);">Terms</a> &amp; <a href="/privacy" style="color:var(--text-faint);">Privacy Policy</a>.
-    </div>
+  <div class="brand-row">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM">
+    <span class="brand-name">Signals FM</span>
   </div>
+
+  <div class="auth-tabs">
+    <div class="auth-tab active" id="tab-login">LOGIN</div>
+    <div class="auth-tab" id="tab-signup">SIGN UP</div>
+  </div>
+
+  <!-- ── LOGIN ── -->
+  <form class="auth-form active" id="login-form">
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-sub">Sign in to your account</p>
+
+    <div class="field-group">
+      <label class="field-label">Email</label>
+      <div class="field-row">
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" required>
+      </div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Password</label>
+      <div class="field-row">
+        <input type="password" id="login-password" placeholder="Your password" autocomplete="current-password" required>
+        <button type="submit" class="go-btn" id="login-btn" aria-label="Login">→</button>
+      </div>
+    </div>
+    <div class="forgot-row">
+      <a id="go-forgot" class="forgot-link">Forgot password?</a>
+    </div>
+
+    <div class="divider">OR</div>
+    <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/google/login'">
+      <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.54-5.17 3.54-8.65z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.88-3c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.31 14.33c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.68H1.3A11.98 11.98 0 000 12.05c0 1.94.46 3.77 1.3 5.37l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.3 6.68l4.01 3.09c.94-2.82 3.58-5.02 6.69-5.02z"/></svg>
+      Continue with Google
+      <span class="arrow">→</span>
+    </button>
+    <div class="auth-footer">No account? <a id="go-signup">Sign up free</a></div>
+  </form>
+
+  <!-- ── FORGOT ── -->
+  <form class="auth-form" id="forgot-form">
+    <h1 class="auth-title">Reset password</h1>
+    <p class="auth-sub">We'll send a reset link to your email.</p>
+    <div class="field-group">
+      <label class="field-label">Email</label>
+      <div class="field-row">
+        <input type="email" id="forgot-email" placeholder="you@example.com" autocomplete="email" required>
+        <button type="submit" class="go-btn" id="forgot-btn" aria-label="Send reset link">→</button>
+      </div>
+    </div>
+    <div class="auth-footer"><a id="go-login-from-forgot">← Back to login</a></div>
+  </form>
+
+  <!-- ── SIGNUP ── -->
+  <form class="auth-form" id="signup-form">
+    <h1 class="auth-title">Create account</h1>
+    <p class="auth-sub">Get free access to 19-channel signals.</p>
+
+    <div class="field-group">
+      <label class="field-label">Email</label>
+      <div class="field-row">
+        <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email" required>
+      </div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Password</label>
+      <div class="field-row">
+        <input type="password" id="signup-password" placeholder="At least 8 characters" autocomplete="new-password" required>
+      </div>
+      <p class="pw-hint">Create a new password for Signals FM — not your email password.</p>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Confirm Password</label>
+      <div class="field-row">
+        <input type="password" id="signup-confirm" placeholder="Re-enter your password" autocomplete="new-password" required>
+        <button type="submit" class="go-btn" id="signup-btn" aria-label="Sign up" disabled>→</button>
+      </div>
+    </div>
+
+    <div class="terms-row">
+      <input type="checkbox" id="agree-terms">
+      <label for="agree-terms">
+        I agree to the <a href="/terms" target="_blank">Terms &amp; Conditions</a> and <a href="/privacy" target="_blank">Privacy Policy</a>
+      </label>
+    </div>
+
+    <div class="divider">OR</div>
+    <button type="button" class="oauth-btn" onclick="window.location.href='/api/auth/google/login'">
+      <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.54-5.17 3.54-8.65z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.88-3c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.31 14.33c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.68H1.3A11.98 11.98 0 000 12.05c0 1.94.46 3.77 1.3 5.37l4.01-3.09z"/><path fill="#EA4335" d="M12 4.75c1.76 0 3.34.6 4.59 1.79l3.44-3.44C17.94 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.3 6.68l4.01 3.09c.94-2.82 3.58-5.02 6.69-5.02z"/></svg>
+      Continue with Google
+      <span class="arrow">→</span>
+    </button>
+    <div class="auth-footer">Already have an account? <a id="go-login">Log in</a></div>
+  </form>
+
+  <div class="auth-msg" id="auth-msg"></div>
+
+  <div class="auth-disclaimer">
+    Signals are for informational purposes only — not financial advice.<br>
+    By continuing you agree to our <a href="/terms">Terms</a> &amp; <a href="/privacy">Privacy Policy</a>.
+  </div>
+
 </div>
 
 <script>
