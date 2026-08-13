@@ -231,8 +231,12 @@ def track_trade():
 
     # Asset ko whitelist ke against validate karte hain - koi bhi arbitrary
     # string yahan se aage (aur baad mein UI mein) nahi jaani chahiye.
-    from main import AVAILABLE_COINS
-    if asset not in AVAILABLE_COINS:
+    # NOTE: pehle sirf AVAILABLE_COINS (crypto list) check hota tha, jis
+    # wajah se koi bhi forex pair (EUR/USD, USD/JPY, etc.) "Unsupported
+    # asset" error de kar track hi nahi ho pata tha - FOREX_PAIRS ko bhi
+    # whitelist mein shamil kar diya taake forex trades bhi track ho sakein.
+    from main import AVAILABLE_COINS, FOREX_PAIRS
+    if asset not in AVAILABLE_COINS and asset not in FOREX_PAIRS:
         return jsonify({"error": "Unsupported asset"}), 400
     try:
         entry_price = float(entry_price)
