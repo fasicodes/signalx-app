@@ -785,6 +785,18 @@ function renderTier3(data) {
       ${candle.confidence_adjustment ? `<div class="channel-detail ${candle.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${candle.confidence_adjustment > 0 ? "+" : ""}${candle.confidence_adjustment}%</div>` : ""}`
   }));
 
+  const mtf = data.multi_timeframe || {};
+  const mtfTone = mtf.status === "ALIGNED" ? "long" : mtf.status === "AGAINST" ? "short" : "flat";
+  const htf = mtf.higher_timeframes || {};
+  const htfEntries = Object.entries(htf).map(([tf, tr]) => `${tf.toUpperCase()}: ${tr || "N/A"}`).join(" · ");
+  cards.push(channelCard({
+    id: 29, title: "Multi-Timeframe Confirmation", model: "higher-TF EMA trend",
+    body: `
+      ${badge(mtf.status || "NEUTRAL", mtfTone)}
+      <div class="channel-detail">${htfEntries || "no higher-timeframe data"}</div>
+      ${mtf.confidence_adjustment ? `<div class="channel-detail ${mtf.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${mtf.confidence_adjustment > 0 ? "+" : ""}${mtf.confidence_adjustment}%</div>` : ""}`
+  }));
+
   tier3El.innerHTML = cards.join("");
 }
 
