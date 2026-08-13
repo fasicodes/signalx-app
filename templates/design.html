@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Multi-Channel Market Readout</title>
-<link rel="stylesheet" href="/static/style.css?v=20260814-others-menu">
+<link rel="stylesheet" href="/static/style.css?v=20260814-rrcalc">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
@@ -304,6 +304,41 @@
           </div>
         </div>
         <div id="accuracy-history" class="accuracy-history" aria-label="Accuracy history"></div>
+      </div>
+    </section>
+
+    <!-- RISK-REWARD / POSITION SIZE CALCULATOR -->
+    <section class="rr-calc-card" aria-label="Risk-Reward Calculator">
+      <div class="rr-calc-head">
+        <div class="channel-id-group">
+          <span class="scope-ticks"><span style="height:6px"></span><span style="height:10px"></span><span style="height:7px"></span><span style="height:12px"></span><span style="height:5px"></span></span>
+          <div>
+            <div class="channel-id">CH.30</div>
+            <div class="channel-title">Risk-Reward &amp; Position Size Calculator</div>
+          </div>
+        </div>
+        <span class="channel-model">ACCOUNT-BASED SIZING</span>
+      </div>
+      <div class="rr-calc-body">
+        <div class="rr-calc-inputs">
+          <label class="rr-input-group">
+            <span>Account Balance (USDT)</span>
+            <input type="number" id="rr-balance" placeholder="1000" min="0" step="1" />
+          </label>
+          <label class="rr-input-group">
+            <span>Risk per Trade (%)</span>
+            <input type="number" id="rr-risk-pct" placeholder="suggested" min="0.1" max="100" step="0.1" />
+          </label>
+        </div>
+        <div class="rr-calc-outputs" id="rr-calc-outputs">
+          <div class="rr-out-item"><span class="rr-out-label">ENTRY</span><span class="rr-out-value" id="rr-out-entry">--</span></div>
+          <div class="rr-out-item"><span class="rr-out-label">STOP LOSS</span><span class="rr-out-value text-short" id="rr-out-sl">--</span></div>
+          <div class="rr-out-item"><span class="rr-out-label">TAKE PROFIT</span><span class="rr-out-value text-long" id="rr-out-tp">--</span></div>
+          <div class="rr-out-item"><span class="rr-out-label">RISK : REWARD</span><span class="rr-out-value" id="rr-out-rr">--</span></div>
+          <div class="rr-out-item"><span class="rr-out-label">RISK AMOUNT</span><span class="rr-out-value" id="rr-out-riskamt">--</span></div>
+          <div class="rr-out-item"><span class="rr-out-label">POSITION SIZE</span><span class="rr-out-value" id="rr-out-possize">--</span></div>
+        </div>
+        <p class="rr-calc-note" id="rr-calc-note">Run an analysis to auto-fill entry/SL/TP from the current signal — enter your balance to see exact position size.</p>
       </div>
     </section>
 
@@ -952,7 +987,7 @@
 
 </div>
 
-<script src="/static/script.js?v=20260814-sr-others"></script>
+<script src="/static/script.js?v=20260814-rrcalc"></script>
 <script>
 // Standalone controller for the homepage info sidebar (Contact/About/
 // Privacy/Terms/Disclaimer). Fully independent of script.js and the
