@@ -797,6 +797,18 @@ function renderTier3(data) {
       ${mtf.confidence_adjustment ? `<div class="channel-detail ${mtf.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${mtf.confidence_adjustment > 0 ? "+" : ""}${mtf.confidence_adjustment}%</div>` : ""}`
   }));
 
+  const corr = data.correlated_asset || {};
+  if (corr.applicable) {
+    const corrTone = corr.status === "ALIGNED" ? "long" : corr.status === "AGAINST" ? "short" : "flat";
+    cards.push(channelCard({
+      id: 31, title: "Correlated Asset Check (BTC)", model: "BTC trend alignment",
+      body: `
+        ${badge(corr.status || "NEUTRAL", corrTone)}
+        <div class="channel-detail">BTC trend: ${corr.btc_trend || "N/A"}</div>
+        ${corr.confidence_adjustment ? `<div class="channel-detail ${corr.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${corr.confidence_adjustment > 0 ? "+" : ""}${corr.confidence_adjustment}%</div>` : ""}`
+    }));
+  }
+
   tier3El.innerHTML = cards.join("");
 }
 
@@ -2601,6 +2613,101 @@ function recalcRiskReward() {
 if (rrBalanceEl) rrBalanceEl.addEventListener("input", recalcRiskReward);
 if (rrRiskPctEl) rrRiskPctEl.addEventListener("input", recalcRiskReward);
 
+/* ---------------------------- mini chart preview (Run Analysis result page) ---------------------------- */
+
+let miniChart = null;
+let miniCandleSeries = null;
+let miniPatternMarkers = null;
+let miniPriceLines = [];
+
+function ensureMiniChartInitialized() {
+  if (miniChart) return;
+  const container = document.getElementById("mini-chart-container");
+  if (!container || typeof LightweightCharts === "undefined") return;
+
+  miniChart = LightweightCharts.createChart(container, {
+    layout: { background: { type: "solid", color: "transparent" }, textColor: "#8b96a5", fontSize: 10 },
+    grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
+    rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
+    timeScale: { borderColor: "rgba(255,255,255,0.08)", timeVisible: true },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    handleScroll: false,
+    handleScale: false,
+  });
+
+  miniCandleSeries = miniChart.addSeries(LightweightCharts.CandlestickSeries, {
+    upColor: "#36e0a0", downColor: "#ff526b",
+    borderUpColor: "#28f3a5", borderDownColor: "#ff6b7e",
+    wickUpColor: "#36e0a0", wickDownColor: "#ff526b",
+  });
+
+  if (typeof LightweightCharts.createSeriesMarkers === "function") {
+    miniPatternMarkers = LightweightCharts.createSeriesMarkers(miniCandleSeries, []);
+  }
+
+  new ResizeObserver(() => {
+    miniChart.applyOptions({ width: container.clientWidth });
+  }).observe(container);
+}
+
+async function loadMiniChartPreview(data) {
+  const coin = data.coin, timeframe = data.timeframe;
+  if (!coin || !timeframe) return;
+
+  ensureMiniChartInitialized();
+  if (!miniChart) return;
+
+  const subEl = document.getElementById("mini-chart-sub");
+  if (subEl) subEl.textContent = `${coin} · ${timeframe.toUpperCase()}`;
+
+  try {
+    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${encodeURIComponent(timeframe)}&limit=60`);
+    const cData = await res.json();
+    if (!res.ok || !Array.isArray(cData.candles)) return;
+
+    const bars = cData.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+    miniCandleSeries.setData(bars);
+    miniChart.timeScale().fitContent();
+
+    if (miniPatternMarkers) {
+      const markers = (cData.patterns || [])
+        .slice()
+        .sort((a, b) => a.time - b.time)
+        .map((p) => {
+          const style = PATTERN_MARKER_STYLE[p.bias] || PATTERN_MARKER_STYLE.neutral;
+          return { time: p.time, position: style.position, color: style.color, shape: style.shape, text: p.pattern };
+        });
+      miniPatternMarkers.setMarkers(markers);
+    }
+
+    miniPriceLines.forEach((line) => { try { miniCandleSeries.removePriceLine(line); } catch (e) {} });
+    miniPriceLines = [];
+    const verdict = (data.final_verdict || "").toUpperCase();
+    if (verdict !== "WAIT") {
+      if (!na(data.last_price)) {
+        miniPriceLines.push(miniCandleSeries.createPriceLine({
+          price: data.last_price, color: "#8b96a5", lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: true, title: "ENTRY",
+        }));
+      }
+      if (!na(data.stop_loss)) {
+        miniPriceLines.push(miniCandleSeries.createPriceLine({
+          price: data.stop_loss, color: "#ff526b", lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "SL",
+        }));
+      }
+      if (!na(data.take_profit)) {
+        miniPriceLines.push(miniCandleSeries.createPriceLine({
+          price: data.take_profit, color: "#36e0a0", lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "TP",
+        }));
+      }
+    }
+  } catch (e) {
+    /* mini chart preview is best-effort - main signal result stays unaffected */
+  }
+}
+
 /* ---------------------------- main render ---------------------------- */
 
 function renderResult(data) {
@@ -2613,10 +2720,17 @@ function renderResult(data) {
   if (data.fake_breakout_warning) {
     addAlert("warning", "FAKE BREAKOUT RISK — order flow disagrees with price direction");
   }
+  const fundingWarn = data.funding_event_warning || {};
+  if (fundingWarn.risk_level === "EXTREME" && fundingWarn.message) {
+    addAlert("danger", "⚠ " + fundingWarn.message);
+  } else if (fundingWarn.risk_level === "ELEVATED" && fundingWarn.message) {
+    addAlert("warning", "⚠ " + fundingWarn.message);
+  }
 
   renderHero(data);
   renderAccuracyScore(data);
   renderRiskRewardCalc(data);
+  loadMiniChartPreview(data);
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
