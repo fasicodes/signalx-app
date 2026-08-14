@@ -657,6 +657,36 @@ def multi_timeframe_confirmation(symbol, base_timeframe, final_verdict):
 
 
 # ============================================================
+# CORRELATED ASSET CHECK (NEW) — altcoins mostly BTC ke pichay chalte
+# hain. Agar koi altcoin ka signal BTC ke overall trend ke khilaf ho,
+# to poori market girne/uthne se wo altcoin bhi affect ho sakta hai -
+# is "cross-asset" risk ko yahan check karte hain. BTC khud ke liye,
+# aur forex pairs ke liye ye NOT_APPLICABLE return karta hai.
+# ============================================================
+def correlated_asset_check(symbol, timeframe, final_verdict):
+    base = symbol.split("/")[0].split(":")[0].upper()
+    if base == "BTC" or _is_forex_pair(symbol):
+        return {"applicable": False, "btc_trend": None, "status": "NOT_APPLICABLE", "confidence_adjustment": 0}
+
+    try:
+        btc_df = get_candles(symbol="BTC/USDT", timeframe=timeframe, limit=120)
+        btc_trend = higher_timeframe_trend(btc_df)
+    except Exception:
+        return {"applicable": True, "btc_trend": None, "status": "UNKNOWN", "confidence_adjustment": 0}
+
+    verdict_dir = "UP" if final_verdict == "LONG" else "DOWN" if final_verdict == "SHORT" else None
+
+    if verdict_dir is None or btc_trend == "SIDEWAYS":
+        status, adj = "NEUTRAL", 0
+    elif btc_trend == verdict_dir:
+        status, adj = "ALIGNED", 5
+    else:
+        status, adj = "AGAINST", -8
+
+    return {"applicable": True, "btc_trend": btc_trend, "status": status, "confidence_adjustment": adj}
+
+
+# ============================================================
 # 1. HAWKES PROCESS APPROXIMATION  (PURANA - UNCHANGED)
 # ============================================================
 def hawkes_pressure(df, alpha=0.6, beta=0.4, lookback=40):
@@ -1733,6 +1763,55 @@ def funding_open_interest(symbol):
 
 
 # ============================================================
+# FUNDING-RATE EVENT WARNING (NEW) — extreme funding rate ka matlab hai
+# market mein bohat zyada leveraged traders ek hi taraf jama hain, jo
+# aksar sudden liquidation cascade / sharp reversal se pehle hota hai.
+# Ye koi real-world news feed nahi hai (aisi API alag/costly hoti hai) -
+# sirf market ke apne funding/OI data se implicit risk warning deta hai.
+# ============================================================
+# Thresholds annualized nahi, per-8h funding rate % par based hain
+# (jaisa OKX/Binance perp funding quote hota hai)
+FUNDING_EXTREME_PCT = 0.05    # ~0.05%/8h se upar = extreme
+FUNDING_ELEVATED_PCT = 0.02   # ~0.02%/8h se upar = elevated
+
+
+def funding_event_warning(symbol):
+    data = funding_open_interest(symbol)
+    fr = data.get("funding_rate_pct")
+
+    if fr is None:
+        return {"available": False, "risk_level": "UNKNOWN", "funding_rate_pct": None, "message": None}
+
+    abs_fr = abs(fr)
+    side = "longs" if fr > 0 else "shorts"
+
+    if abs_fr >= FUNDING_EXTREME_PCT:
+        risk_level = "EXTREME"
+        message = (
+            f"Funding rate is extreme ({fr}% / 8h) - {side} are heavily "
+            "overleveraged. Elevated risk of a sharp liquidation-driven move "
+            "in the next few hours; consider smaller size."
+        )
+    elif abs_fr >= FUNDING_ELEVATED_PCT:
+        risk_level = "ELEVATED"
+        message = (
+            f"Funding rate is elevated ({fr}% / 8h), leaning {side}. "
+            "Some crowding risk building up - worth monitoring."
+        )
+    else:
+        risk_level = "NORMAL"
+        message = None
+
+    return {
+        "available": True,
+        "risk_level": risk_level,
+        "funding_rate_pct": fr,
+        "open_interest": data.get("open_interest"),
+        "message": message,
+    }
+
+
+# ============================================================
 # 26. CVD (CUMULATIVE VOLUME DELTA)  <-- (v8, LIQUIDITY SCANNER)
 # Formula: delta_i = +Volume_i agar close_i >= open_i warna -Volume_i;
 #          CVD_t = cumsum(delta)
@@ -1861,6 +1940,14 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
         mtf_data = {"higher_timeframes": {}, "status": "ERROR", "confidence_adjustment": 0, "error": str(e)}
     confidence_pct = max(5, min(97, round(confidence_pct + mtf_data.get("confidence_adjustment", 0), 2)))
 
+    # --- Correlated asset check (NEW) — altcoins ke liye BTC trend ke
+    # sath alignment check karta hai (BTC/forex ke liye NOT_APPLICABLE).
+    try:
+        correlation_data = correlated_asset_check(symbol, timeframe, final_verdict)
+    except Exception as e:
+        correlation_data = {"applicable": False, "btc_trend": None, "status": "ERROR", "confidence_adjustment": 0, "error": str(e)}
+    confidence_pct = max(5, min(97, round(confidence_pct + correlation_data.get("confidence_adjustment", 0), 2)))
+
     # --- v4 ke 4 concepts (display-only, UNCHANGED) ---
     if include_orderbook:
         try:
@@ -1871,9 +1958,14 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
             vpin_data = vpin_toxicity(symbol)
         except Exception as e:
             vpin_data = {"vpin_score": None, "toxicity": "ERROR", "error": str(e)}
+        try:
+            funding_warning_data = funding_event_warning(symbol)
+        except Exception as e:
+            funding_warning_data = {"available": False, "risk_level": "UNKNOWN", "error": str(e)}
     else:
         ofi_data = {"ofi_score": None, "ofi_raw": None}
         vpin_data = {"vpin_score": None, "toxicity": "SKIPPED"}
+        funding_warning_data = {"available": False, "risk_level": "SKIPPED"}
 
     regime_data = hmm_regime(df)
     jump_data = jump_diffusion_detector(df)
@@ -1984,6 +2076,8 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
         "liquidity_sweep": sweep_data,
         "candlestick_patterns": candle_data,
         "multi_timeframe": mtf_data,
+        "correlated_asset": correlation_data,
+        "funding_event_warning": funding_warning_data,
 
         # Accuracy Score widget (Ch.01-05 concept agreement out of 5, with the verdict above)
         "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
