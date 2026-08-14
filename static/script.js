@@ -547,6 +547,38 @@ function renderAccuracyScore(data) {
   }
 }
 
+function renderTotalSupportScore(data) {
+  const pctEl = document.getElementById("total-support-pct");
+  const subEl = document.getElementById("total-support-sub");
+  const fillEl = document.getElementById("total-support-gauge-fill");
+  const needleEl = document.getElementById("total-support-gauge-needle");
+  if (!pctEl || !fillEl) return;
+
+  const pct = data.total_accuracy_pct;
+  const verdict = (data.final_verdict || "").toUpperCase();
+
+  if (na(pct)) {
+    pctEl.textContent = "--%";
+    pctEl.style.color = "var(--wait)";
+    subEl.textContent = verdict === "WAIT" ? "no directional signal yet (WAIT)" : "waiting for a verdict";
+    fillEl.style.stroke = "var(--wait)";
+    fillEl.style.strokeDasharray = ACCURACY_GAUGE_ARC;
+    fillEl.style.strokeDashoffset = ACCURACY_GAUGE_ARC;
+    needleEl.style.transform = "rotate(0deg)";
+    return;
+  }
+
+  const ratio = Math.max(0, Math.min(100, pct)) / 100;
+  const color = accuracyColor(pct);
+  pctEl.textContent = fmtPct(pct);
+  pctEl.style.color = color;
+  subEl.textContent = `${data.total_agree_count} of ${data.total_channels} channels (whole app) support ${verdict}`;
+  fillEl.style.stroke = color;
+  fillEl.style.strokeDasharray = ACCURACY_GAUGE_ARC;
+  fillEl.style.strokeDashoffset = ACCURACY_GAUGE_ARC * (1 - ratio);
+  needleEl.style.transform = `rotate(${-90 + ratio * 180}deg)`;
+}
+
 async function fetchAndRenderAccuracy(coin) {
   if (!coin || accuracyFetchInFlight) return;
   accuracyFetchInFlight = true;
@@ -557,6 +589,7 @@ async function fetchAndRenderAccuracy(coin) {
     const data = await res.json();
     if (!res.ok || data.error || coin !== currentCoin) return;
     renderAccuracyScore(data);
+    renderTotalSupportScore(data);
   } catch (e) {
     // Silent — a single missed poll shouldn't spam the UI; next tick retries.
   } finally {
@@ -2739,6 +2772,7 @@ function renderResult(data) {
 
   renderHero(data);
   renderAccuracyScore(data);
+  renderTotalSupportScore(data);
   renderRiskRewardCalc(data);
   renderTier1(data);
   renderTier2(data);
