@@ -2628,7 +2628,7 @@ function ensureMiniChartInitialized() {
   miniChart = LightweightCharts.createChart(container, {
     width: container.clientWidth || 300,
     height: container.clientHeight || 200,
-    layout: { background: { type: "solid", color: "transparent" }, textColor: "#8b96a5", fontSize: 10 },
+    layout: { background: { type: "solid", color: "transparent" }, textColor: "#8b96a5", fontSize: 10, attributionLogo: false },
     grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
     rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
     timeScale: { borderColor: "rgba(255,255,255,0.08)", timeVisible: true },
@@ -2663,7 +2663,7 @@ async function loadMiniChartPreview(data) {
   if (subEl) subEl.textContent = `${coin} · ${timeframe.toUpperCase()}`;
 
   try {
-    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${encodeURIComponent(timeframe)}&limit=60`);
+    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${encodeURIComponent(timeframe)}&limit=40`);
     const cData = await res.json();
     if (!res.ok || !Array.isArray(cData.candles)) return;
 
@@ -2672,13 +2672,17 @@ async function loadMiniChartPreview(data) {
     miniChart.timeScale().fitContent();
 
     if (miniPatternMarkers) {
-      const markers = (cData.patterns || [])
-        .slice()
-        .sort((a, b) => a.time - b.time)
-        .map((p) => {
-          const style = PATTERN_MARKER_STYLE[p.bias] || PATTERN_MARKER_STYLE.neutral;
-          return { time: p.time, position: style.position, color: style.color, shape: style.shape, text: p.pattern };
-        });
+      const sortedPatterns = (cData.patterns || []).slice().sort((a, b) => a.time - b.time);
+      // Overlap se bachne ke liye: sirf sabse recent 3 patterns ka naam
+      // (text) dikhta hai, baaki sirf chhota arrow/shape (bina label) -
+      // taake snapshot readable rahe. Poori detail CH.28 card mein hai.
+      const recentWithText = new Set(sortedPatterns.slice(-3).map((p) => p.time));
+      const markers = sortedPatterns.map((p) => {
+        const style = PATTERN_MARKER_STYLE[p.bias] || PATTERN_MARKER_STYLE.neutral;
+        const marker = { time: p.time, position: style.position, color: style.color, shape: style.shape };
+        if (recentWithText.has(p.time)) marker.text = p.pattern;
+        return marker;
+      });
       miniPatternMarkers.setMarkers(markers);
     }
 
