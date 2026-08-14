@@ -32,6 +32,11 @@ _HOLDING_PERIOD_MINUTES = {
     "4 Hours": 240, "1 Day": 1440,
 }
 
+# Discipline tracker: agar last trade loss par band hua ho aur isi window
+# ke andar naya trade track kiya jaye, to revenge-trading warning dikhti
+# hai (non-blocking - final decision hamesha user ki hai).
+REVENGE_WINDOW_MINUTES = 30
+
 
 def _require_login():
     return session.get("user_id")
@@ -265,6 +270,31 @@ def track_trade():
             if cursor.fetchone():
                 return jsonify({"error": "You already have an active trade for this asset"}), 409
 
+            # --- Revenge-trading check (discipline tracker) ---
+            # Agar user ka sabse recent CLOSED trade (koi bhi asset) ek loss
+            # tha aur bohat kam waqt pehle (REVENGE_WINDOW_MINUTES) band hua
+            # hai, to ye trade block nahi karte (final decision hamesha user
+            # ki hai) - bas response mein ek non-blocking warning add karte
+            # hain taake discipline ka reminder mil jaye.
+            cursor.execute(
+                "SELECT closed_at, outcome_class, estimated_pnl FROM active_trades "
+                "WHERE user_id=%s AND status != 'ACTIVE' AND closed_at IS NOT NULL "
+                "ORDER BY closed_at DESC LIMIT 1",
+                (user_id,),
+            )
+            last_closed = cursor.fetchone()
+            revenge_warning = None
+            if last_closed and last_closed.get("closed_at"):
+                was_loss = last_closed.get("outcome_class") in ("STOP_LOSS", "MANUAL_LOSS") or \
+                    (last_closed.get("estimated_pnl") is not None and last_closed["estimated_pnl"] < 0)
+                minutes_since = (datetime.utcnow() - last_closed["closed_at"]).total_seconds() / 60
+                if was_loss and minutes_since <= REVENGE_WINDOW_MINUTES:
+                    revenge_warning = (
+                        f"Your last trade closed at a loss only {int(minutes_since)} min ago. "
+                        "Taking a new trade this quickly after a loss is a common revenge-trading "
+                        "pattern - consider reviewing your setup before proceeding."
+                    )
+
             cursor.execute(
                 """INSERT INTO active_trades
                    (user_id, asset, direction, entry_price, position_size, stop_loss, take_profit,
@@ -275,7 +305,10 @@ def track_trade():
             )
             trade_id = cursor.lastrowid
             _add_event(cursor, trade_id, "TRADE_STARTED", "Trade tracking started.", entry_price, 0)
-        return jsonify({"message": "Trade is now being tracked", "trade_id": trade_id}), 201
+        response = {"message": "Trade is now being tracked", "trade_id": trade_id}
+        if revenge_warning:
+            response["revenge_warning"] = revenge_warning
+        return jsonify(response), 201
     finally:
         conn.close()
 
