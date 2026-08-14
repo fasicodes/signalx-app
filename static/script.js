@@ -2626,6 +2626,8 @@ function ensureMiniChartInitialized() {
   if (!container || typeof LightweightCharts === "undefined") return;
 
   miniChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth || 300,
+    height: container.clientHeight || 200,
     layout: { background: { type: "solid", color: "transparent" }, textColor: "#8b96a5", fontSize: 10 },
     grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
     rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
@@ -2730,7 +2732,6 @@ function renderResult(data) {
   renderHero(data);
   renderAccuracyScore(data);
   renderRiskRewardCalc(data);
-  loadMiniChartPreview(data);
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
@@ -2799,6 +2800,11 @@ async function runAnalysis(forceAnalyze) {
     renderResult(data);
     resultBox.classList.remove("hidden");
     emptyState.classList.add("hidden");
+
+    // Mini chart preview needs the result box to actually be visible
+    // (non-zero width/height) before LightweightCharts can size itself
+    // correctly - so this runs after the unhide, on the next frame.
+    requestAnimationFrame(() => loadMiniChartPreview(data));
 
     fetchAndRenderLiquidity(coin);
     startLiquidityPolling();
