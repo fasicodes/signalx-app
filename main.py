@@ -1034,6 +1034,55 @@ def concept_accuracy_score(final_verdict, **concept_kwargs):
     }
 
 
+def _opposite_direction(verdict):
+    return "SHORT" if verdict == "LONG" else "LONG"
+
+
+def full_signal_support_score(final_verdict, votes, candle_data, mtf_data, correlation_data):
+    """NAYA score — sirf Tier-1 (CH.01-05) tak mehdood nahi, balke poori
+    website ke saare channels ko dekhta hai: CH.01-19 (jo pehle se
+    concept_accuracy_score ke andar vote karte hain) + candlestick
+    (CH.28) + multi-timeframe (CH.29) + correlated-asset (CH.31). Har
+    channel ka vote check karte hain: agar final_verdict ke KHILAF
+    (opposing) direction bola hai to wo 'against' count hota hai, warna
+    (agree ya structurally neutral) 'support' count hota hai. Total mein
+    se kitne channels support kar rahe hain, usi fraction se ye % banta
+    hai — jitna comprehensive ho utna zyada trustworthy signal."""
+    if final_verdict not in ("LONG", "SHORT"):
+        return {"total_accuracy_pct": None, "total_agree_count": 0, "total_channels": 0, "total_votes": []}
+
+    def vote_from_status(ch, name, status, agree_status, against_status):
+        if status == agree_status:
+            direction = final_verdict
+        elif status == against_status:
+            direction = _opposite_direction(final_verdict)
+        else:
+            direction = "NEUTRAL"
+        return {"ch": ch, "name": name, "direction": direction}
+
+    extra_votes = [
+        vote_from_status(28, "Candlestick Patterns", (candle_data or {}).get("confirmation"), "CONFIRMS", "CONTRADICTS"),
+        vote_from_status(29, "Multi-Timeframe Trend", (mtf_data or {}).get("status"), "ALIGNED", "AGAINST"),
+        vote_from_status(31, "Correlated Asset (BTC)", (correlation_data or {}).get("status"), "ALIGNED", "AGAINST"),
+    ]
+
+    all_votes = [dict(v) for v in votes] + extra_votes
+    total = len(all_votes)
+    agree_count = 0
+    for v in all_votes:
+        opposes = v["direction"] in ("LONG", "SHORT") and v["direction"] != final_verdict
+        v["agrees"] = not opposes
+        if v["agrees"]:
+            agree_count += 1
+
+    return {
+        "total_accuracy_pct": round((agree_count / total) * 100, 1),
+        "total_agree_count": agree_count,
+        "total_channels": total,
+        "total_votes": all_votes,
+    }
+
+
 # ============================================================
 # 6. ORDER FLOW IMBALANCE (OFI)  (v4 - UNCHANGED)
 # ============================================================
@@ -2088,6 +2137,14 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
         cusum_data=cusum_data, sweep_data=sweep_data,
     )
 
+    # "Total Signal Support" - Tier-1 Accuracy Score se ALAG - poori
+    # website ke saare channels (CH.01-19 + candlestick + multi-timeframe
+    # + correlated-asset) mein se kitne is verdict ko support kar rahe
+    # hain, us par based ek comprehensive % score.
+    full_support_data = full_signal_support_score(
+        final_verdict, accuracy_data["concept_votes"], candle_data, mtf_data, correlation_data,
+    )
+
     result = {
         "trend": trend,
         "buying_pressure": buying_pressure,
@@ -2129,6 +2186,13 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
         "concept_agree_count": accuracy_data["concept_agree_count"],
         "concept_total": accuracy_data["concept_total"],
         "concept_votes": accuracy_data["concept_votes"],
+
+        # Total Signal Support widget (ALL channels across the whole app,
+        # not just Tier-1) - see full_signal_support_score() comments.
+        "total_accuracy_pct": full_support_data["total_accuracy_pct"],
+        "total_agree_count": full_support_data["total_agree_count"],
+        "total_channels": full_support_data["total_channels"],
+        "total_votes": full_support_data["total_votes"],
 
         "disclaimer": ("Probability estimates only - not financial advice. "
                         "In-sample calculations, no walk-forward backtest run yet. "
