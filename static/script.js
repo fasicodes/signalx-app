@@ -800,11 +800,15 @@ function renderTier3(data) {
   const corr = data.correlated_asset || {};
   if (corr.applicable) {
     const corrTone = corr.status === "ALIGNED" ? "long" : corr.status === "AGAINST" ? "short" : "flat";
+    const corrLabel = corr.correlation != null
+      ? `Correlation: ${corr.correlation} (${corr.correlation_strength})`
+      : "Correlation: N/A";
     cards.push(channelCard({
-      id: 31, title: "Correlated Asset Check (BTC)", model: "BTC trend alignment",
+      id: 31, title: "Correlated Asset Check (BTC)", model: "Pearson r + trend",
       body: `
         ${badge(corr.status || "NEUTRAL", corrTone)}
         <div class="channel-detail">BTC trend: ${corr.btc_trend || "N/A"}</div>
+        <div class="channel-detail">${corrLabel}</div>
         ${corr.confidence_adjustment ? `<div class="channel-detail ${corr.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${corr.confidence_adjustment > 0 ? "+" : ""}${corr.confidence_adjustment}%</div>` : ""}`
     }));
   }
