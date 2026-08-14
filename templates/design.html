@@ -1437,6 +1437,9 @@
       }
       hideModal(trackModal);
       await refreshActiveTrades();
+      if (data.revenge_warning) {
+        addAlert("warning", "⚠ Discipline check: " + data.revenge_warning);
+      }
       document.querySelector('.home-info-tab[data-info="active-trades"]').click();
     } catch (e) {
       msg.textContent = 'Could not connect to the server';
