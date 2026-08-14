@@ -1074,6 +1074,15 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .rr-out-value { font-size: 14px; font-weight: 600; color: var(--text, #cfd6de); }
 .rr-calc-note { font-size: 11px; color: var(--text-faint, #8b96a5); margin: 10px 0 0; }
 
+.mini-chart-card {
+  background: var(--panel, #11161e); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; margin: 14px 0;
+}
+.mini-chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.mini-chart-title { font-weight: 600; font-size: 12.5px; color: var(--text, #cfd6de); }
+.mini-chart-sub { font-size: 11px; color: var(--text-faint, #8b96a5); }
+.mini-chart-container { width: 100%; height: 200px; }
+
 .indicator-panel {
     position: absolute; top: 50px; right: 14px; z-index: 40;
     width: 348px; max-height: 440px; display: flex; flex-direction: column;
