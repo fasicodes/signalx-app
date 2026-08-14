@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Multi-Channel Market Readout</title>
-<link rel="stylesheet" href="/static/style.css?v=20260814-rrcalc">
+<link rel="stylesheet" href="/static/style.css?v=20260814-fullstack">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
@@ -274,6 +274,17 @@
         </div>
         <span id="hero-trend-tag" class="hero-trend-tag">--</span>
       </div>
+    </section>
+
+    <!-- MINI CHART PREVIEW — signal ke sath hi candle chart dikhta hai,
+         Live Chart tab par jaaye bina. Entry/SL/TP lines aur recent
+         candlestick pattern markers include hote hain. -->
+    <section class="mini-chart-card" aria-label="Signal Chart Preview">
+      <div class="mini-chart-head">
+        <span class="mini-chart-title">Price Action Snapshot</span>
+        <span class="mini-chart-sub" id="mini-chart-sub">--</span>
+      </div>
+      <div id="mini-chart-container" class="mini-chart-container"></div>
     </section>
 
     <!-- PROMINENT ACCURACY SCORE -->
@@ -987,7 +998,7 @@
 
 </div>
 
-<script src="/static/script.js?v=20260814-rrcalc"></script>
+<script src="/static/script.js?v=20260814-fullstack"></script>
 <script>
 // Standalone controller for the homepage info sidebar (Contact/About/
 // Privacy/Terms/Disclaimer). Fully independent of script.js and the
