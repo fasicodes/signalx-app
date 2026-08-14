@@ -663,27 +663,72 @@ def multi_timeframe_confirmation(symbol, base_timeframe, final_verdict):
 # is "cross-asset" risk ko yahan check karte hain. BTC khud ke liye,
 # aur forex pairs ke liye ye NOT_APPLICABLE return karta hai.
 # ============================================================
-def correlated_asset_check(symbol, timeframe, final_verdict):
+def correlated_asset_check(symbol, timeframe, final_verdict, df=None):
     base = symbol.split("/")[0].split(":")[0].upper()
     if base == "BTC" or _is_forex_pair(symbol):
-        return {"applicable": False, "btc_trend": None, "status": "NOT_APPLICABLE", "confidence_adjustment": 0}
+        return {
+            "applicable": False, "btc_trend": None, "correlation": None,
+            "correlation_strength": None, "status": "NOT_APPLICABLE", "confidence_adjustment": 0,
+        }
 
     try:
         btc_df = get_candles(symbol="BTC/USDT", timeframe=timeframe, limit=120)
         btc_trend = higher_timeframe_trend(btc_df)
     except Exception:
-        return {"applicable": True, "btc_trend": None, "status": "UNKNOWN", "confidence_adjustment": 0}
+        return {
+            "applicable": True, "btc_trend": None, "correlation": None,
+            "correlation_strength": None, "status": "UNKNOWN", "confidence_adjustment": 0,
+        }
+
+    # Pearson correlation between altcoin & BTC returns (last ~50 candles) -
+    # batata hai ye coin ABHI kitna BTC se "juda" hai. Har coin hamesha
+    # equally BTC-linked nahi hota (kuch apna independent narrative follow
+    # karte hain) - is number ke bina BTC-trend check blindly apply karna
+    # misleading ho sakta hai.
+    correlation = None
+    if df is not None:
+        try:
+            n = min(len(df), len(btc_df), 51)
+            alt_closes = df["close"].values[-n:]
+            btc_closes = btc_df["close"].values[-n:]
+            alt_returns = np.diff(alt_closes) / alt_closes[:-1]
+            btc_returns = np.diff(btc_closes) / btc_closes[:-1]
+            if len(alt_returns) >= 10 and np.std(alt_returns) > 0 and np.std(btc_returns) > 0:
+                correlation = float(np.corrcoef(alt_returns, btc_returns)[0, 1])
+        except Exception:
+            correlation = None
+
+    STRONG_CORR = 0.6
+    WEAK_CORR = 0.3
+    if correlation is None:
+        corr_strength = "UNKNOWN"
+    elif abs(correlation) >= STRONG_CORR:
+        corr_strength = "STRONG"
+    elif abs(correlation) >= WEAK_CORR:
+        corr_strength = "MODERATE"
+    else:
+        corr_strength = "WEAK"
 
     verdict_dir = "UP" if final_verdict == "LONG" else "DOWN" if final_verdict == "SHORT" else None
 
-    if verdict_dir is None or btc_trend == "SIDEWAYS":
+    # Weak/unknown correlation -> is coin ne abhi BTC se "decouple" kiya
+    # hua hai, isliye BTC-trend based adjustment skip karte hain (warna
+    # galat/misleading confidence change ho sakta hai).
+    if verdict_dir is None or btc_trend == "SIDEWAYS" or corr_strength in ("WEAK", "UNKNOWN"):
         status, adj = "NEUTRAL", 0
     elif btc_trend == verdict_dir:
-        status, adj = "ALIGNED", 5
+        status, adj = "ALIGNED", 5 if corr_strength == "STRONG" else 3
     else:
-        status, adj = "AGAINST", -8
+        status, adj = "AGAINST", -8 if corr_strength == "STRONG" else -4
 
-    return {"applicable": True, "btc_trend": btc_trend, "status": status, "confidence_adjustment": adj}
+    return {
+        "applicable": True,
+        "btc_trend": btc_trend,
+        "correlation": round(correlation, 2) if correlation is not None else None,
+        "correlation_strength": corr_strength,
+        "status": status,
+        "confidence_adjustment": adj,
+    }
 
 
 # ============================================================
@@ -1943,7 +1988,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
     # --- Correlated asset check (NEW) — altcoins ke liye BTC trend ke
     # sath alignment check karta hai (BTC/forex ke liye NOT_APPLICABLE).
     try:
-        correlation_data = correlated_asset_check(symbol, timeframe, final_verdict)
+        correlation_data = correlated_asset_check(symbol, timeframe, final_verdict, df=df)
     except Exception as e:
         correlation_data = {"applicable": False, "btc_trend": None, "status": "ERROR", "confidence_adjustment": 0, "error": str(e)}
     confidence_pct = max(5, min(97, round(confidence_pct + correlation_data.get("confidence_adjustment", 0), 2)))
