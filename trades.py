@@ -854,3 +854,372 @@ def trade_journal_stats():
         }), 200
     finally:
         conn.close()
+
+
+# ======================================================================
+# PHASE 2B - Advanced P&L Dashboard
+# All endpoints reuse active_trades - no new tables, no fabricated data.
+# Every query is scoped to the authenticated user's own trades.
+# ======================================================================
+
+def _period_bounds(period, date_from, date_to):
+    """Returns (start_dt, end_dt) or (None, None) for 'all'. Custom period
+    requires explicit date_from/date_to (ISO strings, passed straight
+    through to MySQL)."""
+    now = datetime.utcnow()
+    if period == "today":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0), now
+    if period == "7d":
+        return now - timedelta(days=7), now
+    if period == "30d":
+        return now - timedelta(days=30), now
+    if period == "90d":
+        return now - timedelta(days=90), now
+    if period == "custom":
+        return date_from, date_to
+    return None, None  # "all"
+
+
+def _fetch_user_trades(cursor, user_id, start_dt, end_dt, closed_only=False):
+    where = ["user_id=%s"]
+    params = [user_id]
+    if closed_only:
+        where.append("status != 'ACTIVE'")
+    if start_dt:
+        where.append("created_at >= %s")
+        params.append(start_dt)
+    if end_dt:
+        where.append("created_at <= %s")
+        params.append(end_dt)
+    cursor.execute(f"SELECT * FROM active_trades WHERE {' AND '.join(where)} ORDER BY created_at ASC", tuple(params))
+    return cursor.fetchall()
+
+
+@trades_bp.route("/api/trades/pnl/overview", methods=["GET"])
+def pnl_overview():
+    """Phase 2B.1 - Core performance metrics for the selected period."""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    period = request.args.get("period", "all")
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    if period == "custom" and (not date_from or not date_to):
+        return jsonify({"error": "date_from and date_to are required for a custom period"}), 400
+    start_dt, end_dt = _period_bounds(period, date_from, date_to)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            trades = _fetch_user_trades(cursor, user_id, start_dt, end_dt)
+            trades = [_evaluate_trade(cursor, t) if t["status"] == "ACTIVE" else t for t in trades]
+
+        closed = [t for t in trades if t["status"] != "ACTIVE"]
+        active = [t for t in trades if t["status"] == "ACTIVE"]
+
+        closed_pnls = [t["estimated_pnl"] for t in closed if t.get("estimated_pnl") is not None]
+        realized_pnl = round(sum(closed_pnls), 2) if closed_pnls else 0.0
+        unrealized_pnl = round(sum(t["estimated_pnl"] for t in active if t.get("estimated_pnl") is not None), 2) if active else 0.0
+        total_pnl = round(realized_pnl + unrealized_pnl, 2)
+
+        results = [_journal_result(t) for t in closed]
+        winning_trades = results.count("WIN")
+        losing_trades = results.count("LOSS")
+        win_rate = round((winning_trades / len(closed) * 100), 2) if closed else 0.0
+
+        wins = [p for p in closed_pnls if p > 0]
+        losses = [p for p in closed_pnls if p < 0]
+        avg_win = round(sum(wins) / len(wins), 2) if wins else 0.0
+        avg_loss = round(sum(losses) / len(losses), 2) if losses else 0.0
+        gross_profit = sum(wins) if wins else 0.0
+        gross_loss = abs(sum(losses)) if losses else 0.0
+        profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else None
+
+        rr_values = [rr for rr in (_risk_reward(t) for t in closed) if rr is not None]
+        avg_rr = round(sum(rr_values) / len(rr_values), 2) if rr_values else None
+
+        loss_rate = 1 - (winning_trades / len(closed)) if closed else 0
+        win_rate_frac = (winning_trades / len(closed)) if closed else 0
+        expectancy = round((win_rate_frac * avg_win) + (loss_rate * avg_loss), 2) if closed else 0.0
+
+        best_trade = round(max(closed_pnls), 2) if closed_pnls else None
+        worst_trade = round(min(closed_pnls), 2) if closed_pnls else None
+
+        return jsonify({
+            "period": period,
+            "total_pnl": total_pnl,
+            "realized_pnl": realized_pnl,
+            "unrealized_pnl": unrealized_pnl,
+            "win_rate": win_rate,
+            "total_trades": len(trades),
+            "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
+            "profit_factor": profit_factor,
+            "avg_risk_reward": avg_rr,
+            "expectancy": expectancy,
+            "best_trade": best_trade,
+            "worst_trade": worst_trade,
+        }), 200
+    finally:
+        conn.close()
+
+
+@trades_bp.route("/api/trades/pnl/equity-curve", methods=["GET"])
+def pnl_equity_curve():
+    """Phase 2B.2 - Cumulative equity over time from actual closed trades
+    only (never fabricated). granularity: daily|weekly|monthly."""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    granularity = request.args.get("granularity", "daily")
+    if granularity not in ("daily", "weekly", "monthly"):
+        granularity = "daily"
+    period = request.args.get("period", "all")
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    start_dt, end_dt = _period_bounds(period, date_from, date_to)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            where = ["user_id=%s", "status != 'ACTIVE'", "closed_at IS NOT NULL", "estimated_pnl IS NOT NULL"]
+            params = [user_id]
+            if start_dt:
+                where.append("closed_at >= %s")
+                params.append(start_dt)
+            if end_dt:
+                where.append("closed_at <= %s")
+                params.append(end_dt)
+            cursor.execute(
+                f"SELECT closed_at, estimated_pnl FROM active_trades WHERE {' AND '.join(where)} ORDER BY closed_at ASC",
+                tuple(params),
+            )
+            rows = cursor.fetchall()
+
+        def bucket_key(dt):
+            if granularity == "daily":
+                return dt.strftime("%Y-%m-%d")
+            if granularity == "weekly":
+                iso = dt.isocalendar()
+                return f"{iso[0]}-W{iso[1]:02d}"
+            return dt.strftime("%Y-%m")
+
+        buckets = {}
+        for r in rows:
+            key = bucket_key(r["closed_at"])
+            buckets[key] = buckets.get(key, 0.0) + (r["estimated_pnl"] or 0.0)
+
+        cumulative = 0.0
+        curve = []
+        for key in sorted(buckets.keys()):
+            cumulative += buckets[key]
+            curve.append({
+                "period": key,
+                "pnl": round(buckets[key], 2),
+                "cumulative_pnl": round(cumulative, 2),
+            })
+
+        return jsonify({"granularity": granularity, "points": curve}), 200
+    finally:
+        conn.close()
+
+
+@trades_bp.route("/api/trades/pnl/by-symbol", methods=["GET"])
+def pnl_by_symbol():
+    """Phase 2B.3"""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT asset, estimated_pnl, outcome_class FROM active_trades "
+                "WHERE user_id=%s AND status != 'ACTIVE' AND estimated_pnl IS NOT NULL",
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+
+        by_symbol = {}
+        for r in rows:
+            sym = r["asset"]
+            by_symbol.setdefault(sym, []).append(r)
+
+        result = []
+        for sym, trades in by_symbol.items():
+            pnls = [t["estimated_pnl"] for t in trades]
+            wins = sum(1 for p in pnls if p > 0)
+            result.append({
+                "symbol": sym,
+                "trades": len(trades),
+                "win_rate": round((wins / len(trades) * 100), 2),
+                "pnl": round(sum(pnls), 2),
+                "avg_trade": round(sum(pnls) / len(pnls), 2),
+            })
+        result.sort(key=lambda r: r["pnl"], reverse=True)
+        return jsonify(result), 200
+    finally:
+        conn.close()
+
+
+@trades_bp.route("/api/trades/pnl/by-direction", methods=["GET"])
+def pnl_by_direction():
+    """Phase 2B.4"""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT direction, estimated_pnl FROM active_trades "
+                "WHERE user_id=%s AND status != 'ACTIVE' AND estimated_pnl IS NOT NULL",
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+
+        result = {}
+        for d in ("LONG", "SHORT"):
+            pnls = [r["estimated_pnl"] for r in rows if r["direction"] == d]
+            wins = sum(1 for p in pnls if p > 0)
+            result[d] = {
+                "trades": len(pnls),
+                "win_rate": round((wins / len(pnls) * 100), 2) if pnls else 0.0,
+                "pnl": round(sum(pnls), 2) if pnls else 0.0,
+                "avg_trade": round(sum(pnls) / len(pnls), 2) if pnls else 0.0,
+            }
+        return jsonify(result), 200
+    finally:
+        conn.close()
+
+
+@trades_bp.route("/api/trades/pnl/distribution", methods=["GET"])
+def pnl_distribution():
+    """Phase 2B.5 - Win/Loss/Breakeven counts."""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM active_trades WHERE user_id=%s AND status != 'ACTIVE'", (user_id,))
+            closed = cursor.fetchall()
+
+        results = [_journal_result(t) for t in closed]
+        return jsonify({
+            "winning": results.count("WIN"),
+            "losing": results.count("LOSS"),
+            "breakeven": results.count("BREAKEVEN"),
+        }), 200
+    finally:
+        conn.close()
+
+
+@trades_bp.route("/api/trades/pnl/calendar", methods=["GET"])
+def pnl_calendar():
+    """Phase 2B.6 - Daily performance for a given month.
+    Query param: month=YYYY-MM (defaults to current month)."""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    month_str = request.args.get("month")
+    now = datetime.utcnow()
+    try:
+        if month_str:
+            year, month = [int(x) for x in month_str.split("-")]
+        else:
+            year, month = now.year, now.month
+        start = datetime(year, month, 1)
+        end = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
+    except (ValueError, TypeError):
+        return jsonify({"error": "month must be in YYYY-MM format"}), 400
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT closed_at, estimated_pnl FROM active_trades "
+                "WHERE user_id=%s AND status != 'ACTIVE' AND closed_at >= %s AND closed_at < %s "
+                "AND estimated_pnl IS NOT NULL",
+                (user_id, start, end),
+            )
+            rows = cursor.fetchall()
+
+        days = {}
+        for r in rows:
+            day_key = r["closed_at"].strftime("%Y-%m-%d")
+            days.setdefault(day_key, []).append(r["estimated_pnl"])
+
+        result = []
+        for day_key, pnls in days.items():
+            wins = sum(1 for p in pnls if p > 0)
+            result.append({
+                "date": day_key,
+                "trades": len(pnls),
+                "pnl": round(sum(pnls), 2),
+                "win_rate": round((wins / len(pnls) * 100), 2),
+            })
+        result.sort(key=lambda r: r["date"])
+        return jsonify({"month": f"{year:04d}-{month:02d}", "days": result}), 200
+    finally:
+        conn.close()
+
+
+@trades_bp.route("/api/trades/pnl/drawdown", methods=["GET"])
+def pnl_drawdown():
+    """Phase 2B.7 - Max drawdown, current drawdown, peak equity, recovery.
+    Computed from the chronological equity curve of closed trades only
+    (starting equity baseline = 0, i.e. this tracks P&L drawdown, not
+    drawdown against a deposited account balance which SignalX doesn't
+    track)."""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT closed_at, estimated_pnl FROM active_trades "
+                "WHERE user_id=%s AND status != 'ACTIVE' AND closed_at IS NOT NULL AND estimated_pnl IS NOT NULL "
+                "ORDER BY closed_at ASC",
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+
+        if not rows:
+            return jsonify({
+                "max_drawdown": 0.0, "current_drawdown": 0.0,
+                "peak_equity": 0.0, "current_equity": 0.0,
+                "recovered": True,
+            }), 200
+
+        equity = 0.0
+        peak = 0.0
+        max_dd = 0.0
+        for r in rows:
+            equity += r["estimated_pnl"]
+            if equity > peak:
+                peak = equity
+            dd = peak - equity
+            if dd > max_dd:
+                max_dd = dd
+
+        current_drawdown = round(peak - equity, 2)
+        return jsonify({
+            "max_drawdown": round(max_dd, 2),
+            "current_drawdown": current_drawdown,
+            "peak_equity": round(peak, 2),
+            "current_equity": round(equity, 2),
+            "recovered": current_drawdown <= 0.0,
+        }), 200
+    finally:
+        conn.close()
