@@ -182,6 +182,15 @@ app.register_blueprint(oauth_bp)
 from trades import trades_bp
 app.register_blueprint(trades_bp)
 
+# Phase 1 upgrade: Watchlist + Alerts/Notification Center. Both reuse the
+# existing session-based login (session["user_id"]) and MySQL connection
+# helper - no new auth system, no new DB engine.
+from watchlist import watchlist_bp
+app.register_blueprint(watchlist_bp)
+
+from alerts import alerts_bp
+app.register_blueprint(alerts_bp)
+
 # App start hote hi 'users' table khud ba khud ban jaye (agar pehle se
 # maujood nahi hai). Agar DB abhi connect nahi ho pa raha (misal, MySQL
 # service abhi tak deploy nahi hui) to sirf warning print hoti hai -
@@ -200,6 +209,34 @@ exchange = ccxt.okx()
 # NOTE: this is per-process memory - fine for a single Railway dyno, but
 # resets on restart and won't be shared across multiple workers/instances.
 _OB_SNAPSHOT_CACHE = {}
+
+# Phase 1 upgrade (watchlist.py / alerts.py): lightweight in-memory cache of
+# the LAST /signal result per symbol, so the watchlist row + "new signal"
+# alerts can show a direction/confidence without re-running the full
+# (expensive) 27-concept engine on every poll. Populated only when a user
+# actually requests /signal for that symbol (RUN ANALYSIS, or an alert
+# check that needs it) - never force-computed in the background, per the
+# performance rules (no excessive polling / no duplicate heavy work).
+# NOTE: same per-process-memory caveat as _OB_SNAPSHOT_CACHE above.
+_SIGNAL_CACHE = {}
+_SIGNAL_CACHE_TTL_SEC = 90
+
+
+def _cache_signal_result(symbol, result):
+    _SIGNAL_CACHE[symbol] = {"result": result, "ts": time.time()}
+
+
+def get_cached_signal(symbol, max_age_sec=None):
+    """Last cached /signal result for `symbol`, or None if missing/stale.
+    Used by watchlist.py + alerts.py so they never trigger a fresh heavy
+    computation themselves."""
+    entry = _SIGNAL_CACHE.get(symbol)
+    if not entry:
+        return None
+    max_age = max_age_sec if max_age_sec is not None else _SIGNAL_CACHE_TTL_SEC
+    if time.time() - entry["ts"] > max_age:
+        return None
+    return entry["result"]
 
 # NOTE: exchange OKX hai. Neeche wali AVAILABLE_COINS list frontend (design.html)
 # ke coin-select dropdown se match karti hai. Agar koi coin OKX par USDT pair
@@ -2099,6 +2136,7 @@ def signal_endpoint():
         result = generate_signal(df, symbol=coin, include_orderbook=orderbook)
         result["coin"] = coin
         result["timeframe"] = timeframe
+        _cache_signal_result(coin, result)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
