@@ -51,6 +51,18 @@ const indicatorActiveCountEl = document.getElementById("indicator-active-count")
 const indicatorListCountEl = document.getElementById("indicator-list-count");
 const indicatorOverlayEl = document.getElementById("indicator-overlay");
 
+// volatility panel elements (Phase 3E)
+const volatilityBtnEl = document.getElementById("volatility-btn");
+const volatilityPanelEl = document.getElementById("volatility-panel");
+const volatilityTfLabelEl = document.getElementById("volatility-tf-label");
+const volatilityUnavailableEl = document.getElementById("volatility-unavailable");
+const volatilityRowsEl = document.getElementById("volatility-rows");
+const volAtrEl = document.getElementById("vol-atr");
+const volAtrPctEl = document.getElementById("vol-atr-pct");
+const volStatusEl = document.getElementById("vol-status");
+const volTrendEl = document.getElementById("vol-trend");
+const volPercentileEl = document.getElementById("vol-percentile");
+
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * 48; // r=48
 
 // Liquidity scanner (CH.19-27) auto-refresh state.
@@ -1228,7 +1240,169 @@ const HIT_TOLERANCE = 10;
 let activeChartTool = "cursor";
 let chartDrawings = [];
 let pendingPoints = [];      // points collected so far for the drawing being placed
-let drawingsCoinKey = null;
+let drawingsScopeKey = null; // `${symbol}|${timeframe}` — drawings are scoped per chart, not just per coin
+
+/* ---- Phase 3B: drawing persistence (per user + symbol + timeframe) ----
+   Each drawing keeps its original client-side `id` (used everywhere for
+   hit-testing/selection/dragging) plus a `serverId` once the create POST
+   resolves. Saves are fire-and-forget so drawing stays instant/local-first;
+   failures fall back to a status message instead of throwing. */
+
+function drawingCoordsOnly(d) {
+  const { id, serverId, _resaveNeeded, _syncFailed, ...coords } = d;
+  return coords;
+}
+
+async function saveDrawingCreate(d) {
+  if (!coinSelect) return;
+  try {
+    const res = await fetch("/api/chart/drawings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symbol: coinSelect.value,
+        timeframe: currentChartTimeframe,
+        type: d.type,
+        data: drawingCoordsOnly(d),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "save failed");
+    d.serverId = data.id;
+    if (d._resaveNeeded) {
+      d._resaveNeeded = false;
+      saveDrawingUpdate(d);
+    }
+  } catch (err) {
+    d._syncFailed = true;
+    if (chartStatusEl) chartStatusEl.textContent = "Drawing saved locally. Sync unavailable.";
+  }
+}
+
+async function saveDrawingUpdate(d) {
+  if (!d) return;
+  if (!d.serverId) { d._resaveNeeded = true; return; } // still being created — will resend once that resolves
+  try {
+    const res = await fetch(`/api/chart/drawings/${d.serverId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: drawingCoordsOnly(d) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "update failed");
+    d._syncFailed = false;
+  } catch (err) {
+    d._syncFailed = true;
+    if (chartStatusEl) chartStatusEl.textContent = "Unable to save drawing changes.";
+  }
+}
+
+async function deleteDrawingOnServer(d) {
+  if (!d || !d.serverId) return; // never synced (still creating) — nothing to remove server-side
+  try {
+    const res = await fetch(`/api/chart/drawings/${d.serverId}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "delete failed");
+  } catch (err) {
+    if (chartStatusEl) chartStatusEl.textContent = "Unable to delete drawing on server.";
+  }
+}
+
+async function clearDrawingsOnServer() {
+  if (!coinSelect) return;
+  try {
+    const res = await fetch(
+      `/api/chart/drawings?symbol=${encodeURIComponent(coinSelect.value)}&timeframe=${encodeURIComponent(currentChartTimeframe)}`,
+      { method: "DELETE" }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "clear failed");
+  } catch (err) {
+    if (chartStatusEl) chartStatusEl.textContent = "Unable to clear drawings on server.";
+  }
+}
+
+/* ---- Undo / Redo — covers drawing creation, deletion, and movement only
+   (per spec: a full undo architecture isn't worth the chart-stability risk,
+   this safe subset is). Clear-All is intentionally NOT part of this stack;
+   it has its own confirmation dialog instead. ---- */
+let undoStack = [];
+let redoStack = [];
+const UNDO_LIMIT = 50;
+
+function cloneDrawing(d) { return JSON.parse(JSON.stringify(d)); }
+
+function pushUndo(entry) {
+  undoStack.push(entry);
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack = [];
+  updateUndoRedoButtons();
+}
+
+function applyUndoEntry(entry) {
+  if (entry.action === "create") {
+    const d = chartDrawings.find((dd) => dd.id === entry.id);
+    chartDrawings = chartDrawings.filter((dd) => dd.id !== entry.id);
+    selectedDrawingId = null;
+    hideDrawDeleteBtn();
+    renderDrawings();
+    deleteDrawingOnServer(d);
+    return { action: "delete", drawing: d ? cloneDrawing(d) : entry.drawing };
+  }
+  if (entry.action === "delete") {
+    const d = cloneDrawing(entry.drawing);
+    delete d.serverId; delete d._syncFailed; delete d._resaveNeeded;
+    chartDrawings.push(d);
+    renderDrawings();
+    saveDrawingCreate(d);
+    return { action: "create", id: d.id, drawing: cloneDrawing(d) };
+  }
+  if (entry.action === "move") {
+    const d = chartDrawings.find((dd) => dd.id === entry.id);
+    if (!d) return null;
+    const current = cloneDrawing(d);
+    Object.assign(d, entry.before);
+    renderDrawings();
+    saveDrawingUpdate(d);
+    return { action: "move", id: d.id, before: current };
+  }
+  return null;
+}
+
+function undoLastDrawing() {
+  const entry = undoStack.pop();
+  if (!entry) return;
+  const inverse = applyUndoEntry(entry);
+  if (inverse) redoStack.push(inverse);
+  updateUndoRedoButtons();
+}
+
+function redoLastDrawing() {
+  const entry = redoStack.pop();
+  if (!entry) return;
+  const inverse = applyUndoEntry(entry);
+  if (inverse) undoStack.push(inverse);
+  updateUndoRedoButtons();
+}
+
+function updateUndoRedoButtons() {
+  if (undoBtnEl) undoBtnEl.disabled = undoStack.length === 0;
+  if (redoBtnEl) redoBtnEl.disabled = redoStack.length === 0;
+}
+
+let undoBtnEl = null;
+let redoBtnEl = null;
+
+async function fetchDrawingsForScope(coin, tf) {
+  try {
+    const res = await fetch(`/api/chart/drawings?symbol=${encodeURIComponent(coin)}&timeframe=${encodeURIComponent(tf)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "load failed");
+    return data.drawings || [];
+  } catch (err) {
+    return null; // signals failure to the caller — chart still works, just unsynced
+  }
+}
 
 // Freehand brush state — driven by native mouse/touch events since the
 // chart library's own click/crosshair subscriptions don't expose drag.
@@ -1246,7 +1420,7 @@ const TOOL_ARITY = {
   trendline: 2, ray: 2, extended: 2, trendangle: 2, rectangle: 2, ellipse: 2,
   arrow: 2, measure: 2, fib: 2, fibtimezone: 2, fibfan: 2, fibcircles: 2,
   fibspiral: 2, fibarcs: 2, gannbox: 2, longpos: 2, shortpos: 2,
-  pricerange: 2, daterange: 2, callout: 2,
+  pricerange: 2, daterange: 2, callout: 2, support_zone: 2, resistance_zone: 2,
   fibext: 3, fibchannel: 3, fibwedge: 3, pitchfork: 3, triangle: 3,
 };
 
@@ -1274,6 +1448,8 @@ const TOOL_ICONS = {
   pitchfork: ic('<path d="M4 20L14 4M4 20L20 8M4 20L20 14" stroke="currentColor" stroke-width="1.5"/>'),
   gannbox: ic('<rect x="4" y="4" width="16" height="16" stroke="currentColor" stroke-width="1.4"/><path d="M4 10.7h16M4 17.3h16M10.7 4v16M17.3 4v16M4 4l16 16" stroke="currentColor" stroke-width="0.9"/>'),
   rectangle: ic('<rect x="4" y="6" width="16" height="12" rx="1.5" stroke="currentColor" stroke-width="1.6"/>'),
+  support_zone: ic('<rect x="4" y="10" width="16" height="7" rx="1" fill="rgba(54,224,160,0.25)" stroke="#36e0a0" stroke-width="1.4"/><line x1="3" y1="17" x2="21" y2="17" stroke="#36e0a0" stroke-width="1.4"/>'),
+  resistance_zone: ic('<rect x="4" y="7" width="16" height="7" rx="1" fill="rgba(255,82,107,0.25)" stroke="#ff526b" stroke-width="1.4"/><line x1="3" y1="7" x2="21" y2="7" stroke="#ff526b" stroke-width="1.4"/>'),
   ellipse: ic('<ellipse cx="12" cy="12" rx="9" ry="6.5" stroke="currentColor" stroke-width="1.6"/>'),
   triangle: ic('<path d="M12 4l9 16H3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'),
   arrow: ic('<line x1="4" y1="20" x2="18" y2="6" stroke="currentColor" stroke-width="1.8"/><path d="M11 6h7v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'),
@@ -1289,6 +1465,8 @@ const TOOL_ICONS = {
   callout: ic('<path d="M4 5h16v9H10l-4 4v-4H4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>'),
   icon: ic('<circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="10" r="1.1" fill="currentColor"/><circle cx="15" cy="10" r="1.1" fill="currentColor"/><path d="M8.5 14.5c1 1.4 5.9 1.4 7 0" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>'),
   clear: ic('<path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'),
+  undo: ic('<path d="M7 8H4V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 8c2-3 5.5-4.5 9-3.5A8 8 0 1 1 5 18" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>'),
+  redo: ic('<path d="M17 8h3V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 8c-2-3-5.5-4.5-9-3.5A8 8 0 1 0 19 18" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>'),
 };
 
 // Groups drive both the toolbar UI and which tools live together in a
@@ -1325,6 +1503,8 @@ const TOOL_GROUPS = [
       { id: "triangle", label: "Triangle" },
       { id: "arrow", label: "Arrow" },
       { id: "path", label: "Path" },
+      { id: "support_zone", label: "Support Zone" },
+      { id: "resistance_zone", label: "Resistance Zone" },
   ]},
   { id: "measuregrp", tools: [
       { id: "measure", label: "Measure" },
@@ -1425,6 +1605,30 @@ function renderToolbar() {
   sep.className = "chart-tool-sep";
   chartToolsEl.appendChild(sep);
 
+  undoBtnEl = document.createElement("button");
+  undoBtnEl.type = "button";
+  undoBtnEl.className = "chart-tool-btn";
+  undoBtnEl.dataset.tool = "undo";
+  undoBtnEl.title = "Undo (Ctrl+Z)";
+  undoBtnEl.innerHTML = TOOL_ICONS.undo;
+  undoBtnEl.disabled = undoStack.length === 0;
+  undoBtnEl.addEventListener("click", undoLastDrawing);
+  chartToolsEl.appendChild(undoBtnEl);
+
+  redoBtnEl = document.createElement("button");
+  redoBtnEl.type = "button";
+  redoBtnEl.className = "chart-tool-btn";
+  redoBtnEl.dataset.tool = "redo";
+  redoBtnEl.title = "Redo (Ctrl+Shift+Z)";
+  redoBtnEl.innerHTML = TOOL_ICONS.redo;
+  redoBtnEl.disabled = redoStack.length === 0;
+  redoBtnEl.addEventListener("click", redoLastDrawing);
+  chartToolsEl.appendChild(redoBtnEl);
+
+  const sep2 = document.createElement("span");
+  sep2.className = "chart-tool-sep";
+  chartToolsEl.appendChild(sep2);
+
   const clearBtn = document.createElement("button");
   clearBtn.type = "button";
   clearBtn.className = "chart-tool-btn chart-tool-danger";
@@ -1432,6 +1636,8 @@ function renderToolbar() {
   clearBtn.title = "Clear all drawings";
   clearBtn.innerHTML = TOOL_ICONS.clear;
   clearBtn.addEventListener("click", () => {
+    if (!chartDrawings.length) return;
+    if (!window.confirm("Delete all drawings from this chart?")) return;
     chartDrawings = [];
     pendingPoints = [];
     isBrushing = false;
@@ -1440,6 +1646,7 @@ function renderToolbar() {
     isDraggingDrawing = false;
     hideDrawDeleteBtn();
     renderDrawings();
+    clearDrawingsOnServer();
   });
   chartToolsEl.appendChild(clearBtn);
 
@@ -1508,9 +1715,12 @@ function ensureDrawDeleteBtn() {
   drawDeleteBtnEl.addEventListener("click", (e) => {
     e.stopPropagation();
     if (selectedDrawingId == null) return;
+    const removed = chartDrawings.find((d) => d.id === selectedDrawingId);
     chartDrawings = chartDrawings.filter((d) => d.id !== selectedDrawingId);
     selectedDrawingId = null;
     renderDrawings();
+    deleteDrawingOnServer(removed);
+    if (removed) pushUndo({ action: "delete", drawing: cloneDrawing(removed) });
   });
   host.appendChild(drawDeleteBtnEl);
   return drawDeleteBtnEl;
@@ -1565,23 +1775,29 @@ function handleChartClick(param) {
   const arity = TOOL_ARITY[activeChartTool] || 2;
 
   if (arity === 1) {
+    let created = null;
     if (activeChartTool === "text") {
       const text = window.prompt("Note text:");
-      if (text && text.trim()) chartDrawings.push({ type: "text", ...pt, text: text.trim(), id: ++drawingIdSeq });
+      if (text && text.trim()) created = { type: "text", ...pt, text: text.trim(), id: ++drawingIdSeq };
     } else if (activeChartTool === "note") {
       const text = window.prompt("Note:");
-      if (text && text.trim()) chartDrawings.push({ type: "note", ...pt, text: text.trim(), id: ++drawingIdSeq });
+      if (text && text.trim()) created = { type: "note", ...pt, text: text.trim(), id: ++drawingIdSeq };
     } else if (activeChartTool === "icon") {
       const emoji = window.prompt("Icon (emoji), e.g. ⭐ 🚀 🔥 ⚠️ ✅:", "⭐");
-      if (emoji && emoji.trim()) chartDrawings.push({ type: "icon", ...pt, emoji: emoji.trim().slice(0, 4), id: ++drawingIdSeq });
+      if (emoji && emoji.trim()) created = { type: "icon", ...pt, emoji: emoji.trim().slice(0, 4), id: ++drawingIdSeq };
     } else if (activeChartTool === "horizontal") {
-      chartDrawings.push({ type: "horizontal", price, id: ++drawingIdSeq });
+      created = { type: "horizontal", price, id: ++drawingIdSeq };
     } else if (activeChartTool === "vertical") {
-      chartDrawings.push({ type: "vertical", time: param.time, id: ++drawingIdSeq });
+      created = { type: "vertical", time: param.time, id: ++drawingIdSeq };
     } else if (activeChartTool === "hray") {
-      chartDrawings.push({ type: "hray", ...pt, id: ++drawingIdSeq });
+      created = { type: "hray", ...pt, id: ++drawingIdSeq };
     } else if (activeChartTool === "crossline") {
-      chartDrawings.push({ type: "crossline", ...pt, id: ++drawingIdSeq });
+      created = { type: "crossline", ...pt, id: ++drawingIdSeq };
+    }
+    if (created) {
+      chartDrawings.push(created);
+      saveDrawingCreate(created);
+      pushUndo({ action: "create", id: created.id });
     }
     renderDrawings();
     return;
@@ -1596,6 +1812,8 @@ function handleChartClick(param) {
   if (arity === 2) { d.p1 = p1; d.p2 = p2; }
   if (arity === 3) { d.p1 = p1; d.p2 = p2; d.p3 = p3; }
   chartDrawings.push(d);
+  saveDrawingCreate(d);
+  pushUndo({ action: "create", id: d.id });
   pendingPoints = [];
   renderDrawings();
 }
@@ -1676,14 +1894,20 @@ function onDrawPointerMove(clientX, clientY) {
 function onDrawPointerUp() {
   if (isDraggingDrawing) {
     isDraggingDrawing = false;
+    const movedId = selectedDrawingId;
     dragLastPoint = null;
     setChartInteractionsEnabled(activeChartTool !== "brush");
+    const d = chartDrawings.find((dd) => dd.id === movedId);
+    if (d) saveDrawingUpdate(d);
     return;
   }
   if (!isBrushing) return;
   isBrushing = false;
   if (currentBrushPoints.length > 1) {
-    chartDrawings.push({ type: "brush", points: currentBrushPoints.slice(), id: ++drawingIdSeq });
+    const d = { type: "brush", points: currentBrushPoints.slice(), id: ++drawingIdSeq };
+    chartDrawings.push(d);
+    saveDrawingCreate(d);
+    pushUndo({ action: "create", id: d.id });
   }
   currentBrushPoints = [];
   renderDrawings();
@@ -1715,7 +1939,10 @@ if (candleChartEl) {
     if (activeChartTool !== "path") return;
     e.preventDefault();
     if (pendingPoints.length > 1) {
-      chartDrawings.push({ type: "path", points: pendingPoints.slice(), id: ++drawingIdSeq });
+      const d = { type: "path", points: pendingPoints.slice(), id: ++drawingIdSeq };
+      chartDrawings.push(d);
+      saveDrawingCreate(d);
+      pushUndo({ action: "create", id: d.id });
     }
     pendingPoints = [];
     renderDrawings();
@@ -1741,15 +1968,30 @@ document.addEventListener("keydown", (e) => {
     renderDrawings();
     return;
   }
+
+  const activeTag = (document.activeElement && document.activeElement.tagName) || "";
+  const inTextField = activeTag === "INPUT" || activeTag === "TEXTAREA";
+
+  // Ctrl+Z / Cmd+Z → undo, Ctrl+Shift+Z or Ctrl+Y / Cmd+Shift+Z → redo.
+  // Independent of selection state (undo/redo work with nothing selected)
+  // and never touches browser/page undo when a text input is focused.
+  if (!inTextField && (e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y")) {
+    e.preventDefault();
+    if (e.key === "y" || e.key === "Y" || e.shiftKey) redoLastDrawing(); else undoLastDrawing();
+    return;
+  }
+
   if (selectedDrawingId == null) return;
-  const tag = (document.activeElement && document.activeElement.tagName) || "";
-  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (inTextField) return;
   if (e.key === "Delete" || e.key === "Backspace") {
     e.preventDefault();
+    const removed = chartDrawings.find((d) => d.id === selectedDrawingId);
     chartDrawings = chartDrawings.filter((d) => d.id !== selectedDrawingId);
     selectedDrawingId = null;
     hideDrawDeleteBtn();
     renderDrawings();
+    deleteDrawingOnServer(removed);
+    if (removed) pushUndo({ action: "delete", drawing: cloneDrawing(removed) });
   }
 });
 
@@ -1787,7 +2029,7 @@ function hitTestDrawing(x, y) {
         const b = { x: chartTimeX(d.points[j + 1].time), y: chartPriceY(d.points[j + 1].price) };
         if ([a.x, a.y, b.x, b.y].every((v) => v != null) && distPointToSegment(x, y, a.x, a.y, b.x, b.y) <= HIT_TOLERANCE) return d;
       }
-    } else if (d.type === "rectangle" || d.type === "gannbox" || d.type === "longpos" || d.type === "shortpos" || d.type === "ellipse") {
+    } else if (d.type === "rectangle" || d.type === "gannbox" || d.type === "longpos" || d.type === "shortpos" || d.type === "ellipse" || d.type === "support_zone" || d.type === "resistance_zone") {
       if (!ok2) continue;
       const minX = Math.min(P1.x, P2.x) - HIT_TOLERANCE, maxX = Math.max(P1.x, P2.x) + HIT_TOLERANCE;
       const minY = Math.min(P1.y, P2.y) - HIT_TOLERANCE, maxY = Math.max(P1.y, P2.y) + HIT_TOLERANCE;
@@ -2019,6 +2261,20 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       } else {
         el("ellipse", { cx: x + w / 2, cy: y + h / 2, rx: w / 2, ry: h / 2, fill: "rgba(77,171,247,0.12)", stroke: "#4dabf7", "stroke-width": isSel ? "2.6" : "1.4" });
       }
+      if (isSel) selectedAnchor = { x: Math.max(P1.x, P2.x), y };
+      return;
+    }
+
+    if (d.type === "support_zone" || d.type === "resistance_zone") {
+      if (!ok2) return;
+      const isSupport = d.type === "support_zone";
+      const color = isSupport ? "#36e0a0" : "#ff526b";
+      const x = Math.min(P1.x, P2.x), y = Math.min(P1.y, P2.y);
+      const w = Math.abs(P2.x - P1.x), h = Math.abs(P2.y - P1.y);
+      el("rect", { x, y, width: w, height: h, fill: isSupport ? "rgba(54,224,160,0.14)" : "rgba(255,82,107,0.14)", stroke: color, "stroke-width": isSel ? "2.6" : "1.4", ...(isSel ? { "stroke-dasharray": "5 3" } : {}) });
+      const topPrice = Math.max(d.p1.price, d.p2.price), botPrice = Math.min(d.p1.price, d.p2.price);
+      el("text", { x: x + 6, y: y + 14, fill: color, "font-size": "10", "font-family": "IBM Plex Mono, monospace", "font-weight": "700" }).textContent =
+        `${isSupport ? "SUPPORT" : "RESISTANCE"}  ${fmtPrice ? fmtPrice(topPrice) : topPrice.toFixed(2)} – ${fmtPrice ? fmtPrice(botPrice) : botPrice.toFixed(2)}`;
       if (isSel) selectedAnchor = { x: Math.max(P1.x, P2.x), y };
       return;
     }
@@ -2339,15 +2595,29 @@ async function loadChartData() {
     lwCandleSeries.setData(lastBars);
     lwChart.timeScale().fitContent();
     refreshIndicators();
+    renderVolatilityPanel();
 
-    // drawings are per-coin — switching pairs clears the board, but stay
-    // put when only the timeframe changes for the same coin.
-    if (drawingsCoinKey !== coin) {
+    // drawings are scoped per user + symbol + timeframe (Phase 3B) — BTC/USDT
+    // 1H keeps a separate drawing set from BTC/USDT 4H and from other symbols.
+    const scopeKey = `${coin}|${currentChartTimeframe}`;
+    if (drawingsScopeKey !== scopeKey) {
+      drawingsScopeKey = scopeKey;
       chartDrawings = [];
       pendingPoints = [];
       selectedDrawingId = null;
       hideDrawDeleteBtn();
-      drawingsCoinKey = coin;
+      renderDrawings();
+
+      const rows = await fetchDrawingsForScope(coin, currentChartTimeframe);
+      if (drawingsScopeKey !== scopeKey) return; // user switched chart again before this resolved
+      if (rows === null) {
+        if (chartStatusEl) chartStatusEl.textContent = "⚠ drawings unavailable (offline) · chart still live";
+      } else {
+        chartDrawings = rows.map((r) => {
+          const { id: serverId, type, ...coords } = r;
+          return { ...coords, type, id: ++drawingIdSeq, serverId };
+        });
+      }
     }
     renderDrawings();
 
@@ -2440,6 +2710,7 @@ function restartChartPolling(coin) {
         else if (lastBar.time > prevLast.time) lastBars.push(lastBar);
       }
       refreshIndicators();
+      renderVolatilityPanel();
       updateChartPrice(data);
     } catch (e) {
       // Silent — a single missed poll shouldn't spam the UI; next tick retries.
@@ -2643,6 +2914,103 @@ function atrVals(bars, period = 14) {
   }
   return out;
 }
+
+/* ---------- Volatility panel (Phase 3E) — real OHLCV only, no fabricated
+   values. Classification method (transparent, not a guaranteed prediction):
+   take the ATR% series over the currently-loaded bars, rank the latest
+   value against that same series as a percentile, and bucket it:
+     <25th pct  -> LOW, 25-70th -> NORMAL, 70-90th -> HIGH, >90th -> EXTREME
+   Trend compares the average of the last 5 ATR values against the
+   preceding 5. ---------- */
+function computeVolatilityStats(bars, period = 14) {
+  if (!bars || bars.length < period + 10) return null;
+
+  const atr = atrVals(bars, period);
+  const atrPctSeries = [];
+  for (let i = 0; i < bars.length; i++) {
+    if (atr[i] != null && bars[i].close) atrPctSeries.push({ i, pct: (atr[i] / bars[i].close) * 100 });
+  }
+  if (atrPctSeries.length < 10) return null;
+
+  const latest = atrPctSeries[atrPctSeries.length - 1];
+  const currentAtr = atr[latest.i];
+  const currentAtrPct = latest.pct;
+
+  const sorted = atrPctSeries.map((p) => p.pct).slice().sort((a, b) => a - b);
+  const rank = sorted.filter((v) => v <= currentAtrPct).length;
+  const percentile = Math.round((rank / sorted.length) * 100);
+
+  let status;
+  if (percentile < 25) status = "LOW";
+  else if (percentile < 70) status = "NORMAL";
+  else if (percentile < 90) status = "HIGH";
+  else status = "EXTREME";
+
+  const recentVals = atrPctSeries.slice(-5).map((p) => p.pct);
+  const priorVals = atrPctSeries.slice(-10, -5).map((p) => p.pct);
+  let trend = "Stable", trendDir = "flat";
+  if (priorVals.length === 5) {
+    const recentAvg = recentVals.reduce((a, b) => a + b, 0) / recentVals.length;
+    const priorAvg = priorVals.reduce((a, b) => a + b, 0) / priorVals.length;
+    const change = priorAvg === 0 ? 0 : (recentAvg - priorAvg) / priorAvg;
+    if (change > 0.08) { trend = "Increasing"; trendDir = "up"; }
+    else if (change < -0.08) { trend = "Decreasing"; trendDir = "down"; }
+  }
+
+  return { atr: currentAtr, atrPct: currentAtrPct, status, trend, trendDir, percentile };
+}
+
+function renderVolatilityPanel() {
+  if (!volatilityPanelEl || volatilityPanelEl.hidden) return;
+  if (volatilityTfLabelEl) volatilityTfLabelEl.textContent = currentChartTimeframe;
+
+  const stats = computeVolatilityStats(lastBars);
+  if (!stats) {
+    if (volatilityUnavailableEl) volatilityUnavailableEl.hidden = false;
+    if (volatilityRowsEl) volatilityRowsEl.hidden = true;
+    return;
+  }
+  if (volatilityUnavailableEl) volatilityUnavailableEl.hidden = true;
+  if (volatilityRowsEl) volatilityRowsEl.hidden = false;
+
+  if (volAtrEl) volAtrEl.textContent = fmtPrice ? fmtPrice(stats.atr) : stats.atr.toFixed(2);
+  if (volAtrPctEl) volAtrPctEl.textContent = stats.atrPct.toFixed(2) + "%";
+  if (volStatusEl) {
+    volStatusEl.textContent = stats.status;
+    volStatusEl.className = "volatility-value vol-" + stats.status.toLowerCase();
+  }
+  if (volTrendEl) {
+    const arrow = stats.trendDir === "up" ? "↑ " : stats.trendDir === "down" ? "↓ " : "→ ";
+    volTrendEl.textContent = arrow + stats.trend;
+    volTrendEl.className = "volatility-value" + (stats.trendDir === "up" ? " vol-up" : stats.trendDir === "down" ? " vol-down" : "");
+  }
+  if (volPercentileEl) volPercentileEl.textContent = stats.percentile + "%";
+}
+
+function setVolatilityPanelOpen(open) {
+  if (!volatilityPanelEl) return;
+  volatilityPanelEl.hidden = !open;
+  if (volatilityBtnEl) volatilityBtnEl.classList.toggle("active", open);
+  if (open) renderVolatilityPanel();
+}
+
+if (volatilityBtnEl) {
+  volatilityBtnEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setVolatilityPanelOpen(volatilityPanelEl.hidden);
+  });
+}
+if (volatilityPanelEl) {
+  volatilityPanelEl.addEventListener("click", (e) => e.stopPropagation());
+}
+document.addEventListener("click", (e) => {
+  if (volatilityPanelEl && !volatilityPanelEl.hidden && !volatilityPanelEl.contains(e.target) && !(volatilityBtnEl && volatilityBtnEl.contains(e.target))) {
+    setVolatilityPanelOpen(false);
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (volatilityPanelEl && !volatilityPanelEl.hidden && e.key === "Escape") setVolatilityPanelOpen(false);
+});
 
 function macdVals(closes, fast = 12, slow = 26, signal = 9) {
   const ef = emaVals(closes, fast);
