@@ -643,14 +643,7 @@ def _concept_votes(*, buying_pressure, selling_pressure, bullish_pct, bearish_pc
 
 def concept_accuracy_score(final_verdict, **concept_kwargs):
     votes = _concept_votes(**concept_kwargs)
-
-    # Fixed denominator: the 5 Tier-1 concepts (Ch.01-05 - Hawkes Process,
-    # Bayesian Classifier, Quantile Volatility, Conformal Prediction,
-    # Fractional Kelly) - this is the only tier that actually produces the
-    # final verdict (see tier note in design.html). Ch.06-19 are
-    # display-only diagnostics and must NOT be part of the score.
-    tier1_votes = [v for v in votes if v["ch"] <= 5]
-    total = len(tier1_votes)  # always 5
+    total = len(votes)  # always 19
 
     if final_verdict not in ("LONG", "SHORT"):
         # WAIT has no direction to measure agreement against.
@@ -663,17 +656,9 @@ def concept_accuracy_score(final_verdict, **concept_kwargs):
             "concept_votes": votes,
         }
 
-    # Quantile Volatility / Conformal Prediction / Fractional Kelly (ch
-    # 3-5) are structurally always NEUTRAL - they size risk/volatility off
-    # of final_verdict rather than casting their own opposing direction,
-    # so a NEUTRAL vote counts as supporting the verdict, not disagreeing
-    # with it. Only a concept that actively voted the OPPOSITE direction
-    # counts against the score.
     agree_count = 0
     for v in votes:
-        is_tier1 = v["ch"] <= 5
-        opposes = v["direction"] in ("LONG", "SHORT") and v["direction"] != final_verdict
-        v["agrees"] = is_tier1 and not opposes
+        v["agrees"] = v["direction"] == final_verdict
         if v["agrees"]:
             agree_count += 1
 
@@ -1815,9 +1800,9 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     except Exception as e:
         candlestick_patterns = []
 
-    # "Accuracy Score" - kitne Tier-1 (Ch.01-05) concepts final_verdict ki
-    # taraf ishara kar rahe hain, out of 5 (display metric, verdict khud
-    # change nahi hota - dekho concept_accuracy_score() ke comments).
+    # "Accuracy Score" - kitne 19 mein se concepts final_verdict ki
+    # taraf ishara kar rahe hain (display metric, verdict khud change
+    # nahi hota - dekho concept_accuracy_score() ke comments).
     accuracy_data = concept_accuracy_score(
         final_verdict,
         buying_pressure=buying_pressure, selling_pressure=selling_pressure,
@@ -1863,7 +1848,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         # display-only, human-style chart-reading (does NOT affect final_verdict)
         "candlestick_patterns": candlestick_patterns,
 
-        # Accuracy Score widget (Ch.01-05 concept agreement out of 5, with the verdict above)
+        # Accuracy Score widget (Ch.01-19 agreement with the verdict above)
         "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
         "concept_agree_count": accuracy_data["concept_agree_count"],
         "concept_total": accuracy_data["concept_total"],
