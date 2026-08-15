@@ -36,10 +36,6 @@ const chartTfRow    = document.getElementById("chart-tf-row");
 const candleChartEl = document.getElementById("candle-chart");
 const chartPanelEl  = document.getElementById("chart-panel");
 const chartFullscreenBtn = document.getElementById("chart-fullscreen-btn");
-const chartOthersBtn = document.getElementById("chart-others-btn");
-const chartOthersMenu = document.getElementById("chart-others-menu");
-const togglePatternsEl = document.getElementById("toggle-patterns");
-const toggleSrEl = document.getElementById("toggle-sr");
 const chartBackBtn = document.getElementById("chart-back-btn");
 const chartToolsEl = document.getElementById("chart-tools");
 const drawOverlayEl = document.getElementById("draw-overlay");
@@ -547,36 +543,39 @@ function renderAccuracyScore(data) {
   }
 }
 
-function renderTotalSupportScore(data) {
-  const pctEl = document.getElementById("total-support-pct");
-  const subEl = document.getElementById("total-support-sub");
-  const fillEl = document.getElementById("total-support-gauge-fill");
-  const needleEl = document.getElementById("total-support-gauge-needle");
-  if (!pctEl || !fillEl) return;
+// Display-only, human-style candlestick pattern reading (Doji, Hammer,
+// Engulfing, Stars, Soldiers/Crows). Purely informational — does not
+// feed the verdict/confidence/accuracy logic in any way.
+function renderCandlestickPatterns(data) {
+  const listEl = document.getElementById("candle-patterns-list");
+  if (!listEl) return;
 
-  const pct = data.total_accuracy_pct;
-  const verdict = (data.final_verdict || "").toUpperCase();
+  const patterns = Array.isArray(data.candlestick_patterns) ? data.candlestick_patterns : [];
 
-  if (na(pct)) {
-    pctEl.textContent = "--%";
-    pctEl.style.color = "var(--wait)";
-    subEl.textContent = verdict === "WAIT" ? "no directional signal yet (WAIT)" : "waiting for a verdict";
-    fillEl.style.stroke = "var(--wait)";
-    fillEl.style.strokeDasharray = ACCURACY_GAUGE_ARC;
-    fillEl.style.strokeDashoffset = ACCURACY_GAUGE_ARC;
-    needleEl.style.transform = "rotate(0deg)";
+  if (!patterns.length) {
+    listEl.innerHTML = `<div class="candle-patterns-empty">no classic candlestick pattern on the last few bars right now</div>`;
     return;
   }
 
-  const ratio = Math.max(0, Math.min(100, pct)) / 100;
-  const color = accuracyColor(pct);
-  pctEl.textContent = fmtPct(pct);
-  pctEl.style.color = color;
-  subEl.textContent = `${data.total_agree_count} of ${data.total_channels} channels (whole app) support ${verdict}`;
-  fillEl.style.stroke = color;
-  fillEl.style.strokeDasharray = ACCURACY_GAUGE_ARC;
-  fillEl.style.strokeDashoffset = ACCURACY_GAUGE_ARC * (1 - ratio);
-  needleEl.style.transform = `rotate(${-90 + ratio * 180}deg)`;
+  listEl.innerHTML = patterns.map((p) => {
+    const type = (p.type || "NEUTRAL").toUpperCase();
+    const rowClass = type === "BULLISH" ? "candle-pattern-row--bullish"
+      : type === "BEARISH" ? "candle-pattern-row--bearish"
+      : "candle-pattern-row--neutral";
+    const ago = p.candles_ago === 0 ? "latest candle" : `${p.candles_ago} candle${p.candles_ago === 1 ? "" : "s"} ago`;
+    return `
+      <div class="candle-pattern-row ${rowClass}">
+        <span class="candle-pattern-dot"></span>
+        <div class="candle-pattern-body">
+          <div class="candle-pattern-name">
+            ${escapeHtml(p.name || "")}
+            <span class="candle-pattern-badge">${escapeHtml(type)}</span>
+          </div>
+          <div class="candle-pattern-desc">${escapeHtml(p.description || "")}</div>
+        </div>
+        <span class="candle-pattern-ago">${escapeHtml(ago)}</span>
+      </div>`;
+  }).join("");
 }
 
 async function fetchAndRenderAccuracy(coin) {
@@ -589,7 +588,6 @@ async function fetchAndRenderAccuracy(coin) {
     const data = await res.json();
     if (!res.ok || data.error || coin !== currentCoin) return;
     renderAccuracyScore(data);
-    renderTotalSupportScore(data);
   } catch (e) {
     // Silent — a single missed poll shouldn't spam the UI; next tick retries.
   } finally {
@@ -806,45 +804,6 @@ function renderTier3(data) {
         <div class="dual-item"><span class="dual-label">CUSUM-</span><span class="dual-value">${fmtNum(cusum.cusum_neg, 4)}</span></div>
       </div>`
   }));
-
-  const candle = data.candlestick_patterns || {};
-  const candleTone = candle.confirmation === "CONFIRMS" ? "long" : candle.confirmation === "CONTRADICTS" ? "short" : "flat";
-  const detected = candle.patterns_detected || [];
-  cards.push(channelCard({
-    id: 28, title: "Candlestick Pattern Confirmation", model: "OHLC shape math",
-    body: `
-      ${badge(candle.confirmation || "NONE", candleTone)}
-      <div class="channel-detail">${detected.length ? detected.join(", ") : "no pattern on recent candles"}</div>
-      ${candle.confidence_adjustment ? `<div class="channel-detail ${candle.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${candle.confidence_adjustment > 0 ? "+" : ""}${candle.confidence_adjustment}%</div>` : ""}`
-  }));
-
-  const mtf = data.multi_timeframe || {};
-  const mtfTone = mtf.status === "ALIGNED" ? "long" : mtf.status === "AGAINST" ? "short" : "flat";
-  const htf = mtf.higher_timeframes || {};
-  const htfEntries = Object.entries(htf).map(([tf, tr]) => `${tf.toUpperCase()}: ${tr || "N/A"}`).join(" · ");
-  cards.push(channelCard({
-    id: 29, title: "Multi-Timeframe Confirmation", model: "higher-TF EMA trend",
-    body: `
-      ${badge(mtf.status || "NEUTRAL", mtfTone)}
-      <div class="channel-detail">${htfEntries || "no higher-timeframe data"}</div>
-      ${mtf.confidence_adjustment ? `<div class="channel-detail ${mtf.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${mtf.confidence_adjustment > 0 ? "+" : ""}${mtf.confidence_adjustment}%</div>` : ""}`
-  }));
-
-  const corr = data.correlated_asset || {};
-  if (corr.applicable) {
-    const corrTone = corr.status === "ALIGNED" ? "long" : corr.status === "AGAINST" ? "short" : "flat";
-    const corrLabel = corr.correlation != null
-      ? `Correlation: ${corr.correlation} (${corr.correlation_strength})`
-      : "Correlation: N/A";
-    cards.push(channelCard({
-      id: 31, title: "Correlated Asset Check (BTC)", model: "Pearson r + trend",
-      body: `
-        ${badge(corr.status || "NEUTRAL", corrTone)}
-        <div class="channel-detail">BTC trend: ${corr.btc_trend || "N/A"}</div>
-        <div class="channel-detail">${corrLabel}</div>
-        ${corr.confidence_adjustment ? `<div class="channel-detail ${corr.confidence_adjustment > 0 ? "text-long" : "text-short"}">confidence ${corr.confidence_adjustment > 0 ? "+" : ""}${corr.confidence_adjustment}%</div>` : ""}`
-    }));
-  }
 
   tier3El.innerHTML = cards.join("");
 }
@@ -1147,7 +1106,6 @@ function startLiquidityPolling() {
 
 let lwChart = null;
 let lwCandleSeries = null;
-let lwPatternMarkers = null;
 let chartPollTimer = null;
 let currentChartTimeframe = "1h";
 let chartLimit = 300;
@@ -1163,86 +1121,6 @@ const CHART_RANGE_PRESETS = {
   "1Y": { tf: "1d", limit: 366 },
   "5Y": { tf: "1w", limit: 262 },
 };
-
-// Candlestick pattern markers + Support/Resistance lines — both hidden by
-// default, only rendered when the user opens the OTHERS menu and checks
-// the box (Zainab's request: sirf tab dikhein jab user on kare).
-let chartPatterns = [];
-let srLevels = [];
-let showPatternMarkers = false;
-let showSrLevels = false;
-let srPriceLines = [];
-
-const PATTERN_MARKER_STYLE = {
-  bullish: { color: "#36e0a0", position: "belowBar", shape: "arrowUp" },
-  bearish: { color: "#ff526b", position: "aboveBar", shape: "arrowDown" },
-  neutral: { color: "#8b96a5", position: "inBar", shape: "circle" },
-};
-
-function applyPatternMarkers() {
-  if (!lwPatternMarkers) return;
-  if (!showPatternMarkers) {
-    lwPatternMarkers.setMarkers([]);
-    return;
-  }
-  const markers = chartPatterns
-    .slice()
-    .sort((a, b) => a.time - b.time)
-    .map((p) => {
-      const style = PATTERN_MARKER_STYLE[p.bias] || PATTERN_MARKER_STYLE.neutral;
-      return { time: p.time, position: style.position, color: style.color, shape: style.shape, text: p.pattern };
-    });
-  lwPatternMarkers.setMarkers(markers);
-}
-
-function applySrLevels() {
-  if (!lwCandleSeries) return;
-  srPriceLines.forEach((line) => {
-    try { lwCandleSeries.removePriceLine(line); } catch (e) { /* already gone */ }
-  });
-  srPriceLines = [];
-  if (!showSrLevels) return;
-
-  srLevels.forEach((lvl) => {
-    const color = lvl.type === "resistance" ? "#ff526b" : "#36e0a0";
-    const line = lwCandleSeries.createPriceLine({
-      price: lvl.price,
-      color,
-      lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible: true,
-      title: `${lvl.type === "resistance" ? "R" : "S"} · ${lvl.touches}x`,
-    });
-    srPriceLines.push(line);
-  });
-}
-
-if (chartOthersBtn && chartOthersMenu) {
-  chartOthersBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const willShow = chartOthersMenu.hidden;
-    chartOthersMenu.hidden = !willShow;
-    chartOthersBtn.classList.toggle("active", willShow);
-  });
-  document.addEventListener("click", (e) => {
-    if (!chartOthersMenu.hidden && !chartOthersMenu.contains(e.target) && e.target !== chartOthersBtn) {
-      chartOthersMenu.hidden = true;
-      chartOthersBtn.classList.remove("active");
-    }
-  });
-}
-if (togglePatternsEl) {
-  togglePatternsEl.addEventListener("change", () => {
-    showPatternMarkers = togglePatternsEl.checked;
-    applyPatternMarkers();
-  });
-}
-if (toggleSrEl) {
-  toggleSrEl.addEventListener("change", () => {
-    showSrLevels = toggleSrEl.checked;
-    applySrLevels();
-  });
-}
 
 function ensureChartInitialized() {
   if (lwChart || !candleChartEl || typeof LightweightCharts === "undefined") return;
@@ -1274,12 +1152,6 @@ function ensureChartInitialized() {
     wickUpColor: "#36e0a0",
     wickDownColor: "#ff526b",
   });
-
-  // Candlestick pattern markers (Doji/Hammer/Engulfing/etc.) — v5 API
-  // requires a dedicated markers primitive instead of series.setMarkers().
-  if (typeof LightweightCharts.createSeriesMarkers === "function") {
-    lwPatternMarkers = LightweightCharts.createSeriesMarkers(lwCandleSeries, []);
-  }
 
   lwChart.subscribeClick(handleChartClick);
   lwChart.subscribeCrosshairMove(handleChartCrosshairMove);
@@ -2468,12 +2340,6 @@ async function loadChartData() {
     lwChart.timeScale().fitContent();
     refreshIndicators();
 
-    chartPatterns = data.patterns || [];
-    applyPatternMarkers();
-
-    srLevels = data.support_resistance || [];
-    applySrLevels();
-
     // drawings are per-coin — switching pairs clears the board, but stay
     // put when only the timeframe changes for the same coin.
     if (drawingsCoinKey !== coin) {
@@ -2535,9 +2401,6 @@ async function maybeLoadOlderCandles() {
       lwChart.timeScale().setVisibleLogicalRange({ from: savedRange.from + addedCount, to: savedRange.to + addedCount });
     }
     renderDrawings();
-
-    chartPatterns = [...(data.patterns || []), ...chartPatterns];
-    applyPatternMarkers();
   } catch (err) {
     // silent — a failed older-history fetch shouldn't disrupt the live chart
   } finally {
@@ -2584,173 +2447,6 @@ function restartChartPolling(coin) {
   }, 5000);
 }
 
-/* ---------------------------- risk-reward / position size calculator ---------------------------- */
-
-let rrLatestSignal = null;
-const rrBalanceEl = document.getElementById("rr-balance");
-const rrRiskPctEl = document.getElementById("rr-risk-pct");
-
-function renderRiskRewardCalc(data) {
-  rrLatestSignal = data;
-  const verdict = (data.final_verdict || "").toUpperCase();
-  const noteEl = document.getElementById("rr-calc-note");
-
-  if (verdict === "WAIT" || na(data.stop_loss) || na(data.take_profit)) {
-    ["rr-out-entry", "rr-out-sl", "rr-out-tp", "rr-out-rr", "rr-out-riskamt", "rr-out-possize"].forEach((id) => {
-      document.getElementById(id).textContent = "--";
-    });
-    if (noteEl) noteEl.textContent = "No directional trade to size (WAIT verdict) — calculator activates on LONG/SHORT.";
-    return;
-  }
-
-  if (rrRiskPctEl && !rrRiskPctEl.value && !na(data.suggested_risk_pct)) {
-    rrRiskPctEl.placeholder = `${fmtNum(data.suggested_risk_pct, 2)} (suggested)`;
-  }
-  if (noteEl) noteEl.textContent = "Entry/SL/TP auto-filled from the current signal. Enter your balance to see exact position size.";
-
-  recalcRiskReward();
-}
-
-function recalcRiskReward() {
-  const data = rrLatestSignal;
-  if (!data) return;
-  const verdict = (data.final_verdict || "").toUpperCase();
-  if (verdict === "WAIT" || na(data.stop_loss) || na(data.take_profit)) return;
-
-  const entry = data.last_price;
-  const sl = data.stop_loss;
-  const tp = data.take_profit;
-
-  document.getElementById("rr-out-entry").textContent = fmtPrice(entry);
-  document.getElementById("rr-out-sl").textContent = fmtPrice(sl);
-  document.getElementById("rr-out-tp").textContent = fmtPrice(tp);
-
-  const riskPerUnit = Math.abs(entry - sl);
-  const rewardPerUnit = Math.abs(tp - entry);
-  const rrRatio = riskPerUnit > 0 ? rewardPerUnit / riskPerUnit : null;
-  document.getElementById("rr-out-rr").textContent = rrRatio != null ? `1 : ${rrRatio.toFixed(2)}` : "--";
-
-  const balance = parseFloat(rrBalanceEl && rrBalanceEl.value);
-  const riskPct = parseFloat(rrRiskPctEl && rrRiskPctEl.value) || data.suggested_risk_pct;
-
-  if (!balance || balance <= 0 || !riskPct || riskPerUnit <= 0) {
-    document.getElementById("rr-out-riskamt").textContent = "--";
-    document.getElementById("rr-out-possize").textContent = "--";
-    return;
-  }
-
-  const riskAmount = balance * (riskPct / 100);
-  const positionUnits = riskAmount / riskPerUnit;
-  const positionValue = positionUnits * entry;
-
-  document.getElementById("rr-out-riskamt").textContent = `$${riskAmount.toFixed(2)}`;
-  document.getElementById("rr-out-possize").textContent = `${positionUnits.toFixed(6)} units (~$${positionValue.toFixed(2)})`;
-}
-
-if (rrBalanceEl) rrBalanceEl.addEventListener("input", recalcRiskReward);
-if (rrRiskPctEl) rrRiskPctEl.addEventListener("input", recalcRiskReward);
-
-/* ---------------------------- mini chart preview (Run Analysis result page) ---------------------------- */
-
-let miniChart = null;
-let miniCandleSeries = null;
-let miniPatternMarkers = null;
-let miniPriceLines = [];
-
-function ensureMiniChartInitialized() {
-  if (miniChart) return;
-  const container = document.getElementById("mini-chart-container");
-  if (!container || typeof LightweightCharts === "undefined") return;
-
-  miniChart = LightweightCharts.createChart(container, {
-    width: container.clientWidth || 300,
-    height: container.clientHeight || 200,
-    layout: { background: { type: "solid", color: "transparent" }, textColor: "#8b96a5", fontSize: 10, attributionLogo: false },
-    grid: { vertLines: { color: "rgba(255,255,255,0.04)" }, horzLines: { color: "rgba(255,255,255,0.04)" } },
-    rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
-    timeScale: { borderColor: "rgba(255,255,255,0.08)", timeVisible: true },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    handleScroll: false,
-    handleScale: false,
-  });
-
-  miniCandleSeries = miniChart.addSeries(LightweightCharts.CandlestickSeries, {
-    upColor: "#36e0a0", downColor: "#ff526b",
-    borderUpColor: "#28f3a5", borderDownColor: "#ff6b7e",
-    wickUpColor: "#36e0a0", wickDownColor: "#ff526b",
-  });
-
-  if (typeof LightweightCharts.createSeriesMarkers === "function") {
-    miniPatternMarkers = LightweightCharts.createSeriesMarkers(miniCandleSeries, []);
-  }
-
-  new ResizeObserver(() => {
-    miniChart.applyOptions({ width: container.clientWidth });
-  }).observe(container);
-}
-
-async function loadMiniChartPreview(data) {
-  const coin = data.coin, timeframe = data.timeframe;
-  if (!coin || !timeframe) return;
-
-  ensureMiniChartInitialized();
-  if (!miniChart) return;
-
-  const subEl = document.getElementById("mini-chart-sub");
-  if (subEl) subEl.textContent = `${coin} · ${timeframe.toUpperCase()}`;
-
-  try {
-    const res = await fetch(`/candles?coin=${encodeURIComponent(coin)}&timeframe=${encodeURIComponent(timeframe)}&limit=40`);
-    const cData = await res.json();
-    if (!res.ok || !Array.isArray(cData.candles)) return;
-
-    const bars = cData.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
-    miniCandleSeries.setData(bars);
-    miniChart.timeScale().fitContent();
-
-    if (miniPatternMarkers) {
-      const sortedPatterns = (cData.patterns || []).slice().sort((a, b) => a.time - b.time);
-      // Overlap se bachne ke liye: sirf sabse recent 3 patterns ka naam
-      // (text) dikhta hai, baaki sirf chhota arrow/shape (bina label) -
-      // taake snapshot readable rahe. Poori detail CH.28 card mein hai.
-      const recentWithText = new Set(sortedPatterns.slice(-3).map((p) => p.time));
-      const markers = sortedPatterns.map((p) => {
-        const style = PATTERN_MARKER_STYLE[p.bias] || PATTERN_MARKER_STYLE.neutral;
-        const marker = { time: p.time, position: style.position, color: style.color, shape: style.shape };
-        if (recentWithText.has(p.time)) marker.text = p.pattern;
-        return marker;
-      });
-      miniPatternMarkers.setMarkers(markers);
-    }
-
-    miniPriceLines.forEach((line) => { try { miniCandleSeries.removePriceLine(line); } catch (e) {} });
-    miniPriceLines = [];
-    const verdict = (data.final_verdict || "").toUpperCase();
-    if (verdict !== "WAIT") {
-      if (!na(data.last_price)) {
-        miniPriceLines.push(miniCandleSeries.createPriceLine({
-          price: data.last_price, color: "#8b96a5", lineWidth: 1,
-          lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: true, title: "ENTRY",
-        }));
-      }
-      if (!na(data.stop_loss)) {
-        miniPriceLines.push(miniCandleSeries.createPriceLine({
-          price: data.stop_loss, color: "#ff526b", lineWidth: 1,
-          lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "SL",
-        }));
-      }
-      if (!na(data.take_profit)) {
-        miniPriceLines.push(miniCandleSeries.createPriceLine({
-          price: data.take_profit, color: "#36e0a0", lineWidth: 1,
-          lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "TP",
-        }));
-      }
-    }
-  } catch (e) {
-    /* mini chart preview is best-effort - main signal result stays unaffected */
-  }
-}
-
 /* ---------------------------- main render ---------------------------- */
 
 function renderResult(data) {
@@ -2763,17 +2459,10 @@ function renderResult(data) {
   if (data.fake_breakout_warning) {
     addAlert("warning", "FAKE BREAKOUT RISK — order flow disagrees with price direction");
   }
-  const fundingWarn = data.funding_event_warning || {};
-  if (fundingWarn.risk_level === "EXTREME" && fundingWarn.message) {
-    addAlert("danger", "⚠ " + fundingWarn.message);
-  } else if (fundingWarn.risk_level === "ELEVATED" && fundingWarn.message) {
-    addAlert("warning", "⚠ " + fundingWarn.message);
-  }
 
   renderHero(data);
   renderAccuracyScore(data);
-  renderTotalSupportScore(data);
-  renderRiskRewardCalc(data);
+  renderCandlestickPatterns(data);
   renderTier1(data);
   renderTier2(data);
   renderTier3(data);
@@ -2842,11 +2531,6 @@ async function runAnalysis(forceAnalyze) {
     renderResult(data);
     resultBox.classList.remove("hidden");
     emptyState.classList.add("hidden");
-
-    // Mini chart preview needs the result box to actually be visible
-    // (non-zero width/height) before LightweightCharts can size itself
-    // correctly - so this runs after the unhide, on the next frame.
-    requestAnimationFrame(() => loadMiniChartPreview(data));
 
     fetchAndRenderLiquidity(coin);
     startLiquidityPolling();
