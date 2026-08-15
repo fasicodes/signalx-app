@@ -213,6 +213,22 @@ def init_db():
                 print("[db] migrated: added is_user_mistake column to active_trades (+ backfilled existing closed trades)")
 
             # ------------------------------------------------------------
+            # Phase 2 upgrade: Trade Journal (notes/tags/setup_type on the
+            # EXISTING active_trades table - koi naya trades table nahi
+            # banaya, taake active/closed trades aur unki journal entry
+            # hamesha ek hi row rahe, koi data duplication na ho).
+            # ------------------------------------------------------------
+            cursor.execute("SHOW COLUMNS FROM active_trades LIKE 'notes'")
+            if cursor.fetchone() is None:
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN notes TEXT NULL")
+                # tags JSON array (text) ke tor par store hote hain, e.g. ["Breakout","Trend"]
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN tags TEXT NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN setup_type VARCHAR(50) NULL")
+                cursor.execute("ALTER TABLE active_trades ADD COLUMN journal_updated_at DATETIME NULL")
+                cursor.execute("ALTER TABLE active_trades ADD INDEX idx_user_setup (user_id, setup_type)")
+                print("[db] migrated: added notes/tags/setup_type journal columns to active_trades")
+
+            # ------------------------------------------------------------
             # Phase 1 upgrade: Watchlist, Alerts, Notifications
             # (see watchlist.py / alerts.py). Additive only - no existing
             # table/column is touched or removed.
