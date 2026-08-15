@@ -166,6 +166,10 @@
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.6 5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 12V7M4 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="panel-tab-text">TRADE HISTORY</span>
       </button>
+      <button class="panel-tab home-info-tab" data-info="trade-journal" type="button">
+        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-6-3-6 3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="panel-tab-text">TRADE JOURNAL</span>
+      </button>
     </div>
   </nav>
 
@@ -971,6 +975,57 @@
         </div>
       </div>
 
+      <div class="home-info-panel" data-info="trade-journal">
+        <div class="about-card">
+          <h2 class="about-title">Trade Journal</h2>
+          <p>Every trade you've tracked, with notes, tags and setup context — searchable and filterable.</p>
+
+          <div id="journal-stats-grid" class="perf-summary-grid" style="margin:16px 0 20px;"></div>
+
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+            <input type="text" id="journal-search" placeholder="Search symbol, notes, tags, setup…"
+                   style="flex:2; min-width:160px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:9px 11px; color:var(--text); font-family:var(--mono); font-size:12px;">
+            <select id="journal-filter-direction" style="flex:1; min-width:100px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:9px 8px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <option value="">All Directions</option>
+              <option value="LONG">LONG</option>
+              <option value="SHORT">SHORT</option>
+            </select>
+            <select id="journal-filter-result" style="flex:1; min-width:100px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:9px 8px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <option value="">All Results</option>
+              <option value="WIN">WIN</option>
+              <option value="LOSS">LOSS</option>
+              <option value="BREAKEVEN">BREAKEVEN</option>
+              <option value="OPEN">OPEN</option>
+              <option value="INVALIDATED">INVALIDATED</option>
+              <option value="EXPIRED">EXPIRED</option>
+            </select>
+            <select id="journal-sort" style="flex:1; min-width:130px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:9px 8px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="highest_pnl">Highest P&amp;L</option>
+              <option value="lowest_pnl">Lowest P&amp;L</option>
+              <option value="highest_confidence">Highest Confidence</option>
+            </select>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+            <input type="text" id="journal-filter-symbol" placeholder="Symbol e.g. BTC/USDT"
+                   style="flex:1; min-width:130px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:8px 10px; color:var(--text); font-family:var(--mono); font-size:11.5px; text-transform:uppercase;">
+            <input type="text" id="journal-filter-tag" placeholder="Tag e.g. Breakout"
+                   style="flex:1; min-width:130px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:8px 10px; color:var(--text); font-family:var(--mono); font-size:11.5px;">
+            <input type="text" id="journal-filter-setup" placeholder="Setup e.g. Liquidity Sweep"
+                   style="flex:1; min-width:130px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:8px 10px; color:var(--text); font-family:var(--mono); font-size:11.5px;">
+            <button type="button" id="journal-apply-filters-btn"
+                    style="padding:0 16px; border-radius:7px; border:none; background:var(--accent); color:var(--void); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">APPLY</button>
+            <button type="button" id="journal-clear-filters-btn"
+                    style="padding:0 14px; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:11.5px; cursor:pointer;">CLEAR</button>
+          </div>
+
+          <div id="journal-list">
+            <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
+          </div>
+        </div>
+      </div>
+
       <div class="home-info-panel" data-info="watchlist">
         <div class="about-card">
           <h2 class="about-title">Watchlist</h2>
@@ -1322,6 +1377,14 @@
   <div class="trade-modal-card" style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:440px; max-height:86vh; overflow-y:auto;">
     <div id="trade-detail-content"></div>
     <button id="trade-detail-close-btn" type="button" style="width:100%; margin-top:16px; padding:10px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Close</button>
+  </div>
+</div>
+
+<!-- Trade Journal detail drawer: full stats + timeline + editable notes/tags/setup -->
+<div id="journal-detail-modal" class="trade-modal-overlay" style="display:none; position:fixed; inset:0; z-index:900; align-items:center; justify-content:center;">
+  <div class="trade-modal-card" style="background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto;">
+    <div id="journal-detail-content"></div>
+    <button id="journal-detail-close-btn" type="button" style="width:100%; margin-top:16px; padding:10px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Close</button>
   </div>
 </div>
 
@@ -2213,6 +2276,291 @@
   dirEl.addEventListener('change', calculate);
   document.querySelector('.home-info-tab[data-info="risk-calc"]').addEventListener('click', calculate);
   calculate();
+})();
+</script>
+
+<!-- ============================================================
+     PHASE 2 UPGRADE — Trade Journal
+     Fully self-contained (own IIFE), same pattern as the Phase 1
+     upgrade block above. Reads/writes only the new journal endpoints
+     (/api/trades/journal, /api/trades/journal/stats,
+     /api/trades/<id>/journal) and the existing /api/trades/<id> detail
+     endpoint. Never touches script.js, the Active Trade Tracking
+     module, or the RUN ANALYSIS / signal-engine flow.
+     ============================================================ -->
+<script>
+(function () {
+  const listEl = document.getElementById('journal-list');
+  const statsEl = document.getElementById('journal-stats-grid');
+  const modal = document.getElementById('journal-detail-modal');
+  const contentEl = document.getElementById('journal-detail-content');
+  const closeBtn = document.getElementById('journal-detail-close-btn');
+  if (!listEl || !statsEl) return;
+
+  function showModal(el) { el.style.display = 'flex'; }
+  function hideModal(el) { el.style.display = 'none'; }
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined || isNaN(n)) return '--';
+    const num = Number(n);
+    return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fmtDateTime(iso) {
+    if (!iso) return '--';
+    try {
+      return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return '--'; }
+  }
+
+  function fmtDuration(seconds) {
+    if (seconds === null || seconds === undefined) return '--';
+    if (seconds < 60) return seconds + 's';
+    const mins = Math.floor(seconds / 60);
+    if (mins < 60) return mins + 'm';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h ' + (mins % 60) + 'm';
+    const days = Math.floor(hours / 24);
+    return days + 'd ' + (hours % 24) + 'h';
+  }
+
+  function resultBadge(result) {
+    const map = {
+      WIN: { cls: 'win', color: 'var(--long)' },
+      LOSS: { cls: 'loss', color: 'var(--short)' },
+      BREAKEVEN: { cls: 'neutral', color: 'var(--text-dim)' },
+      OPEN: { cls: 'active', color: 'var(--accent)' },
+      INVALIDATED: { cls: 'loss', color: 'var(--short)' },
+      EXPIRED: { cls: 'neutral', color: 'var(--text-dim)' },
+    };
+    return map[result] || { cls: 'neutral', color: 'var(--text-dim)' };
+  }
+
+  function perfMetricCardHtml(label, value, tone) {
+    return `<div class="perf-metric-card ${tone || ''}">
+      <span class="perf-metric-label">${label}</span>
+      <span class="perf-metric-value">${value}</span>
+    </div>`;
+  }
+
+  async function loadStats() {
+    statsEl.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    try {
+      const res = await fetch('/api/trades/journal/stats', { credentials: 'same-origin' });
+      const s = await res.json();
+      if (!res.ok) { statsEl.innerHTML = `<p style="color:var(--short); font-size:13px;">${s.error || 'Unable to load stats.'}</p>`; return; }
+      const netUp = s.net_pnl >= 0;
+      statsEl.innerHTML = [
+        perfMetricCardHtml('Total Trades', s.total_trades),
+        perfMetricCardHtml('Open', s.open_trades, 'active'),
+        perfMetricCardHtml('Closed', s.closed_trades),
+        perfMetricCardHtml('Win Rate', s.win_rate + '%'),
+        perfMetricCardHtml('Winning', s.winning_trades, 'up'),
+        perfMetricCardHtml('Losing', s.losing_trades, 'down'),
+        perfMetricCardHtml('Net P&amp;L', (netUp ? '+' : '') + fmtMoney(s.net_pnl), netUp ? 'up' : 'down'),
+        perfMetricCardHtml('Avg P&amp;L', (s.avg_pnl >= 0 ? '+' : '') + fmtMoney(s.avg_pnl), s.avg_pnl >= 0 ? 'up' : 'down'),
+        perfMetricCardHtml('Avg Win', fmtMoney(s.avg_win), 'up'),
+        perfMetricCardHtml('Avg Loss', fmtMoney(s.avg_loss), 'down'),
+        perfMetricCardHtml('Best Trade', s.best_trade === null ? '--' : fmtMoney(s.best_trade), 'up'),
+        perfMetricCardHtml('Worst Trade', s.worst_trade === null ? '--' : fmtMoney(s.worst_trade), 'down'),
+      ].join('');
+    } catch (e) {
+      statsEl.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load journal stats.</p>';
+    }
+  }
+
+  function journalRowHtml(t) {
+    const badge = resultBadge(t.result);
+    const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
+    let pnl = Number(t.estimated_pnl) || 0;
+    if (Object.is(pnl, -0)) pnl = 0;
+    const up = pnl >= 0;
+    const tags = (t.tags || []).slice(0, 3).map(tag =>
+      `<span style="display:inline-block; background:var(--panel-raised); border:1px solid var(--line); border-radius:5px; padding:2px 7px; font-size:10px; color:var(--text-dim); margin-right:4px;">${tag}</span>`
+    ).join('');
+    return `
+      <div class="trade-card ${up ? 'is-win' : 'is-loss'}" style="cursor:pointer;" data-id="${t.id}">
+        <div class="trade-card-top">
+          <div class="trade-card-id">
+            <span class="trade-avatar ${dirCls}">${(t.asset || '').split('/')[0].slice(0, 3).toUpperCase()}</span>
+            <div class="trade-card-pair-wrap">
+              <span class="trade-card-pair">${t.asset}</span>
+              <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
+            </div>
+          </div>
+          <span class="trade-status-badge ${badge.cls}" style="color:${badge.color}; border-color:${badge.color};">${t.result}</span>
+        </div>
+        <div class="trade-card-stats">
+          <div class="stat-col"><span class="stat-label">Entry</span><span class="stat-value">${fmtMoney(t.entry_price)}</span></div>
+          <div class="stat-col"><span class="stat-label">P/L</span><span class="stat-value pnl ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(pnl)}</span></div>
+          <div class="stat-col"><span class="stat-label">R:R</span><span class="stat-value">${t.risk_reward !== null && t.risk_reward !== undefined ? '1:' + t.risk_reward : '--'}</span></div>
+          <div class="stat-col"><span class="stat-label">Duration</span><span class="stat-value">${fmtDuration(t.duration_seconds)}</span></div>
+        </div>
+        <div class="trade-card-footer" style="align-items:center;">
+          <span class="trade-closing-reason">${fmtDateTime(t.created_at)}${t.setup_type ? ' · ' + t.setup_type : ''}</span>
+          <span>${tags}</span>
+        </div>
+      </div>`;
+  }
+
+  function buildQuery() {
+    const params = new URLSearchParams();
+    const search = document.getElementById('journal-search').value.trim();
+    const direction = document.getElementById('journal-filter-direction').value;
+    const result = document.getElementById('journal-filter-result').value;
+    const sort = document.getElementById('journal-sort').value;
+    const symbol = document.getElementById('journal-filter-symbol').value.trim();
+    const tag = document.getElementById('journal-filter-tag').value.trim();
+    const setup = document.getElementById('journal-filter-setup').value.trim();
+    if (search) params.set('search', search);
+    if (direction) params.set('direction', direction);
+    if (result) params.set('result', result);
+    if (sort) params.set('sort', sort);
+    if (symbol) params.set('symbol', symbol);
+    if (tag) params.set('tag', tag);
+    if (setup) params.set('setup_type', setup);
+    return params.toString();
+  }
+
+  async function loadJournal() {
+    listEl.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    try {
+      const qs = buildQuery();
+      const res = await fetch('/api/trades/journal' + (qs ? '?' + qs : ''), { credentials: 'same-origin' });
+      const trades = await res.json();
+      if (!res.ok) { listEl.innerHTML = `<p style="color:var(--short); font-size:13px;">${trades.error || 'Unable to load trade journal.'}</p>`; return; }
+      if (!trades.length) { listEl.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">No trades match these filters yet.</p>'; return; }
+      listEl.innerHTML = trades.map(journalRowHtml).join('');
+      listEl.querySelectorAll('.trade-card[data-id]').forEach(card => {
+        card.addEventListener('click', () => openJournalDetail(card.dataset.id));
+      });
+    } catch (e) {
+      listEl.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not connect to the server.</p>';
+    }
+  }
+
+  async function openJournalDetail(id) {
+    contentEl.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    showModal(modal);
+    try {
+      const res = await fetch(`/api/trades/${id}`, { credentials: 'same-origin' });
+      const t = await res.json();
+      if (!res.ok) { contentEl.innerHTML = `<p style="color:var(--short);">${t.error || 'Could not load trade'}</p>`; return; }
+
+      let pnl = Number(t.estimated_pnl) || 0;
+      if (Object.is(pnl, -0)) pnl = 0;
+      const up = pnl >= 0;
+      const dirCls = (t.direction || '').toUpperCase() === 'SHORT' ? 'short' : 'long';
+      const badge = resultBadge(t.result);
+      const tagsStr = (t.tags || []).join(', ');
+
+      contentEl.innerHTML = `
+        <div class="trade-detail-header">
+          <span class="trade-detail-title">
+            ${t.asset}
+            <span class="trade-dir-badge ${dirCls}">${(t.direction || '').toUpperCase()}</span>
+          </span>
+        </div>
+        <div class="trade-detail-status-row">
+          <span class="trade-status-badge" style="color:${badge.color}; border-color:${badge.color};">${t.result}</span>
+        </div>
+        <div class="trade-stat-block">
+          <div class="trade-stat-row"><span class="label">Entry</span><span class="value">${fmtMoney(t.entry_price)}</span></div>
+          <div class="trade-stat-row"><span class="label">${t.status === 'ACTIVE' ? 'Current Price' : 'Exit Price'}</span><span class="value">${fmtMoney(t.status === 'ACTIVE' ? t.last_price : t.exit_price)}</span></div>
+          <div class="trade-stat-row"><span class="label">Position Size</span><span class="value">${fmtMoney(t.position_size)}</span></div>
+          <div class="trade-stat-row"><span class="label">Stop Loss</span><span class="value risk">${fmtMoney(t.stop_loss)}</span></div>
+          <div class="trade-stat-row"><span class="label">Take Profit</span><span class="value target">${fmtMoney(t.take_profit)}</span></div>
+          <div class="trade-stat-row"><span class="label">R:R</span><span class="value">${t.risk_reward !== null && t.risk_reward !== undefined ? '1:' + t.risk_reward : '--'}</span></div>
+          <div class="trade-stat-row"><span class="label">Confidence</span><span class="value">${t.confidence !== null && t.confidence !== undefined ? t.confidence + '%' : '--'}</span></div>
+          <div class="trade-stat-row"><span class="label">Duration</span><span class="value">${fmtDuration(t.duration_seconds)}</span></div>
+          <div class="trade-stat-row pnl-row"><span class="label">Estimated P/L</span><span class="value ${up ? 'up' : 'down'}">${up ? '+' : ''}${fmtMoney(pnl)} (${up ? '+' : ''}${t.estimated_pnl_percent}%)</span></div>
+        </div>
+
+        <div class="trade-detail-subhead">Journal</div>
+        <label style="display:block; font-size:10.5px; color:var(--text-dim); margin:8px 0 5px;">Setup Type</label>
+        <input type="text" id="journal-edit-setup" value="${t.setup_type ? t.setup_type.replace(/"/g, '&quot;') : ''}" placeholder="e.g. Liquidity Sweep"
+               style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px; margin-bottom:10px;">
+        <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Tags (comma-separated)</label>
+        <input type="text" id="journal-edit-tags" value="${tagsStr.replace(/"/g, '&quot;')}" placeholder="Breakout, Trend, High Confidence"
+               style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px; margin-bottom:10px;">
+        <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Notes — why did you enter? what went well/wrong?</label>
+        <textarea id="journal-edit-notes" rows="4" placeholder="Market condition, which signal was used, what went well, what went wrong…"
+                  style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px; resize:vertical; margin-bottom:8px;">${t.notes ? t.notes.replace(/</g, '&lt;') : ''}</textarea>
+        <div id="journal-edit-msg" style="font-size:11.5px; margin-bottom:8px; min-height:14px;"></div>
+        <button type="button" id="journal-edit-save-btn" data-id="${t.id}"
+                style="width:100%; padding:10px 0; border-radius:7px; border:none; background:var(--accent); color:var(--void); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">SAVE JOURNAL ENTRY</button>
+
+        <div class="trade-detail-subhead" style="margin-top:16px;">Trade Timeline</div>
+        <div class="trade-timeline">${
+          (t.timeline || []).map(e => `
+            <div class="timeline-msg neutral">
+              <span class="msg-body">
+                <span class="msg-time">${fmtDateTime(e.timestamp)}</span>
+                <span class="msg-text">${e.message}</span>
+              </span>
+            </div>`).join('') || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'
+        }</div>
+      `;
+
+      document.getElementById('journal-edit-save-btn').addEventListener('click', async (ev) => {
+        const btn = ev.currentTarget;
+        const msgEl = document.getElementById('journal-edit-msg');
+        const notes = document.getElementById('journal-edit-notes').value;
+        const tags = document.getElementById('journal-edit-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+        const setup_type = document.getElementById('journal-edit-setup').value.trim();
+        btn.disabled = true;
+        msgEl.style.color = 'var(--text-dim)';
+        msgEl.textContent = 'Saving…';
+        try {
+          const saveRes = await fetch(`/api/trades/${btn.dataset.id}/journal`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ notes, tags, setup_type: setup_type || null }),
+          });
+          const saved = await saveRes.json();
+          if (!saveRes.ok) {
+            msgEl.style.color = 'var(--short)';
+            msgEl.textContent = saved.error || 'Could not save journal entry.';
+          } else {
+            msgEl.style.color = 'var(--long)';
+            msgEl.textContent = 'Saved.';
+            loadJournal();
+          }
+        } catch (e) {
+          msgEl.style.color = 'var(--short)';
+          msgEl.textContent = 'Could not connect to the server.';
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    } catch (e) {
+      contentEl.innerHTML = '<p style="color:var(--short);">Could not load trade details.</p>';
+    }
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', () => hideModal(modal));
+
+  document.getElementById('journal-apply-filters-btn').addEventListener('click', loadJournal);
+  document.getElementById('journal-clear-filters-btn').addEventListener('click', () => {
+    document.getElementById('journal-search').value = '';
+    document.getElementById('journal-filter-direction').value = '';
+    document.getElementById('journal-filter-result').value = '';
+    document.getElementById('journal-sort').value = 'newest';
+    document.getElementById('journal-filter-symbol').value = '';
+    document.getElementById('journal-filter-tag').value = '';
+    document.getElementById('journal-filter-setup').value = '';
+    loadJournal();
+  });
+  document.getElementById('journal-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadJournal(); });
+
+  const journalNavTab = document.querySelector('.home-info-tab[data-info="trade-journal"]');
+  if (journalNavTab) {
+    journalNavTab.addEventListener('click', () => {
+      loadStats();
+      loadJournal();
+    });
+  }
 })();
 </script>
 
