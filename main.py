@@ -191,6 +191,9 @@ app.register_blueprint(watchlist_bp)
 from alerts import alerts_bp
 app.register_blueprint(alerts_bp)
 
+from chart_drawings import chart_drawings_bp
+app.register_blueprint(chart_drawings_bp)
+
 # App start hote hi 'users' table khud ba khud ban jaye (agar pehle se
 # maujood nahi hai). Agar DB abhi connect nahi ho pa raha (misal, MySQL
 # service abhi tak deploy nahi hui) to sirf warning print hoti hai -
