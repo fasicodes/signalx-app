@@ -734,10 +734,18 @@ def _concept_votes(*, buying_pressure, selling_pressure, bullish_pct, bearish_pc
 
 def concept_accuracy_score(final_verdict, **concept_kwargs):
     votes = _concept_votes(**concept_kwargs)
-    total = len(votes)  # always 19
 
-    if final_verdict not in ("LONG", "SHORT"):
-        # WAIT has no direction to measure agreement against.
+    # Only concepts that actually cast a directional (LONG/SHORT) vote this
+    # time count toward the score. NEUTRAL / non-directional concepts
+    # (Quantile Volatility, VPIN, Hurst, Possible Spoofing, etc.) never
+    # have an opinion one way or the other, so they shouldn't water down
+    # the score as either agreeing or disagreeing - they're just excluded.
+    directional_votes = [v for v in votes if v["direction"] in ("LONG", "SHORT")]
+    total = len(directional_votes)  # varies signal to signal, out of up to 27
+
+    if final_verdict not in ("LONG", "SHORT") or total == 0:
+        # WAIT has no direction to measure agreement against, or nobody
+        # is currently signaling a direction at all.
         for v in votes:
             v["agrees"] = False
         return {
@@ -1946,9 +1954,10 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     except Exception as e:
         crash_risk_data = {"score": None, "label": None, "factors": [], "error": str(e)}
 
-    # "Accuracy Score" - kitne 27 mein se concepts final_verdict ki
-    # taraf ishara kar rahe hain (display metric, verdict khud change
-    # nahi hota - dekho concept_accuracy_score() ke comments).
+    # "Accuracy Score" - kitne DIRECTIONAL concepts (jo actually LONG/SHORT
+    # bol rahe hain, 27 mein se jitne bhi ho) final_verdict ki taraf ishara
+    # kar rahe hain (display metric, verdict khud change nahi hota - dekho
+    # concept_accuracy_score() ke comments).
     accuracy_data = concept_accuracy_score(
         final_verdict,
         buying_pressure=buying_pressure, selling_pressure=selling_pressure,
@@ -2010,7 +2019,8 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "cvd_volume_delta": cvd_data,
         "market_crash_risk": crash_risk_data,
 
-        # Accuracy Score widget (Ch.01-27 agreement with the verdict above)
+        # Accuracy Score widget (agreement among whichever of Ch.01-27 are
+        # currently directional, out of up to 27, with the verdict above)
         "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
         "concept_agree_count": accuracy_data["concept_agree_count"],
         "concept_total": accuracy_data["concept_total"],
