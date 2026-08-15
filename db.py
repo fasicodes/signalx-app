@@ -290,6 +290,30 @@ def init_db():
             )
             print("[db] migrated: watchlist/alerts/notifications tables ready")
 
+            # ------------------------------------------------------------
+            # Phase 3B: Chart Drawings (see chart_drawings.py). Scoped to
+            # user + symbol + timeframe so e.g. BTC/USDT 1H and BTC/USDT 4H
+            # keep separate drawing sets. Additive only.
+            # ------------------------------------------------------------
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS chart_drawings (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    symbol VARCHAR(30) NOT NULL,
+                    timeframe VARCHAR(10) NOT NULL,
+                    drawing_type VARCHAR(30) NOT NULL,
+                    drawing_data MEDIUMTEXT NOT NULL,
+                    style_data TEXT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_user_symbol_tf (user_id, symbol, timeframe),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """
+            )
+            print("[db] migrated: chart_drawings table ready")
+
         print("[db] users table ready")
     finally:
         conn.close()
