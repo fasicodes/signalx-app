@@ -212,6 +212,68 @@ def init_db():
                 )
                 print("[db] migrated: added is_user_mistake column to active_trades (+ backfilled existing closed trades)")
 
+            # ------------------------------------------------------------
+            # Phase 1 upgrade: Watchlist, Alerts, Notifications
+            # (see watchlist.py / alerts.py). Additive only - no existing
+            # table/column is touched or removed.
+            # ------------------------------------------------------------
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS watchlist (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    symbol VARCHAR(30) NOT NULL,
+                    is_favorite TINYINT(1) NOT NULL DEFAULT 0,
+                    sort_order INT NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uniq_user_symbol (user_id, symbol),
+                    INDEX idx_user (user_id),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """
+            )
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS alerts (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    symbol VARCHAR(30) NOT NULL,
+                    alert_type VARCHAR(30) NOT NULL,
+                    target_value DOUBLE NULL,
+                    is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+                    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+                    last_checked_value DOUBLE NULL,
+                    last_direction VARCHAR(10) NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    triggered_at DATETIME NULL,
+                    last_triggered_at DATETIME NULL,
+                    INDEX idx_user (user_id),
+                    INDEX idx_user_enabled (user_id, is_enabled),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """
+            )
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id INT PRIMARY KEY AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    category VARCHAR(20) NOT NULL,
+                    symbol VARCHAR(30) NULL,
+                    title VARCHAR(200) NOT NULL,
+                    message TEXT NOT NULL,
+                    is_read TINYINT(1) NOT NULL DEFAULT 0,
+                    alert_id INT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_user_read (user_id, is_read),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """
+            )
+            print("[db] migrated: watchlist/alerts/notifications tables ready")
+
         print("[db] users table ready")
     finally:
         conn.close()
