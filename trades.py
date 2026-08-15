@@ -537,7 +537,11 @@ def get_trade_detail(trade_id):
             for e in events:
                 e["timestamp"] = e["timestamp"].isoformat()
 
-        result = _serialize_trade(trade)
+        # include_journal=True: adds notes/tags/setup_type/result/risk_reward/
+        # duration_seconds/confidence to the response. Purely additive keys -
+        # existing callers of this endpoint that only read the original
+        # fields are unaffected.
+        result = _serialize_trade(trade, include_journal=True)
         result["timeline"] = events
         try:
             result["original_signal"] = json.loads(trade.get("signal_snapshot") or "{}")
