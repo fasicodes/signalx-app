@@ -434,10 +434,32 @@
                   <span>INDICATORS</span>
                   <span id="indicator-btn-count" class="indicator-btn-count">0</span>
                 </button>
+                <button type="button" id="volatility-btn" class="indicator-btn" title="Volatility">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 17l4-9 4 6 3-5 4 3 3-7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                  <span>VOLATILITY</span>
+                </button>
                 <button type="button" id="chart-fullscreen-btn" class="chart-icon-btn" title="Fullscreen">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
+            </div>
+
+            <div class="volatility-panel" id="volatility-panel" hidden>
+              <div class="volatility-panel-head">
+                <span>VOLATILITY</span>
+                <span id="volatility-tf-label" class="volatility-tf-label"></span>
+              </div>
+              <div class="volatility-panel-body" id="volatility-panel-body">
+                <div class="volatility-unavailable" id="volatility-unavailable" hidden>Volatility data unavailable</div>
+                <div class="volatility-rows" id="volatility-rows">
+                  <div class="volatility-row"><span class="volatility-label">ATR</span><span id="vol-atr" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">ATR %</span><span id="vol-atr-pct" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">STATUS</span><span id="vol-status" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">TREND</span><span id="vol-trend" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">PERCENTILE</span><span id="vol-percentile" class="volatility-value">--</span></div>
+                </div>
+              </div>
+              <div class="volatility-panel-foot">based on actual OHLCV for the current symbol &amp; timeframe</div>
             </div>
 
             <div class="indicator-panel" id="indicator-panel" hidden>
