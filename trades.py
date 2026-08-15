@@ -190,8 +190,80 @@ def _evaluate_trade(cursor, trade):
     return trade
 
 
-def _serialize_trade(t):
-    return {
+def _journal_result(t):
+    """Trade Journal 'Result' column: WIN / LOSS / BREAKEVEN / OPEN /
+    INVALIDATED / EXPIRED. Reuses existing status/outcome_class fields -
+    no new state is invented."""
+    status = t.get("status")
+    if status == "ACTIVE":
+        return "OPEN"
+    if status == "SETUP_INVALIDATED":
+        return "INVALIDATED"
+    if status == "HOLDING_PERIOD_EXPIRED":
+        return "EXPIRED"
+    oc = t.get("outcome_class")
+    pnl = t.get("estimated_pnl")
+    if oc in ("TAKE_PROFIT", "MANUAL_PROFIT"):
+        return "WIN"
+    if oc == "STOP_LOSS":
+        return "LOSS"
+    if oc == "MANUAL_LOSS":
+        return "LOSS"
+    if pnl is not None:
+        if pnl > 0:
+            return "WIN"
+        if pnl < 0:
+            return "LOSS"
+        return "BREAKEVEN"
+    return "OPEN"
+
+
+def _risk_reward(t):
+    """R:R = potential reward / potential risk, based on entry/SL/TP.
+    Returns None if SL or TP missing (can't be computed - never fabricated)."""
+    entry = t.get("entry_price")
+    sl = t.get("stop_loss")
+    tp = t.get("take_profit")
+    if not entry or not sl or not tp:
+        return None
+    risk = abs(entry - sl)
+    reward = abs(tp - entry)
+    if risk <= 0:
+        return None
+    return round(reward / risk, 2)
+
+
+def _duration_seconds(t):
+    start = t.get("created_at")
+    if not start:
+        return None
+    end = t.get("closed_at") or datetime.utcnow()
+    try:
+        return int((end - start).total_seconds())
+    except Exception:
+        return None
+
+
+def _extract_confidence(t):
+    try:
+        snap = json.loads(t.get("signal_snapshot") or "{}")
+        return snap.get("confidence_pct")
+    except Exception:
+        return None
+
+
+def _parse_tags(raw):
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
+
+
+def _serialize_trade(t, include_journal=False):
+    result = {
         "id": t["id"],
         "asset": t["asset"],
         "direction": t["direction"],
@@ -217,6 +289,18 @@ def _serialize_trade(t):
         "condition_message": t.get("condition_message"),
         "condition_started_at": t["condition_started_at"].isoformat() if t.get("condition_started_at") else None,
     }
+    if include_journal:
+        result.update({
+            "notes": t.get("notes"),
+            "tags": _parse_tags(t.get("tags")),
+            "setup_type": t.get("setup_type"),
+            "journal_updated_at": t["journal_updated_at"].isoformat() if t.get("journal_updated_at") else None,
+            "result": _journal_result(t),
+            "risk_reward": _risk_reward(t),
+            "duration_seconds": _duration_seconds(t),
+            "confidence": _extract_confidence(t),
+        })
+    return result
 
 
 @trades_bp.route("/api/trades/track", methods=["POST"])
@@ -516,5 +600,253 @@ def close_trade(trade_id):
             )
             _add_event(cursor, trade_id, "MANUALLY_CLOSED", "Trade was manually closed by the user.", exit_price, pnl)
         return jsonify({"message": "Trade closed"}), 200
+    finally:
+        conn.close()
+
+
+# ======================================================================
+# PHASE 2 - Trade Journal
+# Extends the existing active_trades table (notes/tags/setup_type
+# columns, see db.py migration). No new trade table, no data duplication.
+# ======================================================================
+
+_ALLOWED_SORTS = {
+    "newest": "created_at DESC",
+    "oldest": "created_at ASC",
+    "highest_pnl": "estimated_pnl DESC",
+    "lowest_pnl": "estimated_pnl ASC",
+    "highest_confidence": "created_at DESC",  # confidence lives in JSON, sorted in Python below
+}
+
+
+@trades_bp.route("/api/trades/<int:trade_id>/journal", methods=["PATCH"])
+def update_trade_journal(trade_id):
+    """Add/edit notes, tags, setup_type for a trade. Scoped to the
+    authenticated user - a user can never edit another user's trade."""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid request body"}), 400
+
+    fields = []
+    values = []
+
+    if "notes" in data:
+        notes = data.get("notes")
+        if notes is not None and not isinstance(notes, str):
+            return jsonify({"error": "notes must be a string"}), 400
+        if notes is not None and len(notes) > 5000:
+            return jsonify({"error": "notes must be under 5000 characters"}), 400
+        fields.append("notes=%s")
+        values.append(notes)
+
+    if "tags" in data:
+        tags = data.get("tags")
+        if tags is None:
+            tags = []
+        if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
+            return jsonify({"error": "tags must be a list of strings"}), 400
+        tags = [t.strip() for t in tags if t.strip()][:15]  # sane cap
+        fields.append("tags=%s")
+        values.append(json.dumps(tags))
+
+    if "setup_type" in data:
+        setup_type = data.get("setup_type")
+        if setup_type is not None and (not isinstance(setup_type, str) or len(setup_type) > 50):
+            return jsonify({"error": "setup_type must be a string under 50 characters"}), 400
+        fields.append("setup_type=%s")
+        values.append(setup_type)
+
+    if not fields:
+        return jsonify({"error": "Nothing to update - provide notes, tags, and/or setup_type"}), 400
+
+    fields.append("journal_updated_at=%s")
+    values.append(datetime.utcnow())
+    values.extend([trade_id, user_id])
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Ownership check baked into the WHERE clause itself.
+            cursor.execute(
+                f"UPDATE active_trades SET {', '.join(fields)} WHERE id=%s AND user_id=%s",
+                tuple(values),
+            )
+            if cursor.rowcount == 0:
+                # Either trade doesn't exist, or doesn't belong to this user.
+                cursor.execute("SELECT id FROM active_trades WHERE id=%s", (trade_id,))
+                if cursor.fetchone() is None:
+                    return jsonify({"error": "Trade not found"}), 404
+                return jsonify({"error": "Not authorized to edit this trade"}), 403
+
+            cursor.execute("SELECT * FROM active_trades WHERE id=%s AND user_id=%s", (trade_id, user_id))
+            trade = cursor.fetchone()
+        return jsonify(_serialize_trade(trade, include_journal=True)), 200
+    finally:
+        conn.close()
+
+
+@trades_bp.route("/api/trades/journal", methods=["GET"])
+def list_trade_journal():
+    """Trade Journal table: every trade (active + closed) belonging to the
+    user, with filtering/sorting/search - all scoped to user_id.
+
+    Query params (all optional):
+      symbol, direction (LONG/SHORT), result (WIN/LOSS/BREAKEVEN/OPEN/
+      INVALIDATED/EXPIRED), setup_type, tag, date_from, date_to (ISO dates),
+      pnl_min, pnl_max, confidence_min, search (matches asset/notes/tags/setup),
+      sort (newest|oldest|highest_pnl|lowest_pnl|highest_confidence)
+    """
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    args = request.args
+    symbol = args.get("symbol")
+    direction = args.get("direction")
+    setup_type = args.get("setup_type")
+    tag = args.get("tag")
+    date_from = args.get("date_from")
+    date_to = args.get("date_to")
+    search = (args.get("search") or "").strip().lower()
+    sort = args.get("sort", "newest")
+    if sort not in _ALLOWED_SORTS:
+        sort = "newest"
+
+    where = ["user_id=%s"]
+    params = [user_id]
+
+    if symbol:
+        where.append("asset=%s")
+        params.append(symbol)
+    if direction in ("LONG", "SHORT"):
+        where.append("direction=%s")
+        params.append(direction)
+    if setup_type:
+        where.append("setup_type=%s")
+        params.append(setup_type)
+    if tag:
+        where.append("tags LIKE %s")
+        params.append(f'%"{tag}"%')
+    if date_from:
+        where.append("created_at >= %s")
+        params.append(date_from)
+    if date_to:
+        where.append("created_at <= %s")
+        params.append(date_to)
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            query = f"SELECT * FROM active_trades WHERE {' AND '.join(where)} ORDER BY {_ALLOWED_SORTS[sort]}"
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+
+            # Re-evaluate ACTIVE rows so P&L/status reflect live price,
+            # same as /api/trades/active does.
+            trades = [_evaluate_trade(cursor, t) if t["status"] == "ACTIVE" else t for t in rows]
+
+        serialized = [_serialize_trade(t, include_journal=True) for t in trades]
+
+        # Filters that need computed/derived fields are applied in Python
+        # (result, pnl range, confidence, free-text search) since they
+        # aren't plain columns.
+        result_filter = args.get("result")
+        if result_filter:
+            serialized = [t for t in serialized if t["result"] == result_filter]
+
+        pnl_min = args.get("pnl_min")
+        pnl_max = args.get("pnl_max")
+        if pnl_min is not None:
+            try:
+                pnl_min = float(pnl_min)
+                serialized = [t for t in serialized if (t["estimated_pnl"] or 0) >= pnl_min]
+            except ValueError:
+                pass
+        if pnl_max is not None:
+            try:
+                pnl_max = float(pnl_max)
+                serialized = [t for t in serialized if (t["estimated_pnl"] or 0) <= pnl_max]
+            except ValueError:
+                pass
+
+        confidence_min = args.get("confidence_min")
+        if confidence_min is not None:
+            try:
+                confidence_min = float(confidence_min)
+                serialized = [t for t in serialized if (t["confidence"] or 0) >= confidence_min]
+            except ValueError:
+                pass
+
+        if search:
+            def _matches(t):
+                haystack = " ".join([
+                    t["asset"] or "", t.get("notes") or "", t.get("setup_type") or "",
+                    " ".join(t.get("tags") or []),
+                ]).lower()
+                return search in haystack
+            serialized = [t for t in serialized if _matches(t)]
+
+        if sort == "highest_confidence":
+            serialized.sort(key=lambda t: (t["confidence"] or 0), reverse=True)
+
+        return jsonify(serialized), 200
+    finally:
+        conn.close()
+
+
+@trades_bp.route("/api/trades/journal/stats", methods=["GET"])
+def trade_journal_stats():
+    """Trade Journal Dashboard metrics - counts, win rate, P&L stats.
+    Computed only from the user's own recorded trades; nothing fabricated."""
+    user_id = _require_login()
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM active_trades WHERE user_id=%s", (user_id,))
+            rows = cursor.fetchall()
+            trades = [_evaluate_trade(cursor, t) if t["status"] == "ACTIVE" else t for t in rows]
+
+        total_trades = len(trades)
+        open_trades = sum(1 for t in trades if t["status"] == "ACTIVE")
+        closed = [t for t in trades if t["status"] != "ACTIVE"]
+        closed_trades = len(closed)
+
+        results = [_journal_result(t) for t in closed]
+        winning_trades = results.count("WIN")
+        losing_trades = results.count("LOSS")
+        win_rate = round((winning_trades / closed_trades * 100), 2) if closed_trades else 0.0
+
+        pnls = [t.get("estimated_pnl") for t in closed if t.get("estimated_pnl") is not None]
+        net_pnl = round(sum(pnls), 2) if pnls else 0.0
+        avg_pnl = round(sum(pnls) / len(pnls), 2) if pnls else 0.0
+
+        wins = [p for p in pnls if p > 0]
+        losses = [p for p in pnls if p < 0]
+        avg_win = round(sum(wins) / len(wins), 2) if wins else 0.0
+        avg_loss = round(sum(losses) / len(losses), 2) if losses else 0.0
+        best_trade = round(max(pnls), 2) if pnls else None
+        worst_trade = round(min(pnls), 2) if pnls else None
+
+        return jsonify({
+            "total_trades": total_trades,
+            "open_trades": open_trades,
+            "closed_trades": closed_trades,
+            "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
+            "win_rate": win_rate,
+            "net_pnl": net_pnl,
+            "avg_pnl": avg_pnl,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
+            "best_trade": best_trade,
+            "worst_trade": worst_trade,
+        }), 200
     finally:
         conn.close()
