@@ -719,6 +719,81 @@ body { padding: 14px 18px 28px; }
   .accuracy-score-card--hero .accuracy-gauge-wrap { width: 105px !important; flex: 0 0 105px !important; }
 }
 
+/* ===== Candlestick Patterns (display-only) ===== */
+.candle-patterns-card {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(20,26,35,.98), rgba(15,20,28,.98));
+  box-sizing: border-box;
+}
+.candle-patterns-card .accuracy-score-head { margin: 0 0 14px 0; }
+.candle-patterns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.candle-patterns-empty {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 0;
+}
+.candle-pattern-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255,255,255,.02);
+}
+.candle-pattern-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 9px;
+}
+.candle-pattern-row--bullish .candle-pattern-dot { background: var(--long, #34d399); }
+.candle-pattern-row--bearish .candle-pattern-dot { background: var(--short, #f87171); }
+.candle-pattern-row--neutral .candle-pattern-dot { background: var(--wait, #a1a1aa); }
+.candle-pattern-body { min-width: 0; flex: 1 1 auto; }
+.candle-pattern-name {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.candle-pattern-badge {
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.candle-pattern-desc {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+.candle-pattern-ago {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 /* ===== FINAL TIER 01 LAYOUT FIX =====
    Tier 01 has exactly five decision cards. Keep them in one equal-width row
    on desktop so no card wraps to a second row and no dead space is created. */
