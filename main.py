@@ -383,355 +383,6 @@ def get_live_price(asset):
 
 
 # ============================================================
-# CANDLESTICK PATTERN DETECTION (NEW) — purely deterministic OHLC math,
-# jaisa ek human trader chart par shape dekh kar Doji/Hammer/Engulfing
-# waghera pehchanta hai, waisa hi yahan open/high/low/close ke ratios
-# se check hota hai. Koi ML/guess nahi — agar shart poori hoti hai to
-# pattern confirm hota hai, warna nahi.
-#
-# `detect_candlestick_patterns()` poore df par scan karta hai (chart
-# par marker lagane ke liye /candles endpoint isay use karta hai).
-# `candlestick_confirmation()` sirf sabse recent candles check karta
-# hai aur generate_signal() ke final_verdict ko CONFIRM/CONTRADICT
-# karta hai — verdict khud kabhi flip nahi hota, sirf confidence_pct
-# thodi si (+/-) adjust hoti hai (jaisa pehle discuss hua tha: pattern
-# ko "confirmation filter" ki tarah use karna, standalone signal nahi).
-# ============================================================
-def detect_candlestick_patterns(df, trend_window=10):
-    n = len(df)
-    patterns = []
-    if n < 3:
-        return patterns
-
-    o = df["open"].values
-    h = df["high"].values
-    l = df["low"].values
-    c = df["close"].values
-    has_time = "timestamp" in df.columns
-    t = df["timestamp"].values if has_time else None
-
-    for i in range(2, n):
-        body = abs(c[i] - o[i])
-        rng = h[i] - l[i]
-        if rng <= 0:
-            continue
-        upper_wick = h[i] - max(o[i], c[i])
-        lower_wick = min(o[i], c[i]) - l[i]
-        bullish = c[i] > o[i]
-        bearish = c[i] < o[i]
-
-        start = max(0, i - trend_window)
-        prior_closes = c[start:i]
-        uptrend = len(prior_closes) >= 2 and prior_closes[-1] > prior_closes[0]
-        downtrend = len(prior_closes) >= 2 and prior_closes[-1] < prior_closes[0]
-
-        found = None
-
-        # --- Single-candle patterns ---
-        if body <= 0.1 * rng:
-            found = ("Doji", "neutral")
-        elif body > 0 and lower_wick >= 2 * body and upper_wick <= 0.3 * body:
-            if downtrend:
-                found = ("Hammer", "bullish")
-            elif uptrend:
-                found = ("Hanging Man", "bearish")
-        elif body > 0 and upper_wick >= 2 * body and lower_wick <= 0.3 * body:
-            if downtrend:
-                found = ("Inverted Hammer", "bullish")
-            elif uptrend:
-                found = ("Shooting Star", "bearish")
-
-        # --- Two-candle patterns (override single-candle if found) ---
-        po, pc = o[i - 1], c[i - 1]
-        prev_bearish = pc < po
-        prev_bullish = pc > po
-        if prev_bearish and bullish and o[i] <= pc and c[i] >= po:
-            found = ("Bullish Engulfing", "bullish")
-        elif prev_bullish and bearish and o[i] >= pc and c[i] <= po:
-            found = ("Bearish Engulfing", "bearish")
-        elif prev_bearish and bullish and o[i] < pc and po > c[i] > (po + pc) / 2:
-            found = ("Piercing Line", "bullish")
-        elif prev_bullish and bearish and o[i] > pc and po < c[i] < (po + pc) / 2:
-            found = ("Dark Cloud Cover", "bearish")
-
-        # --- Three-candle patterns (highest priority) ---
-        o1, c1 = o[i - 2], c[i - 2]
-        o2, c2 = o[i - 1], c[i - 1]
-        b1 = abs(c1 - o1)
-        b2 = abs(c2 - o2)
-        r1 = h[i - 2] - l[i - 2]
-        first_bearish_big = (c1 < o1) and r1 > 0 and b1 >= 0.5 * r1
-        first_bullish_big = (c1 > o1) and r1 > 0 and b1 >= 0.5 * r1
-        star_small = (b2 <= 0.4 * b1) if b1 > 0 else False
-
-        if first_bearish_big and star_small and bullish and c[i] > (o1 + c1) / 2:
-            found = ("Morning Star", "bullish")
-        elif first_bullish_big and star_small and bearish and c[i] < (o1 + c1) / 2:
-            found = ("Evening Star", "bearish")
-        elif (c1 > o1) and (c2 > o2) and bullish and c2 > c1 and c[i] > c2 and o2 > o1 and o[i] > o2:
-            found = ("Three White Soldiers", "bullish")
-        elif (c1 < o1) and (c2 < o2) and bearish and c2 < c1 and c[i] < c2 and o2 < o1 and o[i] < o2:
-            found = ("Three Black Crows", "bearish")
-
-        if found:
-            pattern_name, bias = found
-            entry = {"index": i, "pattern": pattern_name, "bias": bias}
-            if has_time:
-                try:
-                    entry["time"] = int(pd.Timestamp(t[i]).timestamp())
-                except Exception:
-                    pass
-            patterns.append(entry)
-
-    return patterns
-
-
-def candlestick_confirmation(df, final_verdict, lookback=3):
-    """Sirf sabse recent `lookback` candles check karta hai - final_verdict
-    ko flip NAHI karta, sirf confidence_pct ko CONFIRM par thoda barhata
-    hai aur CONTRADICT par thoda ghatata hai (max +/-8%, clamp 5-97%
-    generate_signal() mein hota hai)."""
-    all_patterns = detect_candlestick_patterns(df)
-    n = len(df)
-    recent = [p for p in all_patterns if p["index"] >= n - lookback]
-
-    if not recent or final_verdict == "WAIT":
-        return {
-            "patterns_detected": [p["pattern"] for p in recent],
-            "confirmation": "NONE" if not recent else "NEUTRAL",
-            "confidence_adjustment": 0,
-        }
-
-    bullish_count = sum(1 for p in recent if p["bias"] == "bullish")
-    bearish_count = sum(1 for p in recent if p["bias"] == "bearish")
-
-    agrees_bullish = final_verdict == "LONG" and bullish_count > bearish_count
-    agrees_bearish = final_verdict == "SHORT" and bearish_count > bullish_count
-    disagrees_bullish = final_verdict == "LONG" and bearish_count > bullish_count
-    disagrees_bearish = final_verdict == "SHORT" and bullish_count > bearish_count
-
-    if agrees_bullish or agrees_bearish:
-        adj, status = 8, "CONFIRMS"
-    elif disagrees_bullish or disagrees_bearish:
-        adj, status = -8, "CONTRADICTS"
-    else:
-        adj, status = 0, "NEUTRAL"
-
-    return {
-        "patterns_detected": [p["pattern"] for p in recent],
-        "confirmation": status,
-        "confidence_adjustment": adj,
-    }
-
-
-# ============================================================
-# SUPPORT / RESISTANCE DETECTION (NEW) — swing-high/swing-low pivots
-# clustered into horizontal levels, jaisa ek trader chart par manually
-# S/R lines draw karta hai. Purely price-action based hai (candle
-# highs/lows se), order book se ALAG hai (jo already CH.13 mein hai).
-# ============================================================
-def detect_support_resistance(df, pivot_window=5, cluster_pct=0.25, max_levels=6):
-    """`pivot_window` candles ke andar sabse high/low point ko swing
-    pivot maana jata hai. Phir qareeb-qareeb (cluster_pct %) wale pivots
-    ko ek level mein group kiya jata hai — jitni baar price ne wahan
-    touch kiya (`touches`), utni strength zyada. Current price se upar
-    wale levels 'resistance', neeche wale 'support' hain."""
-    n = len(df)
-    if n < (pivot_window * 2 + 3):
-        return []
-
-    high = df["high"].values
-    low = df["low"].values
-    close = df["close"].values
-    current_price = float(close[-1])
-
-    pivots = []
-    for i in range(pivot_window, n - pivot_window):
-        window_high = high[i - pivot_window:i + pivot_window + 1]
-        window_low = low[i - pivot_window:i + pivot_window + 1]
-        if high[i] == window_high.max():
-            pivots.append(float(high[i]))
-        if low[i] == window_low.min():
-            pivots.append(float(low[i]))
-
-    if not pivots:
-        return []
-
-    pivots.sort()
-    clusters = []
-    for price in pivots:
-        placed = False
-        for cluster in clusters:
-            if abs(price - cluster["avg"]) / cluster["avg"] * 100 <= cluster_pct:
-                cluster["prices"].append(price)
-                cluster["avg"] = sum(cluster["prices"]) / len(cluster["prices"])
-                placed = True
-                break
-        if not placed:
-            clusters.append({"avg": price, "prices": [price]})
-
-    levels = []
-    for cluster in clusters:
-        touches = len(cluster["prices"])
-        if touches < 2:
-            continue
-        price = round(cluster["avg"], 8)
-        levels.append({
-            "price": price,
-            "type": "resistance" if price > current_price else "support",
-            "touches": touches,
-        })
-
-    levels.sort(key=lambda x: x["touches"], reverse=True)
-    return levels[:max_levels]
-
-
-# ============================================================
-# MULTI-TIMEFRAME CONFIRMATION (NEW) — pro trader hamesha pehle higher
-# timeframe (4H/1D) ka trend dekhta hai, phir chhoti timeframe (1H/15m)
-# par entry leta hai. Ye function base timeframe ke hisaab se 2 higher
-# timeframes fetch kar ke unka trend (EMA20 vs EMA50 crossover) check
-# karta hai aur final_verdict ke sath align/against hone par confidence
-# ko adjust karta hai — jaisa candlestick confirmation karta hai, verdict
-# khud kabhi flip nahi hota.
-# ============================================================
-HTF_MAP = {
-    "1m": ["1h", "4h"], "3m": ["1h", "4h"], "5m": ["1h", "4h"],
-    "15m": ["1h", "4h"], "30m": ["4h", "1d"],
-    "1h": ["4h", "1d"], "2h": ["4h", "1d"], "4h": ["1d", "1w"],
-    "6h": ["1d", "1w"], "12h": ["1d", "1w"],
-    "1d": ["1w"], "1w": [],
-}
-
-
-def higher_timeframe_trend(df):
-    """EMA20 vs EMA50 crossover + price position se ek fast trend read -
-    'UP' / 'DOWN' / 'SIDEWAYS'. Chhoti history par bhi kaam kare isliye
-    span history-length ke hisaab se adjust hota hai."""
-    close = df["close"]
-    n = len(close)
-    if n < 10:
-        return "SIDEWAYS"
-
-    fast_span = min(20, max(3, n // 3))
-    slow_span = min(50, max(fast_span + 3, n - 1))
-    ema_fast = close.ewm(span=fast_span, adjust=False).mean()
-    ema_slow = close.ewm(span=slow_span, adjust=False).mean()
-
-    last_close = float(close.iloc[-1])
-    last_fast = float(ema_fast.iloc[-1])
-    last_slow = float(ema_slow.iloc[-1])
-
-    if last_fast > last_slow and last_close > last_fast:
-        return "UP"
-    elif last_fast < last_slow and last_close < last_fast:
-        return "DOWN"
-    return "SIDEWAYS"
-
-
-def multi_timeframe_confirmation(symbol, base_timeframe, final_verdict):
-    higher_tfs = HTF_MAP.get(base_timeframe, ["4h", "1d"])
-    trends = {}
-    for tf in higher_tfs:
-        try:
-            htf_df = get_candles(symbol=symbol, timeframe=tf, limit=120)
-            trends[tf] = higher_timeframe_trend(htf_df)
-        except Exception:
-            trends[tf] = None
-
-    verdict_dir = "UP" if final_verdict == "LONG" else "DOWN" if final_verdict == "SHORT" else None
-
-    aligned = sum(1 for tr in trends.values() if verdict_dir and tr == verdict_dir)
-    against = sum(1 for tr in trends.values() if verdict_dir and tr not in (None, "SIDEWAYS") and tr != verdict_dir)
-
-    if verdict_dir is None:
-        status, adj = "NEUTRAL", 0
-    elif aligned > against:
-        status, adj = "ALIGNED", 6
-    elif against > aligned:
-        status, adj = "AGAINST", -10
-    else:
-        status, adj = "MIXED", 0
-
-    return {"higher_timeframes": trends, "status": status, "confidence_adjustment": adj}
-
-
-# ============================================================
-# CORRELATED ASSET CHECK (NEW) — altcoins mostly BTC ke pichay chalte
-# hain. Agar koi altcoin ka signal BTC ke overall trend ke khilaf ho,
-# to poori market girne/uthne se wo altcoin bhi affect ho sakta hai -
-# is "cross-asset" risk ko yahan check karte hain. BTC khud ke liye,
-# aur forex pairs ke liye ye NOT_APPLICABLE return karta hai.
-# ============================================================
-def correlated_asset_check(symbol, timeframe, final_verdict, df=None):
-    base = symbol.split("/")[0].split(":")[0].upper()
-    if base == "BTC" or _is_forex_pair(symbol):
-        return {
-            "applicable": False, "btc_trend": None, "correlation": None,
-            "correlation_strength": None, "status": "NOT_APPLICABLE", "confidence_adjustment": 0,
-        }
-
-    try:
-        btc_df = get_candles(symbol="BTC/USDT", timeframe=timeframe, limit=120)
-        btc_trend = higher_timeframe_trend(btc_df)
-    except Exception:
-        return {
-            "applicable": True, "btc_trend": None, "correlation": None,
-            "correlation_strength": None, "status": "UNKNOWN", "confidence_adjustment": 0,
-        }
-
-    # Pearson correlation between altcoin & BTC returns (last ~50 candles) -
-    # batata hai ye coin ABHI kitna BTC se "juda" hai. Har coin hamesha
-    # equally BTC-linked nahi hota (kuch apna independent narrative follow
-    # karte hain) - is number ke bina BTC-trend check blindly apply karna
-    # misleading ho sakta hai.
-    correlation = None
-    if df is not None:
-        try:
-            n = min(len(df), len(btc_df), 51)
-            alt_closes = df["close"].values[-n:]
-            btc_closes = btc_df["close"].values[-n:]
-            alt_returns = np.diff(alt_closes) / alt_closes[:-1]
-            btc_returns = np.diff(btc_closes) / btc_closes[:-1]
-            if len(alt_returns) >= 10 and np.std(alt_returns) > 0 and np.std(btc_returns) > 0:
-                correlation = float(np.corrcoef(alt_returns, btc_returns)[0, 1])
-        except Exception:
-            correlation = None
-
-    STRONG_CORR = 0.6
-    WEAK_CORR = 0.3
-    if correlation is None:
-        corr_strength = "UNKNOWN"
-    elif abs(correlation) >= STRONG_CORR:
-        corr_strength = "STRONG"
-    elif abs(correlation) >= WEAK_CORR:
-        corr_strength = "MODERATE"
-    else:
-        corr_strength = "WEAK"
-
-    verdict_dir = "UP" if final_verdict == "LONG" else "DOWN" if final_verdict == "SHORT" else None
-
-    # Weak/unknown correlation -> is coin ne abhi BTC se "decouple" kiya
-    # hua hai, isliye BTC-trend based adjustment skip karte hain (warna
-    # galat/misleading confidence change ho sakta hai).
-    if verdict_dir is None or btc_trend == "SIDEWAYS" or corr_strength in ("WEAK", "UNKNOWN"):
-        status, adj = "NEUTRAL", 0
-    elif btc_trend == verdict_dir:
-        status, adj = "ALIGNED", 5 if corr_strength == "STRONG" else 3
-    else:
-        status, adj = "AGAINST", -8 if corr_strength == "STRONG" else -4
-
-    return {
-        "applicable": True,
-        "btc_trend": btc_trend,
-        "correlation": round(correlation, 2) if correlation is not None else None,
-        "correlation_strength": corr_strength,
-        "status": status,
-        "confidence_adjustment": adj,
-    }
-
-
-# ============================================================
 # 1. HAWKES PROCESS APPROXIMATION  (PURANA - UNCHANGED)
 # ============================================================
 def hawkes_pressure(df, alpha=0.6, beta=0.4, lookback=40):
@@ -1031,55 +682,6 @@ def concept_accuracy_score(final_verdict, **concept_kwargs):
         "concept_agree_count": agree_count,
         "concept_total": total,
         "concept_votes": votes,
-    }
-
-
-def _opposite_direction(verdict):
-    return "SHORT" if verdict == "LONG" else "LONG"
-
-
-def full_signal_support_score(final_verdict, votes, candle_data, mtf_data, correlation_data):
-    """NAYA score — sirf Tier-1 (CH.01-05) tak mehdood nahi, balke poori
-    website ke saare channels ko dekhta hai: CH.01-19 (jo pehle se
-    concept_accuracy_score ke andar vote karte hain) + candlestick
-    (CH.28) + multi-timeframe (CH.29) + correlated-asset (CH.31). Har
-    channel ka vote check karte hain: agar final_verdict ke KHILAF
-    (opposing) direction bola hai to wo 'against' count hota hai, warna
-    (agree ya structurally neutral) 'support' count hota hai. Total mein
-    se kitne channels support kar rahe hain, usi fraction se ye % banta
-    hai — jitna comprehensive ho utna zyada trustworthy signal."""
-    if final_verdict not in ("LONG", "SHORT"):
-        return {"total_accuracy_pct": None, "total_agree_count": 0, "total_channels": 0, "total_votes": []}
-
-    def vote_from_status(ch, name, status, agree_status, against_status):
-        if status == agree_status:
-            direction = final_verdict
-        elif status == against_status:
-            direction = _opposite_direction(final_verdict)
-        else:
-            direction = "NEUTRAL"
-        return {"ch": ch, "name": name, "direction": direction}
-
-    extra_votes = [
-        vote_from_status(28, "Candlestick Patterns", (candle_data or {}).get("confirmation"), "CONFIRMS", "CONTRADICTS"),
-        vote_from_status(29, "Multi-Timeframe Trend", (mtf_data or {}).get("status"), "ALIGNED", "AGAINST"),
-        vote_from_status(31, "Correlated Asset (BTC)", (correlation_data or {}).get("status"), "ALIGNED", "AGAINST"),
-    ]
-
-    all_votes = [dict(v) for v in votes] + extra_votes
-    total = len(all_votes)
-    agree_count = 0
-    for v in all_votes:
-        opposes = v["direction"] in ("LONG", "SHORT") and v["direction"] != final_verdict
-        v["agrees"] = not opposes
-        if v["agrees"]:
-            agree_count += 1
-
-    return {
-        "total_accuracy_pct": round((agree_count / total) * 100, 1),
-        "total_agree_count": agree_count,
-        "total_channels": total,
-        "total_votes": all_votes,
     }
 
 
@@ -1598,6 +1200,170 @@ def liquidity_sweep_detector(df, lookback=50):
 
 
 # ============================================================
+# 21. CANDLESTICK PATTERN RECOGNITION  <-- DISPLAY ONLY
+# Classic, human-style price-action reading (Doji, Hammer, Engulfing,
+# Stars, Soldiers/Crows) applied to the actual OHLC candles - the way a
+# discretionary chart-reading trader would eyeball the last few bars.
+#
+# IMPORTANT: this is a separate, purely informational panel. It is NOT
+# wired into final_verdict, confidence_pct, or concept_accuracy_score -
+# those still come ONLY from Hawkes + Bayesian (Conformal Prediction),
+# exactly as before. This just shows the user what a classic chart
+# reader would also notice on the same candles.
+# ============================================================
+def detect_candlestick_patterns(df, lookback=5):
+    """Looks at the last `lookback` candles and returns a list of
+    detected classic candlestick patterns, most-recent-first. Each entry:
+    {name, type: BULLISH/BEARISH/NEUTRAL, candles_ago, description}."""
+    recent = df.tail(max(lookback, 3)).reset_index(drop=True)
+    n = len(recent)
+    if n < 1:
+        return []
+
+    avg_range = float((recent["high"] - recent["low"]).mean()) or 1e-9
+    patterns = []
+
+    def body(c):
+        return abs(c["close"] - c["open"])
+
+    def upper_wick(c):
+        return c["high"] - max(c["close"], c["open"])
+
+    def lower_wick(c):
+        return min(c["close"], c["open"]) - c["low"]
+
+    def rng(c):
+        return c["high"] - c["low"] or 1e-9
+
+    def is_bullish(c):
+        return c["close"] > c["open"]
+
+    # --- single-candle patterns (checked on each of the last `lookback` bars) ---
+    for i in range(n - 1, -1, -1):
+        c = recent.iloc[i]
+        candles_ago = (n - 1) - i
+        b = body(c)
+        uw = upper_wick(c)
+        lw = lower_wick(c)
+        r = rng(c)
+
+        # Doji: body is tiny relative to the bar's own range.
+        if b <= r * 0.1:
+            patterns.append({
+                "name": "Doji",
+                "type": "NEUTRAL",
+                "candles_ago": candles_ago,
+                "description": "Open and close are nearly equal — indecision between buyers and sellers.",
+            })
+            continue
+
+        # Hammer: small body near the top, long lower wick, little/no upper wick.
+        if lw >= b * 2 and uw <= b * 0.5 and b <= r * 0.4:
+            patterns.append({
+                "name": "Hammer",
+                "type": "BULLISH",
+                "candles_ago": candles_ago,
+                "description": "Long lower wick with a small body near the high — rejection of lower prices.",
+            })
+            continue
+
+        # Shooting Star / Inverted Hammer: small body near the bottom, long upper wick.
+        if uw >= b * 2 and lw <= b * 0.5 and b <= r * 0.4:
+            patterns.append({
+                "name": "Shooting Star",
+                "type": "BEARISH",
+                "candles_ago": candles_ago,
+                "description": "Long upper wick with a small body near the low — rejection of higher prices.",
+            })
+            continue
+
+        # Marubozu: body fills almost the entire range (little to no wicks) — strong conviction.
+        if b >= r * 0.9:
+            patterns.append({
+                "name": "Bullish Marubozu" if is_bullish(c) else "Bearish Marubozu",
+                "type": "BULLISH" if is_bullish(c) else "BEARISH",
+                "candles_ago": candles_ago,
+                "description": "Body fills almost the whole candle, barely any wicks — strong one-sided conviction.",
+            })
+
+    # --- two-candle patterns ---
+    if n >= 2:
+        prev, cur = recent.iloc[-2], recent.iloc[-1]
+        prev_body_top = max(prev["open"], prev["close"])
+        prev_body_bot = min(prev["open"], prev["close"])
+        cur_body_top = max(cur["open"], cur["close"])
+        cur_body_bot = min(cur["open"], cur["close"])
+
+        # Bullish Engulfing: prior red candle's body fully engulfed by a green candle.
+        if (not is_bullish(prev)) and is_bullish(cur) and cur_body_bot <= prev_body_bot and cur_body_top >= prev_body_top:
+            patterns.append({
+                "name": "Bullish Engulfing",
+                "type": "BULLISH",
+                "candles_ago": 0,
+                "description": "Current green candle's body fully engulfs the prior red candle's body.",
+            })
+
+        # Bearish Engulfing: prior green candle's body fully engulfed by a red candle.
+        if is_bullish(prev) and (not is_bullish(cur)) and cur_body_bot <= prev_body_bot and cur_body_top >= prev_body_top:
+            patterns.append({
+                "name": "Bearish Engulfing",
+                "type": "BEARISH",
+                "candles_ago": 0,
+                "description": "Current red candle's body fully engulfs the prior green candle's body.",
+            })
+
+    # --- three-candle patterns ---
+    if n >= 3:
+        c1, c2, c3 = recent.iloc[-3], recent.iloc[-2], recent.iloc[-1]
+
+        # Three White Soldiers: three consecutive strong green candles, each closing higher.
+        if is_bullish(c1) and is_bullish(c2) and is_bullish(c3) \
+                and c2["close"] > c1["close"] and c3["close"] > c2["close"] \
+                and body(c1) >= rng(c1) * 0.5 and body(c2) >= rng(c2) * 0.5 and body(c3) >= rng(c3) * 0.5:
+            patterns.append({
+                "name": "Three White Soldiers",
+                "type": "BULLISH",
+                "candles_ago": 0,
+                "description": "Three consecutive strong green candles, each closing higher than the last.",
+            })
+
+        # Three Black Crows: three consecutive strong red candles, each closing lower.
+        if (not is_bullish(c1)) and (not is_bullish(c2)) and (not is_bullish(c3)) \
+                and c2["close"] < c1["close"] and c3["close"] < c2["close"] \
+                and body(c1) >= rng(c1) * 0.5 and body(c2) >= rng(c2) * 0.5 and body(c3) >= rng(c3) * 0.5:
+            patterns.append({
+                "name": "Three Black Crows",
+                "type": "BEARISH",
+                "candles_ago": 0,
+                "description": "Three consecutive strong red candles, each closing lower than the last.",
+            })
+
+        # Morning Star: red candle, small-bodied middle candle (gap down), then a strong green candle closing well into the first candle's body.
+        if (not is_bullish(c1)) and body(c2) <= rng(c2) * 0.35 \
+                and is_bullish(c3) and c3["close"] >= (c1["open"] + c1["close"]) / 2:
+            patterns.append({
+                "name": "Morning Star",
+                "type": "BULLISH",
+                "candles_ago": 0,
+                "description": "Red candle, a small-bodied pause, then a strong green candle reclaiming the range — bottoming reversal.",
+            })
+
+        # Evening Star: green candle, small-bodied middle candle, then a strong red candle closing well into the first candle's body.
+        if is_bullish(c1) and body(c2) <= rng(c2) * 0.35 \
+                and (not is_bullish(c3)) and c3["close"] <= (c1["open"] + c1["close"]) / 2:
+            patterns.append({
+                "name": "Evening Star",
+                "type": "BEARISH",
+                "candles_ago": 0,
+                "description": "Green candle, a small-bodied pause, then a strong red candle giving back the range — topping reversal.",
+            })
+
+    # Most recent first, cap the list so the panel stays readable.
+    patterns.sort(key=lambda p: p["candles_ago"])
+    return patterns[:8]
+
+
+# ============================================================
 # 20. LIQUIDITY MAGNET + LIKELY TARGET  <-- (v8, LIQUIDITY SCANNER)
 # Formula: Magnet = argmax(Price_i * Volume_i) across order-book levels
 #          LikelyTarget = argmax( (Price_i * Volume_i) / Distance_i ),
@@ -1857,55 +1623,6 @@ def funding_open_interest(symbol):
 
 
 # ============================================================
-# FUNDING-RATE EVENT WARNING (NEW) — extreme funding rate ka matlab hai
-# market mein bohat zyada leveraged traders ek hi taraf jama hain, jo
-# aksar sudden liquidation cascade / sharp reversal se pehle hota hai.
-# Ye koi real-world news feed nahi hai (aisi API alag/costly hoti hai) -
-# sirf market ke apne funding/OI data se implicit risk warning deta hai.
-# ============================================================
-# Thresholds annualized nahi, per-8h funding rate % par based hain
-# (jaisa OKX/Binance perp funding quote hota hai)
-FUNDING_EXTREME_PCT = 0.05    # ~0.05%/8h se upar = extreme
-FUNDING_ELEVATED_PCT = 0.02   # ~0.02%/8h se upar = elevated
-
-
-def funding_event_warning(symbol):
-    data = funding_open_interest(symbol)
-    fr = data.get("funding_rate_pct")
-
-    if fr is None:
-        return {"available": False, "risk_level": "UNKNOWN", "funding_rate_pct": None, "message": None}
-
-    abs_fr = abs(fr)
-    side = "longs" if fr > 0 else "shorts"
-
-    if abs_fr >= FUNDING_EXTREME_PCT:
-        risk_level = "EXTREME"
-        message = (
-            f"Funding rate is extreme ({fr}% / 8h) - {side} are heavily "
-            "overleveraged. Elevated risk of a sharp liquidation-driven move "
-            "in the next few hours; consider smaller size."
-        )
-    elif abs_fr >= FUNDING_ELEVATED_PCT:
-        risk_level = "ELEVATED"
-        message = (
-            f"Funding rate is elevated ({fr}% / 8h), leaning {side}. "
-            "Some crowding risk building up - worth monitoring."
-        )
-    else:
-        risk_level = "NORMAL"
-        message = None
-
-    return {
-        "available": True,
-        "risk_level": risk_level,
-        "funding_rate_pct": fr,
-        "open_interest": data.get("open_interest"),
-        "message": message,
-    }
-
-
-# ============================================================
 # 26. CVD (CUMULATIVE VOLUME DELTA)  <-- (v8, LIQUIDITY SCANNER)
 # Formula: delta_i = +Volume_i agar close_i >= open_i warna -Volume_i;
 #          CVD_t = cumsum(delta)
@@ -1983,7 +1700,7 @@ def market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cv
 #     bante hain (Conformal Prediction), v4 jaisa hi - ISE CHANGE
 #     NAHI KIYA GAYA. Baaqi concepts sirf extra info hain. ***
 # ============================================================
-def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h"):
+def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     if _HAS_PANDAS_TA:
         df["rsi"] = ta.rsi(df["close"], length=14)
         macd = ta.macd(df["close"])
@@ -2016,32 +1733,6 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
     suggested_risk_pct = fractional_kelly(win_prob)
     trend = "Bullish" if bullish_pct > bearish_pct else "Bearish"
 
-    # --- Candlestick pattern confirmation (NEW) — confidence ko +/-8%
-    # adjust karta hai agar recent candle shapes verdict ke sath match
-    # ya contradict karein. final_verdict yahan kabhi flip nahi hota.
-    try:
-        candle_data = candlestick_confirmation(df, final_verdict)
-    except Exception as e:
-        candle_data = {"patterns_detected": [], "confirmation": "ERROR", "confidence_adjustment": 0, "error": str(e)}
-    confidence_pct = max(5, min(97, round(confidence_pct + candle_data.get("confidence_adjustment", 0), 2)))
-
-    # --- Multi-timeframe confirmation (NEW) — higher timeframe (4H/1D)
-    # trend ke sath align/against hone par confidence +/-6-10% adjust
-    # hoti hai. final_verdict yahan bhi kabhi flip nahi hota.
-    try:
-        mtf_data = multi_timeframe_confirmation(symbol, timeframe, final_verdict)
-    except Exception as e:
-        mtf_data = {"higher_timeframes": {}, "status": "ERROR", "confidence_adjustment": 0, "error": str(e)}
-    confidence_pct = max(5, min(97, round(confidence_pct + mtf_data.get("confidence_adjustment", 0), 2)))
-
-    # --- Correlated asset check (NEW) — altcoins ke liye BTC trend ke
-    # sath alignment check karta hai (BTC/forex ke liye NOT_APPLICABLE).
-    try:
-        correlation_data = correlated_asset_check(symbol, timeframe, final_verdict, df=df)
-    except Exception as e:
-        correlation_data = {"applicable": False, "btc_trend": None, "status": "ERROR", "confidence_adjustment": 0, "error": str(e)}
-    confidence_pct = max(5, min(97, round(confidence_pct + correlation_data.get("confidence_adjustment", 0), 2)))
-
     # --- v4 ke 4 concepts (display-only, UNCHANGED) ---
     if include_orderbook:
         try:
@@ -2052,14 +1743,9 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
             vpin_data = vpin_toxicity(symbol)
         except Exception as e:
             vpin_data = {"vpin_score": None, "toxicity": "ERROR", "error": str(e)}
-        try:
-            funding_warning_data = funding_event_warning(symbol)
-        except Exception as e:
-            funding_warning_data = {"available": False, "risk_level": "UNKNOWN", "error": str(e)}
     else:
         ofi_data = {"ofi_score": None, "ofi_raw": None}
         vpin_data = {"vpin_score": None, "toxicity": "SKIPPED"}
-        funding_warning_data = {"available": False, "risk_level": "SKIPPED"}
 
     regime_data = hmm_regime(df)
     jump_data = jump_diffusion_detector(df)
@@ -2124,6 +1810,11 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
     except Exception as e:
         sweep_data = {"liquidity_sweep_detected": None, "error": str(e)}
 
+    try:
+        candlestick_patterns = detect_candlestick_patterns(df)
+    except Exception as e:
+        candlestick_patterns = []
+
     # "Accuracy Score" - kitne Tier-1 (Ch.01-05) concepts final_verdict ki
     # taraf ishara kar rahe hain, out of 5 (display metric, verdict khud
     # change nahi hota - dekho concept_accuracy_score() ke comments).
@@ -2135,14 +1826,6 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
         meta_data=meta_data, divergence_data=divergence_data,
         depth_data=depth_data, vwap_data=vwap_data, wavelet_data=wavelet_data,
         cusum_data=cusum_data, sweep_data=sweep_data,
-    )
-
-    # "Total Signal Support" - Tier-1 Accuracy Score se ALAG - poori
-    # website ke saare channels (CH.01-19 + candlestick + multi-timeframe
-    # + correlated-asset) mein se kitne is verdict ko support kar rahe
-    # hain, us par based ek comprehensive % score.
-    full_support_data = full_signal_support_score(
-        final_verdict, accuracy_data["concept_votes"], candle_data, mtf_data, correlation_data,
     )
 
     result = {
@@ -2176,23 +1859,15 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True, timeframe="1h
         "wavelet_trend": wavelet_data,
         "structural_break": cusum_data,
         "liquidity_sweep": sweep_data,
-        "candlestick_patterns": candle_data,
-        "multi_timeframe": mtf_data,
-        "correlated_asset": correlation_data,
-        "funding_event_warning": funding_warning_data,
+
+        # display-only, human-style chart-reading (does NOT affect final_verdict)
+        "candlestick_patterns": candlestick_patterns,
 
         # Accuracy Score widget (Ch.01-05 concept agreement out of 5, with the verdict above)
         "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
         "concept_agree_count": accuracy_data["concept_agree_count"],
         "concept_total": accuracy_data["concept_total"],
         "concept_votes": accuracy_data["concept_votes"],
-
-        # Total Signal Support widget (ALL channels across the whole app,
-        # not just Tier-1) - see full_signal_support_score() comments.
-        "total_accuracy_pct": full_support_data["total_accuracy_pct"],
-        "total_agree_count": full_support_data["total_agree_count"],
-        "total_channels": full_support_data["total_channels"],
-        "total_votes": full_support_data["total_votes"],
 
         "disclaimer": ("Probability estimates only - not financial advice. "
                         "In-sample calculations, no walk-forward backtest run yet. "
@@ -2264,7 +1939,7 @@ def signal_endpoint():
 
     try:
         df = get_candles(symbol=coin, timeframe=timeframe)
-        result = generate_signal(df, symbol=coin, include_orderbook=orderbook, timeframe=timeframe)
+        result = generate_signal(df, symbol=coin, include_orderbook=orderbook)
         result["coin"] = coin
         result["timeframe"] = timeframe
         return jsonify(result)
@@ -2374,29 +2049,10 @@ def candles_endpoint():
         prev_price = float(df["close"].iloc[-2]) if len(df) > 1 else last_price
         change_pct = round(((last_price - prev_price) / prev_price) * 100, 3) if prev_price else 0.0
 
-        # Candlestick pattern markers (Doji, Hammer, Engulfing, etc.) — chart
-        # tab par candles ke upar/neeche visually dikhane ke liye, taake
-        # user human-trader ki tarah pattern ko chart par dekh sake.
-        try:
-            raw_patterns = detect_candlestick_patterns(df)
-            patterns = [
-                {"time": p["time"], "pattern": p["pattern"], "bias": p["bias"]}
-                for p in raw_patterns if "time" in p
-            ]
-        except Exception:
-            patterns = []
-
-        try:
-            support_resistance = detect_support_resistance(df)
-        except Exception:
-            support_resistance = []
-
         return jsonify({
             "coin": coin,
             "timeframe": timeframe,
             "candles": candles,
-            "patterns": patterns,
-            "support_resistance": support_resistance,
             "last_price": round(last_price, 8),
             "change_pct": change_pct,
             "server_time": int(time.time()),
