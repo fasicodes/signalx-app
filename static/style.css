@@ -1153,6 +1153,46 @@ select:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
 .chart-panel.fullscreen .indicator-btn { background: rgba(17, 22, 30, 0.4); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .chart-panel.fullscreen .indicator-btn.active { background: rgba(54, 224, 160, 0.18); }
 
+/* ---------- Volatility button + compact panel (Phase 3E) ---------- */
+.volatility-panel {
+    position: absolute; top: 50px; right: 14px; z-index: 40;
+    width: 220px; display: flex; flex-direction: column;
+    background:
+        linear-gradient(160deg, rgba(21, 27, 36, 0.98), rgba(13, 17, 24, 0.98)),
+        var(--panel-raised);
+    border: 1px solid #2c3642; border-radius: 10px;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(54, 224, 160, 0.04);
+    overflow: hidden;
+}
+.volatility-panel[hidden] { display: none !important; }
+.volatility-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-bottom: 1px solid var(--line);
+    font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-dim);
+}
+.volatility-tf-label { color: var(--text-faint); font-weight: 500; text-transform: uppercase; }
+.volatility-panel-body { padding: 8px 12px; }
+.volatility-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 0; font-family: var(--mono);
+}
+.volatility-label { font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.04em; }
+.volatility-value { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.volatility-value.vol-low { color: var(--text-dim); }
+.volatility-value.vol-normal { color: var(--long); }
+.volatility-value.vol-high { color: #f5a623; }
+.volatility-value.vol-extreme { color: var(--short); }
+.volatility-value.vol-up { color: var(--long); }
+.volatility-value.vol-down { color: var(--short); }
+.volatility-unavailable { padding: 10px 0; font-size: 11.5px; color: var(--text-faint); text-align: center; }
+.volatility-panel-foot { padding: 8px 12px; border-top: 1px solid var(--line); font-size: 9px; color: var(--text-faint); }
+.chart-panel.fullscreen .volatility-panel { top: 54px; right: 16px; }
+.chart-panel.fullscreen .volatility-btn { background: rgba(17, 22, 30, 0.4); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+@media (max-width: 720px) {
+    .volatility-panel { right: 8px; left: 8px; width: auto; top: 108px; }
+    #volatility-btn span:not(.indicator-btn-count) { display: none; }
+}
+
 @media (max-width: 720px) {
     .indicator-panel { right: 8px; left: 8px; width: auto; top: 108px; }
     .indicator-btn span:not(.indicator-btn-count) { display: none; }
@@ -1203,6 +1243,7 @@ body.chart-fullscreen-lock { overflow: hidden; }
 .chart-tool-btn:hover { color: var(--text); background: var(--panel-hover); }
 .chart-tool-btn.active { color: var(--long); background: var(--long-dim); border-color: rgba(54, 224, 160, 0.35); }
 .chart-tool-btn.chart-tool-danger:hover { color: var(--short); background: var(--short-dim); }
+.chart-tool-btn:disabled { opacity: 0.32; cursor: default; pointer-events: none; }
 .chart-tool-sep { width: 20px; height: 1px; background: var(--line); margin: 3px 0; }
 
 /* Tool group: main button + tiny expand arrow + flyout submenu, in the
