@@ -525,7 +525,7 @@ function renderAccuracyScore(data) {
     const color = accuracyColor(pct);
     pctEl.textContent = fmtPct(pct);
     pctEl.style.color = color;
-    subEl.textContent = `${data.concept_agree_count} of ${data.concept_total} concepts support ${verdict}`;
+    subEl.textContent = `${data.concept_agree_count} of ${data.concept_total} concepts agree with ${verdict}`;
     fillEl.style.stroke = color;
     fillEl.style.strokeDasharray = ACCURACY_GAUGE_ARC;
     fillEl.style.strokeDashoffset = ACCURACY_GAUGE_ARC * (1 - ratio);
