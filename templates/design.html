@@ -170,6 +170,10 @@
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-6-3-6 3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
         <span class="panel-tab-text">TRADE JOURNAL</span>
       </button>
+      <button class="panel-tab home-info-tab" data-info="pnl-dashboard" type="button">
+        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 19V9M10 19V4M16 19v-7M22 19H2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="panel-tab-text">P&amp;L DASHBOARD</span>
+      </button>
     </div>
   </nav>
 
@@ -1022,6 +1026,63 @@
 
           <div id="journal-list">
             <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-info-panel" data-info="pnl-dashboard">
+        <div class="about-card">
+          <h2 class="about-title">P&amp;L Dashboard</h2>
+          <p>Performance analytics computed only from your own recorded trades. No projected or simulated values.</p>
+
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin:16px 0;">
+            <select id="pnl-period" style="flex:1; min-width:110px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:9px 8px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <option value="today">Today</option>
+              <option value="7d">7 Days</option>
+              <option value="30d">30 Days</option>
+              <option value="90d">90 Days</option>
+              <option value="all" selected>All Time</option>
+            </select>
+            <select id="pnl-equity-granularity" style="flex:1; min-width:110px; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:9px 8px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <option value="daily">Daily Curve</option>
+              <option value="weekly">Weekly Curve</option>
+              <option value="monthly">Monthly Curve</option>
+            </select>
+          </div>
+
+          <div id="pnl-overview-grid" class="perf-summary-grid" style="margin-bottom:22px;"></div>
+
+          <h3 class="about-subhead">Equity Curve</h3>
+          <div id="pnl-equity-curve-wrap" style="margin:12px 0 24px; background:var(--panel-raised); border:1px solid var(--line); border-radius:8px; padding:14px;">
+            <p style="color:var(--text-faint); font-size:13px; margin:0;">Loading…</p>
+          </div>
+
+          <h3 class="about-subhead">Drawdown</h3>
+          <div id="pnl-drawdown-grid" class="perf-summary-grid" style="margin:12px 0 24px;"></div>
+
+          <h3 class="about-subhead">Win / Loss Distribution</h3>
+          <div id="pnl-distribution-wrap" style="margin:12px 0 24px; background:var(--panel-raised); border:1px solid var(--line); border-radius:8px; padding:14px;">
+            <p style="color:var(--text-faint); font-size:13px; margin:0;">Loading…</p>
+          </div>
+
+          <h3 class="about-subhead">P&amp;L by Direction</h3>
+          <div id="pnl-direction-grid" style="margin:12px 0 24px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <p style="color:var(--text-faint); font-size:13px; margin:0;">Loading…</p>
+          </div>
+
+          <h3 class="about-subhead">P&amp;L by Symbol</h3>
+          <div id="pnl-symbol-table" style="margin:12px 0 24px;">
+            <p style="color:var(--text-faint); font-size:13px; margin:0;">Loading…</p>
+          </div>
+
+          <h3 class="about-subhead">Performance Calendar</h3>
+          <div style="display:flex; align-items:center; gap:10px; margin:10px 0;">
+            <button type="button" id="pnl-calendar-prev" style="padding:6px 12px; border-radius:6px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; cursor:pointer;">‹</button>
+            <span id="pnl-calendar-label" style="font-family:var(--mono); font-size:12.5px; color:var(--text);"></span>
+            <button type="button" id="pnl-calendar-next" style="padding:6px 12px; border-radius:6px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; cursor:pointer;">›</button>
+          </div>
+          <div id="pnl-calendar-grid" style="display:grid; grid-template-columns:repeat(7, 1fr); gap:4px;">
+            <p style="color:var(--text-faint); font-size:13px; margin:0;">Loading…</p>
           </div>
         </div>
       </div>
@@ -2561,6 +2622,275 @@
       loadJournal();
     });
   }
+})();
+</script>
+
+<!-- ============================================================
+     PHASE 2B UPGRADE — Advanced P&L Dashboard
+     Fully self-contained (own IIFE). Reads only the new
+     /api/trades/pnl/* endpoints. Never touches script.js, the Active
+     Trade Tracking module, the Trade Journal module above, or the
+     RUN ANALYSIS / signal-engine flow.
+     ============================================================ -->
+<script>
+(function () {
+  const overviewGrid = document.getElementById('pnl-overview-grid');
+  if (!overviewGrid) return;
+
+  const periodSel = document.getElementById('pnl-period');
+  const granularitySel = document.getElementById('pnl-equity-granularity');
+  const equityWrap = document.getElementById('pnl-equity-curve-wrap');
+  const drawdownGrid = document.getElementById('pnl-drawdown-grid');
+  const distributionWrap = document.getElementById('pnl-distribution-wrap');
+  const directionGrid = document.getElementById('pnl-direction-grid');
+  const symbolTableWrap = document.getElementById('pnl-symbol-table');
+  const calendarGrid = document.getElementById('pnl-calendar-grid');
+  const calendarLabel = document.getElementById('pnl-calendar-label');
+
+  let calendarDate = new Date(); // tracks which month the calendar shows
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined || isNaN(n)) return '--';
+    const num = Number(n);
+    const sign = num < 0 ? '-' : '';
+    return sign + '$' + Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function metricCard(label, value, tone) {
+    return `<div class="perf-metric-card ${tone || ''}">
+      <span class="perf-metric-label">${label}</span>
+      <span class="perf-metric-value">${value}</span>
+    </div>`;
+  }
+
+  async function loadOverview() {
+    overviewGrid.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    try {
+      const res = await fetch(`/api/trades/pnl/overview?period=${periodSel.value}`, { credentials: 'same-origin' });
+      const s = await res.json();
+      if (!res.ok) { overviewGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${s.error || 'Unable to load overview.'}</p>`; return; }
+      const totalUp = s.total_pnl >= 0;
+      overviewGrid.innerHTML = [
+        metricCard('Total P&amp;L', (totalUp ? '+' : '') + fmtMoney(s.total_pnl), totalUp ? 'up' : 'down'),
+        metricCard('Realized P&amp;L', fmtMoney(s.realized_pnl), s.realized_pnl >= 0 ? 'up' : 'down'),
+        metricCard('Unrealized P&amp;L', fmtMoney(s.unrealized_pnl), s.unrealized_pnl >= 0 ? 'up' : 'down'),
+        metricCard('Win Rate', s.win_rate + '%'),
+        metricCard('Total Trades', s.total_trades),
+        metricCard('Winning', s.winning_trades, 'up'),
+        metricCard('Losing', s.losing_trades, 'down'),
+        metricCard('Avg Win', fmtMoney(s.avg_win), 'up'),
+        metricCard('Avg Loss', fmtMoney(s.avg_loss), 'down'),
+        metricCard('Profit Factor', s.profit_factor === null ? '--' : s.profit_factor),
+        metricCard('Avg R:R', s.avg_risk_reward === null ? '--' : '1:' + s.avg_risk_reward),
+        metricCard('Expectancy', fmtMoney(s.expectancy), s.expectancy >= 0 ? 'up' : 'down'),
+        metricCard('Best Trade', s.best_trade === null ? '--' : fmtMoney(s.best_trade), 'up'),
+        metricCard('Worst Trade', s.worst_trade === null ? '--' : fmtMoney(s.worst_trade), 'down'),
+      ].join('');
+    } catch (e) {
+      overviewGrid.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load overview.</p>';
+    }
+  }
+
+  async function loadEquityCurve() {
+    equityWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">Loading…</p>';
+    try {
+      const res = await fetch(`/api/trades/pnl/equity-curve?granularity=${granularitySel.value}&period=${periodSel.value}`, { credentials: 'same-origin' });
+      const data = await res.json();
+      if (!res.ok) { equityWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${data.error || 'Unable to load equity curve.'}</p>`; return; }
+      const points = data.points || [];
+      if (!points.length) {
+        equityWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">No closed trades yet — the equity curve will appear once trades close.</p>';
+        return;
+      }
+      const w = 600, h = 180, pad = 10;
+      const values = points.map(p => p.cumulative_pnl);
+      const minV = Math.min(0, ...values);
+      const maxV = Math.max(0, ...values);
+      const range = (maxV - minV) || 1;
+      const stepX = points.length > 1 ? (w - pad * 2) / (points.length - 1) : 0;
+      const coords = points.map((p, i) => {
+        const x = pad + i * stepX;
+        const y = h - pad - ((p.cumulative_pnl - minV) / range) * (h - pad * 2);
+        return [x, y];
+      });
+      const pathD = coords.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1)).join(' ');
+      const zeroY = h - pad - ((0 - minV) / range) * (h - pad * 2);
+      const lastUp = values[values.length - 1] >= 0;
+
+      equityWrap.innerHTML = `
+        <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:180px; display:block;">
+          <line x1="0" y1="${zeroY.toFixed(1)}" x2="${w}" y2="${zeroY.toFixed(1)}" stroke="var(--line)" stroke-width="1" stroke-dasharray="4,3" />
+          <path d="${pathD}" fill="none" stroke="${lastUp ? 'var(--long)' : 'var(--short)'}" stroke-width="2" />
+        </svg>
+        <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:10.5px; color:var(--text-faint); margin-top:6px;">
+          <span>${points[0].period}</span>
+          <span style="color:${lastUp ? 'var(--long)' : 'var(--short)'};">${lastUp ? '+' : ''}${fmtMoney(values[values.length - 1])} cumulative</span>
+          <span>${points[points.length - 1].period}</span>
+        </div>`;
+    } catch (e) {
+      equityWrap.innerHTML = '<p style="color:var(--short); font-size:13px; margin:0;">Could not load equity curve.</p>';
+    }
+  }
+
+  async function loadDrawdown() {
+    drawdownGrid.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    try {
+      const res = await fetch('/api/trades/pnl/drawdown', { credentials: 'same-origin' });
+      const d = await res.json();
+      if (!res.ok) { drawdownGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${d.error || 'Unable to load drawdown.'}</p>`; return; }
+      drawdownGrid.innerHTML = [
+        metricCard('Max Drawdown', fmtMoney(-Math.abs(d.max_drawdown)), 'down'),
+        metricCard('Current Drawdown', fmtMoney(-Math.abs(d.current_drawdown)), d.current_drawdown > 0 ? 'down' : ''),
+        metricCard('Peak Equity', fmtMoney(d.peak_equity), 'up'),
+        metricCard('Current Equity', fmtMoney(d.current_equity), d.current_equity >= 0 ? 'up' : 'down'),
+      ].join('') + (d.recovered
+        ? '<div class="perf-metric-card up" style="grid-column:1/-1;"><span class="perf-metric-label">Status</span><span class="perf-metric-value">At Peak Equity</span></div>'
+        : '<div class="perf-metric-card down" style="grid-column:1/-1;"><span class="perf-metric-label">Status</span><span class="perf-metric-value">Recovering From Drawdown</span></div>');
+    } catch (e) {
+      drawdownGrid.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load drawdown.</p>';
+    }
+  }
+
+  async function loadDistribution() {
+    distributionWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">Loading…</p>';
+    try {
+      const res = await fetch('/api/trades/pnl/distribution', { credentials: 'same-origin' });
+      const d = await res.json();
+      if (!res.ok) { distributionWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${d.error || 'Unable to load distribution.'}</p>`; return; }
+      const total = d.winning + d.losing + d.breakeven;
+      if (!total) { distributionWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">No closed trades yet.</p>'; return; }
+      const rows = [
+        { label: 'Winning', count: d.winning, color: 'var(--long)' },
+        { label: 'Losing', count: d.losing, color: 'var(--short)' },
+        { label: 'Breakeven', count: d.breakeven, color: 'var(--text-dim)' },
+      ];
+      distributionWrap.innerHTML = rows.map(r => {
+        const pct = total ? (r.count / total * 100) : 0;
+        return `
+          <div style="margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:11.5px; color:var(--text-dim); margin-bottom:4px;">
+              <span>${r.label}</span><span>${r.count} (${pct.toFixed(1)}%)</span>
+            </div>
+            <div style="background:var(--panel); border-radius:5px; height:8px; overflow:hidden;">
+              <div style="width:${pct}%; height:100%; background:${r.color};"></div>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      distributionWrap.innerHTML = '<p style="color:var(--short); font-size:13px; margin:0;">Could not load distribution.</p>';
+    }
+  }
+
+  async function loadDirection() {
+    directionGrid.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Loading…</p>';
+    try {
+      const res = await fetch('/api/trades/pnl/by-direction', { credentials: 'same-origin' });
+      const d = await res.json();
+      if (!res.ok) { directionGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${d.error || 'Unable to load.'}</p>`; return; }
+      directionGrid.innerHTML = ['LONG', 'SHORT'].map(dir => {
+        const s = d[dir] || { trades: 0, win_rate: 0, pnl: 0, avg_trade: 0 };
+        const dirCls = dir === 'SHORT' ? 'short' : 'long';
+        return `
+          <div style="background:var(--panel-raised); border:1px solid var(--line); border-radius:8px; padding:12px;">
+            <span class="trade-dir-badge ${dirCls}">${dir}</span>
+            <div style="font-family:var(--mono); font-size:11.5px; color:var(--text-dim); margin-top:8px; line-height:1.9;">
+              <div>Trades: <span style="color:var(--text);">${s.trades}</span></div>
+              <div>Win Rate: <span style="color:var(--text);">${s.win_rate}%</span></div>
+              <div>P&amp;L: <span style="color:${s.pnl >= 0 ? 'var(--long)' : 'var(--short)'};">${fmtMoney(s.pnl)}</span></div>
+              <div>Avg Trade: <span style="color:${s.avg_trade >= 0 ? 'var(--long)' : 'var(--short)'};">${fmtMoney(s.avg_trade)}</span></div>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      directionGrid.innerHTML = '<p style="color:var(--short); font-size:13px;">Could not load direction breakdown.</p>';
+    }
+  }
+
+  async function loadSymbolTable() {
+    symbolTableWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">Loading…</p>';
+    try {
+      const res = await fetch('/api/trades/pnl/by-symbol', { credentials: 'same-origin' });
+      const rows = await res.json();
+      if (!res.ok) { symbolTableWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${rows.error || 'Unable to load.'}</p>`; return; }
+      if (!rows.length) { symbolTableWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">No closed trades yet.</p>'; return; }
+      symbolTableWrap.innerHTML = `
+        <div style="display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr 1fr 1fr; gap:6px; font-family:var(--mono); font-size:10.5px; color:var(--text-faint); padding:0 8px 6px; border-bottom:1px solid var(--line);">
+          <span>SYMBOL</span><span>TRADES</span><span>WIN%</span><span>P&amp;L</span><span>AVG</span>
+        </div>
+        ${rows.map(r => `
+          <div style="display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr 1fr 1fr; gap:6px; font-family:var(--mono); font-size:11.5px; padding:8px; border-bottom:1px solid var(--line);">
+            <span style="color:var(--text);">${r.symbol}</span>
+            <span style="color:var(--text-dim);">${r.trades}</span>
+            <span style="color:var(--text-dim);">${r.win_rate}%</span>
+            <span style="color:${r.pnl >= 0 ? 'var(--long)' : 'var(--short)'};">${fmtMoney(r.pnl)}</span>
+            <span style="color:${r.avg_trade >= 0 ? 'var(--long)' : 'var(--short)'};">${fmtMoney(r.avg_trade)}</span>
+          </div>`).join('')}`;
+    } catch (e) {
+      symbolTableWrap.innerHTML = '<p style="color:var(--short); font-size:13px; margin:0;">Could not load P&amp;L by symbol.</p>';
+    }
+  }
+
+  async function loadCalendar() {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth() + 1;
+    calendarLabel.textContent = calendarDate.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+    calendarGrid.innerHTML = '<p style="color:var(--text-faint); font-size:13px; grid-column:1/-1; margin:0;">Loading…</p>';
+    try {
+      const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+      const res = await fetch(`/api/trades/pnl/calendar?month=${monthStr}`, { credentials: 'same-origin' });
+      const data = await res.json();
+      if (!res.ok) { calendarGrid.innerHTML = `<p style="color:var(--short); font-size:13px; grid-column:1/-1;">${data.error || 'Unable to load calendar.'}</p>`; return; }
+
+      const byDate = {};
+      (data.days || []).forEach(d => { byDate[d.date] = d; });
+
+      const firstOfMonth = new Date(year, month - 1, 1);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const leadBlanks = firstOfMonth.getDay(); // 0=Sun
+
+      let cells = '';
+      for (let i = 0; i < leadBlanks; i++) cells += '<div></div>';
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const d = byDate[dateStr];
+        const has = !!d;
+        const up = has && d.pnl >= 0;
+        cells += `
+          <div title="${has ? (d.trades + ' trades, ' + fmtMoney(d.pnl) + ', ' + d.win_rate + '% win rate') : 'No trades'}"
+               style="aspect-ratio:1; border-radius:6px; border:1px solid var(--line); background:${has ? (up ? 'rgba(52,199,89,0.12)' : 'rgba(255,69,58,0.12)') : 'var(--panel-raised)'}; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:var(--mono); font-size:9.5px;">
+            <span style="color:var(--text-faint);">${day}</span>
+            ${has ? `<span style="color:${up ? 'var(--long)' : 'var(--short)'}; font-size:9px;">${up ? '+' : ''}${d.pnl.toFixed(0)}</span>` : ''}
+          </div>`;
+      }
+      calendarGrid.innerHTML = cells;
+    } catch (e) {
+      calendarGrid.innerHTML = '<p style="color:var(--short); font-size:13px; grid-column:1/-1;">Could not load calendar.</p>';
+    }
+  }
+
+  function loadAll() {
+    loadOverview();
+    loadEquityCurve();
+    loadDrawdown();
+    loadDistribution();
+    loadDirection();
+    loadSymbolTable();
+    loadCalendar();
+  }
+
+  periodSel.addEventListener('change', () => { loadOverview(); loadEquityCurve(); });
+  granularitySel.addEventListener('change', loadEquityCurve);
+  document.getElementById('pnl-calendar-prev').addEventListener('click', () => {
+    calendarDate.setMonth(calendarDate.getMonth() - 1);
+    loadCalendar();
+  });
+  document.getElementById('pnl-calendar-next').addEventListener('click', () => {
+    calendarDate.setMonth(calendarDate.getMonth() + 1);
+    loadCalendar();
+  });
+
+  const pnlNavTab = document.querySelector('.home-info-tab[data-info="pnl-dashboard"]');
+  if (pnlNavTab) pnlNavTab.addEventListener('click', loadAll);
 })();
 </script>
 
