@@ -518,7 +518,10 @@ def fractional_kelly(win_prob, reward_risk_ratio=1.5, k=0.5):
 # ============================================================
 def _concept_votes(*, buying_pressure, selling_pressure, bullish_pct, bearish_pct,
                     ofi_data, regime_data, jump_data, meta_data, divergence_data,
-                    depth_data, vwap_data, wavelet_data, cusum_data, sweep_data):
+                    depth_data, vwap_data, wavelet_data, cusum_data, sweep_data,
+                    magnet_target_data=None, spoofing_data=None, strength_data=None,
+                    trap_squeeze_data=None, target_zones_data=None, funding_data=None,
+                    cvd_data=None, crash_risk_data=None):
     votes = []
 
     def add(ch, name, direction):
@@ -637,6 +640,94 @@ def _concept_votes(*, buying_pressure, selling_pressure, bullish_pct, bearish_pc
         add(19, "Liquidity Sweep", "SHORT")
     else:
         add(19, "Liquidity Sweep", "NEUTRAL")
+
+    # --- Liquidity Scanner concepts (v8, Ch.20-27) ---
+
+    # 20. Liquidity Magnet & Likely Target - "Resistance Sweep" means the
+    # highest-scored pull is above price (bullish continuation target),
+    # "Support Sweep" means it's below (bearish continuation target).
+    magnet_target_data = magnet_target_data or {}
+    target_type = (magnet_target_data.get("likely_target") or {}).get("type")
+    if target_type == "Resistance Sweep":
+        add(20, "Liquidity Magnet & Target", "LONG")
+    elif target_type == "Support Sweep":
+        add(20, "Liquidity Magnet & Target", "SHORT")
+    else:
+        add(20, "Liquidity Magnet & Target", "NEUTRAL")
+
+    # 21. Possible Spoofing - anomaly flag only, has no directional
+    # opinion of its own (a vanished bid and a vanished ask look the same).
+    add(21, "Possible Spoofing", "NEUTRAL")
+
+    # 22. Market Strength Score - already outputs an explicit bias.
+    strength_data = strength_data or {}
+    strength_bias = strength_data.get("bias")
+    if strength_bias == "BUY":
+        add(22, "Market Strength", "LONG")
+    elif strength_bias == "SELL":
+        add(22, "Market Strength", "SHORT")
+    else:
+        add(22, "Market Strength", "NEUTRAL")
+
+    # 23. Trap & Squeeze Risk - bear-trap/short-squeeze readings lean
+    # bullish (trapped shorts / squeezed shorts push price up), bull-trap/
+    # long-squeeze readings lean bearish.
+    trap_squeeze_data = trap_squeeze_data or {}
+    bullish_pressure_ts = (trap_squeeze_data.get("bear_trap", 0) or 0) + (trap_squeeze_data.get("short_squeeze", 0) or 0)
+    bearish_pressure_ts = (trap_squeeze_data.get("bull_trap", 0) or 0) + (trap_squeeze_data.get("long_squeeze", 0) or 0)
+    if bullish_pressure_ts - bearish_pressure_ts >= 20:
+        add(23, "Trap & Squeeze Risk", "LONG")
+    elif bearish_pressure_ts - bullish_pressure_ts >= 20:
+        add(23, "Trap & Squeeze Risk", "SHORT")
+    else:
+        add(23, "Trap & Squeeze Risk", "NEUTRAL")
+
+    # 24. Liquidity Target Zones - the single largest resting wall: a
+    # BUY_WALL (support) below price leans bullish, a SELL_WALL
+    # (resistance) above price leans bearish.
+    target_zones_data = target_zones_data or []
+    top_zone_side = target_zones_data[0]["side"] if target_zones_data else None
+    if top_zone_side == "BUY_WALL":
+        add(24, "Liquidity Target Zones", "LONG")
+    elif top_zone_side == "SELL_WALL":
+        add(24, "Liquidity Target Zones", "SHORT")
+    else:
+        add(24, "Liquidity Target Zones", "NEUTRAL")
+
+    # 25. Funding Rate + Open Interest - negative funding (shorts paying
+    # longs) is a classic contrarian-bullish tell; richly positive
+    # funding (crowded longs) is a contrarian-bearish tell.
+    funding_data = funding_data or {}
+    fr = funding_data.get("funding_rate_pct")
+    if funding_data.get("available") and fr is not None:
+        if fr < 0:
+            add(25, "Funding Rate + OI", "LONG")
+        elif fr > 0.05:
+            add(25, "Funding Rate + OI", "SHORT")
+        else:
+            add(25, "Funding Rate + OI", "NEUTRAL")
+    else:
+        add(25, "Funding Rate + OI", "NEUTRAL")
+
+    # 26. CVD (Cumulative Volume Delta)
+    cvd_data = cvd_data or {}
+    cvd_trend = cvd_data.get("trend")
+    if cvd_trend == "RISING":
+        add(26, "CVD Volume Delta", "LONG")
+    elif cvd_trend == "FALLING":
+        add(26, "CVD Volume Delta", "SHORT")
+    else:
+        add(26, "CVD Volume Delta", "NEUTRAL")
+
+    # 27. Market Crash Risk - a one-sided (downside-only) stress
+    # checklist: an elevated reading is a real bearish tell, but a low
+    # reading only means "no elevated downside risk right now", not a
+    # bullish vote, so it stays NEUTRAL rather than counting as LONG.
+    crash_risk_data = crash_risk_data or {}
+    if crash_risk_data.get("label") == "ELEVATED":
+        add(27, "Market Crash Risk", "SHORT")
+    else:
+        add(27, "Market Crash Risk", "NEUTRAL")
 
     return votes
 
@@ -1680,7 +1771,7 @@ def market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cv
 
 
 # ============================================================
-# MASTER FUNCTION - sab 19 concepts combine karta hai
+# MASTER FUNCTION - sab 27 concepts combine karta hai
 # *** FINAL VERDICT + CONFIDENCE ab bhi SIRF Hawkes + Bayesian se
 #     bante hain (Conformal Prediction), v4 jaisa hi - ISE CHANGE
 #     NAHI KIYA GAYA. Baaqi concepts sirf extra info hain. ***
@@ -1800,7 +1891,62 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     except Exception as e:
         candlestick_patterns = []
 
-    # "Accuracy Score" - kitne 19 mein se concepts final_verdict ki
+    # --- v8 Liquidity Scanner concepts (Ch.20-27) - now ALSO computed here
+    # (not just in the separate /liquidity endpoint) so they can feed the
+    # combined Accuracy Score below. Each is best-effort / try-except: if
+    # a fetch fails (e.g. no perp market for this coin, no order book),
+    # it degrades to a NEUTRAL/empty vote instead of breaking the signal.
+    if include_orderbook:
+        try:
+            raw_ob_v8 = _clean_order_book(exchange.fetch_order_book(symbol, limit=25))
+        except Exception:
+            raw_ob_v8 = {"bids": [], "asks": []}
+    else:
+        raw_ob_v8 = {"bids": [], "asks": []}
+
+    try:
+        magnet_target_data = liquidity_magnet_and_target(current_price, raw_ob_v8, sweep_data)
+    except Exception as e:
+        magnet_target_data = {"magnet": None, "likely_target": None, "error": str(e)}
+
+    try:
+        spoofing_data = possible_spoofing_detector(symbol, raw_ob_v8)
+    except Exception as e:
+        spoofing_data = {"available": False, "spoof_detected": False, "error": str(e)}
+
+    try:
+        strength_data = market_strength_score(
+            buying_pressure, selling_pressure, ofi_data.get("ofi_score"),
+            depth_data.get("depth_slope"), vpin_data.get("vpin_score"))
+    except Exception as e:
+        strength_data = {"score": None, "label": None, "bias": None, "error": str(e)}
+
+    try:
+        funding_data = funding_open_interest(symbol) if include_orderbook else {"available": False}
+    except Exception as e:
+        funding_data = {"available": False, "error": str(e)}
+
+    try:
+        trap_squeeze_data = trap_and_squeeze_risk(sweep_data, ofi_data, depth_data, funding_data)
+    except Exception as e:
+        trap_squeeze_data = {"bull_trap": 0, "bear_trap": 0, "short_squeeze": 0, "long_squeeze": 0, "error": str(e)}
+
+    try:
+        target_zones_data = liquidity_target_zones(raw_ob_v8, current_price)
+    except Exception as e:
+        target_zones_data = []
+
+    try:
+        cvd_data = cvd_volume_delta(df)
+    except Exception as e:
+        cvd_data = {"cvd": None, "trend": None, "error": str(e)}
+
+    try:
+        crash_risk_data = market_crash_risk(jump_data, cusum_data, vpin_data, ofi_data, sweep_data, cvd_data)
+    except Exception as e:
+        crash_risk_data = {"score": None, "label": None, "factors": [], "error": str(e)}
+
+    # "Accuracy Score" - kitne 27 mein se concepts final_verdict ki
     # taraf ishara kar rahe hain (display metric, verdict khud change
     # nahi hota - dekho concept_accuracy_score() ke comments).
     accuracy_data = concept_accuracy_score(
@@ -1811,6 +1957,10 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         meta_data=meta_data, divergence_data=divergence_data,
         depth_data=depth_data, vwap_data=vwap_data, wavelet_data=wavelet_data,
         cusum_data=cusum_data, sweep_data=sweep_data,
+        magnet_target_data=magnet_target_data, spoofing_data=spoofing_data,
+        strength_data=strength_data, trap_squeeze_data=trap_squeeze_data,
+        target_zones_data=target_zones_data, funding_data=funding_data,
+        cvd_data=cvd_data, crash_risk_data=crash_risk_data,
     )
 
     result = {
@@ -1848,7 +1998,19 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         # display-only, human-style chart-reading (does NOT affect final_verdict)
         "candlestick_patterns": candlestick_patterns,
 
-        # Accuracy Score widget (Ch.01-19 agreement with the verdict above)
+        # v8 Liquidity Scanner concepts (Ch.20-27, display-only, now also
+        # returned here so /signal alone reflects everything the accuracy
+        # score below is based on)
+        "liquidity_magnet_target": magnet_target_data,
+        "possible_spoofing": spoofing_data,
+        "market_strength": strength_data,
+        "trap_squeeze_risk": trap_squeeze_data,
+        "liquidity_target_zones": target_zones_data,
+        "funding_open_interest": funding_data,
+        "cvd_volume_delta": cvd_data,
+        "market_crash_risk": crash_risk_data,
+
+        # Accuracy Score widget (Ch.01-27 agreement with the verdict above)
         "concept_accuracy_pct": accuracy_data["concept_accuracy_pct"],
         "concept_agree_count": accuracy_data["concept_agree_count"],
         "concept_total": accuracy_data["concept_total"],
