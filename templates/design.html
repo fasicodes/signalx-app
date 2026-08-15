@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Multi-Channel Market Readout</title>
-<link rel="stylesheet" href="/static/style.css?v=20260814-fullstack">
+<link rel="stylesheet" href="/static/style.css?v=20260812-fx-1">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
@@ -276,17 +276,6 @@
       </div>
     </section>
 
-    <!-- MINI CHART PREVIEW — signal ke sath hi candle chart dikhta hai,
-         Live Chart tab par jaaye bina. Entry/SL/TP lines aur recent
-         candlestick pattern markers include hote hain. -->
-    <section class="mini-chart-card" aria-label="Signal Chart Preview">
-      <div class="mini-chart-head">
-        <span class="mini-chart-title">Price Action Snapshot</span>
-        <span class="mini-chart-sub" id="mini-chart-sub">--</span>
-      </div>
-      <div id="mini-chart-container" class="mini-chart-container"></div>
-    </section>
-
     <!-- PROMINENT ACCURACY SCORE -->
     <section class="accuracy-score-card accuracy-score-card--hero" aria-label="Accuracy Score">
       <div class="accuracy-score-head">
@@ -318,71 +307,19 @@
       </div>
     </section>
 
-    <!-- TOTAL SIGNAL SUPPORT — poori website ke saare channels (Tier-1
-         se lekar candlestick/multi-timeframe/correlated-asset tak) mein
-         se kitne is verdict ko support kar rahe hain. -->
-    <section class="accuracy-score-card accuracy-score-card--hero" aria-label="Total Signal Support">
+    <section class="candle-patterns-card" aria-label="Candlestick Patterns">
       <div class="accuracy-score-head">
         <div class="channel-id-group">
-          <span class="scope-ticks"><span style="height:6px"></span><span style="height:9px"></span><span style="height:12px"></span><span style="height:7px"></span><span style="height:10px"></span></span>
+          <span class="scope-ticks"><span style="height:6px"></span><span style="height:10px"></span><span style="height:4px"></span></span>
           <div>
-            <div class="channel-id">ALL CHANNELS</div>
-            <div class="channel-title">Total Signal Support</div>
+            <div class="channel-id">DISPLAY ONLY</div>
+            <div class="channel-title">Candlestick Patterns</div>
           </div>
         </div>
-        <span class="channel-model">WEBSITE-WIDE</span>
+        <span class="channel-model">CHART READING</span>
       </div>
-      <div class="accuracy-score-main">
-        <div class="accuracy-gauge-row">
-          <div class="accuracy-gauge-wrap">
-            <svg viewBox="0 0 120 70" aria-hidden="true">
-              <path class="accuracy-gauge-track" d="M 10 60 A 50 50 0 0 1 110 60"></path>
-              <path id="total-support-gauge-fill" class="accuracy-gauge-fill" d="M 10 60 A 50 50 0 0 1 110 60"></path>
-              <line id="total-support-gauge-needle" class="accuracy-gauge-needle" x1="60" y1="60" x2="60" y2="18"></line>
-              <circle cx="60" cy="60" r="4.5" class="accuracy-gauge-hub"></circle>
-            </svg>
-          </div>
-          <div class="accuracy-score-data">
-            <div id="total-support-pct" class="accuracy-score-pct">--%</div>
-            <div id="total-support-sub" class="accuracy-score-sub">waiting for a verdict</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-
-    <!-- RISK-REWARD / POSITION SIZE CALCULATOR -->
-    <section class="rr-calc-card" aria-label="Risk-Reward Calculator">
-      <div class="rr-calc-head">
-        <div class="channel-id-group">
-          <span class="scope-ticks"><span style="height:6px"></span><span style="height:10px"></span><span style="height:7px"></span><span style="height:12px"></span><span style="height:5px"></span></span>
-          <div>
-            <div class="channel-id">CH.30</div>
-            <div class="channel-title">Risk-Reward &amp; Position Size Calculator</div>
-          </div>
-        </div>
-        <span class="channel-model">ACCOUNT-BASED SIZING</span>
-      </div>
-      <div class="rr-calc-body">
-        <div class="rr-calc-inputs">
-          <label class="rr-input-group">
-            <span>Account Balance (USDT)</span>
-            <input type="number" id="rr-balance" placeholder="1000" min="0" step="1" />
-          </label>
-          <label class="rr-input-group">
-            <span>Risk per Trade (%)</span>
-            <input type="number" id="rr-risk-pct" placeholder="suggested" min="0.1" max="100" step="0.1" />
-          </label>
-        </div>
-        <div class="rr-calc-outputs" id="rr-calc-outputs">
-          <div class="rr-out-item"><span class="rr-out-label">ENTRY</span><span class="rr-out-value" id="rr-out-entry">--</span></div>
-          <div class="rr-out-item"><span class="rr-out-label">STOP LOSS</span><span class="rr-out-value text-short" id="rr-out-sl">--</span></div>
-          <div class="rr-out-item"><span class="rr-out-label">TAKE PROFIT</span><span class="rr-out-value text-long" id="rr-out-tp">--</span></div>
-          <div class="rr-out-item"><span class="rr-out-label">RISK : REWARD</span><span class="rr-out-value" id="rr-out-rr">--</span></div>
-          <div class="rr-out-item"><span class="rr-out-label">RISK AMOUNT</span><span class="rr-out-value" id="rr-out-riskamt">--</span></div>
-          <div class="rr-out-item"><span class="rr-out-label">POSITION SIZE</span><span class="rr-out-value" id="rr-out-possize">--</span></div>
-        </div>
-        <p class="rr-calc-note" id="rr-calc-note">Run an analysis to auto-fill entry/SL/TP from the current signal — enter your balance to see exact position size.</p>
+      <div id="candle-patterns-list" class="candle-patterns-list">
+        <div class="candle-patterns-empty">waiting for a verdict</div>
       </div>
     </section>
 
@@ -456,22 +393,6 @@
                 <span id="chart-live-dot" class="live-clock-dot"></span>
                 <span id="chart-price" class="chart-price">--</span>
                 <span id="chart-change" class="chart-change">--</span>
-                <div class="chart-others-wrap" id="chart-others-wrap">
-                  <button type="button" id="chart-others-btn" class="indicator-btn" title="Other overlays">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>
-                    <span>OTHERS</span>
-                  </button>
-                  <div class="chart-others-menu" id="chart-others-menu" hidden>
-                    <label class="chart-others-item">
-                      <input type="checkbox" id="toggle-patterns" />
-                      <span>Candlestick Patterns</span>
-                    </label>
-                    <label class="chart-others-item">
-                      <input type="checkbox" id="toggle-sr" />
-                      <span>Support / Resistance</span>
-                    </label>
-                  </div>
-                </div>
                 <button type="button" id="indicator-btn" class="indicator-btn" title="Indicators">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" fill="currentColor"/></svg>
                   <span>INDICATORS</span>
@@ -1031,7 +952,7 @@
 
 </div>
 
-<script src="/static/script.js?v=20260814-total-support"></script>
+<script src="/static/script.js?v=20260814-accuracy-fix"></script>
 <script>
 // Standalone controller for the homepage info sidebar (Contact/About/
 // Privacy/Terms/Disclaimer). Fully independent of script.js and the
@@ -1481,9 +1402,6 @@
       }
       hideModal(trackModal);
       await refreshActiveTrades();
-      if (data.revenge_warning) {
-        addAlert("warning", "⚠ Discipline check: " + data.revenge_warning);
-      }
       document.querySelector('.home-info-tab[data-info="active-trades"]').click();
     } catch (e) {
       msg.textContent = 'Could not connect to the server';
