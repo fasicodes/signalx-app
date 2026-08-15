@@ -34,6 +34,22 @@
 
       <a href="/demo-trading" style="margin-left:12px;background:var(--panel-raised);border:1px solid var(--line);color:var(--accent);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">DEMO TRADING</a>
 
+      <div style="position:relative; margin-left:10px;">
+        <button type="button" id="notif-bell-btn" title="Notifications" style="width:34px;height:34px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notif-bell-badge" style="display:none; position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px; border-radius:8px; background:var(--short); color:#fff; font-family:var(--mono); font-size:9px; font-weight:800; line-height:16px; text-align:center;">0</span>
+        </button>
+        <div id="notif-dropdown" style="display:none; position:absolute; right:0; top:42px; width:320px; max-height:420px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 12px 30px rgba(0,0,0,0.4); z-index:60;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--line);">
+            <span style="font-family:var(--mono); font-size:11px; font-weight:800; letter-spacing:0.4px; color:var(--text);">NOTIFICATIONS</span>
+            <button type="button" id="notif-mark-all-btn" style="background:none; border:none; color:var(--accent); font-family:var(--mono); font-size:10px; font-weight:700; cursor:pointer;">MARK ALL READ</button>
+          </div>
+          <div id="notif-dropdown-list" style="padding:8px;">
+            <p style="color:var(--text-faint); font-size:12px; padding:10px;">Loading…</p>
+          </div>
+        </div>
+      </div>
+
       <button type="button" id="theme-toggle-btn" title="Toggle light/dark mode" style="margin-left:10px;width:34px;height:34px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
         <svg id="theme-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </button>
@@ -129,6 +145,18 @@
       <button class="panel-tab home-info-tab" data-info="disclaimer" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4M12 17v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
         <span class="panel-tab-text">DISCLAIMER</span>
+      </button>
+      <button class="panel-tab home-info-tab" data-info="watchlist" type="button">
+        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5c-6 0-9.5 5.5-10 7 0.5 1.5 4 7 10 7s9.5-5.5 10-7c-0.5-1.5-4-7-10-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></span>
+        <span class="panel-tab-text">WATCHLIST</span>
+      </button>
+      <button class="panel-tab home-info-tab" data-info="alerts" type="button">
+        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <span class="panel-tab-text">PRICE ALERTS</span>
+      </button>
+      <button class="panel-tab home-info-tab" data-info="risk-calc" type="button">
+        <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h8M8 12h3M13 12h3M8 16h3M13 16h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+        <span class="panel-tab-text">RISK CALCULATOR</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="active-trades" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 17l5-6 4 4 7-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="6" r="1.6" fill="currentColor"/></svg></span>
@@ -943,6 +971,118 @@
         </div>
       </div>
 
+      <div class="home-info-panel" data-info="watchlist">
+        <div class="about-card">
+          <h2 class="about-title">Watchlist</h2>
+          <p>Track the symbols you care about — live price, 24h change, volume and last signal, in one list.</p>
+
+          <div style="display:flex; gap:8px; margin:16px 0;">
+            <input type="text" id="watchlist-add-input" placeholder="e.g. BTC/USDT"
+                   style="flex:1; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:12.5px; text-transform:uppercase;">
+            <button type="button" id="watchlist-add-btn" style="padding:0 16px; border-radius:7px; border:none; background:var(--accent); color:var(--void); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">ADD</button>
+          </div>
+          <div id="watchlist-msg" style="font-size:11.5px; margin-bottom:8px; min-height:14px;"></div>
+
+          <div id="watchlist-list">
+            <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-info-panel" data-info="alerts">
+        <div class="about-card">
+          <h2 class="about-title">Price &amp; Signal Alerts</h2>
+          <p>Get notified on price levels, RSI/MACD conditions, new signals, and liquidity events. Checked automatically while Signals FM is open in your browser.</p>
+
+          <div id="alert-form" style="margin:16px 0; padding:14px; background:var(--panel-raised); border:1px solid var(--line); border-radius:8px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+              <div>
+                <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Symbol</label>
+                <input type="text" id="alert-symbol" placeholder="BTC/USDT" style="width:100%; box-sizing:border-box; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px; text-transform:uppercase;">
+              </div>
+              <div>
+                <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Alert Type</label>
+                <select id="alert-type" style="width:100%; box-sizing:border-box; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+                  <optgroup label="Price">
+                    <option value="PRICE_ABOVE">Price above X</option>
+                    <option value="PRICE_BELOW">Price below X</option>
+                    <option value="PRICE_REACHES">Price reaches X</option>
+                  </optgroup>
+                  <optgroup label="Indicator">
+                    <option value="RSI_ABOVE">RSI above X</option>
+                    <option value="RSI_BELOW">RSI below X</option>
+                    <option value="MACD_BULLISH_CROSS">MACD bullish crossover</option>
+                    <option value="MACD_BEARISH_CROSS">MACD bearish crossover</option>
+                  </optgroup>
+                  <optgroup label="Signal">
+                    <option value="NEW_LONG_SIGNAL">New LONG signal</option>
+                    <option value="NEW_SHORT_SIGNAL">New SHORT signal</option>
+                    <option value="CONFIDENCE_ABOVE">Confidence above X%</option>
+                  </optgroup>
+                  <optgroup label="Liquidity">
+                    <option value="LIQUIDITY_WALL">Large liquidity wall detected</option>
+                    <option value="LIQUIDITY_IMBALANCE">Liquidity imbalance detected</option>
+                    <option value="SUPPORT_LIQUIDITY">Major support liquidity (score ≥ X)</option>
+                    <option value="RESISTANCE_LIQUIDITY">Major resistance liquidity (score ≥ X)</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+            <div id="alert-target-row" style="margin-bottom:10px;">
+              <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;" id="alert-target-label">Target Value</label>
+              <input type="number" id="alert-target" step="any" placeholder="e.g. 65000" style="width:100%; box-sizing:border-box; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+            </div>
+            <div id="alert-form-msg" style="font-size:11.5px; margin-bottom:8px; min-height:14px;"></div>
+            <button type="button" id="alert-create-btn" style="width:100%; padding:10px 0; border-radius:7px; border:none; background:var(--long); color:#06231a; font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">CREATE ALERT</button>
+          </div>
+
+          <h3 class="about-subhead">Your Alerts</h3>
+          <div id="alerts-list" style="margin-top:8px;">
+            <p style="color:var(--text-faint); font-size:13px;">Loading…</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-info-panel" data-info="risk-calc">
+        <div class="about-card">
+          <h2 class="about-title">Risk Management Center</h2>
+          <p>Position sizing and risk/reward, calculated from your account and trade plan. Informational only — always confirm sizing against your own broker/exchange rules.</p>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0;">
+            <div>
+              <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Account Balance ($)</label>
+              <input type="number" id="risk-balance" step="any" value="10000" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+            </div>
+            <div>
+              <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Risk (%)</label>
+              <input type="number" id="risk-percent" step="any" value="1" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+            </div>
+            <div>
+              <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Entry Price</label>
+              <input type="number" id="risk-entry" step="any" placeholder="e.g. 100" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+            </div>
+            <div>
+              <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Stop Loss</label>
+              <input type="number" id="risk-sl" step="any" placeholder="e.g. 98" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+            </div>
+            <div>
+              <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Take Profit</label>
+              <input type="number" id="risk-tp" step="any" placeholder="e.g. 106" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+            </div>
+            <div>
+              <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Direction</label>
+              <select id="risk-direction" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+                <option value="LONG">LONG</option>
+                <option value="SHORT">SHORT</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="risk-calc-msg" style="font-size:11.5px; color:var(--short); margin-bottom:8px; min-height:14px;"></div>
+          <div id="risk-calc-results" class="perf-summary-grid" style="margin-top:6px;"></div>
+        </div>
+      </div>
+
     </div><!-- /.home-info-inner -->
   </div><!-- /.home-info-overlay -->
 
@@ -1636,6 +1776,443 @@
 
   refreshActiveTrades();
   setInterval(refreshActiveTrades, 15000);
+})();
+</script>
+
+<!-- ============================================================
+     PHASE 1 UPGRADE — Notification Center, Watchlist, Price Alerts,
+     Risk Calculator. Fully self-contained (own IIFEs), same pattern as
+     the Active Trade Tracking module above: reads globals set by
+     script.js (selectCoin, coinIconUrl, iconUrlFor, isForexValue) but
+     never modifies script.js state, and never touches the RUN ANALYSIS
+     / signal-engine flow.
+     ============================================================ -->
+<script>
+/* ---------------------------------------------------------------
+   Notification Center (header bell)
+   --------------------------------------------------------------- */
+(function () {
+  const bellBtn = document.getElementById('notif-bell-btn');
+  const badge = document.getElementById('notif-bell-badge');
+  const dropdown = document.getElementById('notif-dropdown');
+  const listEl = document.getElementById('notif-dropdown-list');
+  const markAllBtn = document.getElementById('notif-mark-all-btn');
+  if (!bellBtn) return;
+
+  function timeAgo(iso) {
+    if (!iso) return '';
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
+  }
+
+  function renderList(items) {
+    if (!items.length) {
+      listEl.innerHTML = '<p style="color:var(--text-faint); font-size:12px; padding:10px;">No notifications yet.</p>';
+      return;
+    }
+    listEl.innerHTML = items.map(n => `
+      <div class="notif-item" data-id="${n.id}" style="padding:10px; border-radius:6px; margin-bottom:4px; cursor:pointer; background:${n.is_read ? 'transparent' : 'color-mix(in srgb, var(--accent) 8%, transparent)'};">
+        <div style="display:flex; justify-content:space-between; gap:8px;">
+          <span style="font-family:var(--mono); font-size:11px; font-weight:700; color:var(--text);">${n.title}</span>
+          <span style="font-family:var(--mono); font-size:9.5px; color:var(--text-faint); white-space:nowrap;">${timeAgo(n.created_at)}</span>
+        </div>
+        <p style="margin:4px 0 0; font-size:11px; color:var(--text-dim); line-height:1.4;">${n.message}</p>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.notif-item').forEach(el => {
+      el.addEventListener('click', () => {
+        fetch(`/api/notifications/${el.dataset.id}/read`, { method: 'POST', credentials: 'same-origin' })
+          .then(refreshUnreadCount);
+        el.style.background = 'transparent';
+      });
+    });
+  }
+
+  function loadNotifications() {
+    fetch('/api/notifications?limit=30', { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => renderList(data.notifications || []))
+      .catch(() => { listEl.innerHTML = '<p style="color:var(--short); font-size:12px; padding:10px;">Unable to load notifications.</p>'; });
+  }
+
+  function refreshUnreadCount() {
+    fetch('/api/notifications/unread-count', { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => {
+        const c = data.unread_count || 0;
+        if (c > 0) {
+          badge.style.display = 'block';
+          badge.textContent = c > 99 ? '99+' : c;
+        } else {
+          badge.style.display = 'none';
+        }
+      })
+      .catch(() => {});
+  }
+
+  bellBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = dropdown.style.display === 'block';
+    dropdown.style.display = open ? 'none' : 'block';
+    if (!open) loadNotifications();
+  });
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target) && e.target !== bellBtn) dropdown.style.display = 'none';
+  });
+  if (markAllBtn) {
+    markAllBtn.addEventListener('click', () => {
+      fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin' })
+        .then(() => { loadNotifications(); refreshUnreadCount(); });
+    });
+  }
+
+  window.SignalXNotifications = { refreshUnreadCount };
+
+  refreshUnreadCount();
+  setInterval(refreshUnreadCount, 45000);
+})();
+
+/* ---------------------------------------------------------------
+   Watchlist
+   --------------------------------------------------------------- */
+(function () {
+  const listEl = document.getElementById('watchlist-list');
+  const addInput = document.getElementById('watchlist-add-input');
+  const addBtn = document.getElementById('watchlist-add-btn');
+  const msgEl = document.getElementById('watchlist-msg');
+  if (!listEl) return;
+
+  function setMsg(text, isError) {
+    msgEl.textContent = text || '';
+    msgEl.style.color = isError ? 'var(--short)' : 'var(--long)';
+  }
+
+  function fmtPrice(v) {
+    if (typeof v !== 'number') return '--';
+    return v >= 100 ? v.toFixed(2) : v.toFixed(v >= 1 ? 4 : 6);
+  }
+
+  function render(rows) {
+    if (!rows.length) {
+      listEl.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">Your watchlist is empty. Add a symbol above.</p>';
+      return;
+    }
+    listEl.innerHTML = rows.map(r => {
+      const ticker = r.symbol.split('/')[0];
+      const type = (typeof isForexValue === 'function' && isForexValue(r.symbol)) ? 'forex' : 'crypto';
+      const icon = (typeof iconUrlFor === 'function') ? iconUrlFor(ticker, type) : '';
+      const pct = r.change_percent;
+      const pctText = typeof pct === 'number' ? (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%' : '--';
+      const pctColor = typeof pct === 'number' ? (pct >= 0 ? 'var(--long)' : 'var(--short)') : 'var(--text-faint)';
+      const dir = r.signal_direction;
+      const dirColor = dir === 'LONG' ? 'var(--long)' : dir === 'SHORT' ? 'var(--short)' : 'var(--text-faint)';
+      const conf = typeof r.signal_confidence === 'number' ? r.signal_confidence + '% confidence' : 'no recent signal';
+      return `
+      <div class="watchlist-row" data-symbol="${r.symbol}" style="display:flex; align-items:center; gap:10px; padding:11px 8px; border-bottom:1px solid var(--line); cursor:pointer;">
+        ${icon ? `<img src="${icon}" alt="" style="width:22px;height:22px;border-radius:50%;" onerror="this.style.display='none'">` : ''}
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--text);">${r.symbol}</div>
+          <div style="font-family:var(--mono); font-size:10px; color:${dirColor};">${dir || '—'} · ${conf}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:var(--mono); font-size:12px; color:var(--text);">${r.data_unavailable ? 'N/A' : '$' + fmtPrice(r.last_price)}</div>
+          <div style="font-family:var(--mono); font-size:10.5px; color:${pctColor};">${pctText}</div>
+        </div>
+        <button type="button" class="watchlist-fav-btn" data-symbol="${r.symbol}" title="Favorite" style="background:none;border:none;cursor:pointer;color:${r.is_favorite ? 'var(--accent)' : 'var(--text-faint)'};font-size:16px;padding:0 4px;">★</button>
+        <button type="button" class="watchlist-remove-btn" data-symbol="${r.symbol}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:14px;padding:0 4px;">✕</button>
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('.watchlist-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        const sym = row.dataset.symbol;
+        if (typeof selectCoin === 'function') selectCoin(sym);
+        document.getElementById('home-info-back').click();
+      });
+    });
+    listEl.querySelectorAll('.watchlist-fav-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sym = btn.dataset.symbol;
+        const nowFav = btn.style.color !== 'var(--accent)';
+        fetch(`/api/watchlist/${encodeURIComponent(sym)}/favorite`, {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ favorite: nowFav }),
+        }).then(load);
+      });
+    });
+    listEl.querySelectorAll('.watchlist-remove-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fetch(`/api/watchlist/${encodeURIComponent(btn.dataset.symbol)}`, { method: 'DELETE', credentials: 'same-origin' })
+          .then(load);
+      });
+    });
+  }
+
+  function load() {
+    fetch('/api/watchlist', { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => render(data.watchlist || []))
+      .catch(() => { listEl.innerHTML = '<p style="color:var(--short); font-size:13px;">Unable to load watchlist.</p>'; });
+  }
+
+  function addSymbol() {
+    const raw = (addInput.value || '').trim().toUpperCase();
+    if (!raw) return;
+    const symbol = raw.includes('/') ? raw : raw + '/USDT';
+    setMsg('Adding…', false);
+    fetch('/api/watchlist', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol }),
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) { setMsg(data.error || 'Could not add symbol.', true); return; }
+        addInput.value = '';
+        setMsg('Added ' + symbol, false);
+        load();
+      })
+      .catch(() => setMsg('Could not add symbol.', true));
+  }
+
+  if (addBtn) addBtn.addEventListener('click', addSymbol);
+  if (addInput) addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSymbol(); });
+
+  document.querySelector('.home-info-tab[data-info="watchlist"]').addEventListener('click', load);
+  window.SignalXWatchlist = { load };
+})();
+
+/* ---------------------------------------------------------------
+   Price / Signal / Liquidity Alerts
+   --------------------------------------------------------------- */
+(function () {
+  const symbolInput = document.getElementById('alert-symbol');
+  const typeSelect = document.getElementById('alert-type');
+  const targetRow = document.getElementById('alert-target-row');
+  const targetLabel = document.getElementById('alert-target-label');
+  const targetInput = document.getElementById('alert-target');
+  const createBtn = document.getElementById('alert-create-btn');
+  const formMsg = document.getElementById('alert-form-msg');
+  const listEl = document.getElementById('alerts-list');
+  if (!listEl) return;
+
+  const NO_TARGET_TYPES = new Set(['MACD_BULLISH_CROSS', 'MACD_BEARISH_CROSS', 'NEW_LONG_SIGNAL', 'NEW_SHORT_SIGNAL', 'LIQUIDITY_WALL', 'LIQUIDITY_IMBALANCE']);
+  const TARGET_LABELS = {
+    PRICE_ABOVE: 'Price ($)', PRICE_BELOW: 'Price ($)', PRICE_REACHES: 'Price ($)',
+    RSI_ABOVE: 'RSI Level (0-100)', RSI_BELOW: 'RSI Level (0-100)',
+    CONFIDENCE_ABOVE: 'Confidence (%)',
+    SUPPORT_LIQUIDITY: 'Minimum Score (0-99)', RESISTANCE_LIQUIDITY: 'Minimum Score (0-99)',
+  };
+
+  function syncTargetField() {
+    const t = typeSelect.value;
+    if (NO_TARGET_TYPES.has(t)) {
+      targetRow.style.display = 'none';
+    } else {
+      targetRow.style.display = 'block';
+      targetLabel.textContent = TARGET_LABELS[t] || 'Target Value';
+    }
+  }
+  typeSelect.addEventListener('change', syncTargetField);
+  syncTargetField();
+
+  function setFormMsg(text, isError) {
+    formMsg.textContent = text || '';
+    formMsg.style.color = isError ? 'var(--short)' : 'var(--long)';
+  }
+
+  function statusColor(status) {
+    if (status === 'TRIGGERED') return 'var(--accent)';
+    if (status === 'DISABLED') return 'var(--text-faint)';
+    return 'var(--long)';
+  }
+
+  function renderAlerts(items) {
+    if (!items.length) {
+      listEl.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">No alerts yet — create one above.</p>';
+      return;
+    }
+    listEl.innerHTML = items.map(a => `
+      <div class="alert-row" data-id="${a.id}" style="padding:11px 10px; border:1px solid var(--line); border-radius:7px; margin-bottom:8px; background:var(--panel-raised);">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div>
+            <span style="font-family:var(--mono); font-size:12px; font-weight:700; color:var(--text);">${a.symbol}</span>
+            <span style="font-family:var(--mono); font-size:10.5px; color:var(--text-dim); margin-left:6px;">${a.alert_type.replace(/_/g, ' ')}${a.target_value != null ? ' · ' + a.target_value : ''}</span>
+          </div>
+          <span style="font-family:var(--mono); font-size:9.5px; font-weight:800; color:${statusColor(a.status)};">${a.status}</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button type="button" class="alert-toggle-btn" data-id="${a.id}" style="flex:1; padding:6px 0; border-radius:6px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:10.5px; font-weight:700; cursor:pointer;">${a.is_enabled ? 'DISABLE' : 'ENABLE'}</button>
+          <button type="button" class="alert-delete-btn" data-id="${a.id}" style="flex:1; padding:6px 0; border-radius:6px; border:1px solid var(--line); background:transparent; color:var(--short); font-family:var(--mono); font-size:10.5px; font-weight:700; cursor:pointer;">DELETE</button>
+        </div>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.alert-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        fetch(`/api/alerts/${btn.dataset.id}/toggle`, { method: 'POST', credentials: 'same-origin' }).then(loadAlerts);
+      });
+    });
+    listEl.querySelectorAll('.alert-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        fetch(`/api/alerts/${btn.dataset.id}`, { method: 'DELETE', credentials: 'same-origin' }).then(loadAlerts);
+      });
+    });
+  }
+
+  function loadAlerts() {
+    fetch('/api/alerts', { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => renderAlerts(data.alerts || []))
+      .catch(() => { listEl.innerHTML = '<p style="color:var(--short); font-size:13px;">Unable to load alerts.</p>'; });
+  }
+
+  function createAlert() {
+    const rawSymbol = (symbolInput.value || '').trim().toUpperCase();
+    const symbol = rawSymbol.includes('/') ? rawSymbol : rawSymbol + '/USDT';
+    const alert_type = typeSelect.value;
+    const needsTarget = !NO_TARGET_TYPES.has(alert_type);
+    const target_value = needsTarget ? parseFloat(targetInput.value) : null;
+
+    if (!rawSymbol) { setFormMsg('Enter a symbol.', true); return; }
+    if (needsTarget && (isNaN(target_value))) { setFormMsg('Enter a target value.', true); return; }
+
+    setFormMsg('Creating…', false);
+    fetch('/api/alerts', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, alert_type, target_value }),
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) { setFormMsg(data.error || 'Could not create alert.', true); return; }
+        setFormMsg('Alert created.', false);
+        symbolInput.value = '';
+        targetInput.value = '';
+        loadAlerts();
+      })
+      .catch(() => setFormMsg('Could not create alert.', true));
+  }
+
+  if (createBtn) createBtn.addEventListener('click', createAlert);
+  document.querySelector('.home-info-tab[data-info="alerts"]').addEventListener('click', loadAlerts);
+
+  /* Poll active alerts while the app is open, and surface newly-triggered
+     ones as both a browser notification (if permitted) and an in-app one
+     (already created server-side into the notifications table). */
+  function checkAlerts() {
+    fetch('/api/alerts/check', { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => {
+        const triggered = data.triggered || [];
+        if (!triggered.length) return;
+        if (window.SignalXNotifications) window.SignalXNotifications.refreshUnreadCount();
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          triggered.forEach(t => new Notification(t.title, { body: t.message }));
+        }
+        const alertsPanel = document.querySelector('.home-info-panel[data-info="alerts"]');
+        if (alertsPanel && alertsPanel.classList.contains('active')) loadAlerts();
+      })
+      .catch(() => {});
+  }
+
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    document.querySelector('.home-info-tab[data-info="alerts"]').addEventListener('click', () => {
+      Notification.requestPermission();
+    }, { once: true });
+  }
+
+  setInterval(checkAlerts, 45000);
+  setTimeout(checkAlerts, 5000);
+
+  window.SignalXAlerts = { loadAlerts, checkAlerts };
+})();
+
+/* ---------------------------------------------------------------
+   Risk Management Center — pure client-side calculation, no backend
+   round-trip needed (informational/calculation-focused only).
+   --------------------------------------------------------------- */
+(function () {
+  const balanceEl = document.getElementById('risk-balance');
+  const riskPctEl = document.getElementById('risk-percent');
+  const entryEl = document.getElementById('risk-entry');
+  const slEl = document.getElementById('risk-sl');
+  const tpEl = document.getElementById('risk-tp');
+  const dirEl = document.getElementById('risk-direction');
+  const msgEl = document.getElementById('risk-calc-msg');
+  const resultsEl = document.getElementById('risk-calc-results');
+  if (!balanceEl) return;
+
+  function card(label, value, color) {
+    return `<div class="perf-metric-card">
+      <span class="perf-metric-label">${label}</span>
+      <span class="perf-metric-value" style="${color ? 'color:' + color + ';' : ''}">${value}</span>
+    </div>`;
+  }
+
+  function calculate() {
+    const balance = parseFloat(balanceEl.value);
+    const riskPct = parseFloat(riskPctEl.value);
+    const entry = parseFloat(entryEl.value);
+    const sl = parseFloat(slEl.value);
+    const tp = parseFloat(tpEl.value);
+    const direction = dirEl.value;
+
+    if ([balance, riskPct, entry, sl].some(v => isNaN(v)) || balance <= 0 || entry <= 0) {
+      msgEl.textContent = 'Enter account balance, risk %, entry price, and stop loss to calculate.';
+      resultsEl.innerHTML = '';
+      return;
+    }
+    const riskDistance = direction === 'LONG' ? entry - sl : sl - entry;
+    if (riskDistance <= 0) {
+      msgEl.textContent = 'Stop loss must be on the losing side of entry for the selected direction.';
+      resultsEl.innerHTML = '';
+      return;
+    }
+    msgEl.textContent = '';
+
+    const riskAmount = balance * (riskPct / 100);
+    const positionSize = riskAmount / riskDistance; // units of the asset
+    const positionValue = positionSize * entry;
+    const potentialLoss = riskAmount;
+
+    let potentialProfit = null, rr = null, rewardDistance = null;
+    if (!isNaN(tp) && tp > 0) {
+      rewardDistance = direction === 'LONG' ? tp - entry : entry - tp;
+      if (rewardDistance > 0) {
+        potentialProfit = positionSize * rewardDistance;
+        rr = rewardDistance / riskDistance;
+      }
+    }
+
+    let html = '';
+    html += card('Risk Amount', '$' + riskAmount.toFixed(2), 'var(--short)');
+    html += card('Position Size', positionSize.toFixed(6) + ' units');
+    html += card('Position Value', '$' + positionValue.toFixed(2));
+    html += card('Potential Loss', '-$' + potentialLoss.toFixed(2), 'var(--short)');
+    if (potentialProfit != null) {
+      html += card('Potential Profit', '+$' + potentialProfit.toFixed(2), 'var(--long)');
+      html += card('Risk / Reward', '1 : ' + rr.toFixed(2), rr >= 2 ? 'var(--long)' : rr >= 1 ? 'var(--text)' : 'var(--short)');
+    } else {
+      html += card('Potential Profit', 'add a Take Profit', 'var(--text-faint)');
+      html += card('Risk / Reward', '—', 'var(--text-faint)');
+    }
+    resultsEl.innerHTML = html;
+  }
+
+  [balanceEl, riskPctEl, entryEl, slEl, tpEl, dirEl].forEach(el => el.addEventListener('input', calculate));
+  dirEl.addEventListener('change', calculate);
+  document.querySelector('.home-info-tab[data-info="risk-calc"]').addEventListener('click', calculate);
+  calculate();
 })();
 </script>
 
