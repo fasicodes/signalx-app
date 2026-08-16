@@ -411,78 +411,87 @@
         </div>
 
         <div id="panel-livechart" class="tab-panel">
-          <div class="chart-panel" id="chart-panel">
+          <div class="chart-workspace" id="chart-workspace" data-layout="1">
+            <div class="chart-layout-selector" role="group" aria-label="Chart layout">
+              <button type="button" class="chart-layout-btn active" data-layout="1" title="Single chart">1</button>
+              <button type="button" class="chart-layout-btn" data-layout="2" title="Two charts">2</button>
+              <button type="button" class="chart-layout-btn" data-layout="4" title="Four charts">4</button>
+            </div>
+            <div class="chart-mobile-tabs" id="chart-mobile-tabs" hidden></div>
+            <div class="chart-grid" id="chart-grid">
+            <div class="chart-grid-cell" data-slot="1">
+          <div class="chart-panel" id="chart-panel" data-role="chart-panel">
 
             <div class="chart-header">
               <div class="chart-header-left">
-                <button type="button" id="chart-back-btn" class="chart-back-btn" title="Exit fullscreen">
+                <button type="button" id="chart-back-btn" data-role="chart-back-btn" class="chart-back-btn" title="Exit fullscreen">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   <span>BACK</span>
                 </button>
-                <img id="chart-coin-icon" class="chart-coin-logo" alt="" src="" />
+                <img id="chart-coin-icon" data-role="chart-coin-icon" class="chart-coin-logo" alt="" src="" />
                 <div>
-                  <div class="chart-title" id="chart-title">BTC / USDT · 1H</div>
+                  <div class="chart-title" id="chart-title" data-role="chart-title">BTC / USDT · 1H</div>
                   <div class="chart-subtitle">live candlestick feed — polled from the exchange</div>
                 </div>
               </div>
               <div class="chart-price-block">
                 <span id="chart-live-dot" class="live-clock-dot"></span>
-                <span id="chart-price" class="chart-price">--</span>
-                <span id="chart-change" class="chart-change">--</span>
-                <button type="button" id="indicator-btn" class="indicator-btn" title="Indicators">
+                <span id="chart-price" data-role="chart-price" class="chart-price">--</span>
+                <span id="chart-change" data-role="chart-change" class="chart-change">--</span>
+                <button type="button" id="indicator-btn" data-role="indicator-btn" class="indicator-btn" title="Indicators">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" fill="currentColor"/></svg>
                   <span>INDICATORS</span>
-                  <span id="indicator-btn-count" class="indicator-btn-count">0</span>
+                  <span id="indicator-btn-count" data-role="indicator-btn-count" class="indicator-btn-count">0</span>
                 </button>
-                <button type="button" id="volatility-btn" class="indicator-btn" title="Volatility">
+                <button type="button" id="volatility-btn" data-role="volatility-btn" class="indicator-btn" title="Volatility">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 17l4-9 4 6 3-5 4 3 3-7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
                   <span>VOLATILITY</span>
                 </button>
-                <button type="button" id="chart-fullscreen-btn" class="chart-icon-btn" title="Fullscreen">
+                <button type="button" id="chart-fullscreen-btn" data-role="chart-fullscreen-btn" class="chart-icon-btn" title="Fullscreen">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
             </div>
 
-            <div class="volatility-panel" id="volatility-panel" hidden>
+            <div class="volatility-panel" id="volatility-panel" data-role="volatility-panel" hidden>
               <div class="volatility-panel-head">
                 <span>VOLATILITY</span>
-                <span id="volatility-tf-label" class="volatility-tf-label"></span>
+                <span id="volatility-tf-label" data-role="volatility-tf-label" class="volatility-tf-label"></span>
               </div>
               <div class="volatility-panel-body" id="volatility-panel-body">
-                <div class="volatility-unavailable" id="volatility-unavailable" hidden>Volatility data unavailable</div>
+                <div class="volatility-unavailable" id="volatility-unavailable" data-role="volatility-unavailable" hidden>Volatility data unavailable</div>
                 <div class="volatility-rows" id="volatility-rows">
-                  <div class="volatility-row"><span class="volatility-label">ATR</span><span id="vol-atr" class="volatility-value">--</span></div>
-                  <div class="volatility-row"><span class="volatility-label">ATR %</span><span id="vol-atr-pct" class="volatility-value">--</span></div>
-                  <div class="volatility-row"><span class="volatility-label">STATUS</span><span id="vol-status" class="volatility-value">--</span></div>
-                  <div class="volatility-row"><span class="volatility-label">TREND</span><span id="vol-trend" class="volatility-value">--</span></div>
-                  <div class="volatility-row"><span class="volatility-label">PERCENTILE</span><span id="vol-percentile" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">ATR</span><span id="vol-atr" data-role="vol-atr" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">ATR %</span><span id="vol-atr-pct" data-role="vol-atr-pct" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">STATUS</span><span id="vol-status" data-role="vol-status" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">TREND</span><span id="vol-trend" data-role="vol-trend" class="volatility-value">--</span></div>
+                  <div class="volatility-row"><span class="volatility-label">PERCENTILE</span><span id="vol-percentile" data-role="vol-percentile" class="volatility-value">--</span></div>
                 </div>
               </div>
               <div class="volatility-panel-foot">based on actual OHLCV for the current symbol &amp; timeframe</div>
             </div>
 
-            <div class="indicator-panel" id="indicator-panel" hidden>
+            <div class="indicator-panel" id="indicator-panel" data-role="indicator-panel" hidden>
               <div class="indicator-panel-head">
                 <div class="indicator-search-box">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                  <input type="text" id="indicator-search" class="indicator-search" placeholder="Search indicators…" autocomplete="off" spellcheck="false" />
+                  <input type="text" id="indicator-search" data-role="indicator-search" class="indicator-search" placeholder="Search indicators…" autocomplete="off" spellcheck="false" />
                   <kbd class="indicator-search-key">/</kbd>
                 </div>
-                <button type="button" id="indicator-clear-all" class="indicator-clear-all" title="Remove all indicators">CLEAR ALL</button>
+                <button type="button" id="indicator-clear-all" data-role="indicator-clear-all" class="indicator-clear-all" title="Remove all indicators">CLEAR ALL</button>
               </div>
               <div class="indicator-active-bar">
                 <span class="indicator-active-label">ACTIVE</span>
-                <span id="indicator-active-count" class="indicator-active-count">0</span>
+                <span id="indicator-active-count" data-role="indicator-active-count" class="indicator-active-count">0</span>
                 <span class="indicator-active-hint">click to toggle</span>
               </div>
-              <div class="indicator-list" id="indicator-list"></div>
+              <div class="indicator-list" id="indicator-list" data-role="indicator-list"></div>
               <div class="indicator-panel-foot">
-                <span id="indicator-list-count">20 indicators</span>
+                <span id="indicator-list-count" data-role="indicator-list-count">20 indicators</span>
                 <span class="indicator-panel-hint">indicators apply to the current chart &amp; timeframe</span>
               </div>
             </div>
-            <div class="chart-tf-row" id="chart-tf-row">
+            <div class="chart-tf-row" id="chart-tf-row" data-role="chart-tf-row">
               <button class="chart-tf-btn" data-tf="1m">1m</button>
               <button class="chart-tf-btn" data-tf="5m">5m</button>
               <button class="chart-tf-btn" data-tf="15m">15m</button>
@@ -499,18 +508,21 @@
             </div>
 
             <div class="chart-body">
-              <div class="chart-tools" id="chart-tools"><!-- populated by script.js: renderToolbar() --></div>
+              <div class="chart-tools" id="chart-tools" data-role="chart-tools"><!-- populated by script.js: renderToolbar() --></div>
               <div class="chart-canvas-wrap">
-                <div id="candle-chart" class="candle-chart"></div>
-                <svg id="indicator-overlay" class="indicator-overlay"></svg>
-                <svg id="draw-overlay" class="draw-overlay"></svg>
+                <div id="candle-chart" data-role="candle-chart" class="candle-chart"></div>
+                <svg id="indicator-overlay" data-role="indicator-overlay" class="indicator-overlay"></svg>
+                <svg id="draw-overlay" data-role="draw-overlay" class="draw-overlay"></svg>
               </div>
             </div>
 
             <div class="chart-footer">
-              <span id="chart-status">connecting…</span>
+              <span id="chart-status" data-role="chart-status">connecting…</span>
             </div>
           </div>
+            </div><!-- /.chart-grid-cell[data-slot="1"] -->
+            </div><!-- /#chart-grid -->
+          </div><!-- /.chart-workspace -->
         </div>
 
       </div><!-- /.tab-content-area -->
