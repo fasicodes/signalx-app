@@ -1757,3 +1757,84 @@ html[data-theme="light"] .perf-metric-card.up .perf-metric-value { color: #0f7a4
         transition-duration: 0.001ms !important;
     }
 }
+
+/* ==========================================================================
+   MULTI-CHART SYSTEM -- layout selector, grid, mobile tabs
+   ========================================================================== */
+
+.chart-workspace { display: flex; flex-direction: column; gap: 10px; }
+
+.chart-layout-selector {
+    display: flex; gap: 4px; align-self: flex-start;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 7px;
+    padding: 3px;
+}
+.chart-layout-btn {
+    width: 28px; height: 26px; display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; border-radius: 5px; color: var(--muted);
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.chart-layout-btn:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+.chart-layout-btn.active { background: rgba(54, 224, 160, 0.16); color: var(--long); }
+
+.chart-grid {
+    display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 10px;
+}
+.chart-workspace[data-layout="2"] .chart-grid { grid-template-columns: 1fr 1fr; }
+.chart-workspace[data-layout="4"] .chart-grid { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+.chart-grid-cell { min-width: 0; min-height: 0; display: flex; }
+.chart-grid-cell .chart-panel { flex: 1; min-width: 0; min-height: 0; }
+
+/* Multi-chart layouts need a fixed working height per cell (the single-chart
+   layout keeps the page's natural height, unchanged from before). */
+.chart-workspace[data-layout="2"] .chart-grid-cell,
+.chart-workspace[data-layout="4"] .chart-grid-cell { min-height: 380px; }
+.chart-workspace[data-layout="2"] .candle-chart,
+.chart-workspace[data-layout="4"] .candle-chart { height: 100%; }
+
+/* Visual cue for which chart keyboard shortcuts (undo/redo/delete) apply to
+   when more than one chart is on screen. */
+.chart-workspace[data-layout="2"] .chart-panel-active,
+.chart-workspace[data-layout="4"] .chart-panel-active {
+    outline: 1.5px solid rgba(54, 224, 160, 0.55); outline-offset: -1px;
+}
+
+.chart-panel-secondary .chart-title { font-size: 13px; }
+
+/* compact per-chart symbol dropdown, only present on secondary (2nd-4th)
+   charts -- the primary chart keeps using the main coin picker above the
+   tabs, unchanged. */
+.chart-symbol-picker {
+    background: var(--void); border: 1px solid var(--line); border-radius: 5px;
+    color: var(--text); font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    padding: 3px 6px; cursor: pointer;
+}
+
+.chart-mobile-tabs { display: none; gap: 6px; overflow-x: auto; }
+.chart-mobile-tab {
+    flex-shrink: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 700;
+    padding: 6px 12px; cursor: pointer;
+}
+.chart-mobile-tab.active { background: rgba(54, 224, 160, 0.16); color: var(--long); border-color: rgba(54, 224, 160, 0.4); }
+
+/* Mobile: never force 2x2 tiny charts -- show one active chart at a time
+   with a tab strip to switch between them (spec: responsive design). */
+@media (max-width: 720px) {
+    .chart-workspace[data-layout="2"] .chart-grid,
+    .chart-workspace[data-layout="4"] .chart-grid { grid-template-columns: 1fr; grid-template-rows: none; }
+    .chart-workspace[data-layout="2"] .chart-grid-cell,
+    .chart-workspace[data-layout="4"] .chart-grid-cell { display: none; min-height: 60vh; }
+    .chart-workspace[data-layout="2"] .chart-grid-cell.chart-mobile-visible,
+    .chart-workspace[data-layout="4"] .chart-grid-cell.chart-mobile-visible { display: flex; }
+    .chart-workspace[data-layout="2"] .chart-mobile-tabs,
+    .chart-workspace[data-layout="4"] .chart-mobile-tabs { display: flex; }
+}
+
+/* Tablet: cap four-up at two columns so cells stay usable (spec: tablet
+   should prefer 1-2 charts' worth of space even in the 4-chart layout). */
+@media (min-width: 721px) and (max-width: 1080px) {
+    .chart-workspace[data-layout="4"] .chart-grid { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+}
