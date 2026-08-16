@@ -1804,10 +1804,76 @@ html[data-theme="light"] .perf-metric-card.up .perf-metric-value { color: #0f7a4
    height, so the candle-chart's height:100% had nothing real to resolve
    against. Stretching them (same pattern already used for fullscreen,
    below) is what lets every layout -- 1, 2, 3, or 4 -- actually fill its
-   cell instead of collapsing to content height. */
+   cell instead of collapsing to content height. Canvas-wrap gets its size
+   spelled out explicitly (not just flex:1) so the lightweight-charts
+   container has an unambiguous box to measure, matching exactly what its
+   own resize reads off clientWidth/clientHeight. */
 .chart-grid-cell .chart-body { flex: 1; min-height: 0; }
-.chart-grid-cell .chart-canvas-wrap { flex: 1; min-width: 0; min-height: 0; }
-.chart-grid-cell .candle-chart { height: 100%; }
+.chart-grid-cell .chart-canvas-wrap {
+    flex: 1; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden;
+}
+.chart-grid-cell .candle-chart { width: 100%; height: 100%; }
+
+/* The drawing-tool sidebar (10+ stacked icon buttons) has a real intrinsic
+   height that can exceed a compact 4-up cell's available height. Left
+   unconstrained, that pushed/shrank the canvas next to it down to a
+   sliver. Let the toolbar scroll internally instead of fighting the
+   canvas for space. */
+.chart-grid-cell .chart-tools { max-height: 100%; overflow-y: auto; scrollbar-width: thin; }
+
+/* Compact header controls once more than one chart is on screen -- these
+   cards are now at most ~50% (2-up) down to ~25% (4-up) of the width a
+   single chart had, so the full-width text labels ("INDICATORS",
+   "VOLATILITY"), the subtitle line, and 12 timeframe/range buttons in a
+   row no longer fit and were clipping or wrapping into extra header rows
+   (stealing height straight from the candle area below). Icons + counts
+   stay, labels drop -- mirrors the same compacting already used on mobile
+   for a single chart, just applied whenever a card is this narrow. */
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-subtitle,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-subtitle,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-subtitle { display: none; }
+
+.chart-workspace[data-layout="2"] .chart-grid-cell .indicator-btn span:not(.indicator-btn-count),
+.chart-workspace[data-layout="3"] .chart-grid-cell .indicator-btn span:not(.indicator-btn-count),
+.chart-workspace[data-layout="4"] .chart-grid-cell .indicator-btn span:not(.indicator-btn-count) { display: none; }
+
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-back-btn span,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-back-btn span,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-back-btn span { display: none; }
+
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-header,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-header,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-header { flex-wrap: nowrap; gap: 6px; }
+
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-header-left,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-header-left,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-header-left { gap: 6px; min-width: 0; overflow: hidden; }
+
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-title,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-title,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-title {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;
+}
+
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-price-block,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-price-block,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-price-block { gap: 5px; flex-shrink: 0; }
+
+/* 12 timeframe/range buttons no longer wrap into a second row inside a
+   compact card (that row eats candle height) -- they scroll horizontally
+   instead, same trade-off the mobile breakpoint already makes. */
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-tf-row,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-tf-row,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-tf-row {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px;
+}
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-tf-btn,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-tf-btn,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-tf-btn,
+.chart-workspace[data-layout="2"] .chart-grid-cell .chart-range-btn,
+.chart-workspace[data-layout="3"] .chart-grid-cell .chart-range-btn,
+.chart-workspace[data-layout="4"] .chart-grid-cell .chart-range-btn { flex-shrink: 0; }
+
 
 /* Visual cue for which chart keyboard shortcuts (undo/redo/delete) apply to
    when more than one chart is on screen. */
