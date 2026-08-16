@@ -3847,7 +3847,7 @@ async maybeLoadOlderCandles() {
     }
 
     const addedCount = older.length;
-    this.lastBars = [...older, ...lastBars];
+    this.lastBars = [...older, ...this.lastBars];
     this.oldestLoadedTime = this.lastBars[0].time;
 
     const savedRange = this.lwChart.timeScale().getVisibleLogicalRange();
@@ -4409,6 +4409,31 @@ class ChartManager {
     // engine actually queries by -- see ChartInstance.resolveDom), so nothing
     // collides with slot 1's ids.
     clone.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+
+    // cloneNode(true) on slot 1 also clones whatever lightweight-charts had
+    // already rendered INTO slot 1's DOM (its internal canvas/table nodes) --
+    // if slot 1 was already open when this clone is made, that stale,
+    // frozen chart markup ends up sitting inside the new slot's mount
+    // point. The new ChartInstance then calls createChart() on that
+    // already-occupied container, which doesn't clear it first, so the
+    // real, live chart gets created alongside/behind a dead static clone --
+    // net effect: a permanently blank card. Give every new slot a truly
+    // empty mount point before its own chart engine ever touches it.
+    const cloneCandleChart = clone.querySelector('[data-role="candle-chart"]');
+    if (cloneCandleChart) cloneCandleChart.innerHTML = "";
+    const cloneDrawOverlay = clone.querySelector('[data-role="draw-overlay"]');
+    if (cloneDrawOverlay) cloneDrawOverlay.innerHTML = "";
+    const cloneIndicatorOverlay = clone.querySelector('[data-role="indicator-overlay"]');
+    if (cloneIndicatorOverlay) cloneIndicatorOverlay.innerHTML = "";
+    // also drop any transient UI state (fullscreen, active outline, open
+    // panels) that would otherwise be copied verbatim from slot 1's
+    // current state instead of starting fresh.
+    clone.classList.remove("fullscreen", "chart-panel-active");
+    const cloneIndicatorPanel = clone.querySelector('[data-role="indicator-panel"]');
+    if (cloneIndicatorPanel) cloneIndicatorPanel.hidden = true;
+    const cloneVolatilityPanel = clone.querySelector('[data-role="volatility-panel"]');
+    if (cloneVolatilityPanel) cloneVolatilityPanel.hidden = true;
+
     clone.addEventListener("mousedown", () => this.setActive(id), { capture: true });
     clone.addEventListener("touchstart", () => this.setActive(id), { capture: true, passive: true });
     return clone;
@@ -4530,6 +4555,20 @@ class ChartManager {
     this.computeWorkspaceHeight();
     Object.values(this.instances).forEach((inst) => {
       if (inst.resizeChart) inst.resizeChart();
+    });
+    // Belt-and-braces: run one more pass after the browser has actually
+    // PAINTED the new layout. The synchronous clientWidth/Height read above
+    // is usually accurate (reading it forces a reflow), but a same-tick
+    // burst of DOM changes (destroying/creating slots, flipping the grid
+    // template, resizing the workspace) can still leave a chart's canvas
+    // sized to an in-between state that never gets corrected once nothing
+    // ELSE changes size afterward -- this is what caused an already-open
+    // chart to visibly stay clipped to its pre-switch size after a layout
+    // change. Cheap and idempotent, so it's safe to just always do it.
+    requestAnimationFrame(() => {
+      Object.values(this.instances).forEach((inst) => {
+        if (inst.resizeChart) inst.resizeChart();
+      });
     });
   }
 
