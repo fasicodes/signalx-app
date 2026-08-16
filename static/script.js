@@ -2162,6 +2162,10 @@ setSymbol(sym) {
 // memory, timers, or stale network polling.
 destroy() {
   if (this.chartPollTimer) clearInterval(this.chartPollTimer);
+  if (this._resizeObserver) {
+    try { this._resizeObserver.disconnect(); } catch (e) { /* already gone */ }
+    this._resizeObserver = null;
+  }
   if (this.drawDeleteBtnEl && this.drawDeleteBtnEl.parentElement) {
     this.drawDeleteBtnEl.parentElement.removeChild(this.drawDeleteBtnEl);
   }
@@ -2697,14 +2701,31 @@ ensureChartInitialized() {
     this.maybeLoadOlderCandles();
   });
 
-  window.addEventListener("resize", () => this.resizeChart());
+  // Window-level resize is handled centrally by ChartManager.resizeAll()
+  // (one listener for every open chart, instead of one per instance) --
+  // see ChartManager constructor. Here we only watch THIS chart's own
+  // container box directly, which also catches resizes that a window
+  // "resize" event never fires for: layout switches (1/2/3/4), the
+  // sidebar/nav drawer opening or closing, fullscreen transitions, and
+  // orientation changes.
+  if (typeof ResizeObserver !== "undefined" && this.candleChartEl) {
+    this._resizeObserver = new ResizeObserver(() => this.resizeChart());
+    this._resizeObserver.observe(this.candleChartEl);
+  }
 
   this.renderIndicatorOverlay();
 }
 
 resizeChart() {
   if (!this.lwChart || !this.candleChartEl) return;
-  this.lwChart.resize(this.candleChartEl.clientWidth, this.candleChartEl.clientHeight);
+  const w = this.candleChartEl.clientWidth;
+  const h = this.candleChartEl.clientHeight;
+  // Container is hidden (e.g. an inactive mobile chart tab, or a
+  // display:none ancestor) -- 0x0 isn't a real size to resize to, and
+  // lightweight-charts doesn't like it. Skip; resizeAll() re-fires this
+  // once the container becomes visible again (tab switch, layout change).
+  if (!w || !h) return;
+  this.lwChart.resize(w, h);
   this.renderDrawings();
   this.renderIndicatorOverlay();
 }
@@ -4238,7 +4259,7 @@ syncChartCoinIcon() {
 /* ==========================================================================
    MULTI-CHART SYSTEM -- ChartManager
    --------------------------------------------------------------------------
-   Owns the 1 / 2 / 4 chart layout, creates and destroys ChartInstance
+   Owns the 1 / 2 / 3 / 4 chart layout, creates and destroys ChartInstance
    objects as the layout changes, tracks which chart is "active" (for
    actions that must target exactly one chart -- undo/redo/delete, and
    keyboard shortcuts), and persists the chosen layout + each secondary
@@ -4273,7 +4294,38 @@ class ChartManager {
     this.wireActiveChartShortcuts();
     this.applyLayout(this.layout, { skipSave: true });
 
+    // Centralized resize handling: ONE listener drives every open chart
+    // (instead of each ChartInstance listening to window resize itself),
+    // and it also recomputes the workspace's real available height from
+    // the viewport instead of relying on any fixed/arbitrary px or vh
+    // value baked into the CSS.
     window.addEventListener("resize", () => this.resizeAll());
+    window.addEventListener("orientationchange", () => {
+      // orientation change fires before the browser finishes reflowing on
+      // some mobile browsers -- give layout a moment to settle first.
+      setTimeout(() => this.resizeAll(), 200);
+    });
+    // Fonts loading late can shift the workspace's top offset (and so its
+    // computed height) after the first paint -- true up once more.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => this.resizeAll()).catch(() => {});
+    }
+    requestAnimationFrame(() => this.resizeAll());
+  }
+
+  // Calculates the workspace's real available height from the actual
+  // viewport (current scroll position + where the workspace starts +
+  // a small bottom gutter) instead of any fixed/arbitrary height. Runs
+  // every time the layout, viewport, or DOM around the workspace changes.
+  computeWorkspaceHeight() {
+    if (!this.workspaceEl) return;
+    const isMobile = window.innerWidth <= 720;
+    const top = this.workspaceEl.getBoundingClientRect().top;
+    const bottomGutter = isMobile ? 14 : 24;
+    let h = window.innerHeight - top - bottomGutter;
+    const floor = isMobile ? 420 : 480; // usability floor, not a target height
+    if (!isFinite(h) || h < floor) h = floor;
+    this.workspaceEl.style.height = h + "px";
   }
 
   get primary() {
@@ -4374,7 +4426,7 @@ class ChartManager {
 
   applyLayout(n, opts) {
     opts = opts || {};
-    const wanted = n === 2 ? [1, 2] : n === 4 ? [1, 2, 3, 4] : [1];
+    const wanted = n === 2 ? [1, 2] : n === 3 ? [1, 2, 3] : n === 4 ? [1, 2, 3, 4] : [1];
     // destroy slots no longer needed (highest id first is fine, order
     // doesn't matter -- each destroy is independent)
     Object.keys(this.instances).map(Number).forEach((id) => {
@@ -4420,6 +4472,7 @@ class ChartManager {
   }
 
   resizeAll() {
+    this.computeWorkspaceHeight();
     Object.values(this.instances).forEach((inst) => {
       if (inst.resizeChart) inst.resizeChart();
     });
@@ -4460,7 +4513,7 @@ class ChartManager {
       const raw = localStorage.getItem(CHART_LAYOUT_STORAGE_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
-      if (data.layout === 2 || data.layout === 4) this.layout = data.layout;
+      if (data.layout === 2 || data.layout === 3 || data.layout === 4) this.layout = data.layout;
     } catch (e) { /* ignore */ }
   }
 
