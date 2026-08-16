@@ -2100,6 +2100,11 @@ activate() {
   this._activated = true;
   this.ensureChartInitialized();
   this.loadChartData();
+  // Guarantee a correctly-sized first paint independent of ResizeObserver
+  // timing: force one more resize once the browser has actually settled
+  // the box this chart was just created into (same double-rAF pattern
+  // already used for fullscreen transitions below).
+  requestAnimationFrame(() => requestAnimationFrame(() => this.resizeChart()));
 }
 
 // Resolves every DOM handle this chart engine touches, scoped to this
@@ -2213,6 +2218,18 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && this.chartPanelEl && this.chartPanelEl.classList.contains("fullscreen")) {
     this.setChartFullscreen(false);
   }
+});
+// Sync back to normal layout if the user exits NATIVE fullscreen by a
+// route our own button doesn't see -- browser Esc, swipe-down gesture,
+// etc. Scoped to THIS instance's panel only, so Chart 2 going fullscreen
+// (or exiting it) never touches Chart 1/3/4.
+["fullscreenchange", "webkitfullscreenchange"].forEach((evt) => {
+  document.addEventListener(evt, () => {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (this.chartPanelEl && this.chartPanelEl.classList.contains("fullscreen") && fsEl !== this.chartPanelEl) {
+      this.setChartFullscreen(false);
+    }
+  });
 });
 
 /* ==========================================================================
@@ -2734,6 +2751,32 @@ setChartFullscreen(on) {
   if (!this.chartPanelEl) return;
   this.chartPanelEl.classList.toggle("fullscreen", on);
   document.body.classList.toggle("chart-fullscreen-lock", on);
+
+  // The CSS class above is the actual visual mechanism (position:fixed,
+  // inset:0) -- it's what makes this work uniformly everywhere, including
+  // iOS Safari, which doesn't support Fullscreen-API on arbitrary <div>s.
+  // Layer the real Fullscreen API on top where it IS supported, so browser
+  // chrome/URL bar also hides and OS-level Esc/gestures stay in sync (via
+  // the fullscreenchange listener wired in init(), scoped to this chart).
+  if (on) {
+    const rfs = this.chartPanelEl.requestFullscreen || this.chartPanelEl.webkitRequestFullscreen;
+    if (rfs) {
+      try {
+        const p = rfs.call(this.chartPanelEl);
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) { /* not available in this context -- CSS fullscreen still works */ }
+    }
+  } else {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    const efs = document.exitFullscreen || document.webkitExitFullscreen;
+    if (fsEl === this.chartPanelEl && efs) {
+      try {
+        const p = efs.call(document);
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) { /* already out, or unsupported -- fine */ }
+    }
+  }
+
   // chart canvas size changed — resize on next frame once layout settles
   requestAnimationFrame(() => requestAnimationFrame(() => this.resizeChart()));
 }
@@ -4432,12 +4475,24 @@ class ChartManager {
     Object.keys(this.instances).map(Number).forEach((id) => {
       if (id !== 1 && !wanted.includes(id)) this.destroyInstance(id);
     });
-    // create any newly-needed slots
-    wanted.forEach((id) => { if (id !== 1) this.ensureInstance(id); });
 
+    // IMPORTANT: flip the grid to its new column/row template BEFORE
+    // creating any newly-needed chart instances. ensureInstance() ->
+    // activate() -> ensureChartInitialized() reads the container's
+    // CURRENT box size synchronously (LightweightCharts sizes its canvas
+    // to the container at creation time) -- if the grid were still in the
+    // OLD layout's template when a brand-new secondary chart is created,
+    // that chart would be born measuring the wrong cell shape (e.g. a
+    // full single-column cell while switching 1 -> 4), which is what
+    // produced the near-zero-height / squashed-line canvas bug.
     this.layout = n;
     if (this.workspaceEl) this.workspaceEl.dataset.layout = String(n);
     this.layoutBtns.forEach((btn) => btn.classList.toggle("active", parseInt(btn.dataset.layout, 10) === n));
+
+    // create any newly-needed slots (now that the grid is already sized
+    // and shaped correctly for them)
+    wanted.forEach((id) => { if (id !== 1) this.ensureInstance(id); });
+
     this.setActive(1);
     this.buildMobileTabs(wanted);
     this.resizeAll();
