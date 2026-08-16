@@ -1762,10 +1762,14 @@ html[data-theme="light"] .perf-metric-card.up .perf-metric-value { color: #0f7a4
    MULTI-CHART SYSTEM -- layout selector, grid, mobile tabs
    ========================================================================== */
 
-.chart-workspace { display: flex; flex-direction: column; gap: 10px; }
+/* The workspace's actual height is set inline (in px) by
+   ChartManager.computeWorkspaceHeight(), derived from the real viewport --
+   never a fixed/arbitrary CSS height. This is just a sane floor for the
+   instant before that JS runs (or if it's ever unavailable). */
+.chart-workspace { display: flex; flex-direction: column; gap: 10px; min-height: 480px; }
 
 .chart-layout-selector {
-    display: flex; gap: 4px; align-self: flex-start;
+    display: flex; gap: 4px; align-self: flex-start; flex-shrink: 0;
     background: var(--panel); border: 1px solid var(--line); border-radius: 7px;
     padding: 3px;
 }
@@ -1778,25 +1782,37 @@ html[data-theme="light"] .perf-metric-card.up .perf-metric-value { color: #0f7a4
 .chart-layout-btn:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
 .chart-layout-btn.active { background: rgba(54, 224, 160, 0.16); color: var(--long); }
 
+/* The grid fills whatever height the workspace actually has (set by JS)
+   instead of a fixed px/vh guess -- every layout, including the 1-chart
+   layout, now sizes off the same real available space. */
 .chart-grid {
+    flex: 1 1 auto; min-height: 0; min-width: 0; overflow: hidden;
     display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 10px;
 }
-.chart-workspace[data-layout="2"] .chart-grid { grid-template-columns: 1fr 1fr; }
+.chart-workspace[data-layout="2"] .chart-grid { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+.chart-workspace[data-layout="3"] .chart-grid { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.chart-workspace[data-layout="3"] .chart-grid-cell[data-slot="1"] { grid-column: 1; grid-row: 1 / span 2; }
+.chart-workspace[data-layout="3"] .chart-grid-cell[data-slot="2"] { grid-column: 2; grid-row: 1; }
+.chart-workspace[data-layout="3"] .chart-grid-cell[data-slot="3"] { grid-column: 2; grid-row: 2; }
 .chart-workspace[data-layout="4"] .chart-grid { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 
-.chart-grid-cell { min-width: 0; min-height: 0; display: flex; }
-.chart-grid-cell .chart-panel { flex: 1; min-width: 0; min-height: 0; }
+.chart-grid-cell { min-width: 0; min-height: 0; display: flex; overflow: hidden; }
+.chart-grid-cell .chart-panel { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 
-/* Multi-chart layouts need a fixed working height per cell (the single-chart
-   layout keeps the page's natural height, unchanged from before). */
-.chart-workspace[data-layout="2"] .chart-grid-cell,
-.chart-workspace[data-layout="4"] .chart-grid-cell { min-height: 380px; }
-.chart-workspace[data-layout="2"] .candle-chart,
-.chart-workspace[data-layout="4"] .candle-chart { height: 100%; }
+/* Root cause of the old "candle area pushed to the bottom" bug: chart-body
+   and chart-canvas-wrap never actually grew to fill the panel's remaining
+   height, so the candle-chart's height:100% had nothing real to resolve
+   against. Stretching them (same pattern already used for fullscreen,
+   below) is what lets every layout -- 1, 2, 3, or 4 -- actually fill its
+   cell instead of collapsing to content height. */
+.chart-grid-cell .chart-body { flex: 1; min-height: 0; }
+.chart-grid-cell .chart-canvas-wrap { flex: 1; min-width: 0; min-height: 0; }
+.chart-grid-cell .candle-chart { height: 100%; }
 
 /* Visual cue for which chart keyboard shortcuts (undo/redo/delete) apply to
    when more than one chart is on screen. */
 .chart-workspace[data-layout="2"] .chart-panel-active,
+.chart-workspace[data-layout="3"] .chart-panel-active,
 .chart-workspace[data-layout="4"] .chart-panel-active {
     outline: 1.5px solid rgba(54, 224, 160, 0.55); outline-offset: -1px;
 }
@@ -1809,10 +1825,10 @@ html[data-theme="light"] .perf-metric-card.up .perf-metric-value { color: #0f7a4
 .chart-symbol-picker {
     background: var(--void); border: 1px solid var(--line); border-radius: 5px;
     color: var(--text); font-family: "IBM Plex Mono", monospace; font-size: 11px;
-    padding: 3px 6px; cursor: pointer;
+    padding: 3px 6px; cursor: pointer; max-width: 120px;
 }
 
-.chart-mobile-tabs { display: none; gap: 6px; overflow-x: auto; }
+.chart-mobile-tabs { display: none; gap: 6px; overflow-x: auto; flex-shrink: 0; }
 .chart-mobile-tab {
     flex-shrink: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
     color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 700;
@@ -1820,21 +1836,31 @@ html[data-theme="light"] .perf-metric-card.up .perf-metric-value { color: #0f7a4
 }
 .chart-mobile-tab.active { background: rgba(54, 224, 160, 0.16); color: var(--long); border-color: rgba(54, 224, 160, 0.4); }
 
-/* Mobile: never force 2x2 tiny charts -- show one active chart at a time
-   with a tab strip to switch between them (spec: responsive design). */
+/* Mobile: never force 3-4 tiny stacked charts -- show one active chart at
+   a time, full available height, with a tab strip to switch between them
+   without destroying the others (spec: mobile responsive design). */
 @media (max-width: 720px) {
     .chart-workspace[data-layout="2"] .chart-grid,
-    .chart-workspace[data-layout="4"] .chart-grid { grid-template-columns: 1fr; grid-template-rows: none; }
+    .chart-workspace[data-layout="3"] .chart-grid,
+    .chart-workspace[data-layout="4"] .chart-grid { grid-template-columns: 1fr; grid-template-rows: 1fr; }
     .chart-workspace[data-layout="2"] .chart-grid-cell,
-    .chart-workspace[data-layout="4"] .chart-grid-cell { display: none; min-height: 60vh; }
+    .chart-workspace[data-layout="3"] .chart-grid-cell,
+    .chart-workspace[data-layout="4"] .chart-grid-cell { display: none; grid-column: 1; grid-row: 1; }
     .chart-workspace[data-layout="2"] .chart-grid-cell.chart-mobile-visible,
+    .chart-workspace[data-layout="3"] .chart-grid-cell.chart-mobile-visible,
     .chart-workspace[data-layout="4"] .chart-grid-cell.chart-mobile-visible { display: flex; }
     .chart-workspace[data-layout="2"] .chart-mobile-tabs,
+    .chart-workspace[data-layout="3"] .chart-mobile-tabs,
     .chart-workspace[data-layout="4"] .chart-mobile-tabs { display: flex; }
+    .chart-symbol-picker { max-width: 92px; }
 }
 
-/* Tablet: cap four-up at two columns so cells stay usable (spec: tablet
-   should prefer 1-2 charts' worth of space even in the 4-chart layout). */
+/* Tablet: keep every layout usable at medium widths instead of squeezing
+   3-4 charts into full-size columns (spec: balanced tablet layouts). */
 @media (min-width: 721px) and (max-width: 1080px) {
+    .chart-workspace[data-layout="3"] .chart-grid { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+    .chart-workspace[data-layout="3"] .chart-grid-cell[data-slot="1"] { grid-column: 1 / span 2; grid-row: 1; }
+    .chart-workspace[data-layout="3"] .chart-grid-cell[data-slot="2"] { grid-column: 1; grid-row: 2; }
+    .chart-workspace[data-layout="3"] .chart-grid-cell[data-slot="3"] { grid-column: 2; grid-row: 2; }
     .chart-workspace[data-layout="4"] .chart-grid { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 }
