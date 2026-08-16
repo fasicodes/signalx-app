@@ -2100,11 +2100,6 @@ activate() {
   this._activated = true;
   this.ensureChartInitialized();
   this.loadChartData();
-  // Guarantee a correctly-sized first paint independent of ResizeObserver
-  // timing: force one more resize once the browser has actually settled
-  // the box this chart was just created into (same double-rAF pattern
-  // already used for fullscreen transitions below).
-  requestAnimationFrame(() => requestAnimationFrame(() => this.resizeChart()));
 }
 
 // Resolves every DOM handle this chart engine touches, scoped to this
@@ -2167,10 +2162,6 @@ setSymbol(sym) {
 // memory, timers, or stale network polling.
 destroy() {
   if (this.chartPollTimer) clearInterval(this.chartPollTimer);
-  if (this._resizeObserver) {
-    try { this._resizeObserver.disconnect(); } catch (e) { /* already gone */ }
-    this._resizeObserver = null;
-  }
   if (this.drawDeleteBtnEl && this.drawDeleteBtnEl.parentElement) {
     this.drawDeleteBtnEl.parentElement.removeChild(this.drawDeleteBtnEl);
   }
@@ -2218,18 +2209,6 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && this.chartPanelEl && this.chartPanelEl.classList.contains("fullscreen")) {
     this.setChartFullscreen(false);
   }
-});
-// Sync back to normal layout if the user exits NATIVE fullscreen by a
-// route our own button doesn't see -- browser Esc, swipe-down gesture,
-// etc. Scoped to THIS instance's panel only, so Chart 2 going fullscreen
-// (or exiting it) never touches Chart 1/3/4.
-["fullscreenchange", "webkitfullscreenchange"].forEach((evt) => {
-  document.addEventListener(evt, () => {
-    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    if (this.chartPanelEl && this.chartPanelEl.classList.contains("fullscreen") && fsEl !== this.chartPanelEl) {
-      this.setChartFullscreen(false);
-    }
-  });
 });
 
 /* ==========================================================================
@@ -2718,31 +2697,14 @@ ensureChartInitialized() {
     this.maybeLoadOlderCandles();
   });
 
-  // Window-level resize is handled centrally by ChartManager.resizeAll()
-  // (one listener for every open chart, instead of one per instance) --
-  // see ChartManager constructor. Here we only watch THIS chart's own
-  // container box directly, which also catches resizes that a window
-  // "resize" event never fires for: layout switches (1/2/3/4), the
-  // sidebar/nav drawer opening or closing, fullscreen transitions, and
-  // orientation changes.
-  if (typeof ResizeObserver !== "undefined" && this.candleChartEl) {
-    this._resizeObserver = new ResizeObserver(() => this.resizeChart());
-    this._resizeObserver.observe(this.candleChartEl);
-  }
+  window.addEventListener("resize", () => this.resizeChart());
 
   this.renderIndicatorOverlay();
 }
 
 resizeChart() {
   if (!this.lwChart || !this.candleChartEl) return;
-  const w = this.candleChartEl.clientWidth;
-  const h = this.candleChartEl.clientHeight;
-  // Container is hidden (e.g. an inactive mobile chart tab, or a
-  // display:none ancestor) -- 0x0 isn't a real size to resize to, and
-  // lightweight-charts doesn't like it. Skip; resizeAll() re-fires this
-  // once the container becomes visible again (tab switch, layout change).
-  if (!w || !h) return;
-  this.lwChart.resize(w, h);
+  this.lwChart.resize(this.candleChartEl.clientWidth, this.candleChartEl.clientHeight);
   this.renderDrawings();
   this.renderIndicatorOverlay();
 }
@@ -2751,32 +2713,6 @@ setChartFullscreen(on) {
   if (!this.chartPanelEl) return;
   this.chartPanelEl.classList.toggle("fullscreen", on);
   document.body.classList.toggle("chart-fullscreen-lock", on);
-
-  // The CSS class above is the actual visual mechanism (position:fixed,
-  // inset:0) -- it's what makes this work uniformly everywhere, including
-  // iOS Safari, which doesn't support Fullscreen-API on arbitrary <div>s.
-  // Layer the real Fullscreen API on top where it IS supported, so browser
-  // chrome/URL bar also hides and OS-level Esc/gestures stay in sync (via
-  // the fullscreenchange listener wired in init(), scoped to this chart).
-  if (on) {
-    const rfs = this.chartPanelEl.requestFullscreen || this.chartPanelEl.webkitRequestFullscreen;
-    if (rfs) {
-      try {
-        const p = rfs.call(this.chartPanelEl);
-        if (p && p.catch) p.catch(() => {});
-      } catch (e) { /* not available in this context -- CSS fullscreen still works */ }
-    }
-  } else {
-    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    const efs = document.exitFullscreen || document.webkitExitFullscreen;
-    if (fsEl === this.chartPanelEl && efs) {
-      try {
-        const p = efs.call(document);
-        if (p && p.catch) p.catch(() => {});
-      } catch (e) { /* already out, or unsupported -- fine */ }
-    }
-  }
-
   // chart canvas size changed — resize on next frame once layout settles
   requestAnimationFrame(() => requestAnimationFrame(() => this.resizeChart()));
 }
@@ -3847,7 +3783,7 @@ async maybeLoadOlderCandles() {
     }
 
     const addedCount = older.length;
-    this.lastBars = [...older, ...this.lastBars];
+    this.lastBars = [...older, ...lastBars];
     this.oldestLoadedTime = this.lastBars[0].time;
 
     const savedRange = this.lwChart.timeScale().getVisibleLogicalRange();
@@ -4302,7 +4238,7 @@ syncChartCoinIcon() {
 /* ==========================================================================
    MULTI-CHART SYSTEM -- ChartManager
    --------------------------------------------------------------------------
-   Owns the 1 / 2 / 3 / 4 chart layout, creates and destroys ChartInstance
+   Owns the 1 / 2 / 4 chart layout, creates and destroys ChartInstance
    objects as the layout changes, tracks which chart is "active" (for
    actions that must target exactly one chart -- undo/redo/delete, and
    keyboard shortcuts), and persists the chosen layout + each secondary
@@ -4337,38 +4273,7 @@ class ChartManager {
     this.wireActiveChartShortcuts();
     this.applyLayout(this.layout, { skipSave: true });
 
-    // Centralized resize handling: ONE listener drives every open chart
-    // (instead of each ChartInstance listening to window resize itself),
-    // and it also recomputes the workspace's real available height from
-    // the viewport instead of relying on any fixed/arbitrary px or vh
-    // value baked into the CSS.
     window.addEventListener("resize", () => this.resizeAll());
-    window.addEventListener("orientationchange", () => {
-      // orientation change fires before the browser finishes reflowing on
-      // some mobile browsers -- give layout a moment to settle first.
-      setTimeout(() => this.resizeAll(), 200);
-    });
-    // Fonts loading late can shift the workspace's top offset (and so its
-    // computed height) after the first paint -- true up once more.
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => this.resizeAll()).catch(() => {});
-    }
-    requestAnimationFrame(() => this.resizeAll());
-  }
-
-  // Calculates the workspace's real available height from the actual
-  // viewport (current scroll position + where the workspace starts +
-  // a small bottom gutter) instead of any fixed/arbitrary height. Runs
-  // every time the layout, viewport, or DOM around the workspace changes.
-  computeWorkspaceHeight() {
-    if (!this.workspaceEl) return;
-    const isMobile = window.innerWidth <= 720;
-    const top = this.workspaceEl.getBoundingClientRect().top;
-    const bottomGutter = isMobile ? 14 : 24;
-    let h = window.innerHeight - top - bottomGutter;
-    const floor = isMobile ? 420 : 480; // usability floor, not a target height
-    if (!isFinite(h) || h < floor) h = floor;
-    this.workspaceEl.style.height = h + "px";
   }
 
   get primary() {
@@ -4409,31 +4314,6 @@ class ChartManager {
     // engine actually queries by -- see ChartInstance.resolveDom), so nothing
     // collides with slot 1's ids.
     clone.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
-
-    // cloneNode(true) on slot 1 also clones whatever lightweight-charts had
-    // already rendered INTO slot 1's DOM (its internal canvas/table nodes) --
-    // if slot 1 was already open when this clone is made, that stale,
-    // frozen chart markup ends up sitting inside the new slot's mount
-    // point. The new ChartInstance then calls createChart() on that
-    // already-occupied container, which doesn't clear it first, so the
-    // real, live chart gets created alongside/behind a dead static clone --
-    // net effect: a permanently blank card. Give every new slot a truly
-    // empty mount point before its own chart engine ever touches it.
-    const cloneCandleChart = clone.querySelector('[data-role="candle-chart"]');
-    if (cloneCandleChart) cloneCandleChart.innerHTML = "";
-    const cloneDrawOverlay = clone.querySelector('[data-role="draw-overlay"]');
-    if (cloneDrawOverlay) cloneDrawOverlay.innerHTML = "";
-    const cloneIndicatorOverlay = clone.querySelector('[data-role="indicator-overlay"]');
-    if (cloneIndicatorOverlay) cloneIndicatorOverlay.innerHTML = "";
-    // also drop any transient UI state (fullscreen, active outline, open
-    // panels) that would otherwise be copied verbatim from slot 1's
-    // current state instead of starting fresh.
-    clone.classList.remove("fullscreen", "chart-panel-active");
-    const cloneIndicatorPanel = clone.querySelector('[data-role="indicator-panel"]');
-    if (cloneIndicatorPanel) cloneIndicatorPanel.hidden = true;
-    const cloneVolatilityPanel = clone.querySelector('[data-role="volatility-panel"]');
-    if (cloneVolatilityPanel) cloneVolatilityPanel.hidden = true;
-
     clone.addEventListener("mousedown", () => this.setActive(id), { capture: true });
     clone.addEventListener("touchstart", () => this.setActive(id), { capture: true, passive: true });
     return clone;
@@ -4494,30 +4374,18 @@ class ChartManager {
 
   applyLayout(n, opts) {
     opts = opts || {};
-    const wanted = n === 2 ? [1, 2] : n === 3 ? [1, 2, 3] : n === 4 ? [1, 2, 3, 4] : [1];
+    const wanted = n === 2 ? [1, 2] : n === 4 ? [1, 2, 3, 4] : [1];
     // destroy slots no longer needed (highest id first is fine, order
     // doesn't matter -- each destroy is independent)
     Object.keys(this.instances).map(Number).forEach((id) => {
       if (id !== 1 && !wanted.includes(id)) this.destroyInstance(id);
     });
+    // create any newly-needed slots
+    wanted.forEach((id) => { if (id !== 1) this.ensureInstance(id); });
 
-    // IMPORTANT: flip the grid to its new column/row template BEFORE
-    // creating any newly-needed chart instances. ensureInstance() ->
-    // activate() -> ensureChartInitialized() reads the container's
-    // CURRENT box size synchronously (LightweightCharts sizes its canvas
-    // to the container at creation time) -- if the grid were still in the
-    // OLD layout's template when a brand-new secondary chart is created,
-    // that chart would be born measuring the wrong cell shape (e.g. a
-    // full single-column cell while switching 1 -> 4), which is what
-    // produced the near-zero-height / squashed-line canvas bug.
     this.layout = n;
     if (this.workspaceEl) this.workspaceEl.dataset.layout = String(n);
     this.layoutBtns.forEach((btn) => btn.classList.toggle("active", parseInt(btn.dataset.layout, 10) === n));
-
-    // create any newly-needed slots (now that the grid is already sized
-    // and shaped correctly for them)
-    wanted.forEach((id) => { if (id !== 1) this.ensureInstance(id); });
-
     this.setActive(1);
     this.buildMobileTabs(wanted);
     this.resizeAll();
@@ -4552,23 +4420,8 @@ class ChartManager {
   }
 
   resizeAll() {
-    this.computeWorkspaceHeight();
     Object.values(this.instances).forEach((inst) => {
       if (inst.resizeChart) inst.resizeChart();
-    });
-    // Belt-and-braces: run one more pass after the browser has actually
-    // PAINTED the new layout. The synchronous clientWidth/Height read above
-    // is usually accurate (reading it forces a reflow), but a same-tick
-    // burst of DOM changes (destroying/creating slots, flipping the grid
-    // template, resizing the workspace) can still leave a chart's canvas
-    // sized to an in-between state that never gets corrected once nothing
-    // ELSE changes size afterward -- this is what caused an already-open
-    // chart to visibly stay clipped to its pre-switch size after a layout
-    // change. Cheap and idempotent, so it's safe to just always do it.
-    requestAnimationFrame(() => {
-      Object.values(this.instances).forEach((inst) => {
-        if (inst.resizeChart) inst.resizeChart();
-      });
     });
   }
 
@@ -4607,7 +4460,7 @@ class ChartManager {
       const raw = localStorage.getItem(CHART_LAYOUT_STORAGE_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
-      if (data.layout === 2 || data.layout === 3 || data.layout === 4) this.layout = data.layout;
+      if (data.layout === 2 || data.layout === 4) this.layout = data.layout;
     } catch (e) { /* ignore */ }
   }
 
