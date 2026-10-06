@@ -167,6 +167,16 @@
   .toast.err { border-color: var(--short); color: var(--short); }
   .toast.ok { border-color: var(--long); }
   @media (prefers-reduced-motion: reduce) { .switch::after { transition: none; } }
+
+  /* Account switcher */
+  .acct-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--panel-raised); }
+  .acct-switch button { background: none; border: none; color: var(--text-dim); font-family: var(--mono); font-size: 12px; font-weight: 700;
+                        padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+  .acct-switch button + button { border-left: 1px solid var(--line); }
+  .acct-switch button[aria-pressed="true"] { color: var(--text); background: var(--panel-hover); }
+  .acct-switch button[aria-pressed="true"][data-mode="demo"] { box-shadow: inset 0 -2px 0 var(--wait); }
+  .acct-switch button[aria-pressed="true"][data-mode="live"] { box-shadow: inset 0 -2px 0 var(--short); }
+  .acct-switch .mini { font-weight: 500; font-size: 10.5px; color: var(--text-faint); }
 </style>
 </head>
 <body>
@@ -174,12 +184,16 @@
 
   <header class="at-top">
     <div class="at-brand">
-      <a href="/" class="back-link" title="Dashboard par wapas">← Dashboard</a>
+      <a href="/" class="back-link" title="Back to dashboard">← Dashboard</a>
       <img src="{{ url_for('static', filename='logo.png') }}" alt="">
       <span>Signals FM</span><span class="sub">Auto-Trade Bot</span>
     </div>
     <div class="at-nav">
-      <div class="conn-badge"><span class="at-dot" id="conn-dot"></span><span id="conn-text">Binance connect nahi</span></div>
+      <div class="acct-switch" role="group" aria-label="Binance account">
+        <button type="button" data-mode="demo" aria-pressed="true"><span class="at-dot" id="sw-dot-demo"></span>Demo <span class="mini" id="sw-mini-demo"></span></button>
+        <button type="button" data-mode="live" aria-pressed="false"><span class="at-dot" id="sw-dot-live"></span>Live <span class="mini" id="sw-mini-live"></span></button>
+      </div>
+      <div class="conn-badge"><span class="at-dot" id="conn-dot"></span><span id="conn-text">Not connected</span></div>
       <button class="btn btn-primary" id="btn-connect">Connect Binance</button>
       <button class="btn" id="btn-voice">Voice: ON</button>
     </div>
@@ -189,8 +203,8 @@
 
   <section class="stats" aria-label="Account summary">
     <div class="stat"><div class="k">Balance (USDT)</div><div class="v" id="st-balance">—</div><div class="s" id="st-balance-sub">&nbsp;</div></div>
-    <div class="stat"><div class="k">Aaj ka PnL</div><div class="v" id="st-today">—</div><div class="s">UTC din, band trades</div></div>
-    <div class="stat"><div class="k">Khuli trades ka PnL</div><div class="v" id="st-unreal">—</div><div class="s" id="st-open-count">0 open</div></div>
+    <div class="stat"><div class="k">Today's PnL</div><div class="v" id="st-today">—</div><div class="s">Closed trades, UTC day</div></div>
+    <div class="stat"><div class="k">Open PnL</div><div class="v" id="st-unreal">—</div><div class="s" id="st-open-count">0 open</div></div>
     <div class="stat"><div class="k">Total PnL</div><div class="v" id="st-total">—</div><div class="s" id="st-closed">0 closed</div></div>
     <div class="stat"><div class="k">Win rate</div><div class="v" id="st-winrate">—</div><div class="s" id="st-wl">&nbsp;</div></div>
     <div class="stat"><div class="k">Engine</div><div class="v" id="st-engine">—</div><div class="s" id="st-engine-sub">&nbsp;</div></div>
@@ -203,18 +217,18 @@
         <div class="bot-switch">
           <div>
             <div class="label" id="bot-label">Bot OFF</div>
-            <div class="bot-state" id="bot-sub">Binance connect karein</div>
+            <div class="bot-state" id="bot-sub">Connect Binance first</div>
           </div>
           <button class="switch" id="bot-switch" role="switch" aria-checked="false" aria-label="Auto-trade bot on/off" disabled></button>
         </div>
         <div class="bot-state" id="bot-detail"></div>
-        <button class="btn btn-danger" id="btn-panic" disabled title="Bot band + saari positions market par close">Stop all — sab band karo</button>
+        <button class="btn btn-danger" id="btn-panic" disabled title="Turn the bot off and close every open position">Stop all</button>
       </div>
 
       <div class="panel">
-        <div class="panel-title"><span>Coins</span><span class="faint" id="coin-count">0 / 8 bot mein</span></div>
-        <div class="coin-tools"><input class="inp" id="coin-search" placeholder="Coin dhoondein…" aria-label="Coin search"></div>
-        <div class="note">Checkbox = bot is coin par trade karega (max 8). Row par click = chart dekhein.</div>
+        <div class="panel-title"><span>Coins</span><span class="faint" id="coin-count">0 / 8 in bot</span></div>
+        <div class="coin-tools"><input class="inp" id="coin-search" placeholder="Search coins…" aria-label="Search coins"></div>
+        <div class="note">Tick a coin to let the bot trade it (max 8). Click a row to view its chart.</div>
         <div class="coin-list" id="coin-list"></div>
       </div>
     </div>
@@ -230,7 +244,7 @@
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
             <span class="sig-badge" id="sig-badge">Signal: —</span>
-            <button class="btn btn-sm" id="btn-analyze">Signal check karein</button>
+            <button class="btn btn-sm" id="btn-analyze">Check signal</button>
           </div>
           <div class="hero-actions">
             <button class="btn btn-primary" id="btn-long" disabled>Manual LONG</button>
@@ -240,27 +254,27 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title"><span id="chart-title">BTC/USDT</span><span class="faint" id="chart-sub">Entry / SL / TP lines chart par dikhengi</span></div>
+        <div class="panel-title"><span id="chart-title">BTC/USDT</span><span class="faint" id="chart-sub">Entry / SL / TP lines appear on the chart</span></div>
         <div id="candle-chart"></div>
       </div>
 
       <div class="panel">
-        <div class="panel-title"><span>Bot settings (risk control)</span><span class="faint" id="settings-dirty"></span></div>
+        <div class="panel-title"><span id="settings-title">Bot settings</span><span class="faint" id="settings-dirty"></span></div>
         <div class="settings-grid">
           <div class="field"><label for="s-market">Market</label>
-            <select class="sel" id="s-market"><option value="spot">Spot (sirf LONG, no leverage)</option><option value="futures">USDT-M Futures (LONG + SHORT)</option></select></div>
+            <select class="sel" id="s-market"><option value="spot">Spot (LONG only, no leverage)</option><option value="futures">USDT-M Futures (LONG + SHORT)</option></select></div>
           <div class="field"><label for="s-leverage">Leverage</label><select class="sel" id="s-leverage"></select>
-            <span class="hint">Server cap: 20x. Shuru mein 1–3x behtar.</span></div>
+            <span class="hint">Server cap: 20x. 1–3x is safer to start.</span></div>
           <div class="field"><label for="s-timeframe">Signal timeframe</label><select class="sel" id="s-timeframe"></select></div>
-          <div class="field"><label for="s-risk">Risk per trade (% balance)</label><input class="inp" type="number" id="s-risk" min="0.1" max="3" step="0.1">
-            <span class="hint">SL hit ho to itna nuqsan (0.1–3%)</span></div>
+          <div class="field"><label for="s-risk">Risk per trade (% of balance)</label><input class="inp" type="number" id="s-risk" min="0.1" max="3" step="0.1">
+            <span class="hint">Loss if the stop-loss is hit (0.1–3%)</span></div>
           <div class="field"><label for="s-maxpos">Max position size (USDT)</label><input class="inp" type="number" id="s-maxpos" min="10" step="10"></div>
           <div class="field"><label for="s-maxopen">Max open positions</label><input class="inp" type="number" id="s-maxopen" min="1" max="5" step="1"></div>
           <div class="field"><label for="s-daily">Daily loss limit (%)</label><input class="inp" type="number" id="s-daily" min="1" max="20" step="0.5">
-            <span class="hint">Itna nuqsan ho to bot us din ruk jaye</span></div>
+            <span class="hint">The bot pauses for the day after this loss</span></div>
           <div class="field"><label for="s-conf">Min signal confidence (%)</label><input class="inp" type="number" id="s-conf" min="55" max="95" step="1"></div>
           <div class="field"><label for="s-rr">Reward : Risk</label><input class="inp" type="number" id="s-rr" min="1" max="4" step="0.1">
-            <span class="hint">1.5 = TP, SL se 1.5 guna door</span></div>
+            <span class="hint">1.5 = take-profit is 1.5× the stop distance</span></div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;">
           <button class="btn" id="btn-reset-settings">Undo</button>
@@ -281,59 +295,53 @@
         </div>
         <div class="tbl-wrap" id="tab-open">
           <table class="tbl"><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>SL / TP</th><th>PnL</th><th></th></tr></thead>
-            <tbody id="open-body"><tr><td colspan="6" class="empty">Koi khuli position nahi</td></tr></tbody></table>
+            <tbody id="open-body"><tr><td colspan="6" class="empty">No open positions</td></tr></tbody></table>
         </div>
         <div class="tbl-wrap" id="tab-history" hidden>
           <table class="tbl"><thead><tr><th>Coin</th><th>Side</th><th>Entry → Exit</th><th>PnL</th><th>Reason</th></tr></thead>
-            <tbody id="history-body"><tr><td colspan="5" class="empty">Abhi koi band trade nahi</td></tr></tbody></table>
+            <tbody id="history-body"><tr><td colspan="5" class="empty">No closed trades yet</td></tr></tbody></table>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-title"><span>Assistant</span><span class="faint">"help" likhein</span></div>
+        <div class="panel-title"><span>Assistant</span><span class="faint">Type "help"</span></div>
         <div class="chat-box" id="chat-box" aria-live="polite"></div>
         <div class="chat-row">
-          <input class="inp" id="chat-input" placeholder="e.g. status, bot band karo, signal eth" aria-label="Assistant command">
+          <input class="inp" id="chat-input" placeholder="e.g. status, stop bot, signal eth" aria-label="Assistant command">
           <button class="btn btn-primary" id="btn-send">Send</button>
-          <button class="btn" id="btn-mic" title="Bol kar command dein" aria-label="Voice command">🎙️</button>
+          <button class="btn" id="btn-mic" title="Speak a command" aria-label="Voice command">🎙️</button>
         </div>
       </div>
 
       <div class="panel">
         <div class="panel-title"><span>Activity log</span>
           <label class="faint" style="font-family:var(--mono);font-size:10.5px;display:flex;gap:5px;align-items:center;cursor:pointer;">
-            <input type="checkbox" id="log-show-scan"> scans bhi dikhayein</label></div>
+            <input type="checkbox" id="log-show-scan"> Show scans</label></div>
         <div class="log" id="log"></div>
       </div>
     </div>
   </div>
 
   <p class="faint" style="font-size:11.5px;line-height:1.6;max-width:900px;">
-    Bot ke faislay SignalX signal engine (Hawkes + Bayesian, Conformal confidence) se aate hain. Is engine ka abhi koi walk-forward backtest nahi hua,
-    is liye profit ki koi guarantee nahi. Crypto trading, khaas taur par leverage ke sath, mein poora paisa doob sakta hai. Pehle Demo mode mein aazmayein.
-    Ye financial advice nahi hai.
+    Bot decisions come from the SignalX signal engine (Hawkes + Bayesian, conformal confidence). The engine has not been walk-forward backtested,
+    so there is no guarantee of profit. Crypto trading, especially with leverage, can lose all of the money in the account. Test on the Demo account first.
+    This is not financial advice.
+    Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener" style="color:inherit;">TradingView</a>.
   </p>
 </div>
 
 <!-- Connect modal -->
 <div class="modal" id="m-connect" role="dialog" aria-modal="true" aria-labelledby="m-connect-title">
   <div class="modal-box">
-    <div class="modal-head"><span id="m-connect-title">Binance connect karein</span><button class="x" data-close aria-label="Close">×</button></div>
-    <div class="field"><label for="c-mode">Account</label>
-      <select class="sel" id="c-mode">
-        <option value="demo">Demo Trading (demo.binance.com) — risk-free</option>
-        <option value="live">Live — asli paisa</option>
-      </select></div>
-    <div class="note" id="c-help">
-      Keys yahan banayein: <b>demo.binance.com</b> → profile → API Management. Market (Spot/Futures) wahi use hoga jo Bot settings mein chuna hai.
-    </div>
+    <div class="modal-head"><span id="m-connect-title">Connect Binance</span><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="note" id="c-help"></div>
     <div class="alert warn" id="c-live-warn" hidden>
-      Live key banate waqt sirf <b>Enable Reading</b> aur <b>Spot/Futures Trading</b> ON rakhein. <b>Withdrawals hamesha OFF</b> — withdrawal wali key server qabool nahi karega.
-      Behtar hai IP whitelist bhi lagayein.
+      When creating a live key, enable only <b>Reading</b> and <b>Spot/Futures Trading</b>. <b>Keep withdrawals OFF</b> — the server rejects keys with withdrawal permission.
+      Restricting the key to your server's IP is strongly recommended.
     </div>
-    <div class="field"><label for="c-key">API Key</label><input class="inp" id="c-key" autocomplete="off" spellcheck="false"></div>
-    <div class="field"><label for="c-secret">Secret Key</label><input class="inp" type="password" id="c-secret" autocomplete="new-password" spellcheck="false"></div>
-    <div class="note">Keys server par encrypted save hoti hain aur browser mein kabhi store nahi hotin. Secret dobara kabhi dikhaya nahi jayega.</div>
+    <div class="field"><label for="c-key">API key</label><input class="inp" id="c-key" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label for="c-secret">Secret key</label><input class="inp" type="password" id="c-secret" autocomplete="new-password" spellcheck="false"></div>
+    <div class="note">Keys are encrypted on the server and never stored in your browser. The secret is never shown again.</div>
     <div class="alert err" id="c-error" hidden></div>
     <div class="modal-foot">
       <button class="btn btn-danger" id="c-disconnect" hidden>Disconnect</button>
@@ -346,15 +354,15 @@
 <!-- Trade confirm modal -->
 <div class="modal" id="m-trade" role="dialog" aria-modal="true" aria-labelledby="m-trade-title">
   <div class="modal-box">
-    <div class="modal-head"><span id="m-trade-title">Trade confirm karein</span><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="modal-head"><span id="m-trade-title">Confirm trade</span><button class="x" data-close aria-label="Close">×</button></div>
     <dl class="kv" id="t-kv"></dl>
     <div id="t-signal"></div>
     <label class="check" id="t-live-wrap" hidden><input type="checkbox" id="t-live-ack">
-      <span>Main samajhti hoon ke ye <b>LIVE</b> account par asli paise ki trade hai aur nuqsan ho sakta hai.</span></label>
+      <span>I understand this is a <b>LIVE</b> trade with real money and I can lose it.</span></label>
     <div class="alert err" id="t-error" hidden></div>
     <div class="modal-foot">
       <button class="btn" data-close>Cancel</button>
-      <button class="btn btn-primary" id="t-submit">Order lagayein</button>
+      <button class="btn btn-primary" id="t-submit">Place order</button>
     </div>
   </div>
 </div>
@@ -362,14 +370,14 @@
 <!-- Live bot ack modal -->
 <div class="modal" id="m-live" role="dialog" aria-modal="true" aria-labelledby="m-live-title">
   <div class="modal-box">
-    <div class="modal-head"><span id="m-live-title">Live account par bot chalayein?</span><button class="x" data-close aria-label="Close">×</button></div>
-    <div class="note">Bot ab aap ke <b>asli Binance account</b> par khud orders lagayega. Signal engine ki koi guarantee nahi, aur leverage ke sath nuqsan tez hota hai.
-      <ul><li>Kya aap ne pehle Demo mode mein kam az kam 2–4 hafte results dekhe?</li>
-      <li>Risk per trade aur daily loss limit sahi set hain?</li></ul></div>
-    <label class="check"><input type="checkbox" id="l-ack"><span>Main risk samajhti hoon aur live bot chalana chahti hoon.</span></label>
+    <div class="modal-head"><span id="m-live-title">Run the bot on your live account?</span><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="note">The bot will place orders on your <b>real Binance account</b> on its own. The signal engine has no guarantee, and leverage makes losses faster.
+      <ul><li>Have you watched results on the Demo account for at least 2–4 weeks?</li>
+      <li>Are risk per trade and the daily loss limit set correctly?</li></ul></div>
+    <label class="check"><input type="checkbox" id="l-ack"><span>I understand the risk and want to run the live bot.</span></label>
     <div class="modal-foot">
       <button class="btn" data-close>Cancel</button>
-      <button class="btn btn-danger" id="l-submit" disabled>Live bot ON karein</button>
+      <button class="btn btn-danger" id="l-submit" disabled>Turn on live bot</button>
     </div>
   </div>
 </div>
@@ -377,11 +385,12 @@
 <!-- Panic modal -->
 <div class="modal" id="m-panic" role="dialog" aria-modal="true" aria-labelledby="m-panic-title">
   <div class="modal-box">
-    <div class="modal-head"><span id="m-panic-title">Sab band karein?</span><button class="x" data-close aria-label="Close">×</button></div>
-    <div class="note">Bot OFF ho jayega aur <b id="p-count">0</b> khuli position(s) foran market price par band ho jayengi.</div>
+    <div class="modal-head"><span id="m-panic-title">Stop everything?</span><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="note" id="p-text"></div>
     <div class="modal-foot">
       <button class="btn" data-close>Cancel</button>
-      <button class="btn btn-danger" id="p-submit">Haan, sab band karo</button>
+      <button class="btn btn-danger" id="p-both">Stop both accounts</button>
+      <button class="btn btn-danger" id="p-submit">Stop this account</button>
     </div>
   </div>
 </div>
@@ -396,10 +405,14 @@
 
   // ------------------------------------------------------------ helpers
   const $ = (id) => document.getElementById(id);
+  const savedMode = localStorage.getItem("signalsfm-at-account");
   const S = {
+    mode: savedMode === "live" ? "live" : "demo",
     status: null, prices: {}, selected: "BTC/USDT", form: null, formDirty: false,
     lastLogId: null, signal: null, pendingTrade: null, voice: localStorage.getItem("signalsfm-at-voice") !== "off",
+    refreshSeq: 0,
   };
+  const LABEL = (m) => (m === "live" ? "Live" : "Demo");
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -407,28 +420,27 @@
   function fmtPrice(p) {
     if (p == null || isNaN(p)) return "—";
     const n = Number(p);
-    if (n >= 1000) return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    if (n >= 1000) return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
     return n.toPrecision(4);
   }
   function fmtUsd(v, sign) {
     if (v == null || isNaN(v)) return "—";
     const n = Number(v);
-    const s = Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const s = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return (n < 0 ? "-" : sign && n > 0 ? "+" : "") + "$" + s;
   }
   function cls(v) { return v > 0 ? "pos" : v < 0 ? "neg" : "dim"; }
   function ago(iso) {
-    if (!iso) return "kabhi nahi";
+    if (!iso) return "never";
     const sec = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
-    if (sec < 60) return Math.round(sec) + "s pehle";
-    if (sec < 3600) return Math.round(sec / 60) + "m pehle";
-    return Math.round(sec / 3600) + "h pehle";
+    if (sec < 60) return Math.round(sec) + "s ago";
+    if (sec < 3600) return Math.round(sec / 60) + "m ago";
+    return Math.round(sec / 3600) + "h ago";
   }
   function hhmm(iso) {
     if (!iso) return "";
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   }
   function toast(text, kind) {
     const t = $("toast");
@@ -448,17 +460,18 @@
     try {
       res = await fetch(path, init);
     } catch (e) {
-      throw new Error("Server se connection nahi ho saka.");
+      throw new Error("Could not reach the server.");
     }
-    if (res.status === 401) { window.location.href = "/login"; throw new Error("Login zaroori hai."); }
+    if (res.status === 401) { window.location.href = "/login"; throw new Error("Login required."); }
     try { data = await res.json(); } catch (e) { data = {}; }
     if (!res.ok || data.ok === false) {
-      const err = new Error(data.error || ("Request fail (" + res.status + ")"));
+      const err = new Error(data.error || ("Request failed (" + res.status + ")"));
       err.status = res.status; err.data = data;
       throw err;
     }
     return data;
   }
+  const withAcct = (body) => Object.assign({ account: S.mode }, body || {});
   function openModal(id) { $(id).classList.add("open"); const f = $(id).querySelector("input,select,button.btn-primary,button.btn-danger"); if (f) f.focus(); }
   function closeModal(id) { $(id).classList.remove("open"); }
   document.querySelectorAll(".modal").forEach((m) => {
@@ -474,7 +487,7 @@
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = "en-IN";
+      u.lang = "en-US";
       window.speechSynthesis.speak(u);
     } catch (e) { /* ignore */ }
   }
@@ -487,15 +500,40 @@
   });
   renderVoice();
 
+  // ------------------------------------------------------------ account switcher
+  function renderSwitcher() {
+    document.querySelectorAll(".acct-switch button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === S.mode ? "true" : "false"));
+    const accts = S.status && S.status.accounts;
+    ["demo", "live"].forEach((m) => {
+      const a = accts && accts[m];
+      $("sw-dot-" + m).className = "at-dot" + (a && a.bot_enabled ? " on" : a && a.connected ? " warn" : "");
+      $("sw-mini-" + m).textContent = !a || !a.connected ? "" : a.bot_enabled ? "bot on" : a.open_positions ? a.open_positions + " open" : "";
+      $("sw-dot-" + m).title = !a || !a.connected ? "Not connected" : a.bot_enabled ? "Bot running" : "Connected, bot off";
+    });
+  }
+  function switchAccount(mode) {
+    if (mode === S.mode) return;
+    if (S.formDirty && !confirm("You have unsaved settings. Switch account and discard them?")) return;
+    S.mode = mode;
+    localStorage.setItem("signalsfm-at-account", mode);
+    S.status = null; S.form = null; S.formDirty = false; S.lastLogId = null;
+    $("settings-dirty").textContent = "";
+    renderSwitcher();
+    chat("ai", `Switched to the ${LABEL(mode)} account.`);
+    refresh().then(() => { loadCandles(false); drawPositionLines(); });
+  }
+  document.querySelectorAll(".acct-switch button").forEach((b) => b.addEventListener("click", () => switchAccount(b.dataset.mode)));
+  renderSwitcher();
+
   // ------------------------------------------------------------ chart
   let chart = null, series = null, priceLines = [];
   function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
   function initChart() {
-    if (!window.LightweightCharts) { $("candle-chart").innerHTML = '<div class="empty">Chart library load nahi hui.</div>'; return; }
+    if (!window.LightweightCharts) { $("candle-chart").innerHTML = '<div class="empty">Chart library failed to load.</div>'; return; }
     const LC = window.LightweightCharts;
     chart = LC.createChart($("candle-chart"), {
       autoSize: true,
-      layout: { background: { type: "solid", color: cssVar("--void") || "#070a0f" }, textColor: cssVar("--text-dim") || "#8b96a5", fontFamily: "IBM Plex Mono, monospace" },
+      layout: { background: { type: "solid", color: cssVar("--void") || "#070a0f" }, textColor: cssVar("--text-dim") || "#8b96a5", fontFamily: "IBM Plex Mono, monospace", attributionLogo: false },
       grid: { vertLines: { color: cssVar("--line-soft") || "#1a222c" }, horzLines: { color: cssVar("--line-soft") || "#1a222c" } },
       rightPriceScale: { borderColor: cssVar("--line") || "#27303b" },
       timeScale: { borderColor: cssVar("--line") || "#27303b", timeVisible: true },
@@ -514,12 +552,10 @@
       if (!r.ok || !d.candles) throw new Error(d.error || "candles");
       series.setData(d.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
       if (fit) chart.timeScale().fitContent();
-      if (d.last_price != null) {
-        $("hero-price").textContent = "$" + fmtPrice(d.last_price);
-      }
-      $("chart-sub").textContent = tf + " candles · market data";
+      if (d.last_price != null) $("hero-price").textContent = "$" + fmtPrice(d.last_price);
+      $("chart-sub").textContent = tf + " candles";
     } catch (e) {
-      $("chart-sub").textContent = "Chart data nahi mila";
+      $("chart-sub").textContent = "Chart data unavailable";
     }
   }
   function drawPositionLines() {
@@ -557,7 +593,7 @@
       cb.addEventListener("change", () => {
         const set = new Set(botCoins());
         if (cb.checked) {
-          if (set.size >= st.options.max_coins) { cb.checked = false; toast(`Zyada se zyada ${st.options.max_coins} coins`, "err"); return; }
+          if (set.size >= st.options.max_coins) { cb.checked = false; toast(`Up to ${st.options.max_coins} coins`, "err"); return; }
           set.add(c);
         } else set.delete(c);
         S.form.coins = st.options.coins.filter((x) => set.has(x));
@@ -569,7 +605,7 @@
     renderCoinCount();
   }
   function renderCoinCount() {
-    if (S.status) $("coin-count").textContent = `${botCoins().length} / ${S.status.options.max_coins} bot mein`;
+    if (S.status) $("coin-count").textContent = `${botCoins().length} / ${S.status.options.max_coins} in bot`;
   }
   $("coin-search").addEventListener("input", renderCoins);
 
@@ -587,7 +623,7 @@
         $("hero-price").textContent = "$" + fmtPrice(p.last);
         $("hero-change").innerHTML = p.change_pct != null ? `<span class="${cls(p.change_pct)}">${p.change_pct > 0 ? "+" : ""}${p.change_pct.toFixed(2)}% (24h)</span>` : "&nbsp;";
       }
-    } catch (e) { /* prices optional */ }
+    } catch (e) { /* prices are optional */ }
   }
 
   function selectCoin(c) {
@@ -623,7 +659,7 @@
       toast(e.message, "err");
       return null;
     } finally {
-      $("btn-analyze").disabled = false; $("btn-analyze").textContent = "Signal check karein";
+      $("btn-analyze").disabled = false; $("btn-analyze").textContent = "Check signal";
     }
   }
   $("btn-analyze").addEventListener("click", () => analyze());
@@ -660,22 +696,24 @@
   }
   function markDirty() { S.formDirty = true; $("settings-dirty").textContent = "Unsaved changes"; $("settings-dirty").className = "pos"; }
   ["s-market", "s-leverage", "s-timeframe", "s-risk", "s-maxpos", "s-maxopen", "s-daily", "s-conf", "s-rr"].forEach((id) => {
-    $(id).addEventListener("input", () => { readForm(); $("s-leverage").disabled = S.form.market_type === "spot"; markDirty(); });
+    $(id).addEventListener("input", () => { if (!S.form) return; readForm(); $("s-leverage").disabled = S.form.market_type === "spot"; markDirty(); });
   });
   $("btn-reset-settings").addEventListener("click", () => {
+    if (!S.status) return;
     S.form = formFromSettings(S.status.settings); S.formDirty = false;
     $("settings-dirty").textContent = ""; writeForm(); renderCoins();
   });
   $("btn-save-settings").addEventListener("click", async () => {
+    if (!S.form) return;
     readForm();
     const btn = $("btn-save-settings");
     btn.disabled = true;
     try {
-      const d = await api("/api/autotrade/settings", { method: "POST", body: S.form });
+      const d = await api("/api/autotrade/settings", { method: "POST", body: withAcct(S.form) });
       S.form = formFromSettings(d.settings); S.formDirty = false;
       $("settings-dirty").textContent = "Saved"; $("settings-dirty").className = "faint";
       writeForm();
-      toast("Settings save ho gayin", "ok");
+      toast(`${LABEL(S.mode)} settings saved`, "ok");
       await refresh();
       loadCandles(false);
     } catch (e) {
@@ -687,43 +725,47 @@
   function renderStatus() {
     const st = S.status;
     const acct = st.account;
-    // connection badge
+    const L = LABEL(S.mode);
+    renderSwitcher();
+    $("settings-title").textContent = `${L} bot settings`;
+
     const dot = $("conn-dot");
     if (st.connected) {
       dot.className = "at-dot " + (acct.balance_error ? "warn" : "on");
-      $("conn-text").textContent = `Binance ${acct.mode === "live" ? "LIVE" : "DEMO"} · ${acct.key_hint || ""}`;
-      $("btn-connect").textContent = "Account";
+      $("conn-text").textContent = `Binance ${L} · ${acct.key_hint || ""}`;
+      $("btn-connect").textContent = "Manage account";
       $("btn-connect").className = "btn";
     } else {
       dot.className = "at-dot";
-      $("conn-text").textContent = "Binance connect nahi";
-      $("btn-connect").textContent = "Connect Binance";
+      $("conn-text").textContent = `${L} not connected`;
+      $("btn-connect").textContent = `Connect ${L}`;
       $("btn-connect").className = "btn btn-primary";
     }
 
-    // mode strip
     const strip = $("mode-strip");
     if (!st.ready.encryption || !st.ready.ccxt) {
       strip.className = "mode-strip live";
-      strip.innerHTML = `<strong>Setup adhoora hai.</strong> Server par ${!st.ready.encryption ? "<b>AUTOTRADE_ENCRYPTION_KEY</b> environment variable" : "<b>ccxt</b> library"} missing hai, is liye Binance connect nahi ho sakta. Admin ise Railway Variables mein add kare.`;
+      strip.innerHTML = `<strong>Setup incomplete.</strong> The server is missing ${!st.ready.encryption ? "the <b>AUTOTRADE_ENCRYPTION_KEY</b> environment variable" : "the <b>ccxt</b> library"}, so Binance cannot be connected. Add it in Railway Variables.`;
     } else if (!st.connected) {
-      strip.className = "mode-strip";
-      strip.innerHTML = `<strong>Shuru kaise karein:</strong><ol>
-        <li><b>demo.binance.com</b> par Demo Trading API key banayein (risk-free).</li>
-        <li>Upar <b>Connect Binance</b> dabayein aur "Demo" chun kar key/secret paste karein.</li>
-        <li>Neeche settings aur coins set karke <b>Save</b> karein, phir bot ON karein.</li></ol>`;
-    } else if (acct.mode === "demo") {
+      strip.className = "mode-strip" + (S.mode === "live" ? " live" : "");
+      strip.innerHTML = S.mode === "demo"
+        ? `<strong>Get started with Demo (no real money):</strong><ol>
+          <li>Create an API key on <b>demo.binance.com</b> (Profile → API Management).</li>
+          <li>Click <b>Connect Demo</b> above and paste the API key and secret.</li>
+          <li>Pick your coins and settings below, click <b>Save settings</b>, then turn the bot on.</li></ol>`
+        : `<strong>Live account — real money.</strong> Create an API key on <b>binance.com</b> with withdrawals disabled, then click <b>Connect Live</b>.
+           Your Demo account and bot keep running separately.`;
+    } else if (S.mode === "demo") {
       strip.className = "mode-strip demo";
-      strip.innerHTML = `<strong>DEMO account</strong> — Binance Demo Trading. Orders asli Binance engine par lagte hain lekin paisa asli nahi. Live par jaane se pehle yahan kuch hafte results dekhein.`;
+      strip.innerHTML = `<strong>DEMO account</strong> — Binance Demo Trading. Orders go to the real Binance engine, but the money is not real. Watch results here for a few weeks before going live.`;
     } else {
       strip.className = "mode-strip live";
-      strip.innerHTML = `<strong>LIVE account — asli paisa.</strong> Har order aap ke Binance account mein real funds se lagta hai.`;
+      strip.innerHTML = `<strong>LIVE account — real money.</strong> Every order uses real funds in your Binance account.`;
     }
     if (st.connected && acct.balance_error) {
       strip.innerHTML += `<div class="alert err" style="margin-top:8px;">${esc(acct.balance_error)}</div>`;
     }
 
-    // stats
     if (st.connected && acct.balance_usdt != null) {
       $("st-balance").textContent = fmtUsd(acct.balance_usdt);
       $("st-balance-sub").textContent = `${acct.balance_market || st.settings.market_type} · free USDT · ${ago(acct.balance_at)}`;
@@ -735,32 +777,33 @@
     $("st-total").textContent = fmtUsd(s.total_pnl, true); $("st-total").className = "v " + cls(s.total_pnl);
     $("st-closed").textContent = `${s.closed_count} closed`;
     $("st-winrate").textContent = s.win_rate == null ? "—" : s.win_rate + "%";
-    $("st-wl").textContent = s.closed_count ? `${s.wins} jeet · ${s.losses} haar` : "\u00a0";
+    $("st-wl").textContent = s.closed_count ? `${s.wins} won · ${s.losses} lost` : "\u00a0";
     $("st-engine").textContent = st.engine.online ? "Online" : "Offline";
     $("st-engine").className = "v " + (st.engine.online ? "pos" : "neg");
-    $("st-engine-sub").textContent = st.engine.heartbeat_at ? "heartbeat " + ago(st.engine.heartbeat_at) : "abhi start nahi hua";
+    $("st-engine-sub").textContent = st.engine.heartbeat_at ? "heartbeat " + ago(st.engine.heartbeat_at) : "not started yet";
 
-    // bot card
     const bot = st.bot;
     const card = $("bot-card"), sw = $("bot-switch");
     sw.disabled = !st.connected;
     sw.setAttribute("aria-checked", bot.enabled ? "true" : "false");
+    sw.setAttribute("aria-label", `${L} bot on/off`);
     card.className = "panel bot-card" + (bot.enabled ? (bot.paused_until ? " paused" : " running") : "");
-    $("bot-label").textContent = bot.enabled ? (bot.paused_until ? "Bot PAUSED" : "Bot ON") : "Bot OFF";
-    if (!st.connected) $("bot-sub").textContent = "Pehle Binance connect karein";
-    else if (!bot.enabled) $("bot-sub").textContent = "Bot naye trades nahi le raha";
-    else if (bot.paused_until) $("bot-sub").textContent = `${bot.pause_reason} — ${hhmm(bot.paused_until)} tak ruka hua`;
-    else $("bot-sub").textContent = `Har ${st.settings.timeframe === "15m" ? "3" : st.settings.timeframe === "1h" ? "5" : "10"} min signals scan`;
+    $("bot-label").textContent = `${L} bot ` + (bot.enabled ? (bot.paused_until ? "PAUSED" : "ON") : "OFF");
+    if (!st.connected) $("bot-sub").textContent = `Connect the ${L} account first`;
+    else if (!bot.enabled) $("bot-sub").textContent = "Not taking new trades";
+    else if (bot.paused_until) $("bot-sub").textContent = `${bot.pause_reason} — paused until ${hhmm(bot.paused_until)}`;
+    else $("bot-sub").textContent = `Scans signals every ${st.settings.timeframe === "15m" ? "3" : st.settings.timeframe === "1h" ? "5" : "10"} min`;
     const det = [];
     det.push(`${st.settings.market_type === "futures" ? "Futures " + st.settings.leverage + "x" : "Spot"} · risk ${st.settings.risk_pct}% · min ${st.settings.min_confidence}%`);
     det.push(`Last scan: ${ago(bot.last_scan_at)}`);
-    if (bot.enabled && !st.engine.online) det.push(`<span class="neg">Engine offline — trades nahi lagengi. Server logs check karein.</span>`);
+    if (bot.enabled && !st.engine.online) det.push(`<span class="neg">Engine offline — no trades will be placed. Check the server logs.</span>`);
     $("bot-detail").innerHTML = det.join("<br>");
-    $("btn-panic").disabled = !(st.connected && (bot.enabled || st.positions.length));
+    const anyActive = Object.values(st.accounts).some((a) => a.bot_enabled || a.open_positions);
+    $("btn-panic").disabled = !anyActive;
 
     $("btn-long").disabled = !st.connected;
     $("btn-short").disabled = !st.connected || st.settings.market_type === "spot";
-    $("btn-short").title = st.settings.market_type === "spot" ? "Spot mein SHORT nahi hota — settings mein Futures chunein" : "";
+    $("btn-short").title = st.settings.market_type === "spot" ? "No SHORT on spot — choose Futures in the settings" : "";
 
     renderPositions();
     renderLog();
@@ -769,7 +812,7 @@
   function renderPositions() {
     const st = S.status;
     const ob = $("open-body");
-    if (!st.positions.length) ob.innerHTML = `<tr><td colspan="6" class="empty">Koi khuli position nahi</td></tr>`;
+    if (!st.positions.length) ob.innerHTML = `<tr><td colspan="6" class="empty">No open positions</td></tr>`;
     else {
       ob.innerHTML = st.positions.map((p) => `<tr class="click" data-sym="${esc(p.symbol)}">
         <td>${esc(p.symbol.replace("/USDT", ""))}<br><span class="faint">${p.leverage}x ${esc(p.source)}</span></td>
@@ -781,10 +824,10 @@
     }
     ob.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => selectCoin(tr.dataset.sym)));
     ob.querySelectorAll("[data-close-id]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); closePosition(+b.dataset.closeId, b); }));
-    $("pos-note").textContent = st.positions.length ? "SL/TP bot monitor karta hai" : "";
+    $("pos-note").textContent = st.positions.length ? "SL/TP monitored by the bot" : "";
 
     const hb = $("history-body");
-    if (!st.history.length) hb.innerHTML = `<tr><td colspan="5" class="empty">Abhi koi band trade nahi</td></tr>`;
+    if (!st.history.length) hb.innerHTML = `<tr><td colspan="5" class="empty">No closed trades yet</td></tr>`;
     else hb.innerHTML = st.history.map((p) => `<tr>
         <td>${esc(p.symbol.replace("/USDT", ""))}<br><span class="faint">${hhmm(p.closed_at)}</span></td>
         <td class="${p.side === "LONG" ? "pos" : "neg"}">${p.side}</td>
@@ -798,7 +841,7 @@
     const showScan = $("log-show-scan").checked;
     const rows = S.status.logs.filter((l) => showScan || l.level !== "SCAN");
     $("log").innerHTML = rows.length ? rows.map((l) => `<div class="log-row"><span class="faint">${hhmm(l.created_at)}</span><span class="lv ${esc(l.level)}">${esc(l.level)}</span><span>${esc(l.message)}</span></div>`).join("")
-      : `<div class="empty">Abhi koi activity nahi</div>`;
+      : `<div class="empty">No activity yet</div>`;
   }
   $("log-show-scan").addEventListener("change", () => S.status && renderLog());
 
@@ -806,23 +849,26 @@
     if (prevLastId == null) return;
     const fresh = S.status.logs.filter((l) => l.id > prevLastId && (l.level === "TRADE" || l.level === "WARN")).reverse();
     fresh.forEach((l) => {
-      chat("ai", l.message);
+      chat("ai", `[${LABEL(S.mode)}] ${l.message}`);
       if (l.level === "TRADE") {
         const m = l.message.match(/^(OPEN|CLOSE) (LONG|SHORT) (\S+)/);
-        if (m) speak(m[1] === "OPEN" ? `${m[3].replace("/USDT", "")} ${m[2]} trade khul gayi` : `${m[3].replace("/USDT", "")} trade band ho gayi`);
+        if (m) speak(`${m[3].replace("/USDT", "")} ${m[2].toLowerCase()} trade ${m[1] === "OPEN" ? "opened" : "closed"}`);
       }
     });
   }
 
   // ------------------------------------------------------------ refresh loop
   async function refresh() {
+    const seq = ++S.refreshSeq;
+    const mode = S.mode;
     try {
-      const d = await api("/api/autotrade/status");
+      const d = await api("/api/autotrade/status?account=" + mode);
+      if (seq !== S.refreshSeq || mode !== S.mode) return;  // stale response after an account switch
       const prevLast = S.lastLogId;
       const first = !S.status;
       S.status = d;
       S.lastLogId = d.logs.length ? d.logs[0].id : (prevLast || 0);
-      if (first) {
+      if (!$("s-leverage").options.length) {
         fillSelect("s-leverage", d.options.leverage, (v) => v + "x");
         fillSelect("s-timeframe", d.options.timeframes);
       }
@@ -831,7 +877,7 @@
       if (first) renderCoins();
       else announceNewTrades(prevLast);
     } catch (e) {
-      if (!S.status) $("mode-strip").innerHTML = `<div class="alert err">Status load nahi hua: ${esc(e.message)}</div>`;
+      if (!S.status) $("mode-strip").innerHTML = `<div class="alert err">Could not load status: ${esc(e.message)}</div>`;
     }
   }
 
@@ -839,50 +885,48 @@
   // Connect
   $("btn-connect").addEventListener("click", () => {
     const st = S.status;
+    const live = S.mode === "live";
     $("c-error").hidden = true;
     $("c-key").value = ""; $("c-secret").value = "";
     $("c-disconnect").hidden = !(st && st.connected);
-    if (st && st.connected) $("c-mode").value = st.account.mode;
-    updateConnectHelp();
+    $("m-connect-title").textContent = `${st && st.connected ? "Manage" : "Connect"} Binance ${LABEL(S.mode)} account`;
+    $("c-live-warn").hidden = !live;
+    $("c-help").innerHTML = (st && st.connected ? `Connected key: <b>${esc(st.account.key_hint || "")}</b>. Paste a new key below to replace it.<br>` : "") +
+      (live ? "Create the key on <b>binance.com</b> → Profile → API Management."
+            : "Create the key on <b>demo.binance.com</b> → Profile → API Management.") +
+      " The market (Spot/Futures) follows this account's bot settings.";
     openModal("m-connect");
   });
-  function updateConnectHelp() {
-    const live = $("c-mode").value === "live";
-    $("c-live-warn").hidden = !live;
-    $("c-help").innerHTML = live
-      ? "Keys yahan banayein: <b>binance.com</b> → profile → API Management. Market (Spot/Futures) wahi use hoga jo Bot settings mein chuna hai."
-      : "Keys yahan banayein: <b>demo.binance.com</b> → profile → API Management. Market (Spot/Futures) wahi use hoga jo Bot settings mein chuna hai.";
-  }
-  $("c-mode").addEventListener("change", updateConnectHelp);
   $("c-submit").addEventListener("click", async () => {
     const btn = $("c-submit");
     btn.disabled = true; btn.textContent = "Verifying…"; $("c-error").hidden = true;
     try {
-      const d = await api("/api/autotrade/connect", { method: "POST", body: { api_key: $("c-key").value.trim(), api_secret: $("c-secret").value.trim(), mode: $("c-mode").value } });
+      const d = await api("/api/autotrade/connect", { method: "POST", body: withAcct({ api_key: $("c-key").value.trim(), api_secret: $("c-secret").value.trim() }) });
       $("c-key").value = ""; $("c-secret").value = "";
       closeModal("m-connect");
-      const msg = `Binance ${d.mode === "live" ? "LIVE" : "DEMO"} connect ho gaya. Balance: ${fmtUsd(d.balance_usdt)} USDT.` + (d.note ? "\n" + d.note : "");
-      chat("ai", msg); speak("Binance connect ho gaya");
+      chat("ai", `Binance ${LABEL(d.mode)} connected. Balance: ${fmtUsd(d.balance_usdt)} USDT.` + (d.note ? "\n" + d.note : ""));
+      speak(`Binance ${LABEL(d.mode)} connected`);
       await refresh();
     } catch (e) {
       $("c-error").textContent = e.message; $("c-error").hidden = false;
     } finally { btn.disabled = false; btn.textContent = "Verify & connect"; }
   });
   $("c-disconnect").addEventListener("click", async () => {
-    if (!confirm("Binance disconnect karein? Saved API keys server se delete ho jayengi.")) return;
+    if (!confirm(`Disconnect the ${LABEL(S.mode)} account? Its saved API keys will be deleted from the server.`)) return;
     try {
-      await api("/api/autotrade/disconnect", { method: "POST", body: {} });
-      closeModal("m-connect"); chat("ai", "Binance disconnect ho gaya, keys delete kar di gayin."); await refresh();
+      await api("/api/autotrade/disconnect", { method: "POST", body: withAcct({}) });
+      closeModal("m-connect"); chat("ai", `${LABEL(S.mode)} account disconnected and keys deleted.`); await refresh();
     } catch (e) { $("c-error").textContent = e.message; $("c-error").hidden = false; }
   });
 
   // Bot toggle
   async function setBot(enabled, ackLive) {
     try {
-      await api("/api/autotrade/bot", { method: "POST", body: { enabled, ack_live: !!ackLive } });
-      const msg = enabled ? "Auto-trade bot ON. Ye har scan par signals check karega aur sirf settings ki shartein poori hone par trade lega."
-        : "Bot OFF. Khuli positions phir bhi SL/TP par monitor hoti rahengi.";
-      chat("ai", msg); speak(enabled ? "Bot shuru ho gaya" : "Bot band ho gaya");
+      await api("/api/autotrade/bot", { method: "POST", body: withAcct({ enabled, ack_live: !!ackLive }) });
+      const L = LABEL(S.mode);
+      chat("ai", enabled ? `${L} bot is ON. It checks signals on every scan and only trades when all of your settings are met.`
+        : `${L} bot is OFF. Open positions are still monitored for SL/TP.`);
+      speak(`${L} bot ${enabled ? "started" : "stopped"}`);
       await refresh();
       return true;
     } catch (e) {
@@ -892,38 +936,51 @@
     }
   }
   function requestBot(enabled) {
-    if (enabled && S.formDirty) { toast("Pehle settings save karein", "err"); return; }
-    if (enabled && S.status.connected && S.status.account.mode === "live") {
+    if (enabled && S.formDirty) { toast("Save your settings first", "err"); return; }
+    if (enabled && S.mode === "live") {
       $("l-ack").checked = false; $("l-submit").disabled = true; openModal("m-live"); return;
     }
     setBot(enabled);
   }
-  $("bot-switch").addEventListener("click", () => requestBot(!S.status.bot.enabled));
+  $("bot-switch").addEventListener("click", () => S.status && requestBot(!S.status.bot.enabled));
   $("l-ack").addEventListener("change", () => { $("l-submit").disabled = !$("l-ack").checked; });
   $("l-submit").addEventListener("click", async () => { closeModal("m-live"); await setBot(true, true); });
 
   // Panic
-  $("btn-panic").addEventListener("click", () => { $("p-count").textContent = S.status.positions.length; openModal("m-panic"); });
-  $("p-submit").addEventListener("click", async () => {
-    const btn = $("p-submit"); btn.disabled = true;
+  function openPanic() {
+    const a = S.status.accounts;
+    const other = S.mode === "live" ? "demo" : "live";
+    $("p-text").innerHTML = `<b>Stop this account</b> turns the ${LABEL(S.mode)} bot off and closes its ${a[S.mode].open_positions} open position(s) at market price.<br>` +
+      `<b>Stop both accounts</b> also stops the ${LABEL(other)} bot and closes its ${a[other].open_positions} position(s).`;
+    openModal("m-panic");
+  }
+  async function doPanic(scope) {
+    $("p-submit").disabled = true; $("p-both").disabled = true;
     try {
-      const d = await api("/api/autotrade/panic", { method: "POST", body: {} });
-      chat("ai", `Stop all: bot OFF, ${d.closed} position(s) band.`); speak("Sab band kar diya");
+      const d = await api("/api/autotrade/panic", { method: "POST", body: { account: scope } });
+      chat("ai", `Stop all (${scope === "all" ? "both accounts" : LABEL(scope)}): bot off, ${d.closed} position(s) closed.`);
+      speak("Everything stopped");
     } catch (e) {
       const f = (e.data && e.data.failed) || [];
-      chat("ai", "Kuch positions band nahi ho sakin: " + f.map((x) => x.symbol + " (" + x.error + ")").join(", ") + "\nBinance app se check karein!");
-      toast("Kuch positions band nahi hui — Binance check karein", "err");
-    } finally { btn.disabled = false; closeModal("m-panic"); refresh(); }
-  });
+      chat("ai", "Some positions could not be closed: " + f.map((x) => x.symbol + " (" + x.error + ")").join(", ") + "\nCheck your Binance app now!");
+      toast("Some positions did not close — check Binance", "err");
+    } finally {
+      $("p-submit").disabled = false; $("p-both").disabled = false;
+      closeModal("m-panic"); refresh();
+    }
+  }
+  $("btn-panic").addEventListener("click", openPanic);
+  $("p-submit").addEventListener("click", () => doPanic(S.mode));
+  $("p-both").addEventListener("click", () => doPanic("all"));
 
   // Close one
   async function closePosition(id, btn) {
     const p = S.status.positions.find((x) => x.id === id);
-    if (!p || !confirm(`${p.symbol} ${p.side} position market price par band karein?`)) return;
+    if (!p || !confirm(`Close the ${p.symbol} ${p.side} position at market price?`)) return;
     if (btn) btn.disabled = true;
     try {
       const d = await api(`/api/autotrade/positions/${id}/close`, { method: "POST", body: {} });
-      chat("ai", `${p.symbol} band. PnL: ${fmtUsd(d.pnl_usdt, true)}`);
+      chat("ai", `${p.symbol} closed. PnL: ${fmtUsd(d.pnl_usdt, true)}`);
     } catch (e) { toast(e.message, "err"); }
     refresh();
   }
@@ -931,31 +988,32 @@
   // Manual trade
   async function previewTrade(side, symbol) {
     symbol = symbol || S.selected;
-    if (S.formDirty) { toast("Pehle settings save karein", "err"); return; }
+    if (S.formDirty) { toast("Save your settings first", "err"); return; }
+    const live = S.mode === "live";
     $("t-error").hidden = true;
     $("t-kv").innerHTML = `<dt>Calculating…</dt><dd></dd>`;
     $("t-signal").innerHTML = "";
-    const live = S.status.account && S.status.account.mode === "live";
     $("t-live-wrap").hidden = !live; $("t-live-ack").checked = false;
     $("t-submit").disabled = true;
-    $("m-trade-title").textContent = `${side} ${symbol}`;
+    $("m-trade-title").textContent = `${side} ${symbol} · ${LABEL(S.mode)}`;
+    S.pendingTrade = null;
     openModal("m-trade");
     try {
-      const d = await api("/api/autotrade/manual", { method: "POST", body: { symbol, side, confirm: false } });
-      S.pendingTrade = { symbol, side };
+      const d = await api("/api/autotrade/manual", { method: "POST", body: withAcct({ symbol, side, confirm: false }) });
+      S.pendingTrade = { symbol, side, mode: S.mode };
       $("t-kv").innerHTML = `
         <dt>Account</dt><dd>${d.mode === "live" ? '<span class="neg">LIVE</span>' : "DEMO"} · ${esc(d.market_type)} ${d.leverage}x</dd>
-        <dt>Price (approx)</dt><dd>$${fmtPrice(d.price)}</dd>
+        <dt>Price (approx.)</dt><dd>$${fmtPrice(d.price)}</dd>
         <dt>Quantity</dt><dd>${d.amount} ${esc(symbol.split("/")[0])}</dd>
         <dt>Position size</dt><dd>${fmtUsd(d.notional_usdt)}</dd>
-        <dt>Margin use</dt><dd>${fmtUsd(d.margin_usdt)} / free ${fmtUsd(d.free_usdt)}</dd>
+        <dt>Margin used</dt><dd>${fmtUsd(d.margin_usdt)} / free ${fmtUsd(d.free_usdt)}</dd>
         <dt>Stop-loss</dt><dd class="neg">$${fmtPrice(d.stop_loss)} (−${d.sl_pct}%)</dd>
         <dt>Take-profit</dt><dd class="pos">$${fmtPrice(d.take_profit)} (+${d.tp_pct}%)</dd>
-        <dt>SL hit par nuqsan</dt><dd class="neg">≈ ${fmtUsd(d.risk_usdt)}</dd>`;
+        <dt>Loss if SL is hit</dt><dd class="neg">≈ ${fmtUsd(d.risk_usdt)}</dd>`;
       const sg = d.signal;
       if (sg) {
         const agree = sg.verdict === side;
-        $("t-signal").innerHTML = `<div class="alert ${agree ? "ok" : "warn"}">Signal (${esc(sg.timeframe)}): <b>${esc(sg.verdict)}</b> ${Math.round(sg.confidence)}%. ${agree ? "Signal aap ki trade ke sath hai." : "Dhyan dein: signal aap ki trade ke sath nahi hai."}</div>`;
+        $("t-signal").innerHTML = `<div class="alert ${agree ? "ok" : "warn"}">Signal (${esc(sg.timeframe)}): <b>${esc(sg.verdict)}</b> ${Math.round(sg.confidence)}%. ${agree ? "The signal agrees with this trade." : "Heads up: the signal does not agree with this trade."}</div>`;
       }
       $("t-submit").disabled = live;
     } catch (e) {
@@ -966,19 +1024,18 @@
   $("t-live-ack").addEventListener("change", () => { $("t-submit").disabled = !$("t-live-ack").checked || !S.pendingTrade; });
   $("t-submit").addEventListener("click", async () => {
     const t = S.pendingTrade; if (!t) return;
-    const btn = $("t-submit"); btn.disabled = true; btn.textContent = "Order lag raha hai…";
+    const btn = $("t-submit"); btn.disabled = true; btn.textContent = "Placing order…";
     try {
-      const d = await api("/api/autotrade/manual", { method: "POST", body: { symbol: t.symbol, side: t.side, confirm: true, ack_live: $("t-live-ack").checked } });
+      const d = await api("/api/autotrade/manual", { method: "POST", body: { account: t.mode, symbol: t.symbol, side: t.side, confirm: true, ack_live: $("t-live-ack").checked } });
       closeModal("m-trade");
-      chat("ai", `${t.side} ${t.symbol} khul gayi @ $${fmtPrice(d.entry_price)}\nSL $${fmtPrice(d.stop_loss)} · TP $${fmtPrice(d.take_profit)}`);
-      speak("Trade khul gayi");
-      await refresh();
+      chat("ai", `[${LABEL(t.mode)}] ${t.side} ${t.symbol} opened @ $${fmtPrice(d.entry_price)}\nSL $${fmtPrice(d.stop_loss)} · TP $${fmtPrice(d.take_profit)}`);
+      speak("Trade opened");
       S.pendingTrade = null;
+      await refresh();
     } catch (e) {
       $("t-error").textContent = e.message; $("t-error").hidden = false;
-      const live = S.status.account && S.status.account.mode === "live";
-      btn.disabled = live && !$("t-live-ack").checked;
-    } finally { btn.textContent = "Order lagayein"; }
+      btn.disabled = t.mode === "live" && !$("t-live-ack").checked;
+    } finally { btn.textContent = "Place order"; }
   });
   $("btn-long").addEventListener("click", () => previewTrade("LONG"));
   $("btn-short").addEventListener("click", () => previewTrade("SHORT"));
@@ -1008,50 +1065,56 @@
     return null;
   }
   const HAS = (words, list) => list.some((k) => words.includes(k));
-  const STOP_WORDS = ["stop", "band", "bund", "ruko", "ruk", "off", "rok", "roko", "pause"];
-  const START_WORDS = ["start", "chalao", "chala", "shuru", "on", "resume"];
+  const STOP_WORDS = ["stop", "off", "pause", "disable", "halt"];
+  const START_WORDS = ["start", "on", "resume", "enable", "run"];
 
   async function handleCommand(text) {
     const st = S.status;
-    const lower = text.toLowerCase();
-    const words = lower.split(/[^a-z0-9]+/).filter(Boolean);
+    const L = LABEL(S.mode);
+    const words = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
     const coin = findCoin(words);
     let reply;
 
-    if (HAS(words, ["help", "madad", "commands"])) {
-      reply = "Commands:\n• status / balance\n• bot on / bot band karo\n• signal btc\n• btc buy / eth short (confirm window khulegi)\n• sab band karo (Stop all)\n• positions";
-    } else if (HAS(words, ["sab", "all", "panic", "emergency"]) && HAS(words, STOP_WORDS.concat(["close", "exit"]))) {
-      if (!st.connected) reply = "Binance connected nahi hai.";
-      else { $("p-count").textContent = st.positions.length; openModal("m-panic"); reply = "Stop all ki confirmation window khol di hai. 'Haan, sab band karo' dabayein."; }
-    } else if (HAS(words, ["bot", "auto", "autotrade"]) && HAS(words, STOP_WORDS)) {
-      if (!st.bot.enabled) reply = "Bot pehle se OFF hai.";
+    if (HAS(words, ["help", "commands"])) {
+      reply = "Commands:\n• status / balance\n• start bot / stop bot\n• switch to live / switch to demo\n• signal btc\n• buy btc / short eth (opens a confirmation)\n• positions\n• stop all";
+    } else if (HAS(words, ["switch", "use", "go"]) && HAS(words, ["live", "demo"])) {
+      const target = words.includes("live") ? "live" : "demo";
+      if (target === S.mode) reply = `You are already on the ${LABEL(target)} account.`;
+      else { switchAccount(target); return; }
+    } else if (HAS(words, ["all", "everything", "panic", "emergency"]) && HAS(words, STOP_WORDS.concat(["close", "exit", "panic", "emergency"]))) {
+      openPanic(); reply = "Opened the Stop all confirmation.";
+    } else if (HAS(words, ["bot", "auto", "autotrade", "trading"]) && HAS(words, STOP_WORDS)) {
+      if (!st.bot.enabled) reply = `The ${L} bot is already off.`;
       else { await setBot(false); return; }
-    } else if (HAS(words, ["bot", "auto", "autotrade"]) && HAS(words, START_WORDS)) {
-      if (!st.connected) reply = "Pehle Binance connect karein (upar 'Connect Binance').";
-      else if (st.bot.enabled) reply = "Bot pehle se ON hai.";
+    } else if (HAS(words, ["bot", "auto", "autotrade", "trading"]) && HAS(words, START_WORDS)) {
+      if (!st.connected) reply = `Connect the ${L} account first (Connect button at the top).`;
+      else if (st.bot.enabled) reply = `The ${L} bot is already on.`;
       else { requestBot(true); return; }
-    } else if (coin && HAS(words, ["buy", "long", "kharido", "lo"])) {
-      if (!st.connected) reply = "Pehle Binance connect karein.";
-      else { selectCoin(coin); previewTrade("LONG", coin); reply = `${coin} LONG ki preview khol di hai. Size aur SL/TP dekh kar confirm karein.`; }
-    } else if (coin && HAS(words, ["sell", "short", "becho"])) {
-      if (!st.connected) reply = "Pehle Binance connect karein.";
+    } else if (coin && HAS(words, ["buy", "long"])) {
+      if (!st.connected) reply = `Connect the ${L} account first.`;
+      else { selectCoin(coin); previewTrade("LONG", coin); reply = `Opened a LONG preview for ${coin} on ${L}. Check the size and SL/TP, then confirm.`; }
+    } else if (coin && HAS(words, ["sell", "short"])) {
+      if (!st.connected) reply = `Connect the ${L} account first.`;
       else if (st.settings.market_type === "spot") {
         const open = st.positions.find((p) => p.symbol === coin);
-        reply = open ? `Spot position band karne ke liye Open table mein ${coin} ka Close button dabayein.` : "Spot mein SHORT nahi hota. Futures settings mein chunein.";
-      } else { selectCoin(coin); previewTrade("SHORT", coin); reply = `${coin} SHORT ki preview khol di hai. Confirm karein.`; }
+        reply = open ? `To close the ${coin} spot position, use its Close button in the Open table.` : "SHORT is not available on spot. Choose Futures in the settings.";
+      } else { selectCoin(coin); previewTrade("SHORT", coin); reply = `Opened a SHORT preview for ${coin} on ${L}. Confirm to place it.`; }
     } else if (HAS(words, ["signal", "analysis", "analyze"]) || (coin && words.length <= 2)) {
       const c = coin || S.selected;
       if (c !== S.selected) selectCoin(c);
-      chat("ai", `${c} ka signal check ho raha hai…`);
+      chat("ai", `Checking the ${c} signal…`);
       const sg = await analyze(c);
-      reply = sg ? `${c} (${sg.timeframe}): ${sg.verdict} — confidence ${Math.round(sg.confidence)}%. ${sg.verdict === "WAIT" ? "Abhi trade ka setup nahi." : sg.confidence >= st.settings.min_confidence ? "Bot ki min confidence se upar hai." : "Bot ki min confidence se kam hai, bot ye trade nahi lega."}` : "Signal nahi mil saka.";
-    } else if (HAS(words, ["position", "positions", "trades", "trade"])) {
-      reply = st.positions.length ? st.positions.map((p) => `${p.side} ${p.symbol}: ${fmtUsd(p.unrealized_pnl, true)} (SL ${fmtPrice(p.stop_loss)}, TP ${fmtPrice(p.take_profit)})`).join("\n") : "Koi khuli position nahi.";
-    } else if (HAS(words, ["status", "balance", "haal", "kya", "pnl", "profit"])) {
-      if (!st.connected) reply = "Binance connected nahi hai.";
-      else reply = `Account: ${st.account.mode.toUpperCase()} · Balance ${fmtUsd(st.account.balance_usdt)} USDT\nBot: ${st.bot.enabled ? "ON" : "OFF"}${st.bot.paused_until ? " (paused)" : ""} · Engine ${st.engine.online ? "online" : "offline"}\nAaj: ${fmtUsd(st.stats.realized_today, true)} · Open: ${st.positions.length} (${fmtUsd(st.stats.unrealized, true)})`;
+      reply = sg ? `${c} (${sg.timeframe}): ${sg.verdict} — ${Math.round(sg.confidence)}% confidence. ${sg.verdict === "WAIT" ? "No trade setup right now." : sg.confidence >= st.settings.min_confidence ? "Above the bot's minimum confidence." : "Below the bot's minimum confidence, so the bot will not take it."}` : "Could not get the signal.";
+    } else if (HAS(words, ["position", "positions", "trades", "open"])) {
+      reply = st.positions.length ? st.positions.map((p) => `${p.side} ${p.symbol}: ${fmtUsd(p.unrealized_pnl, true)} (SL ${fmtPrice(p.stop_loss)}, TP ${fmtPrice(p.take_profit)})`).join("\n") : `No open positions on ${L}.`;
+    } else if (HAS(words, ["status", "balance", "pnl", "profit", "summary"])) {
+      const other = S.mode === "live" ? "demo" : "live";
+      const o = st.accounts[other];
+      if (!st.connected) reply = `The ${L} account is not connected.`;
+      else reply = `${L}: balance ${fmtUsd(st.account.balance_usdt)} USDT · bot ${st.bot.enabled ? "ON" : "OFF"}${st.bot.paused_until ? " (paused)" : ""} · engine ${st.engine.online ? "online" : "offline"}\nToday: ${fmtUsd(st.stats.realized_today, true)} · open: ${st.positions.length} (${fmtUsd(st.stats.unrealized, true)})`;
+      reply += `\n${LABEL(other)}: ${o.connected ? (o.bot_enabled ? "bot ON" : "bot OFF") + ", " + o.open_positions + " open" : "not connected"}`;
     } else {
-      reply = "Ye command samajh nahi aayi. 'help' likh kar list dekhein.";
+      reply = "Sorry, I didn't understand that. Type \"help\" to see the commands.";
     }
     chat("ai", reply);
     speak(reply.split("\n")[0]);
@@ -1068,16 +1131,16 @@
   $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
   $("btn-mic").addEventListener("click", () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { toast("Is browser mein voice input nahi hai (Chrome use karein)", "err"); return; }
+    if (!SR) { toast("Voice input is not supported in this browser (try Chrome)", "err"); return; }
     const r = new SR();
-    r.lang = "en-IN";
+    r.lang = "en-US";
     r.onresult = (ev) => { $("chat-input").value = ev.results[0][0].transcript; send(); };
-    r.onerror = () => toast("Awaaz samajh nahi aayi", "err");
+    r.onerror = () => toast("Could not understand the audio", "err");
     r.start();
   });
 
   // ------------------------------------------------------------ boot
-  chat("ai", "Salam! Main aap ka auto-trade assistant hoon. 'help' likh kar commands dekhein. Trades hamesha confirm window ke zariye lagti hain.");
+  chat("ai", "Hi! I'm your auto-trade assistant. Type \"help\" to see what I can do. Trades are always placed through a confirmation window.");
   initChart();
   refresh().then(() => selectCoin(S.selected));
   setInterval(refresh, 5000);
