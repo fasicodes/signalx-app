@@ -2,37 +2,35 @@
 Auto-Trade Bot (Binance) - SignalX / Signals FM
 ================================================
 
-Ye module "Auto-Trade" feature ko REAL banata hai. Purana HTML mockup sirf
-random numbers dikhata tha; ye module:
+Turns the old HTML auto-trade mockup into a real, risk-controlled bot.
 
-  1. User ki Binance API keys SERVER par ENCRYPTED save karta hai
-     (browser/localStorage mein kabhi nahi).
-  2. Binance se asal balance, asal price aur asal market orders (ccxt) use
-     karta hai - Demo Trading (risk-free) ya Live.
-  3. Trade ka faisla SignalX ke apne signal engine (generate_signal ->
-     final_verdict + confidence_pct) se leta hai, random se nahi.
-  4. Har trade par Stop-Loss + Take-Profit, risk-based position size,
-     max open positions, rozana loss limit aur leverage cap lagata hai.
-  5. Ek background engine (thread) positions monitor karta hai aur
-     SL/TP hit hone par position band karta hai. Futures par exchange ke
-     upar ek "backup stop" bhi lagta hai, taake server band ho jaye tab
-     bhi nuqsan mehdood rahe.
-  6. Emergency "Stop All" (panic) button: bot band + saari positions close.
+  1. Each user can connect TWO Binance accounts: "demo" (Binance Demo
+     Trading, no real money) and "live" (real funds). Each account has its
+     own bot switch, settings, positions, history and log, so both bots can
+     run at the same time, independently.
+  2. API keys are stored ENCRYPTED on the server (never in the browser).
+  3. Real balances, prices and market orders via ccxt.
+  4. Trade decisions come from SignalX's own signal engine
+     (generate_signal -> final_verdict + confidence_pct), never random.
+  5. Every trade gets a Stop-Loss + Take-Profit, risk-based position size,
+     max open positions, a daily loss limit and a leverage cap.
+  6. A background engine monitors positions and closes them when SL/TP is
+     hit. On futures a "backup stop" order is also placed on Binance so
+     losses stay limited even if the server goes down.
+  7. Emergency "Stop all": bot off + every open position closed.
 
-ZAROORI ENVIRONMENT VARIABLES
-  AUTOTRADE_ENCRYPTION_KEY  (zaroori) - Fernet key. Banane ka tareeqa:
+ENVIRONMENT VARIABLES
+  AUTOTRADE_ENCRYPTION_KEY  (required) Fernet key. Generate with:
       python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-      Ye key kabhi change na karein, warna saved API keys decrypt nahi hongi.
-  AUTOTRADE_ENGINE          (optional) - "off" kar dein to background bot
-      nahi chalega (sirf manual trades + monitoring band).
-  AUTOTRADE_MONITOR_SEC     (optional) - positions check karne ka waqfa
-      (default 10 seconds).
+      Never change it later, or saved API keys can no longer be decrypted.
+  AUTOTRADE_ENGINE          (optional) "off" disables the background engine.
+  AUTOTRADE_MONITOR_SEC     (optional) position check interval, default 10.
 
-IMPORTANT LIMITATIONS (sach):
-  - Signal engine ki koi walk-forward backtesting nahi hui (main.py ka
-    disclaimer dekhein). Bot profit ki guarantee nahi deta.
-  - Pehle kam az kam 2-4 hafte Binance DEMO mode mein chalayein.
-  - Spot market mein sirf LONG (buy) trades hoti hain; SHORT sirf futures.
+LIMITATIONS
+  - The signal engine has no walk-forward backtest yet (see main.py
+    disclaimer). There is no guarantee of profit.
+  - Run on the Demo account for a few weeks before going live.
+  - Spot = LONG only. SHORT requires USDT-M futures.
 """
 
 import json
@@ -48,7 +46,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 
 from db import get_db_connection
 
-try:  # ccxt requirements.txt mein pehle se hai
+try:  # already in requirements.txt
     import ccxt
 except ImportError:  # pragma: no cover
     ccxt = None
@@ -63,17 +61,18 @@ except ImportError:  # pragma: no cover
 autotrade_bp = Blueprint("autotrade", __name__)
 
 # ---------------------------------------------------------------------------
-# Hard safety limits (server-side - frontend inhein bypass nahi kar sakta)
+# Hard safety limits (enforced server-side)
 # ---------------------------------------------------------------------------
+MODES = ("demo", "live")
 ALLOWED_LEVERAGE = (1, 2, 3, 5, 10, 20)
 TIMEFRAME_SCAN_SEC = {"15m": 180, "1h": 300, "4h": 600}
 TIMEFRAME_MINUTES = {"15m": 15, "1h": 60, "4h": 240}
 MAX_COINS = 8
-SL_MIN_PCT = 0.4           # stop-loss kam az kam 0.4% door
-SL_MAX_PCT = 6.0           # aur zyada se zyada 6%
-SL_FALLBACK_PCT = 1.5      # agar signal se volatility na mile
-LIQ_SAFETY_FRACTION = 0.6  # SL, liquidation distance ke 60% ke andar hona chahiye
-BACKUP_STOP_EXTRA = 0.25   # futures backup stop, SL se 25% aur aage
+SL_MIN_PCT = 0.4           # stop-loss at least 0.4% away
+SL_MAX_PCT = 6.0           # and at most 6%
+SL_FALLBACK_PCT = 1.5      # used when the signal has no volatility figure
+LIQ_SAFETY_FRACTION = 0.6  # SL must sit within 60% of the liquidation distance
+BACKUP_STOP_EXTRA = 0.25   # futures backup stop sits 25% beyond the bot SL
 LOG_RETENTION_DAYS = 14
 
 DEFAULT_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"]
@@ -100,7 +99,7 @@ DEFAULT_SETTINGS = {
 ENGINE_LOCK_NAME = "signalx_autotrade_engine"
 MONITOR_INTERVAL_SEC = max(5, int(os.environ.get("AUTOTRADE_MONITOR_SEC", "10") or 10))
 
-# main.py se inject hone wale functions (circular import se bachne ke liye)
+# Injected from main.py (avoids a circular import)
 _hooks = {
     "get_candles": None,
     "generate_signal": None,
@@ -110,7 +109,7 @@ _hooks = {
 
 
 # ===========================================================================
-# Chhote helpers
+# Small helpers
 # ===========================================================================
 def _utcnow():
     return datetime.utcnow().replace(microsecond=0)
@@ -159,8 +158,12 @@ def _err(message, status=400, **extra):
     return jsonify(payload), status
 
 
+def _label(mode):
+    return "Live" if mode == "live" else "Demo"
+
+
 class _Cursor:
-    """`with _Cursor() as cur:` -> naya connection + cursor, end par close."""
+    """`with _Cursor() as cur:` -> fresh connection + cursor, closed on exit."""
 
     def __enter__(self):
         self.conn = get_db_connection()
@@ -200,19 +203,19 @@ def encryption_ready():
 def _encrypt(text):
     f = _fernet()
     if f is None:
-        raise RuntimeError("AUTOTRADE_ENCRYPTION_KEY set nahi hai")
+        raise RuntimeError("AUTOTRADE_ENCRYPTION_KEY is not set.")
     return f.encrypt(text.encode()).decode()
 
 
 def _decrypt(token):
     f = _fernet()
     if f is None:
-        raise RuntimeError("AUTOTRADE_ENCRYPTION_KEY set nahi hai")
+        raise RuntimeError("AUTOTRADE_ENCRYPTION_KEY is not set.")
     try:
         return f.decrypt(token.encode()).decode()
     except InvalidToken:
-        raise RuntimeError("Saved API keys decrypt nahi ho sakin (encryption key badal gayi?). "
-                           "Binance dobara connect karein.")
+        raise RuntimeError("Saved API keys could not be decrypted (was the encryption key changed?). "
+                           "Please reconnect Binance.")
 
 
 # ===========================================================================
@@ -222,10 +225,10 @@ def init_tables():
     with _Cursor() as cur:
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS autotrade_accounts (
-                user_id INT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS autotrade_exchange_accounts (
+                user_id INT NOT NULL,
+                mode VARCHAR(10) NOT NULL,
                 exchange VARCHAR(20) NOT NULL DEFAULT 'binance',
-                mode VARCHAR(10) NOT NULL DEFAULT 'demo',
                 api_key_enc TEXT NOT NULL,
                 api_secret_enc TEXT NOT NULL,
                 key_hint VARCHAR(16) NULL,
@@ -234,14 +237,16 @@ def init_tables():
                 balance_market VARCHAR(10) NULL,
                 balance_at DATETIME NULL,
                 connected_at DATETIME NULL,
+                PRIMARY KEY (user_id, mode),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             """
         )
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS autotrade_settings (
-                user_id INT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS autotrade_bot_settings (
+                user_id INT NOT NULL,
+                mode VARCHAR(10) NOT NULL,
                 enabled TINYINT(1) NOT NULL DEFAULT 0,
                 market_type VARCHAR(10) NOT NULL DEFAULT 'spot',
                 leverage INT NOT NULL DEFAULT 1,
@@ -259,6 +264,7 @@ def init_tables():
                 day_ref_balance DOUBLE NULL,
                 last_scan_at DATETIME NULL,
                 updated_at DATETIME NULL,
+                PRIMARY KEY (user_id, mode),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             """
@@ -302,6 +308,7 @@ def init_tables():
             CREATE TABLE IF NOT EXISTS autotrade_logs (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 user_id INT NOT NULL,
+                mode VARCHAR(10) NULL,
                 level VARCHAR(10) NOT NULL,
                 message VARCHAR(500) NOT NULL,
                 created_at DATETIME NOT NULL,
@@ -319,19 +326,84 @@ def init_tables():
             )
             """
         )
+    _migrate_v1()
     print("[autotrade] tables ready")
 
 
-def log_event(user_id, level, message, cur=None):
+def _migrate_v1():
+    """The first release kept one account + one settings row per user
+    (tables autotrade_accounts / autotrade_settings, no logs.mode column).
+    Copy that data into the per-account tables once, then rename the old
+    tables so the copy never runs again."""
+    with _Cursor() as cur:
+        try:
+            cur.execute("SELECT mode FROM autotrade_logs LIMIT 1")
+            cur.fetchall()
+        except Exception:
+            cur.execute("ALTER TABLE autotrade_logs ADD COLUMN mode VARCHAR(10) NULL")
+            print("[autotrade] migrated: autotrade_logs.mode added")
+
+    with _Cursor() as cur:
+        try:
+            cur.execute("SELECT * FROM autotrade_accounts")
+            old_accounts = cur.fetchall() or []
+        except Exception:
+            return  # no v1 tables -> nothing to migrate
+        try:
+            cur.execute("SELECT * FROM autotrade_settings")
+            old_settings = {r["user_id"]: r for r in (cur.fetchall() or [])}
+        except Exception:
+            old_settings = {}
+
+        account_mode = {}
+        for a in old_accounts:
+            mode = a.get("mode") if a.get("mode") in MODES else "demo"
+            account_mode[a["user_id"]] = mode
+            cur.execute("SELECT user_id FROM autotrade_exchange_accounts WHERE user_id=%s AND mode=%s",
+                        (a["user_id"], mode))
+            if cur.fetchone() is None:
+                cur.execute(
+                    """INSERT INTO autotrade_exchange_accounts (user_id, mode, exchange, api_key_enc, api_secret_enc,
+                       key_hint, balance_usdt, balance_total_usdt, balance_market, balance_at, connected_at)
+                       VALUES (%s,%s,'binance',%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (a["user_id"], mode, a["api_key_enc"], a["api_secret_enc"], a.get("key_hint"),
+                     a.get("balance_usdt"), a.get("balance_total_usdt"), a.get("balance_market"),
+                     a.get("balance_at"), a.get("connected_at")),
+                )
+        for user_id, s in old_settings.items():
+            mode = account_mode.get(user_id, "demo")
+            cur.execute("SELECT user_id FROM autotrade_bot_settings WHERE user_id=%s AND mode=%s", (user_id, mode))
+            if cur.fetchone() is None:
+                cur.execute(
+                    """INSERT INTO autotrade_bot_settings (user_id, mode, enabled, market_type, leverage, risk_pct,
+                       max_position_usdt, max_open_positions, daily_loss_limit_pct, min_confidence, timeframe,
+                       reward_risk, coins, updated_at)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (user_id, mode, s.get("enabled") or 0, s.get("market_type") or "spot", s.get("leverage") or 1,
+                     s.get("risk_pct") or 1, s.get("max_position_usdt") or 100, s.get("max_open_positions") or 2,
+                     s.get("daily_loss_limit_pct") or 5, s.get("min_confidence") or 65, s.get("timeframe") or "1h",
+                     s.get("reward_risk") or 1.5, s.get("coins"), _utcnow()),
+                )
+        for old, new in (("autotrade_accounts", "autotrade_accounts_v1_migrated"),
+                         ("autotrade_settings", "autotrade_settings_v1_migrated")):
+            try:
+                cur.execute(f"ALTER TABLE {old} RENAME TO {new}")
+            except Exception as e:
+                print(f"[autotrade] could not rename {old}: {e}")
+        print(f"[autotrade] migrated {len(old_accounts)} account(s) from v1 tables")
+
+
+def log_event(user_id, level, message, cur=None, mode=None):
     message = str(message)[:500]
-    sql = "INSERT INTO autotrade_logs (user_id, level, message, created_at) VALUES (%s,%s,%s,%s)"
+    sql = "INSERT INTO autotrade_logs (user_id, mode, level, message, created_at) VALUES (%s,%s,%s,%s,%s)"
+    params = (user_id, mode, level, message, _utcnow())
     try:
         if cur is not None:
-            cur.execute(sql, (user_id, level, message, _utcnow()))
+            cur.execute(sql, params)
         else:
             with _Cursor() as c:
-                c.execute(sql, (user_id, level, message, _utcnow()))
-    except Exception as e:  # logging kabhi engine ko crash na kare
+                c.execute(sql, params)
+    except Exception as e:  # logging must never crash the engine
         print(f"[autotrade] log failed: {e}")
 
 
@@ -355,28 +427,24 @@ def _row_to_settings(row):
     s["max_open_positions"] = int(s["max_open_positions"] or 1)
     for k in ("risk_pct", "max_position_usdt", "daily_loss_limit_pct", "min_confidence", "reward_risk"):
         s[k] = float(s[k])
-    s["paused_until"] = row.get("paused_until")
-    s["pause_reason"] = row.get("pause_reason")
-    s["day_ref_date"] = row.get("day_ref_date")
-    s["day_ref_balance"] = row.get("day_ref_balance")
-    s["last_scan_at"] = row.get("last_scan_at")
+    for k in ("paused_until", "pause_reason", "day_ref_date", "day_ref_balance", "last_scan_at"):
+        s[k] = row.get(k)
     return s
 
 
-def load_settings(user_id, cur=None):
+def load_settings(user_id, mode, cur=None):
     def _q(c):
-        c.execute("SELECT * FROM autotrade_settings WHERE user_id=%s", (user_id,))
+        c.execute("SELECT * FROM autotrade_bot_settings WHERE user_id=%s AND mode=%s", (user_id, mode))
         return c.fetchone()
 
-    row = _q(cur) if cur is not None else None
-    if cur is None:
-        with _Cursor() as c:
-            row = _q(c)
-    return _row_to_settings(row)
+    if cur is not None:
+        return _row_to_settings(_q(cur))
+    with _Cursor() as c:
+        return _row_to_settings(_q(c))
 
 
 def validate_settings(raw, current=None):
-    """Frontend se aaye settings ko check + clamp karta hai.
+    """Checks + clamps settings coming from the browser.
     Returns (clean_dict, error_message_or_None)."""
     cur = dict(current or DEFAULT_SETTINGS)
     raw = raw or {}
@@ -384,23 +452,23 @@ def validate_settings(raw, current=None):
 
     market_type = str(raw.get("market_type", cur["market_type"])).lower()
     if market_type not in ("spot", "futures"):
-        return None, "Market type sirf 'spot' ya 'futures' ho sakta hai."
+        return None, "Market type must be 'spot' or 'futures'."
     clean["market_type"] = market_type
 
     try:
         leverage = int(raw.get("leverage", cur["leverage"]))
     except (TypeError, ValueError):
-        return None, "Leverage ghalat hai."
+        return None, "Invalid leverage."
     if leverage not in ALLOWED_LEVERAGE:
-        return None, f"Leverage in mein se hona chahiye: {', '.join(str(x) for x in ALLOWED_LEVERAGE)}x"
+        return None, f"Leverage must be one of: {', '.join(str(x) for x in ALLOWED_LEVERAGE)}x"
     clean["leverage"] = 1 if market_type == "spot" else leverage
 
     def num(key, lo, hi, label):
         val = _f(raw.get(key, cur[key]))
         if val is None:
-            raise ValueError(f"{label} ghalat hai.")
+            raise ValueError(f"{label} is invalid.")
         if val < lo or val > hi:
-            raise ValueError(f"{label} {lo} aur {hi} ke darmiyan hona chahiye.")
+            raise ValueError(f"{label} must be between {lo:g} and {hi:g}.")
         return val
 
     try:
@@ -415,12 +483,12 @@ def validate_settings(raw, current=None):
 
     timeframe = str(raw.get("timeframe", cur["timeframe"]))
     if timeframe not in TIMEFRAME_SCAN_SEC:
-        return None, "Timeframe sirf 15m, 1h ya 4h ho sakta hai."
+        return None, "Timeframe must be 15m, 1h or 4h."
     clean["timeframe"] = timeframe
 
     coins = raw.get("coins", cur["coins"])
     if not isinstance(coins, list):
-        return None, "Coins list ghalat hai."
+        return None, "Invalid coin list."
     allowed = set(coin_choices())
     picked = []
     for c in coins:
@@ -428,15 +496,15 @@ def validate_settings(raw, current=None):
         if c in allowed and c not in picked:
             picked.append(c)
     if not picked:
-        return None, "Kam az kam ek coin chunein."
+        return None, "Select at least one coin."
     if len(picked) > MAX_COINS:
-        return None, f"Zyada se zyada {MAX_COINS} coins chun sakti hain."
+        return None, f"You can select up to {MAX_COINS} coins."
     clean["coins"] = picked
     return clean, None
 
 
-def save_settings(user_id, clean, cur):
-    cur.execute("SELECT user_id FROM autotrade_settings WHERE user_id=%s", (user_id,))
+def save_settings(user_id, mode, clean, cur):
+    cur.execute("SELECT user_id FROM autotrade_bot_settings WHERE user_id=%s AND mode=%s", (user_id, mode))
     exists = cur.fetchone() is not None
     values = (
         clean["market_type"], clean["leverage"], clean["risk_pct"], clean["max_position_usdt"],
@@ -445,53 +513,52 @@ def save_settings(user_id, clean, cur):
     )
     if exists:
         cur.execute(
-            """UPDATE autotrade_settings SET market_type=%s, leverage=%s, risk_pct=%s,
+            """UPDATE autotrade_bot_settings SET market_type=%s, leverage=%s, risk_pct=%s,
                max_position_usdt=%s, max_open_positions=%s, daily_loss_limit_pct=%s,
                min_confidence=%s, timeframe=%s, reward_risk=%s, coins=%s, updated_at=%s
-               WHERE user_id=%s""",
-            values + (user_id,),
+               WHERE user_id=%s AND mode=%s""",
+            values + (user_id, mode),
         )
     else:
         cur.execute(
-            """INSERT INTO autotrade_settings (market_type, leverage, risk_pct, max_position_usdt,
+            """INSERT INTO autotrade_bot_settings (market_type, leverage, risk_pct, max_position_usdt,
                max_open_positions, daily_loss_limit_pct, min_confidence, timeframe, reward_risk,
-               coins, updated_at, user_id, enabled)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0)""",
-            values + (user_id,),
+               coins, updated_at, user_id, mode, enabled)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0)""",
+            values + (user_id, mode),
         )
 
 
-def _ensure_settings_row(user_id, cur):
-    cur.execute("SELECT user_id FROM autotrade_settings WHERE user_id=%s", (user_id,))
+def _ensure_settings_row(user_id, mode, cur):
+    cur.execute("SELECT user_id FROM autotrade_bot_settings WHERE user_id=%s AND mode=%s", (user_id, mode))
     if cur.fetchone() is None:
-        save_settings(user_id, dict(DEFAULT_SETTINGS), cur)
+        save_settings(user_id, mode, dict(DEFAULT_SETTINGS), cur)
 
 
 # ===========================================================================
-# Pure trading math (unit-testable, koi network/DB nahi)
+# Pure trading math (unit-testable, no network / DB)
 # ===========================================================================
 def plan_levels(side, entry_price, volatility_pct, reward_risk, leverage):
-    """Entry price se Stop-Loss / Take-Profit nikalta hai.
+    """Stop-Loss / Take-Profit from the entry price.
 
-    volatility_pct = signal ka `extreme_volatility_95_pct` (95th percentile
-    candle move, %). Isi ko SL distance banaya jata hai (wahi logic jo
-    main.py ka quantile_volatility() use karta hai), lekin full precision
-    ke sath (main.py 2 decimals par round karta hai jo DOGE/PEPE jaise
-    sastay coins ke liye ghalat ho jata hai).
+    volatility_pct = the signal's `extreme_volatility_95_pct` (95th
+    percentile candle move, %), used as the SL distance - the same idea as
+    main.py's quantile_volatility(), but kept at full precision (main.py
+    rounds to 2 decimals, which breaks for cheap coins like DOGE/PEPE).
     Returns (plan_dict, error_or_None)."""
     if side not in ("LONG", "SHORT"):
-        return None, "Side LONG ya SHORT honi chahiye."
+        return None, "Side must be LONG or SHORT."
     entry_price = _f(entry_price)
     if not entry_price or entry_price <= 0:
-        return None, "Price nahi mila."
+        return None, "Price not available."
     vol = _f(volatility_pct)
     sl_pct = _clamp(vol if vol and vol > 0 else SL_FALLBACK_PCT, SL_MIN_PCT, SL_MAX_PCT)
     leverage = int(leverage or 1)
     if leverage > 1:
         liq_pct = 100.0 / leverage
         if sl_pct > liq_pct * LIQ_SAFETY_FRACTION:
-            return None, (f"{leverage}x leverage par stop-loss ({sl_pct:.2f}%) liquidation ke bohat qareeb hai. "
-                          f"Leverage kam karein.")
+            return None, (f"At {leverage}x leverage the stop-loss ({sl_pct:.2f}%) is too close to liquidation. "
+                          f"Lower the leverage.")
     tp_pct = sl_pct * float(reward_risk or 1.5)
     if side == "LONG":
         sl = entry_price * (1 - sl_pct / 100)
@@ -503,7 +570,7 @@ def plan_levels(side, entry_price, volatility_pct, reward_risk, leverage):
 
 
 def size_position(free_usdt, risk_pct, sl_pct, max_position_usdt, leverage, market_type):
-    """Risk-based sizing: agar SL hit ho to nuqsan ~ (risk_pct % of balance).
+    """Risk-based sizing: if SL is hit, the loss is ~risk_pct % of balance.
     Returns (notional_usdt, risk_usdt)."""
     free_usdt = max(0.0, _f(free_usdt, 0.0))
     risk_usdt = free_usdt * float(risk_pct) / 100.0
@@ -544,15 +611,15 @@ def level_hit(side, price, stop_loss, take_profit):
 
 
 # ===========================================================================
-# Binance client (ccxt wrapper)
+# Binance client (thin ccxt wrapper)
 # ===========================================================================
 class BinanceClient:
-    """ccxt.binance ka patla wrapper. Sirf yahi class network par jati hai,
-    baaqi engine isi ke methods use karta hai (tests mein fake class)."""
+    """The only class that talks to the network. The engine uses only these
+    methods, which makes it testable with a fake client."""
 
     def __init__(self, api_key, secret, mode, market_type):
         if ccxt is None:
-            raise RuntimeError("ccxt library install nahi hai (pip install ccxt).")
+            raise RuntimeError("The ccxt library is not installed (pip install ccxt).")
         self.mode = mode
         self.market_type = market_type
         options = {
@@ -567,8 +634,8 @@ class BinanceClient:
             "options": options,
         })
         if mode == "demo":
-            # Binance ne Futures "testnet" ko "Demo Trading" se replace kar diya
-            # hai; naye ccxt versions mein enable_demo_trading() hai.
+            # Binance replaced the futures testnet with "Demo Trading";
+            # recent ccxt versions expose enable_demo_trading().
             if hasattr(self.ex, "enable_demo_trading"):
                 self.ex.enable_demo_trading(True)
             else:
@@ -622,7 +689,7 @@ class BinanceClient:
         return _f((bal.get(base) or {}).get("free"), 0.0)
 
     def api_restrictions(self):
-        """Live account ki API permissions (withdrawal enabled hai ya nahi)."""
+        """Live account API permissions (is withdrawal enabled?)."""
         try:
             return self.ex.sapi_get_account_apirestrictions()
         except Exception:
@@ -654,17 +721,17 @@ class BinanceClient:
     def prepare_futures(self, symbol, leverage):
         s = self.sym(symbol)
         try:
-            self.ex.set_position_mode(False)  # One-way mode (hedge mode nahi)
+            self.ex.set_position_mode(False)  # one-way mode (not hedge mode)
         except Exception:
             pass
         try:
             self.ex.set_margin_mode("isolated", s)
         except Exception:
-            pass  # pehle se isolated ho to Binance error deta hai
+            pass  # Binance errors if it is already isolated
         self.ex.set_leverage(int(leverage), s)
 
     def futures_positions(self, symbols):
-        """{ 'BTC/USDT': contracts } - sirf jin ki position khuli hai."""
+        """{ 'BTC/USDT': contracts } for symbols with an open position."""
         out = {}
         if not symbols:
             return out
@@ -740,15 +807,15 @@ def get_client(account, market_type):
     return client
 
 
-def _drop_clients(user_id):
+def _drop_clients(user_id, mode):
     with _client_cache_lock:
-        for k in [k for k in _client_cache if k[0] == user_id]:
+        for k in [k for k in _client_cache if k[0] == user_id and k[1] == mode]:
             _client_cache.pop(k, None)
 
 
-def load_account(user_id, cur=None):
+def load_account(user_id, mode, cur=None):
     def _q(c):
-        c.execute("SELECT * FROM autotrade_accounts WHERE user_id=%s", (user_id,))
+        c.execute("SELECT * FROM autotrade_exchange_accounts WHERE user_id=%s AND mode=%s", (user_id, mode))
         return c.fetchone()
 
     if cur is not None:
@@ -761,15 +828,19 @@ def _friendly_exchange_error(e):
     name = type(e).__name__
     text = str(e)
     if "451" in text or "restricted location" in text.lower():
-        return ("Binance is server ki location (country) se API access block karta hai. "
-                "Server ko kisi aur region (non-US) mein deploy karein.")
+        return ("Binance blocks API access from this server's country. "
+                "Deploy the server in a non-US region.")
     if name in ("AuthenticationError",) or "API-key" in text or "Invalid Api-Key" in text or "-2015" in text:
-        return "API key/secret ghalat hai, ya is key ko is account type (Spot/Futures) ki permission nahi hai."
+        return "Invalid API key/secret, or this key has no permission for this market (Spot/Futures)."
     if name == "InsufficientFunds" or "insufficient" in text.lower():
-        return "Binance account mein kaafi USDT balance nahi hai."
+        return "Not enough USDT balance on the Binance account."
     if name in ("NetworkError", "RequestTimeout", "ExchangeNotAvailable", "DDoSProtection"):
-        return "Binance se connection nahi ho saka (network/timeout). Thori der baad dobara try karein."
+        return "Could not reach Binance (network/timeout). Please try again shortly."
     return f"Binance error: {text[:180]}"
+
+
+def _error_text(e):
+    return str(e) if isinstance(e, (RuntimeError,)) else _friendly_exchange_error(e)
 
 
 # ===========================================================================
@@ -780,9 +851,9 @@ _signal_cache_lock = threading.Lock()
 
 
 def get_signal(symbol, timeframe, max_age_sec=300):
-    """SignalX ka apna generate_signal() chalata hai. Verdict/confidence
-    sirf Hawkes+Bayesian (Conformal) se bante hain jo order-book par depend
-    nahi karte, is liye include_orderbook=False (halka aur tez)."""
+    """Runs SignalX's own generate_signal(). The verdict/confidence come
+    only from Hawkes + Bayesian (Conformal), which do not depend on the
+    order book, so include_orderbook=False (lighter and faster)."""
     key = (symbol, timeframe)
     now = time.time()
     with _signal_cache_lock:
@@ -792,7 +863,7 @@ def get_signal(symbol, timeframe, max_age_sec=300):
     get_candles = _hooks.get("get_candles")
     generate_signal = _hooks.get("generate_signal")
     if not get_candles or not generate_signal:
-        raise RuntimeError("Signal engine available nahi hai.")
+        raise RuntimeError("Signal engine is not available.")
     df = get_candles(symbol=symbol, timeframe=timeframe, limit=200)
     res = generate_signal(df, symbol=symbol, include_orderbook=False)
     summary = {
@@ -811,55 +882,58 @@ def get_signal(symbol, timeframe, max_age_sec=300):
 
 
 # ===========================================================================
-# Open / close positions (engine + routes dono yahi use karte hain)
+# Open / close positions (shared by the engine and the routes)
 # ===========================================================================
 class TradeError(Exception):
     pass
 
 
-def _open_positions(user_id, cur):
+def _open_positions(user_id, mode, cur):
     cur.execute(
-        "SELECT * FROM autotrade_positions WHERE user_id=%s AND status IN ('OPEN','CLOSING') ORDER BY opened_at",
-        (user_id,),
+        """SELECT * FROM autotrade_positions WHERE user_id=%s AND mode=%s AND status IN ('OPEN','CLOSING')
+           ORDER BY opened_at""",
+        (user_id, mode),
     )
     return cur.fetchall() or []
 
 
-def _store_balance(user_id, free, total, market_type, cur):
+def _store_balance(user_id, mode, free, total, market_type, cur):
     cur.execute(
-        "UPDATE autotrade_accounts SET balance_usdt=%s, balance_total_usdt=%s, balance_market=%s, balance_at=%s WHERE user_id=%s",
-        (free, total, market_type, _utcnow(), user_id),
+        """UPDATE autotrade_exchange_accounts SET balance_usdt=%s, balance_total_usdt=%s, balance_market=%s,
+           balance_at=%s WHERE user_id=%s AND mode=%s""",
+        (free, total, market_type, _utcnow(), user_id, mode),
     )
 
 
 def open_position(user_id, account, settings, symbol, side, signal=None, source="BOT", dry_run=False):
-    """Market order se nayi position kholta hai (SL/TP ke sath).
-    dry_run=True -> sirf plan/size return karta hai, order nahi lagata."""
+    """Opens a new position with a market order (with SL/TP).
+    dry_run=True -> returns only the plan/size, places no order."""
+    mode = account["mode"]
     market_type = settings["market_type"]
     leverage = int(settings["leverage"]) if market_type == "futures" else 1
     if side not in ("LONG", "SHORT"):
-        raise TradeError("Side LONG ya SHORT honi chahiye.")
+        raise TradeError("Side must be LONG or SHORT.")
     if market_type == "spot" and side == "SHORT":
-        raise TradeError("Spot market mein SHORT nahi ho sakta. Short ke liye Futures chunein.")
+        raise TradeError("SHORT is not possible on spot. Choose Futures in the bot settings.")
 
     with _Cursor() as cur:
-        existing = _open_positions(user_id, cur)
+        existing = _open_positions(user_id, mode, cur)
     if any(p["symbol"] == symbol for p in existing):
-        raise TradeError(f"{symbol} par pehle se ek position khuli hai.")
+        raise TradeError(f"A position on {symbol} is already open.")
     if len(existing) >= int(settings["max_open_positions"]):
-        raise TradeError(f"Max open positions ({settings['max_open_positions']}) poori ho chuki hain.")
+        raise TradeError(f"Max open positions ({settings['max_open_positions']}) reached.")
 
     client = get_client(account, market_type)
     try:
         if not client.has_symbol(symbol):
-            raise TradeError(f"Binance {market_type} par {symbol} market nahi mila.")
+            raise TradeError(f"{symbol} is not available on Binance {market_type}.")
         free, total = client.balance_usdt()
         price = client.price(symbol)
         rules = client.market_rules(symbol)
     except TradeError:
         raise
     except Exception as e:
-        raise TradeError(_friendly_exchange_error(e))
+        raise TradeError(_error_text(e))
 
     vol = (signal or {}).get("volatility_pct")
     plan, err = plan_levels(side, price, vol, settings["reward_risk"], leverage)
@@ -871,8 +945,8 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
     min_cost = max(rules["min_cost"], 5.0)
     if amount <= 0 or amount < rules["min_amount"] or amount * price < min_cost:
         raise TradeError(
-            f"Trade size bohat chhota hai ({amount * price:.2f} USDT). Binance minimum ~{min_cost:.2f} USDT hai - "
-            f"balance barhayein ya Risk %/Max position barhayein."
+            f"Trade size is too small ({amount * price:.2f} USDT). Binance minimum is about {min_cost:.2f} USDT - "
+            f"add balance or raise Risk % / Max position."
         )
 
     preview = {
@@ -882,7 +956,7 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
         "stop_loss": client.price_to_precision(symbol, plan["stop_loss"]),
         "take_profit": client.price_to_precision(symbol, plan["take_profit"]),
         "sl_pct": plan["sl_pct"], "tp_pct": plan["tp_pct"], "free_usdt": round(free, 2),
-        "mode": account["mode"],
+        "mode": mode,
     }
     if dry_run:
         return preview
@@ -892,11 +966,11 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
             client.prepare_futures(symbol, leverage)
         order = client.market_order(symbol, "buy" if side == "LONG" else "sell", amount)
     except Exception as e:
-        raise TradeError(_friendly_exchange_error(e))
+        raise TradeError(_error_text(e))
 
     fill = order["average"] or price
     filled = order["filled"] or amount
-    plan, _ = plan_levels(side, fill, vol, settings["reward_risk"], 1)  # actual fill se levels
+    plan, _ = plan_levels(side, fill, vol, settings["reward_risk"], 1)  # levels from the actual fill
     sl = client.price_to_precision(symbol, plan["stop_loss"])
     tp = client.price_to_precision(symbol, plan["take_profit"])
     now = _utcnow()
@@ -907,23 +981,23 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
                    entry_price, stop_loss, take_profit, leverage, notional_usdt, fee_rate, confidence, status,
                    entry_order_id, last_price, unrealized_pnl, opened_at, status_changed_at)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'OPEN',%s,%s,0,%s,%s)""",
-                (user_id, account["mode"], market_type, symbol, side, source, filled, fill, sl, tp, leverage,
+                (user_id, mode, market_type, symbol, side, source, filled, fill, sl, tp, leverage,
                  round(filled * fill, 4), rules["taker"], (signal or {}).get("confidence"), order["id"],
                  fill, now, now),
             )
             position_id = cur.lastrowid
             try:
                 free2, total2 = client.balance_usdt()
-                _store_balance(user_id, free2, total2, market_type, cur)
+                _store_balance(user_id, mode, free2, total2, market_type, cur)
             except Exception:
                 pass
     except Exception as db_err:
-        # Order lag gaya lekin DB mein save nahi hua -> foran wapas band karo
+        # The order went through but could not be saved -> close it right away
         try:
             client.market_order(symbol, "sell" if side == "LONG" else "buy", filled, reduce_only=True)
         except Exception:
             pass
-        raise TradeError(f"Position save nahi ho saki, order wapas band kar diya gaya: {db_err}")
+        raise TradeError(f"Position could not be saved, so the order was closed again: {db_err}")
 
     if market_type == "futures":
         dist = abs(fill - sl)
@@ -934,20 +1008,21 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
             with _Cursor() as cur:
                 cur.execute("UPDATE autotrade_positions SET backup_stop_id=%s WHERE id=%s", (stop_id, position_id))
         except Exception as e:
-            log_event(user_id, "WARN", f"{symbol}: Binance par backup stop nahi lag saka ({type(e).__name__}). "
-                                       f"Bot khud SL monitor karega.")
+            log_event(user_id, "WARN", f"{symbol}: backup stop could not be placed on Binance "
+                                       f"({type(e).__name__}). The bot will monitor the SL itself.", mode=mode)
 
     conf = (signal or {}).get("confidence")
     conf_txt = f", signal {conf:.0f}%" if conf else ""
     log_event(user_id, "TRADE",
-              f"OPEN {side} {symbol} {filled:g} @ {fill:g} ({leverage}x{conf_txt}) | SL {sl:g} | TP {tp:g} [{source}]")
+              f"OPEN {side} {symbol} {filled:g} @ {fill:g} ({leverage}x{conf_txt}) | SL {sl:g} | TP {tp:g} [{source}]",
+              mode=mode)
     preview.update({"id": position_id, "entry_price": fill, "amount": filled, "stop_loss": sl, "take_profit": tp})
     return preview
 
 
 def _claim(position_id, from_status=("OPEN",)):
-    """Position ko atomically 'CLOSING' mark karta hai taake engine aur
-    user ka click dono ek sath close na karein. True = humne claim kiya."""
+    """Atomically marks a position 'CLOSING' so the engine and a user click
+    never close it twice. True = we own the close."""
     placeholders = ",".join(["%s"] * len(from_status))
     with _Cursor() as cur:
         cur.execute(
@@ -974,29 +1049,29 @@ def _finalize(pos, exit_price, reason, client=None):
         if client is not None:
             try:
                 free, total = client.balance_usdt()
-                _store_balance(pos["user_id"], free, total, pos["market_type"], cur)
+                _store_balance(pos["user_id"], pos["mode"], free, total, pos["market_type"], cur)
             except Exception:
                 pass
     sign = "+" if pnl >= 0 else ""
     log_event(pos["user_id"], "TRADE",
-              f"CLOSE {pos['side']} {pos['symbol']} @ {exit_price:g} | PnL {sign}{pnl:.2f} USDT [{reason}]")
+              f"CLOSE {pos['side']} {pos['symbol']} @ {exit_price:g} | PnL {sign}{pnl:.2f} USDT [{reason}]",
+              mode=pos["mode"])
     return pnl
 
 
 def close_position(pos, account, reason, price_hint=None, already_claimed=False):
-    """Position market order se band karta hai. Returns pnl (float)."""
+    """Closes a position with a market order. Returns pnl (float)."""
     if not already_claimed and not _claim(pos["id"]):
-        raise TradeError("Ye position pehle hi band ho rahi hai.")
+        raise TradeError("This position is already being closed.")
     try:
         client = get_client(account, pos["market_type"])
         symbol = pos["symbol"]
         close_side = "sell" if pos["side"] == "LONG" else "buy"
-        exit_price = None
         if pos["market_type"] == "futures":
-            client.cancel_all(symbol)  # backup stop hata do
+            client.cancel_all(symbol)  # remove the backup stop
             qty = client.futures_positions([symbol]).get(symbol, 0.0)
             if qty <= 0:
-                # Binance par pehle hi band (backup stop trigger / user ne khud band ki)
+                # Already closed on Binance (backup stop fired, or closed by hand)
                 exit_price = (client.order_average(pos["backup_stop_id"], symbol) if pos.get("backup_stop_id") else None)
                 exit_price = exit_price or price_hint or client.price(symbol)
                 return _finalize(pos, exit_price, "EXCHANGE", client)
@@ -1008,15 +1083,15 @@ def close_position(pos, account, reason, price_hint=None, already_claimed=False)
             price_now = price_hint or client.price(symbol)
             rules = client.market_rules(symbol)
             if amount <= 0 or amount * price_now < max(rules["min_cost"], 1.0):
-                # coin wallet mein hai hi nahi (user ne Binance par khud bech diya)
+                # The coin is no longer in the wallet (sold manually on Binance)
                 return _finalize(pos, price_now, "EXTERNAL", client)
             order = client.market_order(symbol, "sell", amount)
         exit_price = order["average"] or price_hint or client.price(symbol)
         return _finalize(pos, exit_price, reason, client)
     except Exception as e:
         _release(pos["id"])
-        msg = str(e) if isinstance(e, TradeError) else _friendly_exchange_error(e)
-        log_event(pos["user_id"], "ERROR", f"{pos['symbol']} close nahi ho saki: {msg}")
+        msg = str(e) if isinstance(e, TradeError) else _error_text(e)
+        log_event(pos["user_id"], "ERROR", f"Could not close {pos['symbol']}: {msg}", mode=pos["mode"])
         raise TradeError(msg)
 
 
@@ -1028,12 +1103,12 @@ _engine_start_lock = threading.Lock()
 _error_throttle = {}
 
 
-def _throttled_log(user_id, level, message, every_sec=600):
-    key = (user_id, message[:80])
+def _throttled_log(user_id, mode, level, message, every_sec=600):
+    key = (user_id, mode, message[:80])
     now = time.time()
     if now - _error_throttle.get(key, 0) >= every_sec:
         _error_throttle[key] = now
-        log_event(user_id, level, message)
+        log_event(user_id, level, message, mode=mode)
 
 
 def _heartbeat():
@@ -1047,8 +1122,8 @@ def _heartbeat():
 
 
 def recover_stuck_positions():
-    """Agar server close karte waqt band ho gaya ho to 'CLOSING' wali
-    positions wapas 'OPEN' kar do - monitor unhein dobara check karega."""
+    """If the server died mid-close, put 'CLOSING' positions back to 'OPEN'
+    so the monitor checks them again."""
     cutoff = _utcnow() - timedelta(minutes=2)
     with _Cursor() as cur:
         cur.execute("UPDATE autotrade_positions SET status='OPEN' WHERE status='CLOSING' AND status_changed_at < %s",
@@ -1059,13 +1134,13 @@ def monitor_positions():
     with _Cursor() as cur:
         cur.execute("SELECT * FROM autotrade_positions WHERE status='OPEN'")
         rows = cur.fetchall() or []
-    by_user = {}
+    groups = {}
     for r in rows:
-        by_user.setdefault(r["user_id"], []).append(r)
+        groups.setdefault((r["user_id"], r["mode"]), []).append(r)
 
-    for user_id, positions in by_user.items():
+    for (user_id, mode), positions in groups.items():
         try:
-            account = load_account(user_id)
+            account = load_account(user_id, mode)
             if not account:
                 continue
             for market_type in ("spot", "futures"):
@@ -1080,13 +1155,13 @@ def monitor_positions():
                     _check_position(pos, account, client, prices.get(pos["symbol"]), live_futures)
         except Exception as e:
             msg = str(e) if isinstance(e, (TradeError, RuntimeError)) else _friendly_exchange_error(e)
-            _throttled_log(user_id, "ERROR", f"Position monitor error: {msg}")
+            _throttled_log(user_id, mode, "ERROR", f"Position monitor error: {msg}")
 
 
 def _check_position(pos, account, client, price, live_futures):
     age = (_utcnow() - (_to_dt(pos["opened_at"]) or _utcnow())).total_seconds()
     if live_futures is not None and age > 60 and live_futures.get(pos["symbol"], 0.0) <= 0:
-        # Binance par position ab mojood nahi -> backup stop chal gaya ya user ne khud band ki
+        # Position no longer exists on Binance -> backup stop fired or closed by hand
         if _claim(pos["id"]):
             try:
                 exit_price = (client.order_average(pos["backup_stop_id"], pos["symbol"])
@@ -1111,68 +1186,71 @@ def _check_position(pos, account, client, price, live_futures):
             pass  # already logged
 
 
-def _realized_today(user_id, cur):
+def _realized_today(user_id, mode, cur):
     start = _utcnow().replace(hour=0, minute=0, second=0)
     cur.execute(
-        "SELECT COALESCE(SUM(pnl_usdt),0) AS s FROM autotrade_positions WHERE user_id=%s AND status='CLOSED' AND closed_at >= %s",
-        (user_id, start),
+        """SELECT COALESCE(SUM(pnl_usdt),0) AS s FROM autotrade_positions
+           WHERE user_id=%s AND mode=%s AND status='CLOSED' AND closed_at >= %s""",
+        (user_id, mode, start),
     )
     row = cur.fetchone() or {}
     return _f(row.get("s"), 0.0)
 
 
-def _daily_guard(user_id, settings, client):
-    """Rozana loss limit check. True = naye trades allowed."""
+def _daily_guard(user_id, mode, settings, client):
+    """Daily loss limit check. True = new trades allowed."""
     today = _utcnow().strftime("%Y-%m-%d")
     with _Cursor() as cur:
         if settings.get("day_ref_date") != today or not settings.get("day_ref_balance"):
             free, total = client.balance_usdt()
             ref = total or free
-            cur.execute("UPDATE autotrade_settings SET day_ref_date=%s, day_ref_balance=%s WHERE user_id=%s",
-                        (today, ref, user_id))
+            cur.execute("UPDATE autotrade_bot_settings SET day_ref_date=%s, day_ref_balance=%s WHERE user_id=%s AND mode=%s",
+                        (today, ref, user_id, mode))
             settings["day_ref_balance"] = ref
             settings["day_ref_date"] = today
-        realized = _realized_today(user_id, cur)
+        realized = _realized_today(user_id, mode, cur)
         limit_usdt = float(settings["day_ref_balance"] or 0) * float(settings["daily_loss_limit_pct"]) / 100.0
         if limit_usdt > 0 and realized <= -limit_usdt:
             tomorrow = (_utcnow() + timedelta(days=1)).replace(hour=0, minute=0, second=0)
-            cur.execute("UPDATE autotrade_settings SET paused_until=%s, pause_reason=%s WHERE user_id=%s",
-                        (tomorrow, "Daily loss limit", user_id))
+            cur.execute("UPDATE autotrade_bot_settings SET paused_until=%s, pause_reason=%s WHERE user_id=%s AND mode=%s",
+                        (tomorrow, "Daily loss limit", user_id, mode))
             log_event(user_id, "WARN",
-                      f"Aaj ka loss limit ({settings['daily_loss_limit_pct']}% = {limit_usdt:.2f} USDT) poora ho gaya. "
-                      f"Bot kal (UTC 00:00) tak naye trades nahi lega.", cur)
+                      f"Daily loss limit reached ({settings['daily_loss_limit_pct']}% = {limit_usdt:.2f} USDT). "
+                      f"No new trades until 00:00 UTC.", cur, mode=mode)
             return False
     return True
 
 
-def scan_user(user_id, between_coins=None):
-    """Ek user ke liye: signals check karo aur conditions poori hon to trade lo."""
-    settings = load_settings(user_id)
-    account = load_account(user_id)
+def scan_user(user_id, mode, between_coins=None):
+    """For one user's bot on one account: check signals and trade when all
+    conditions are met."""
+    settings = load_settings(user_id, mode)
+    account = load_account(user_id, mode)
     if not settings["enabled"] or not account:
         return
     with _Cursor() as cur:
-        cur.execute("UPDATE autotrade_settings SET last_scan_at=%s WHERE user_id=%s", (_utcnow(), user_id))
+        cur.execute("UPDATE autotrade_bot_settings SET last_scan_at=%s WHERE user_id=%s AND mode=%s",
+                    (_utcnow(), user_id, mode))
     paused_until = _to_dt(settings.get("paused_until"))
     if paused_until and paused_until > _utcnow():
         return
 
     try:
         client = get_client(account, settings["market_type"])
-        if not _daily_guard(user_id, settings, client):
+        if not _daily_guard(user_id, mode, settings, client):
             return
     except Exception as e:
-        msg = str(e) if isinstance(e, RuntimeError) else _friendly_exchange_error(e)
-        _throttled_log(user_id, "ERROR", f"Scan ruk gaya: {msg}")
+        _throttled_log(user_id, mode, "ERROR", f"Scan stopped: {_error_text(e)}")
         return
 
     tf = settings["timeframe"]
     cooldown = timedelta(minutes=TIMEFRAME_MINUTES[tf])
     with _Cursor() as cur:
-        open_now = _open_positions(user_id, cur)
+        open_now = _open_positions(user_id, mode, cur)
         cur.execute(
-            "SELECT symbol, MAX(closed_at) AS last_closed FROM autotrade_positions WHERE user_id=%s AND status='CLOSED' GROUP BY symbol",
-            (user_id,),
+            """SELECT symbol, MAX(closed_at) AS last_closed FROM autotrade_positions
+               WHERE user_id=%s AND mode=%s AND status='CLOSED' GROUP BY symbol""",
+            (user_id, mode),
         )
         last_closed = {r["symbol"]: _to_dt(r["last_closed"]) for r in (cur.fetchall() or [])}
     open_symbols = {p["symbol"] for p in open_now}
@@ -1184,7 +1262,7 @@ def scan_user(user_id, between_coins=None):
             between_coins()
         short = symbol.split("/")[0]
         if symbol in open_symbols:
-            notes.append(f"{short}: position khuli")
+            notes.append(f"{short}: position open")
             continue
         lc = last_closed.get(symbol)
         if lc and _utcnow() - lc < cooldown:
@@ -1197,17 +1275,17 @@ def scan_user(user_id, between_coins=None):
             sig = get_signal(symbol, tf, max_age_sec=TIMEFRAME_SCAN_SEC[tf] - 10)
         except Exception as e:
             notes.append(f"{short}: signal error")
-            _throttled_log(user_id, "ERROR", f"{symbol} signal nahi mila: {str(e)[:120]}")
+            _throttled_log(user_id, mode, "ERROR", f"No signal for {symbol}: {str(e)[:120]}")
             continue
         verdict, conf = sig.get("verdict"), sig.get("confidence") or 0.0
         if verdict not in ("LONG", "SHORT"):
             notes.append(f"{short}: WAIT {conf:.0f}%")
             continue
         if conf < settings["min_confidence"]:
-            notes.append(f"{short}: {verdict} {conf:.0f}% (kam confidence)")
+            notes.append(f"{short}: {verdict} {conf:.0f}% (low confidence)")
             continue
         if settings["market_type"] == "spot" and verdict == "SHORT":
-            notes.append(f"{short}: SHORT {conf:.0f}% (spot mein short nahi)")
+            notes.append(f"{short}: SHORT {conf:.0f}% (no shorts on spot)")
             continue
         try:
             open_position(user_id, account, settings, symbol, verdict, signal=sig, source="BOT")
@@ -1215,16 +1293,17 @@ def scan_user(user_id, between_coins=None):
             open_symbols.add(symbol)
             notes.append(f"{short}: {verdict} {conf:.0f}% -> TRADE")
         except TradeError as e:
-            notes.append(f"{short}: {verdict} {conf:.0f}% (skip)")
-            _throttled_log(user_id, "WARN", f"{symbol} trade nahi li: {e}", every_sec=1800)
-    log_event(user_id, "SCAN", f"Scan {tf}: " + " | ".join(notes))
+            notes.append(f"{short}: {verdict} {conf:.0f}% (skipped)")
+            _throttled_log(user_id, mode, "WARN", f"{symbol} trade skipped: {e}", every_sec=1800)
+    log_event(user_id, "SCAN", f"Scan {tf}: " + " | ".join(notes), mode=mode)
 
 
-def _due_users():
+def _due_bots():
     with _Cursor() as cur:
         cur.execute(
-            """SELECT s.user_id, s.timeframe, s.last_scan_at FROM autotrade_settings s
-               JOIN autotrade_accounts a ON a.user_id = s.user_id WHERE s.enabled = 1"""
+            """SELECT s.user_id, s.mode, s.timeframe, s.last_scan_at FROM autotrade_bot_settings s
+               JOIN autotrade_exchange_accounts a ON a.user_id = s.user_id AND a.mode = s.mode
+               WHERE s.enabled = 1"""
         )
         rows = cur.fetchall() or []
     now = _utcnow()
@@ -1233,7 +1312,7 @@ def _due_users():
         last = _to_dt(r.get("last_scan_at"))
         interval = TIMEFRAME_SCAN_SEC.get(r.get("timeframe"), 300)
         if last is None or (now - last).total_seconds() >= interval:
-            due.append(r["user_id"])
+            due.append((r["user_id"], r["mode"]))
     return due
 
 
@@ -1262,13 +1341,13 @@ def _engine_loop(lock_conn):
             _safe(monitor_positions)
 
     while True:
-        lock_conn.ping(reconnect=False)  # lock wala connection toot jaye -> exception -> lock dobara lo
+        lock_conn.ping(reconnect=False)  # lost lock connection -> exception -> re-acquire the lock
         maybe_monitor()
         now = time.time()
         if now - state["last_scan_check"] >= 30:
             state["last_scan_check"] = now
-            for uid in _safe(_due_users) or []:
-                _safe(scan_user, uid, between_coins=maybe_monitor)
+            for uid, mode in _safe(_due_bots) or []:
+                _safe(scan_user, uid, mode, between_coins=maybe_monitor)
         if now - state["last_prune"] >= 6 * 3600:
             state["last_prune"] = now
             _safe(prune_logs)
@@ -1287,7 +1366,7 @@ def _engine_supervisor():
             if got != 1:
                 lock_conn.close()
                 lock_conn = None
-                time.sleep(30)  # koi aur worker/instance engine chala raha hai
+                time.sleep(30)  # another worker/instance runs the engine
                 continue
             print(f"[autotrade] engine started on {socket.gethostname()} (monitor every {MONITOR_INTERVAL_SEC}s)")
             _engine_loop(lock_conn)
@@ -1316,8 +1395,8 @@ def start_engine():
 
 def init_autotrade(app=None, *, get_candles=None, generate_signal=None, data_exchange=None,
                    available_coins=None, start=True):
-    """main.py se call hota hai. Signal functions inject karta hai, tables
-    banata hai aur background engine start karta hai."""
+    """Called from main.py. Injects the signal functions, creates tables and
+    starts the background engine."""
     if get_candles and not _hooks["get_candles"]:
         _hooks["get_candles"] = get_candles
     if generate_signal and not _hooks["generate_signal"]:
@@ -1329,9 +1408,9 @@ def init_autotrade(app=None, *, get_candles=None, generate_signal=None, data_exc
     try:
         init_tables()
     except Exception as e:
-        print(f"[autotrade] WARNING: tables nahi ban sakin: {e}")
+        print(f"[autotrade] WARNING: could not create tables: {e}")
     if not encryption_ready():
-        print("[autotrade] WARNING: AUTOTRADE_ENCRYPTION_KEY set nahi hai - Binance connect disabled rahega.")
+        print("[autotrade] WARNING: AUTOTRADE_ENCRYPTION_KEY is not set - Binance connect is disabled.")
     if start:
         start_engine()
 
@@ -1362,8 +1441,19 @@ def _settings_json(s):
 # ===========================================================================
 def _require_json_post():
     if not request.is_json:
-        return _err("JSON request zaroori hai.", 415)
+        return _err("A JSON request is required.", 415)
     return None
+
+
+def _req_mode(data=None):
+    """Account ('demo' / 'live') from the JSON body or the query string."""
+    mode = None
+    if data is not None:
+        mode = data.get("account")
+    if not mode:
+        mode = request.args.get("account")
+    mode = str(mode or "").lower()
+    return mode if mode in MODES else None
 
 
 @autotrade_bp.route("/auto-trading", methods=["GET"])
@@ -1380,34 +1470,50 @@ _balance_failures = {}
 def status():
     uid = _user_id()
     if not uid:
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
+    mode = _req_mode()
+    if not mode:
+        return _err("Account must be 'demo' or 'live'.")
     with _Cursor() as cur:
-        _ensure_settings_row(uid, cur)
-        settings = load_settings(uid, cur)
-        account = load_account(uid, cur)
-        cur.execute("SELECT * FROM autotrade_positions WHERE user_id=%s AND status IN ('OPEN','CLOSING') ORDER BY opened_at DESC", (uid,))
+        _ensure_settings_row(uid, mode, cur)
+        settings = load_settings(uid, mode, cur)
+        account = load_account(uid, mode, cur)
+        cur.execute("""SELECT * FROM autotrade_positions WHERE user_id=%s AND mode=%s AND status IN ('OPEN','CLOSING')
+                       ORDER BY opened_at DESC""", (uid, mode))
         open_rows = cur.fetchall() or []
-        cur.execute("SELECT * FROM autotrade_positions WHERE user_id=%s AND status='CLOSED' ORDER BY closed_at DESC LIMIT 25", (uid,))
+        cur.execute("""SELECT * FROM autotrade_positions WHERE user_id=%s AND mode=%s AND status='CLOSED'
+                       ORDER BY closed_at DESC LIMIT 25""", (uid, mode))
         history = cur.fetchall() or []
         cur.execute(
             """SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN pnl_usdt > 0 THEN 1 ELSE 0 END),0) AS wins,
-               COALESCE(SUM(pnl_usdt),0) AS total FROM autotrade_positions WHERE user_id=%s AND status='CLOSED'""",
-            (uid,),
+               COALESCE(SUM(pnl_usdt),0) AS total FROM autotrade_positions
+               WHERE user_id=%s AND mode=%s AND status='CLOSED'""",
+            (uid, mode),
         )
         agg = cur.fetchone() or {}
-        realized_today = _realized_today(uid, cur)
-        cur.execute("SELECT id, level, message, created_at FROM autotrade_logs WHERE user_id=%s ORDER BY id DESC LIMIT 40", (uid,))
+        realized_today = _realized_today(uid, mode, cur)
+        cur.execute("""SELECT id, level, message, created_at FROM autotrade_logs
+                       WHERE user_id=%s AND (mode=%s OR mode IS NULL) ORDER BY id DESC LIMIT 40""", (uid, mode))
         logs = cur.fetchall() or []
         cur.execute("SELECT heartbeat_at FROM autotrade_engine WHERE id=1")
         hb = (cur.fetchone() or {}).get("heartbeat_at")
+        # Summary of both accounts for the account switcher
+        cur.execute("SELECT mode, key_hint FROM autotrade_exchange_accounts WHERE user_id=%s", (uid,))
+        connected = {r["mode"]: r for r in (cur.fetchall() or [])}
+        cur.execute("SELECT mode, enabled FROM autotrade_bot_settings WHERE user_id=%s", (uid,))
+        enabled = {r["mode"]: int(r["enabled"] or 0) for r in (cur.fetchall() or [])}
+        cur.execute("""SELECT mode, COUNT(*) AS n FROM autotrade_positions WHERE user_id=%s AND status IN ('OPEN','CLOSING')
+                       GROUP BY mode""", (uid,))
+        open_counts = {r["mode"]: int(r["n"]) for r in (cur.fetchall() or [])}
 
-    # Balance purana ho (90s+) to Binance se taaza le lo. Fail hone par 60s
-    # tak dobara try nahi karte (har 5s poll par Binance ko spam na karein).
+    # Refresh the balance from Binance if older than 90s. After a failure,
+    # wait 60s before retrying (do not hammer Binance on every 5s poll).
     if account and encryption_ready():
         bal_at = _to_dt(account.get("balance_at"))
         stale = bal_at is None or (_utcnow() - bal_at).total_seconds() > 90 or \
             account.get("balance_market") != settings["market_type"]
-        recent_fail = _balance_failures.get(uid)
+        fail_key = (uid, mode)
+        recent_fail = _balance_failures.get(fail_key)
         if stale and recent_fail and time.time() - recent_fail[0] < 60:
             account["balance_error"] = recent_fail[1]
         elif stale:
@@ -1415,21 +1521,27 @@ def status():
                 client = get_client(account, settings["market_type"])
                 free, total = client.balance_usdt()
                 with _Cursor() as cur:
-                    _store_balance(uid, free, total, settings["market_type"], cur)
+                    _store_balance(uid, mode, free, total, settings["market_type"], cur)
                 account.update({"balance_usdt": free, "balance_total_usdt": total, "balance_at": _utcnow(),
                                 "balance_market": settings["market_type"]})
-                _balance_failures.pop(uid, None)
+                _balance_failures.pop(fail_key, None)
             except Exception as e:
-                account["balance_error"] = _friendly_exchange_error(e) if not isinstance(e, RuntimeError) else str(e)
-                _balance_failures[uid] = (time.time(), account["balance_error"])
+                account["balance_error"] = _error_text(e)
+                _balance_failures[fail_key] = (time.time(), account["balance_error"])
 
     hb_dt = _to_dt(hb)
     n = int(_f(agg.get("n"), 0))
     wins = int(_f(agg.get("wins"), 0))
     paused_until = _to_dt(settings.get("paused_until"))
+    is_paused = bool(paused_until and paused_until > _utcnow())
     return jsonify({
         "ok": True,
+        "mode": mode,
         "ready": {"encryption": encryption_ready(), "ccxt": ccxt is not None},
+        "accounts": {m: {"connected": m in connected,
+                         "key_hint": (connected.get(m) or {}).get("key_hint"),
+                         "bot_enabled": bool(enabled.get(m)),
+                         "open_positions": open_counts.get(m, 0)} for m in MODES},
         "connected": bool(account),
         "account": None if not account else {
             "mode": account["mode"], "key_hint": account.get("key_hint"),
@@ -1443,8 +1555,8 @@ def status():
         "settings": _settings_json(settings),
         "bot": {
             "enabled": bool(settings["enabled"]),
-            "paused_until": _iso(paused_until) if paused_until and paused_until > _utcnow() else None,
-            "pause_reason": settings.get("pause_reason") if paused_until and paused_until > _utcnow() else None,
+            "paused_until": _iso(paused_until) if is_paused else None,
+            "pause_reason": settings.get("pause_reason") if is_paused else None,
             "last_scan_at": _iso(_to_dt(settings.get("last_scan_at"))),
         },
         "engine": {
@@ -1472,57 +1584,57 @@ def status():
 def connect():
     uid = _user_id()
     if not uid:
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
     bad = _require_json_post()
     if bad:
         return bad
     if not encryption_ready():
-        return _err("Server par AUTOTRADE_ENCRYPTION_KEY set nahi hai, is liye keys save nahi ho saktin. "
-                    "Admin isay Railway Variables mein add kare.", 503)
+        return _err("AUTOTRADE_ENCRYPTION_KEY is not set on the server, so keys cannot be stored. "
+                    "Add it in Railway Variables.", 503)
     data = request.get_json(silent=True) or {}
+    mode = _req_mode(data)
+    if not mode:
+        return _err("Account must be 'demo' or 'live'.")
     api_key = str(data.get("api_key") or "").strip()
     secret = str(data.get("api_secret") or "").strip()
-    mode = str(data.get("mode") or "demo").lower()
-    if mode not in ("demo", "live"):
-        return _err("Mode 'demo' ya 'live' hona chahiye.")
     if len(api_key) < 16 or len(secret) < 16:
-        return _err("API key aur secret dono poore paste karein.")
+        return _err("Paste both the full API key and the secret key.")
 
     with _Cursor() as cur:
-        _ensure_settings_row(uid, cur)
-        settings = load_settings(uid, cur)
-        if _open_positions(uid, cur):
-            return _err("Khuli positions ke dauran account change nahi ho sakta. Pehle positions band karein.", 409)
+        _ensure_settings_row(uid, mode, cur)
+        settings = load_settings(uid, mode, cur)
+        if _open_positions(uid, mode, cur):
+            return _err(f"The {_label(mode)} account has open positions. Close them before changing keys.", 409)
 
     try:
         client = _client_factory(api_key, secret, mode, settings["market_type"])
         free, total = client.balance_usdt()
     except Exception as e:
-        msg = str(e) if isinstance(e, RuntimeError) else _friendly_exchange_error(e)
-        return _err(f"Verify fail: {msg}")
+        return _err(f"Verification failed: {_error_text(e)}")
 
     note = None
     if mode == "live":
         restrictions = client.api_restrictions()
         if restrictions and restrictions.get("enableWithdrawals"):
-            return _err("Is API key par WITHDRAWAL permission ON hai. Security ke liye Binance mein ye permission "
-                        "band karein (sirf Reading + Spot/Futures Trading rakhein), phir dobara connect karein.")
+            return _err("This API key has WITHDRAWALS enabled. For safety, disable that permission on Binance "
+                        "(keep only Reading + Spot/Futures Trading) and connect again.")
         if restrictions and not restrictions.get("ipRestrict"):
-            note = "Tip: Binance API key par apne server ka IP whitelist kar dein (zyada mehfooz)."
+            note = "Tip: restrict this API key to your server's IP address on Binance for extra safety."
 
     now = _utcnow()
     with _Cursor() as cur:
-        cur.execute("DELETE FROM autotrade_accounts WHERE user_id=%s", (uid,))
+        cur.execute("DELETE FROM autotrade_exchange_accounts WHERE user_id=%s AND mode=%s", (uid, mode))
         cur.execute(
-            """INSERT INTO autotrade_accounts (user_id, exchange, mode, api_key_enc, api_secret_enc, key_hint,
+            """INSERT INTO autotrade_exchange_accounts (user_id, mode, exchange, api_key_enc, api_secret_enc, key_hint,
                balance_usdt, balance_total_usdt, balance_market, balance_at, connected_at)
-               VALUES (%s,'binance',%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+               VALUES (%s,%s,'binance',%s,%s,%s,%s,%s,%s,%s,%s)""",
             (uid, mode, _encrypt(api_key), _encrypt(secret), "..." + api_key[-4:], free, total,
              settings["market_type"], now, now),
         )
-        cur.execute("UPDATE autotrade_settings SET enabled=0 WHERE user_id=%s", (uid,))
-        log_event(uid, "INFO", f"Binance {mode.upper()} connect hua. {settings['market_type']} balance: {free:.2f} USDT", cur)
-    _drop_clients(uid)
+        cur.execute("UPDATE autotrade_bot_settings SET enabled=0 WHERE user_id=%s AND mode=%s", (uid, mode))
+        log_event(uid, "INFO", f"Binance {_label(mode)} connected. {settings['market_type']} balance: {free:.2f} USDT",
+                  cur, mode=mode)
+    _drop_clients(uid, mode)
     return jsonify({"ok": True, "mode": mode, "balance_usdt": free, "balance_total_usdt": total, "note": note})
 
 
@@ -1530,14 +1642,17 @@ def connect():
 def disconnect():
     uid = _user_id()
     if not uid:
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
+    mode = _req_mode(request.get_json(silent=True) or {})
+    if not mode:
+        return _err("Account must be 'demo' or 'live'.")
     with _Cursor() as cur:
-        if _open_positions(uid, cur):
-            return _err("Pehle saari khuli positions band karein, phir disconnect karein.", 409)
-        cur.execute("DELETE FROM autotrade_accounts WHERE user_id=%s", (uid,))
-        cur.execute("UPDATE autotrade_settings SET enabled=0 WHERE user_id=%s", (uid,))
-        log_event(uid, "INFO", "Binance disconnect hua, API keys delete kar di gayin.", cur)
-    _drop_clients(uid)
+        if _open_positions(uid, mode, cur):
+            return _err("Close all open positions on this account first, then disconnect.", 409)
+        cur.execute("DELETE FROM autotrade_exchange_accounts WHERE user_id=%s AND mode=%s", (uid, mode))
+        cur.execute("UPDATE autotrade_bot_settings SET enabled=0 WHERE user_id=%s AND mode=%s", (uid, mode))
+        log_event(uid, "INFO", f"Binance {_label(mode)} disconnected. API keys deleted.", cur, mode=mode)
+    _drop_clients(uid, mode)
     return jsonify({"ok": True})
 
 
@@ -1545,20 +1660,25 @@ def disconnect():
 def update_settings():
     uid = _user_id()
     if not uid:
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
     bad = _require_json_post()
     if bad:
         return bad
+    data = request.get_json(silent=True) or {}
+    mode = _req_mode(data)
+    if not mode:
+        return _err("Account must be 'demo' or 'live'.")
     with _Cursor() as cur:
-        _ensure_settings_row(uid, cur)
-        current = load_settings(uid, cur)
-        clean, err = validate_settings(request.get_json(silent=True) or {}, current)
+        _ensure_settings_row(uid, mode, cur)
+        current = load_settings(uid, mode, cur)
+        clean, err = validate_settings(data, current)
         if err:
             return _err(err)
-        save_settings(uid, clean, cur)
+        save_settings(uid, mode, clean, cur)
         log_event(uid, "INFO",
                   f"Settings saved: {clean['market_type']} {clean['leverage']}x, risk {clean['risk_pct']}%, "
-                  f"min conf {clean['min_confidence']}%, {clean['timeframe']}, coins {len(clean['coins'])}", cur)
+                  f"min confidence {clean['min_confidence']}%, {clean['timeframe']}, {len(clean['coins'])} coins",
+                  cur, mode=mode)
     return jsonify({"ok": True, "settings": clean})
 
 
@@ -1566,42 +1686,46 @@ def update_settings():
 def toggle_bot():
     uid = _user_id()
     if not uid:
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
     bad = _require_json_post()
     if bad:
         return bad
     data = request.get_json(silent=True) or {}
+    mode = _req_mode(data)
+    if not mode:
+        return _err("Account must be 'demo' or 'live'.")
     enable = bool(data.get("enabled"))
     with _Cursor() as cur:
-        _ensure_settings_row(uid, cur)
-        account = load_account(uid, cur)
+        _ensure_settings_row(uid, mode, cur)
+        account = load_account(uid, mode, cur)
         if enable:
             if not account:
-                return _err("Pehle Binance connect karein.")
-            if account["mode"] == "live" and not data.get("ack_live"):
-                return _err("Live mode mein bot chalane ke liye risk warning confirm karna zaroori hai.",
-                            428, need_ack=True)
-        cur.execute("UPDATE autotrade_settings SET enabled=%s, last_scan_at=NULL, paused_until=NULL, pause_reason=NULL WHERE user_id=%s"
-                    if enable else "UPDATE autotrade_settings SET enabled=%s WHERE user_id=%s",
-                    (1 if enable else 0, uid))
-        log_event(uid, "INFO", "Auto-Trade bot ON kiya gaya." if enable else "Auto-Trade bot OFF kiya gaya. "
-                  "Khuli positions SL/TP par monitor hoti rahengi.", cur)
-    return jsonify({"ok": True, "enabled": enable})
+                return _err(f"Connect your Binance {_label(mode)} account first.")
+            if mode == "live" and not data.get("ack_live"):
+                return _err("Please confirm the risk warning to run the bot on your live account.", 428, need_ack=True)
+            cur.execute("""UPDATE autotrade_bot_settings SET enabled=1, last_scan_at=NULL, paused_until=NULL,
+                           pause_reason=NULL WHERE user_id=%s AND mode=%s""", (uid, mode))
+            log_event(uid, "INFO", f"{_label(mode)} bot turned ON.", cur, mode=mode)
+        else:
+            cur.execute("UPDATE autotrade_bot_settings SET enabled=0 WHERE user_id=%s AND mode=%s", (uid, mode))
+            log_event(uid, "INFO", f"{_label(mode)} bot turned OFF. Open positions are still monitored for SL/TP.",
+                      cur, mode=mode)
+    return jsonify({"ok": True, "enabled": enable, "mode": mode})
 
 
 @autotrade_bp.route("/api/autotrade/positions/<int:position_id>/close", methods=["POST"])
 def close_one(position_id):
     uid = _user_id()
     if not uid:
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
     with _Cursor() as cur:
         cur.execute("SELECT * FROM autotrade_positions WHERE id=%s AND user_id=%s", (position_id, uid))
         pos = cur.fetchone()
-        account = load_account(uid, cur)
+        account = load_account(uid, pos["mode"], cur) if pos else None
     if not pos or pos["status"] != "OPEN":
-        return _err("Position nahi mili ya pehle se band ho rahi hai.", 404)
+        return _err("Position not found or already closing.", 404)
     if not account:
-        return _err("Binance connected nahi hai.")
+        return _err(f"Binance {_label(pos['mode'])} account is not connected.")
     try:
         pnl = close_position(pos, account, "MANUAL")
     except TradeError as e:
@@ -1611,48 +1735,62 @@ def close_one(position_id):
 
 @autotrade_bp.route("/api/autotrade/panic", methods=["POST"])
 def panic():
-    """Emergency: bot band + saari positions market par close."""
+    """Emergency: turn the bot off and close every open position on the
+    given account (or on both accounts with account='all')."""
     uid = _user_id()
     if not uid:
-        return _err("Login zaroori hai.", 401)
-    with _Cursor() as cur:
-        cur.execute("UPDATE autotrade_settings SET enabled=0 WHERE user_id=%s", (uid,))
-        account = load_account(uid, cur)
-        cur.execute("SELECT * FROM autotrade_positions WHERE user_id=%s AND status='OPEN'", (uid,))
-        positions = cur.fetchall() or []
-        log_event(uid, "WARN", f"STOP ALL dabaya gaya: bot OFF, {len(positions)} position(s) band ki ja rahi hain.", cur)
+        return _err("Login required.", 401)
+    data = request.get_json(silent=True) or {}
+    requested = str(data.get("account") or request.args.get("account") or "").lower()
+    modes = MODES if requested == "all" else ((requested,) if requested in MODES else None)
+    if not modes:
+        return _err("Account must be 'demo', 'live' or 'all'.")
     closed, failed = 0, []
-    for pos in positions:
-        try:
-            close_position(pos, account, "PANIC")
-            closed += 1
-        except TradeError as e:
-            failed.append({"symbol": pos["symbol"], "error": str(e)})
+    for mode in modes:
+        with _Cursor() as cur:
+            cur.execute("UPDATE autotrade_bot_settings SET enabled=0 WHERE user_id=%s AND mode=%s", (uid, mode))
+            account = load_account(uid, mode, cur)
+            cur.execute("SELECT * FROM autotrade_positions WHERE user_id=%s AND mode=%s AND status='OPEN'", (uid, mode))
+            positions = cur.fetchall() or []
+            log_event(uid, "WARN", f"STOP ALL: {_label(mode)} bot OFF, closing {len(positions)} position(s).",
+                      cur, mode=mode)
+        for pos in positions:
+            if not account:
+                failed.append({"symbol": pos["symbol"], "error": "Account not connected"})
+                continue
+            try:
+                close_position(pos, account, "PANIC")
+                closed += 1
+            except TradeError as e:
+                failed.append({"symbol": pos["symbol"], "error": str(e)})
     return jsonify({"ok": not failed, "closed": closed, "failed": failed})
 
 
 @autotrade_bp.route("/api/autotrade/manual", methods=["POST"])
 def manual_trade():
-    """Manual trade. confirm=false -> sirf preview (size/SL/TP), confirm=true -> order."""
+    """Manual trade. confirm=false -> preview only (size/SL/TP), confirm=true -> order."""
     uid = _user_id()
     if not uid:
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
     bad = _require_json_post()
     if bad:
         return bad
     data = request.get_json(silent=True) or {}
+    mode = _req_mode(data)
+    if not mode:
+        return _err("Account must be 'demo' or 'live'.")
     symbol = str(data.get("symbol") or "").upper()
     side = str(data.get("side") or "").upper()
     if symbol not in coin_choices():
-        return _err("Ye coin supported nahi hai.")
+        return _err("This coin is not supported.")
     with _Cursor() as cur:
-        _ensure_settings_row(uid, cur)
-        settings = load_settings(uid, cur)
-        account = load_account(uid, cur)
+        _ensure_settings_row(uid, mode, cur)
+        settings = load_settings(uid, mode, cur)
+        account = load_account(uid, mode, cur)
     if not account:
-        return _err("Pehle Binance connect karein.")
-    if account["mode"] == "live" and data.get("confirm") and not data.get("ack_live"):
-        return _err("Live trade ke liye confirmation zaroori hai.", 428, need_ack=True)
+        return _err(f"Connect your Binance {_label(mode)} account first.")
+    if mode == "live" and data.get("confirm") and not data.get("ack_live"):
+        return _err("Live trades need an explicit confirmation.", 428, need_ack=True)
     try:
         sig = get_signal(symbol, settings["timeframe"], max_age_sec=600)
     except Exception:
@@ -1670,15 +1808,15 @@ def manual_trade():
 @autotrade_bp.route("/api/autotrade/signal", methods=["GET"])
 def signal_summary():
     if not _user_id():
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
     symbol = str(request.args.get("symbol") or "BTC/USDT").upper()
     timeframe = request.args.get("timeframe") or "1h"
     if symbol not in coin_choices() or timeframe not in TIMEFRAME_SCAN_SEC:
-        return _err("Coin ya timeframe ghalat hai.")
+        return _err("Invalid coin or timeframe.")
     try:
         return jsonify({"ok": True, **get_signal(symbol, timeframe, max_age_sec=300)})
     except Exception as e:
-        return _err(f"Signal nahi mila: {str(e)[:150]}")
+        return _err(f"Signal not available: {str(e)[:150]}")
 
 
 _price_cache = {"ts": 0.0, "key": None, "data": None}
@@ -1686,9 +1824,9 @@ _price_cache = {"ts": 0.0, "key": None, "data": None}
 
 @autotrade_bp.route("/api/autotrade/prices", methods=["GET"])
 def prices():
-    """Coin list ke liye live price + 24h change (public market data)."""
+    """Live price + 24h change for the coin list (public market data)."""
     if not _user_id():
-        return _err("Login zaroori hai.", 401)
+        return _err("Login required.", 401)
     allowed = set(coin_choices())
     symbols = [s for s in (request.args.get("symbols") or "").upper().split(",") if s in allowed][:MAX_COINS + 4]
     if not symbols:
@@ -1698,12 +1836,12 @@ def prices():
         return jsonify({"ok": True, "prices": _price_cache["data"]})
     ex = _hooks.get("data_exchange")
     if ex is None:
-        return _err("Market data available nahi.")
+        return _err("Market data is not available.")
     try:
         tickers = ex.fetch_tickers(symbols)
         out = {s: {"last": _f(tickers[s].get("last")), "change_pct": _f(tickers[s].get("percentage"))}
                for s in symbols if s in tickers}
     except Exception as e:
-        return _err(f"Prices nahi mile: {str(e)[:120]}")
+        return _err(f"Prices not available: {str(e)[:120]}")
     _price_cache.update({"ts": time.time(), "key": key, "data": out})
     return jsonify({"ok": True, "prices": out})
