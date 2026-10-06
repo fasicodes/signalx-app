@@ -2401,10 +2401,10 @@ def liquidity_endpoint():
 
 # ============================================================
 # AUTO-TRADE BOT (Binance) - autotrade.py
-# Asal Binance orders, SignalX signals par. Signal functions yahan
-# se inject hote hain (circular import se bachne ke liye). Background
-# engine MySQL GET_LOCK use karta hai taake multiple workers/instances
-# mein sirf EK engine chale (duplicate orders kabhi na lagein).
+# Real Binance orders driven by SignalX signals (Demo + Live accounts).
+# Signal functions are injected here to avoid a circular import. The
+# background engine takes a MySQL GET_LOCK so only ONE engine runs across
+# workers/instances (never duplicate orders).
 # ============================================================
 from autotrade import autotrade_bp, init_autotrade
 app.register_blueprint(autotrade_bp)
