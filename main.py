@@ -2399,6 +2399,25 @@ def liquidity_endpoint():
     })
 
 
+# ============================================================
+# AUTO-TRADE BOT (Binance) - autotrade.py
+# Asal Binance orders, SignalX signals par. Signal functions yahan
+# se inject hote hain (circular import se bachne ke liye). Background
+# engine MySQL GET_LOCK use karta hai taake multiple workers/instances
+# mein sirf EK engine chale (duplicate orders kabhi na lagein).
+# ============================================================
+from autotrade import autotrade_bp, init_autotrade
+app.register_blueprint(autotrade_bp)
+limiter.limit("120 per minute")(autotrade_bp)
+init_autotrade(
+    app,
+    get_candles=get_candles,
+    generate_signal=generate_signal,
+    data_exchange=exchange,
+    available_coins=AVAILABLE_COINS,
+)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     # Production mein debug hamesha OFF rehna chahiye - warna crash hone par
