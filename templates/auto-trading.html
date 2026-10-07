@@ -324,8 +324,9 @@
   </div>
 
   <p class="faint" style="font-size:11.5px;line-height:1.6;max-width:900px;">
-    Bot decisions come from the SignalX signal engine (Hawkes + Bayesian, conformal confidence). The engine has not been walk-forward backtested,
-    so there is no guarantee of profit. Crypto trading, especially with leverage, can lose all of the money in the account. Test on the Demo account first.
+    Bot decisions come from signal engine v2 (closed 4-hour candles, the same signal as the dashboard and the Track Record), whatever scan
+    interval you pick. Its stop is 3&times; ATR and its target 1.5&times; ATR; on 15 months of data it never saw it won about 70% of signals with a
+    small profit after fees, and it also had losing months. Past results do not guarantee future results. Crypto trading, especially with leverage, can lose all of the money in the account. Test on the Demo account first.
     This is not financial advice.
     Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener" style="color:inherit;">TradingView</a>.
   </p>
