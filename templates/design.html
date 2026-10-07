@@ -370,7 +370,7 @@
       <span class="tier-num">TIER&nbsp;01</span>
       <span class="tier-label">Core Verdict Engine</span>
     </div>
-    <p class="tier-note">Ch.01–05 — Hawkes Process, Bayesian Classifier &amp; Conformal Prediction. This is the only tier that produces the final verdict and confidence score.</p>
+    <p class="tier-note">Signal engine v2: a model trained on 2022&ndash;mid 2025 and tested on data it never saw. It reads closed 4-hour candles, the daily trend, Bitcoin and 16-coin market breadth, and only gives LONG or SHORT for its strongest ~3% of setups. This is the only tier that sets the verdict and confidence; the other tiers are display-only.</p>
     <div id="tier-1" class="channel-grid"></div>
 
     <div class="tier-divider">
@@ -1232,7 +1232,7 @@
   </div><!-- /.home-info-overlay -->
 
   <footer class="disclaimer">
-    <span id="disclaimer-text">⚠ Probability estimates only — not financial advice. In-sample calculations, no walk-forward backtest run. Final verdict/confidence come only from Tier 01 (Hawkes + Bayesian via Conformal Prediction); Tiers 02–03 are display-only.</span>
+    <span id="disclaimer-text">⚠ Not financial advice. The verdict comes from signal engine v2 (4-hour candles); confidence is the historical win probability of similar setups on unseen data, after fees. Other tiers are display-only.</span>
   </footer>
 
 </div>
