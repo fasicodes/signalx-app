@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Privacy Policy</title>
+<meta name="description" content="What data Signals FM collects, how API keys are protected, and your choices.">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -30,42 +31,81 @@ h1{font-family:var(--display);font-size:clamp(28px,5vw,42px);font-weight:800;let
 h2{font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-.3px;margin:32px 0 10px;color:var(--text);display:flex;align-items:center;gap:10px;}
 h2::before{content:"";display:block;width:3px;height:18px;background:var(--green);border-radius:2px;flex-shrink:0;}
 p{color:var(--text2);margin:0 0 14px;}
-ul{color:var(--text2);padding-left:20px;margin:0 0 14px;}
-ul li{margin-bottom:6px;}
 a{color:var(--green);text-decoration:none;}
 a:hover{text-decoration:underline;}
+.warning-box{background:rgba(255,187,51,.06);border:1px solid rgba(255,187,51,.2);border-radius:10px;padding:16px 18px;margin:28px 0;font-size:13.5px;color:#c49230;}
+.warning-box strong{color:#e8aa30;}
+ul{color:var(--text2);padding-left:20px;margin:0 0 14px;}
+ul li{margin-bottom:6px;}
+.legal-nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:44px;padding-top:20px;border-top:1px solid var(--border);font-family:var(--mono);font-size:12px;}
+.legal-nav a{color:var(--text2);}
 </style>
 </head>
 <body>
 <div class="page">
-  <a class="back" href="/">← Back to Signals FM</a>
+  <a class="back" href="/">&larr; Back to Signals FM</a>
   <div class="badge"><span class="dot"></span>Legal</div>
-  <h1>Privacy Policy</h1>
-  <p class="meta">Last updated: August 2026</p>
+  <h1>Privacy policy</h1>
+  <p class="meta">Last updated: October 2026</p>
   <hr class="divider">
-
-  <h2>Information We Collect</h2>
-  <p>We collect information you provide directly, including your email address when you create an account or sign in with Google OAuth. We also collect usage data such as which markets you analyze and your session preferences.</p>
-
-  <h2>How We Use Your Information</h2>
+  <h2>What we collect</h2>
   <ul>
-    <li>To authenticate your account and maintain your session</li>
-    <li>To personalize your dashboard experience and save preferences</li>
-    <li>To send transactional emails such as password reset and email verification</li>
-    <li>To improve the quality and accuracy of our signal engine</li>
+    <li><b>Account details:</b> your email address and a hashed password, or your name, email and profile picture if you sign
+      in with Google.</li>
+    <li><b>Exchange API keys</b>, only if you connect the Auto-Trade bot.</li>
+    <li><b>Trading activity on Signals FM:</b> Demo Trading orders, positions, journal notes and settings; Auto-Trade settings,
+      positions and activity logs; your watchlist and alerts.</li>
+    <li><b>Technical data:</b> your IP address and browser information, used for security and rate limiting.</li>
   </ul>
 
-  <h2>Data Storage &amp; Security</h2>
-  <p>Your data is stored securely using industry-standard encryption. We do not sell or share your personal information with third parties for marketing purposes. We use Supabase for authentication and database services.</p>
+  <h2>How we use it</h2>
+  <ul>
+    <li>To sign you in and keep your session active.</li>
+    <li>To run the features you use: signals, Demo Trading, the Auto-Trade bot, alerts and your saved preferences.</li>
+    <li>To send account emails such as verification and password reset.</li>
+    <li>To keep the service secure and to improve it.</li>
+  </ul>
 
-  <h2>Cookies &amp; Local Storage</h2>
-  <p>Signals FM uses local storage to save your UI preferences (such as light/dark mode and demo portfolio state). We use session cookies for authentication only — no tracking or advertising cookies.</p>
+  <h2>How we protect it</h2>
+  <p>Data is stored in our MySQL database with our hosting provider and sent over encrypted (HTTPS) connections. Passwords are
+    stored only as hashes. Exchange API secrets are encrypted with a server-side key before they are saved, are never shown
+    again, and are deleted as soon as you disconnect.</p>
 
-  <h2>Your Rights</h2>
-  <p>You may request deletion of your account and associated data at any time by contacting us. You also have the right to access and export any personal data we hold about you.</p>
+  <h2>Who we share it with</h2>
+  <p>We don't sell your data or share it for advertising. We use a few service providers to run Signals FM:</p>
+  <ul>
+    <li>our hosting and database provider;</li>
+    <li>Google, if you choose to sign in with Google;</li>
+    <li>Gmail, to deliver account emails;</li>
+    <li>the exchange you connect (for example Binance), which receives the orders the bot places on your behalf;</li>
+    <li>market data providers (OKX, Yahoo Finance), which receive price requests but no personal data;</li>
+    {% if ga_measurement_id %}<li>Google Analytics, to count visits with IP anonymization.</li>{% endif %}
+  </ul>
+
+  <h2>Cookies and local storage</h2>
+  <p>We use a session cookie to keep you logged in. Your browser's local storage keeps interface preferences such as the
+    theme, chart timeframe and favorite coins. {% if ga_measurement_id %}Google Analytics sets cookies to count visits.{% else %}We
+    don't use advertising or tracking cookies.{% endif %}</p>
+
+  <h2>How long we keep it</h2>
+  <p>Account data is kept until you delete your account. Auto-Trade activity logs are deleted after 14 days. Demo Trading
+    history is kept so you can review your past practice sessions.</p>
+
+  <h2>Your choices and rights</h2>
+  <p>You can disconnect exchange keys at any time from the Auto-Trade page, which deletes them. You can ask us to export or
+    delete your account and all associated data.</p>
+
+  <h2>Children</h2>
+  <p>Signals FM is not intended for anyone under 18, and we don't knowingly collect their data.</p>
 
   <h2>Contact</h2>
-  <p>For privacy-related requests or questions, please reach out via the contact details on our main site.</p>
+  {% if support_email %}<p>Questions or requests: <a href="mailto:{{ support_email }}">{{ support_email }}</a>.</p>
+  {% else %}<p>For questions or requests, contact us through the email address you receive our account emails from.</p>{% endif %}
+  <nav class="legal-nav" aria-label="Legal">
+    <a href="/terms">Terms of use</a>
+    <a href="/privacy">Privacy policy</a>
+    <a href="/risk-disclosure">Risk disclosure</a>
+  </nav>
 </div>
 <script>
   document.documentElement.setAttribute('data-theme', localStorage.getItem('signalsfm-theme') || 'dark');
