@@ -83,6 +83,7 @@ from flask_limiter.util import get_remote_address
 import pandas as pd
 import numpy as np
 import ccxt
+import signal_engine
 
 # pandas-ta is optional: it is not published for every Python version, so we
 # ship a numpy/pandas fallback for the two indicators generate_signal() needs
@@ -1840,22 +1841,25 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     latest = df.iloc[-1]
     current_price = float(latest["close"])
 
-    # --- Purane 5 concepts (VERDICT YAHAN SE BANTA HAI - UNCHANGED) ---
+    # --- Display-only pressure / bias readings (no longer decide the verdict) ---
     buying_pressure, selling_pressure = hawkes_pressure(df)
     bullish_pct, bearish_pct = bayesian_bullish_bearish(df)
-    confidence_pct, trade_decision = conformal_confidence(bullish_pct, buying_pressure, selling_pressure)
 
-    if trade_decision == "SKIP":
-        final_verdict = "WAIT"
-    elif bullish_pct > bearish_pct:
-        final_verdict = "LONG"
+    # --- VERDICT: signal engine v2 (signal_engine.py) on closed 4h candles ---
+    engine = engine_signal(symbol)
+    if engine.get("verdict"):
+        final_verdict = engine["verdict"]
+        confidence_pct = engine["confidence"]
+        trend = "Bullish" if engine["p_long"] >= engine["p_short"] else "Bearish"
     else:
-        final_verdict = "SHORT"
+        final_verdict, confidence_pct = "WAIT", None
+        trend = "Bullish" if bullish_pct > bearish_pct else "Bearish"
 
-    volatility_data = quantile_volatility(df, current_price, final_verdict)
-    win_prob = max(bullish_pct, bearish_pct) / 100
-    suggested_risk_pct = fractional_kelly(win_prob)
-    trend = "Bullish" if bullish_pct > bearish_pct else "Bearish"
+    volatility_data = quantile_volatility(df, current_price, "WAIT")
+    if final_verdict in ("LONG", "SHORT"):
+        volatility_data["stop_loss"] = signal_engine.price_round(engine["stop_loss"])
+        volatility_data["take_profit"] = signal_engine.price_round(engine["take_profit"])
+    suggested_risk_pct = 1.0 if final_verdict in ("LONG", "SHORT") else 0.0
 
     # --- v4 ke 4 concepts (display-only, UNCHANGED) ---
     if include_orderbook:
@@ -2066,60 +2070,49 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "concept_total": accuracy_data["concept_total"],
         "concept_votes": accuracy_data["concept_votes"],
 
-        "disclaimer": ("Probability estimates only - not financial advice. "
-                        "In-sample calculations, no walk-forward backtest run yet. "
-                        "Final verdict/confidence come ONLY from Hawkes+Bayesian "
-                        "(Conformal Prediction); all other panels are display-only."),
+        "engine": engine,
+        "engine_test": signal_engine.test_stats(),
+        "disclaimer": ("Not financial advice. The verdict comes from signal engine v2 (4-hour candles); "
+                        "confidence is the historical win probability of similar setups, measured on data "
+                        "the model never saw, after fees. All other panels are display-only."),
     }
     result.update(volatility_data)
     return result
 
 
+_engine_lock = __import__("threading").Lock()
+_engine_instance = None
+
+
+def get_signal_engine():
+    global _engine_instance
+    if _engine_instance is None:
+        with _engine_lock:
+            if _engine_instance is None:
+                _engine_instance = signal_engine.LiveEngine(get_candles)
+    return _engine_instance
+
+
+def engine_signal(symbol):
+    """Signal engine v2 result for one coin, JSON-ready. Never raises."""
+    if _is_forex_pair(symbol):
+        return {"error": "Signals cover crypto pairs only."}
+    try:
+        res = dict(get_signal_engine().signal(symbol))
+    except Exception as e:
+        return {"error": f"Signal engine unavailable: {str(e)[:160]}"}
+    for k in ("bar_time", "signal_at", "next_update"):
+        if res.get(k) is not None:
+            res[k] = res[k].isoformat() + "Z"
+    for k in ("entry", "stop_loss", "take_profit", "atr"):
+        if res.get(k) is not None:
+            res[k] = signal_engine.price_round(res[k])
+    return res
+
+
 # ============================================================
 # ROUTES
 # ============================================================
-# ============================================================
-# signal_core(): ONLY the part of generate_signal() that decides the
-# verdict, confidence and SL/TP (Hawkes + Bayesian + Conformal +
-# quantile volatility) - without the heavy display-only channels.
-# Used by trackrecord.py (live record + walk-forward backtest) so the
-# public track record measures exactly the signal users see.
-# KEEP IN SYNC with the first part of generate_signal().
-# ============================================================
-def signal_core(df):
-    df = df.copy()
-    if _HAS_PANDAS_TA:
-        df["rsi"] = ta.rsi(df["close"], length=14)
-        macd = ta.macd(df["close"])
-        df["macd"] = macd["MACD_12_26_9"]
-        df["macd_signal"] = macd["MACDs_12_26_9"]
-    else:
-        df["rsi"] = _ta_rsi(df["close"], 14)
-        macd_line, macd_signal_line = _ta_macd(df["close"])
-        df["macd"] = macd_line
-        df["macd_signal"] = macd_signal_line
-    df = df.dropna(subset=["rsi", "macd", "macd_signal"]).reset_index(drop=True)
-
-    current_price = float(df.iloc[-1]["close"])
-    buying_pressure, selling_pressure = hawkes_pressure(df)
-    bullish_pct, bearish_pct = bayesian_bullish_bearish(df)
-    confidence_pct, trade_decision = conformal_confidence(bullish_pct, buying_pressure, selling_pressure)
-    if trade_decision == "SKIP":
-        final_verdict = "WAIT"
-    elif bullish_pct > bearish_pct:
-        final_verdict = "LONG"
-    else:
-        final_verdict = "SHORT"
-    returns = df["close"].pct_change().dropna()
-    return {
-        "verdict": final_verdict,
-        "confidence": confidence_pct,
-        "bullish_pct": bullish_pct,
-        "price": current_price,
-        "extreme_move": float(returns.abs().quantile(0.95)),
-    }
-
-
 @app.route("/login", methods=["GET"])
 def login_page():
     # Agar user pehle se login hai to seedha trading interface pe bhej dein
@@ -2457,6 +2450,7 @@ init_autotrade(
     generate_signal=generate_signal,
     data_exchange=exchange,
     available_coins=AVAILABLE_COINS,
+    engine_signal=engine_signal,
 )
 
 
@@ -2478,8 +2472,8 @@ init_papertrade(app, available_coins=AVAILABLE_COINS)
 # TRACK RECORD + PUBLIC PAGES + SEO
 # trackrecord.py records every LONG/SHORT the engine gives on a fixed
 # coin list (live) and replays the same rule over history (walk-forward
-# backtest). It uses signal_core() above, i.e. the exact verdict path of
-# generate_signal(). /track-record is login-only until the env var
+# backtest). It uses the same signal engine instance as /signal
+# (signal_engine.py v2). /track-record is login-only until the env var
 # TRACK_RECORD_PUBLIC=on is set.
 # ============================================================
 import re as _re
@@ -2487,7 +2481,7 @@ from datetime import datetime as _dt
 from trackrecord import track_bp, init_trackrecord, is_public as _track_public
 app.register_blueprint(track_bp)
 limiter.limit("60 per minute")(track_bp)
-init_trackrecord(app, get_candles=get_candles, signal_core=signal_core, available_coins=AVAILABLE_COINS)
+init_trackrecord(app, get_candles=get_candles, engine=get_signal_engine(), available_coins=AVAILABLE_COINS)
 
 
 def _site_globals():
