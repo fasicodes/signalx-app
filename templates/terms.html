@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signals FM — Terms &amp; Risk Disclaimer</title>
+<title>Signals FM — Terms of Use</title>
+<meta name="description" content="The terms for using Signals FM signals, Demo Trading, the Auto-Trade bot and trading tools.">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -34,34 +35,81 @@ a{color:var(--green);text-decoration:none;}
 a:hover{text-decoration:underline;}
 .warning-box{background:rgba(255,187,51,.06);border:1px solid rgba(255,187,51,.2);border-radius:10px;padding:16px 18px;margin:28px 0;font-size:13.5px;color:#c49230;}
 .warning-box strong{color:#e8aa30;}
+ul{color:var(--text2);padding-left:20px;margin:0 0 14px;}
+ul li{margin-bottom:6px;}
+.legal-nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:44px;padding-top:20px;border-top:1px solid var(--border);font-family:var(--mono);font-size:12px;}
+.legal-nav a{color:var(--text2);}
 </style>
 </head>
 <body>
 <div class="page">
-  <a class="back" href="/">← Back to Signals FM</a>
+  <a class="back" href="/">&larr; Back to Signals FM</a>
   <div class="badge"><span class="dot"></span>Legal</div>
-  <h1>Terms of Use &amp;<br>Risk Disclaimer</h1>
-  <p class="meta">Last updated: August 2026</p>
+  <h1>Terms of use</h1>
+  <p class="meta">Last updated: October 2026</p>
   <hr class="divider">
-
   <div class="warning-box">
-    <strong>⚠ Important:</strong> Trading financial instruments involves substantial risk of loss. Please read this document carefully before using Signals FM.
+    <strong>&#9888; Important:</strong> Trading crypto, especially with leverage, involves a high risk of losing money. Read the
+    <a href="/risk-disclosure">risk disclosure</a> before you use signals, Demo Trading or the Auto-Trade bot.
   </div>
 
-  <h2>Not Financial Advice</h2>
-  <p>Signals FM provides algorithmic market analysis and signals for informational and educational purposes only. Nothing on this platform constitutes financial, investment, or trading advice. You are solely responsible for any trading decisions you make.</p>
+  <h2>What Signals FM is</h2>
+  <p>Signals FM provides algorithmic market analysis (signals with a confidence score), a public track record of those signals,
+    a Demo Trading simulator with virtual money, an optional Auto-Trade bot that can place orders on your own exchange account,
+    and free trading calculators.</p>
 
-  <h2>Risk Warning</h2>
-  <p>Trading financial instruments, including cryptocurrencies and foreign exchange, involves substantial risk of loss and is not suitable for every investor. Past performance of any signal or strategy is not indicative of future results. You could lose some or all of your invested capital.</p>
+  <h2>Who can use it</h2>
+  <p>You must be at least 18 years old (or the age of majority where you live) and allowed by the laws of your country to use
+    crypto exchanges and, if you use them, derivatives such as futures. You are responsible for checking this.</p>
 
-  <h2>No Guarantees</h2>
-  <p>Signals FM does not guarantee any specific outcome, profit, or accuracy of its signals. All data and analysis is provided "as is" without warranty of any kind, express or implied.</p>
+  <h2>Not financial advice</h2>
+  <p>Everything on Signals FM is general information and education. Nothing here is personal financial, investment, tax or
+    trading advice, and no signal is a recommendation to buy or sell. You alone decide whether and how to trade.</p>
 
-  <h2>Your Account</h2>
-  <p>You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs under your account. Notify us immediately of any unauthorized use.</p>
+  <h2>No guarantees</h2>
+  <p>We don't guarantee any profit, outcome or accuracy. Signals, confidence scores, the track record and backtests describe
+    the past or a model's estimate; they do not predict the future. The service is provided &ldquo;as is&rdquo; and
+    &ldquo;as available&rdquo;, without warranties of any kind.</p>
+
+  <h2>Auto-Trade and exchange accounts</h2>
+  <ul>
+    <li>When you connect an exchange API key and turn the bot on, you authorize Signals FM to place and close orders on that
+      account according to the settings you choose. You can turn the bot off, close positions or disconnect at any time.</li>
+    <li>Create keys with trading permission only. Keys with withdrawal permission are refused. Keep your exchange account
+      secured with two-factor authentication.</li>
+    <li>Orders can fail, be delayed or fill at worse prices because of exchange outages, network problems, API changes,
+      software errors or server downtime. You are responsible for monitoring your account.</li>
+    <li>The exchange's own terms apply to your account. We are not the exchange and do not hold your funds.</li>
+  </ul>
+
+  <h2>Demo Trading</h2>
+  <p>Demo Trading uses live prices with virtual funds that have no cash value and cannot be withdrawn or exchanged. Fills,
+    fees, funding and liquidations are simulated and can differ from a real exchange. We may reset or change demo accounts.</p>
+
+  <h2>Your account</h2>
+  <p>Keep your login details private. You are responsible for activity under your account and should tell us right away if you
+    notice unauthorized use.</p>
+
+  <h2>Acceptable use</h2>
+  <p>Don't attempt to break or bypass security, overload the service with automated requests, scrape it at scale, resell the
+    signals, or use it for anything unlawful. We may suspend accounts that do.</p>
+
+  <h2>Changes and availability</h2>
+  <p>We may change, add or remove features, and we may update these terms. The &ldquo;last updated&rdquo; date above shows
+    when. Continuing to use the service after a change means you accept the updated terms.</p>
+
+  <h2>Limitation of liability</h2>
+  <p>To the maximum extent allowed by law, Signals FM is not liable for trading losses, lost profits, or indirect damages
+    arising from your use of the service, including signals, Demo Trading and the Auto-Trade bot.</p>
 
   <h2>Contact</h2>
-  <p>For questions about these terms, please reach out via the contact details provided on our main site.</p>
+  {% if support_email %}<p>Questions or requests: <a href="mailto:{{ support_email }}">{{ support_email }}</a>.</p>
+  {% else %}<p>For questions or requests, contact us through the email address you receive our account emails from.</p>{% endif %}
+  <nav class="legal-nav" aria-label="Legal">
+    <a href="/terms">Terms of use</a>
+    <a href="/privacy">Privacy policy</a>
+    <a href="/risk-disclosure">Risk disclosure</a>
+  </nav>
 </div>
 <script>
   document.documentElement.setAttribute('data-theme', localStorage.getItem('signalsfm-theme') || 'dark');
