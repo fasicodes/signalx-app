@@ -2418,6 +2418,20 @@ init_autotrade(
 )
 
 
+# ============================================================
+# DEMO TRADING (paper trading) - papertrade.py
+# Server-side practice exchange: virtual USDT account, spot + futures,
+# limit / stop / trailing orders, TP/SL, fees, funding, liquidation,
+# journal and performance stats. Uses the same OKX public prices as the
+# charts. Its background engine also takes a MySQL GET_LOCK, so only one
+# engine runs across workers/instances.
+# ============================================================
+from papertrade import paper_bp, init_papertrade
+app.register_blueprint(paper_bp)
+limiter.limit("300 per minute")(paper_bp)
+init_papertrade(app, available_coins=AVAILABLE_COINS)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     # Production mein debug hamesha OFF rehna chahiye - warna crash hone par
