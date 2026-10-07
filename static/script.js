@@ -473,7 +473,7 @@ function renderHero(data) {
   const gaugeFill = document.getElementById("gauge-fill");
 
   gaugeVerdict.textContent = verdict;
-  gaugeConfidence.textContent = fmtPct(data.confidence_pct) + " confidence";
+  gaugeConfidence.textContent = na(data.confidence_pct) ? "engine unavailable" : fmtPct(data.confidence_pct) + " win probability";
 
   let color = "var(--wait)";
   if (verdict === "LONG") color = "var(--long)";
@@ -619,62 +619,75 @@ function startAccuracyPolling() {
 
 function renderTier1(data) {
   const cards = [];
+  const eng = data.engine || {};
+  const test = data.engine_test || {};
+  const verdict = (data.final_verdict || "WAIT").toUpperCase();
+  const isTrade = verdict === "LONG" || verdict === "SHORT";
+  const utcTime = (iso) => {
+    if (!iso) return "--";
+    const d = new Date(iso);
+    return isNaN(d) ? "--" : d.toISOString().slice(11, 16) + " UTC";
+  };
 
   cards.push(channelCard({
-    id: 1, title: "Buying / Selling Pressure", model: "hawkes process",
+    id: 1, title: "Win Probability", model: "signal engine v2 · 4h",
     span2: true,
-    body: `
+    body: eng.error ? `<div class="channel-detail">${escapeHtml(eng.error)}</div>` : `
       <div class="dual-split">
         <div class="dual-item">
-          <span class="dual-label">BUY PRESSURE</span>
-          <span class="dual-value text-long">${fmtNum(data.buying_pressure, 1)} / 10</span>
-          ${meterBar((data.buying_pressure ?? 0) * 10, "c-long")}
+          <span class="dual-label">IF LONG</span>
+          <span class="dual-value text-long">${fmtPct(eng.p_long)}</span>
+          ${meterBar(eng.p_long ?? 0, "c-long")}
         </div>
         <div class="dual-item">
-          <span class="dual-label">SELL PRESSURE</span>
-          <span class="dual-value text-short">${fmtNum(data.selling_pressure, 1)} / 10</span>
-          ${meterBar((data.selling_pressure ?? 0) * 10, "c-short")}
+          <span class="dual-label">IF SHORT</span>
+          <span class="dual-value text-short">${fmtPct(eng.p_short)}</span>
+          ${meterBar(eng.p_short ?? 0, "c-short")}
         </div>
-      </div>`
+      </div>
+      <div class="channel-detail">chance the target is hit before the stop, from similar past setups the model never trained on</div>`
   }));
 
   cards.push(channelCard({
-    id: 2, title: "Market Bias", model: "bayesian classifier",
-    span2: true,
-    body: `
-      ${meterBar(data.bullish_pct ?? 50, "c-long")}
-      <div class="dual-split">
-        <div class="dual-item"><span class="dual-label">BULLISH</span><span class="dual-value text-long">${fmtPct(data.bullish_pct)}</span></div>
-        <div class="dual-item"><span class="dual-label">BEARISH</span><span class="dual-value text-short">${fmtPct(data.bearish_pct)}</span></div>
-      </div>`
-  }));
-
-  cards.push(channelCard({
-    id: 3, title: "Quantile Volatility", model: "95th pctile · SL/TP",
+    id: 2, title: "Trade Levels", model: "3× ATR stop · 1.5× ATR target",
     span2: true,
     body: `
       <div class="dual-split">
-        <div class="dual-item"><span class="dual-label">EXPECTED MOVE</span><span class="dual-value">${fmtPct(data.expected_volatility_pct, 2)}</span></div>
-        <div class="dual-item"><span class="dual-label">EXTREME MOVE (95%)</span><span class="dual-value">${fmtPct(data.extreme_volatility_95_pct, 2)}</span></div>
-        <div class="dual-item"><span class="dual-label">STOP LOSS</span><span class="dual-value text-short">${fmtPrice(data.stop_loss)}</span></div>
-        <div class="dual-item"><span class="dual-label">TAKE PROFIT</span><span class="dual-value text-long">${fmtPrice(data.take_profit)}</span></div>
-      </div>`
+        <div class="dual-item"><span class="dual-label">ENTRY (4H CLOSE)</span><span class="dual-value">${isTrade ? fmtPrice(eng.entry) : "--"}</span></div>
+        <div class="dual-item"><span class="dual-label">STOP LOSS</span><span class="dual-value text-short">${isTrade ? fmtPrice(data.stop_loss) : "--"}</span></div>
+        <div class="dual-item"><span class="dual-label">TAKE PROFIT</span><span class="dual-value text-long">${isTrade ? fmtPrice(data.take_profit) : "--"}</span></div>
+        <div class="dual-item"><span class="dual-label">TIME LIMIT</span><span class="dual-value">8 days</span></div>
+      </div>
+      <div class="channel-detail">${isTrade ? `stop ${fmtPct(eng.sl_pct, 2)} away · target ${fmtPct(eng.tp_pct, 2)} away` : "levels appear when there is a LONG or SHORT signal"}</div>`
   }));
 
-  const decision = data.confidence_pct != null && data.confidence_pct < 55 ? "SKIP" : "TRADE";
   cards.push(channelCard({
-    id: 4, title: "Conformal Decision", model: "conformal prediction",
+    id: 3, title: "Tested Performance", model: "unseen data · after fees",
+    span2: true,
+    body: test.signals ? `
+      <div class="dual-split">
+        <div class="dual-item"><span class="dual-label">WIN RATE</span><span class="dual-value text-long">${fmtPct(test.win_rate)}</span></div>
+        <div class="dual-item"><span class="dual-label">AVG PER SIGNAL</span><span class="dual-value">${test.avg_net_r >= 0 ? "+" : ""}${fmtNum(test.avg_net_r, 3)}R</span></div>
+        <div class="dual-item"><span class="dual-label">PROFIT FACTOR</span><span class="dual-value">${fmtNum(test.profit_factor, 2)}</span></div>
+        <div class="dual-item"><span class="dual-label">SIGNALS</span><span class="dual-value">${test.signals}</span></div>
+      </div>
+      <div class="channel-detail">${escapeHtml(test.period || "")} · ${test.coins} coins · fees ${escapeHtml(test.fees || "")} · past results do not guarantee future results</div>`
+      : `<div class="channel-detail">test results unavailable</div>`
+  }));
+
+  cards.push(channelCard({
+    id: 4, title: "Decision", model: "top ~3% setups only",
     body: `
-      ${badge(decision, decision === "TRADE" ? "long" : "wait")}
+      ${badge(isTrade ? "TRADE" : "WAIT", isTrade ? "long" : "wait")}
       <div class="channel-main">${fmtPct(data.confidence_pct)}</div>
-      <div class="channel-detail">confidence score</div>`
+      <div class="channel-detail">next check ${utcTime(eng.next_update)}</div>`
   }));
 
   cards.push(channelCard({
-    id: 5, title: "Suggested Risk", model: "fractional kelly",
+    id: 5, title: "Suggested Risk", model: "per trade",
     body: `
-      <div class="channel-main text-wait">${fmtPct(data.suggested_risk_pct, 2)}</div>
-      <div class="channel-detail">of account per trade</div>`
+      <div class="channel-main text-wait">${isTrade ? fmtPct(data.suggested_risk_pct, 1) : "0%"}</div>
+      <div class="channel-detail">of account if the stop is hit</div>`
   }));
 
   tier1El.innerHTML = cards.join("");
