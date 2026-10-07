@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Track record: every Signals FM signal and its result</title>
-<meta name="description" content="Every long and short Signals FM gives on BTC, ETH, SOL and five more coins, recorded automatically with its stop-loss, target and result. Live record plus a walk-forward backtest.">
+<meta name="description" content="Every long and short Signals FM gives on BTC, ETH, SOL and five more coins, recorded automatically with its stop-loss, target and result. Live record plus a 365-day backtest, after fees.">
 {% set seo_title = "Signals FM track record" %}{% set seo_path = "/track-record" %}{% set seo_description = "Every long and short Signals FM gives, logged automatically with its stop, target and result in R." %}
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
@@ -100,7 +100,7 @@
 
     <section class="block">
       <h2 class="sec">10,000 USDT, risking 1% on every signal</h2>
-      <p class="sec-sub">What the account would look like if every signal had been taken with the same 1% risk, compounding, before fees.</p>
+      <p class="sec-sub">What the account would look like if every signal had been taken with the same 1% risk, compounding, after estimated fees.</p>
       <svg id="curve" role="img" aria-label="Account balance over time"></svg>
     </section>
 
@@ -133,14 +133,15 @@
   <section class="block rules" id="rules">
     <h2 class="sec">How this is measured</h2>
     <ul id="rules-list">
-      <li><b>Same coins, every candle.</b> BTC, ETH, SOL, XRP, BNB, DOGE, ADA and LINK are read at every 1h and 4h close. Every long or short is logged.</li>
+      <li><b>Same coins, every candle.</b> BTC, ETH, SOL, XRP, BNB, DOGE, ADA and LINK are read at every 4-hour candle close by signal engine v2. Every long or short is logged.</li>
       <li><b>Entry</b> is the close of the candle that gave the signal.</li>
-      <li><b>Stop-loss</b> is the signal's 95th-percentile candle move away from entry, and the <b>target</b> is 1.5 times that distance, exactly as the dashboard shows them.</li>
-      <li><b>One signal per coin and timeframe at a time.</b> New signals are ignored until the open one closes.</li>
+      <li><b>Stop-loss</b> is 3 &times; ATR(14) away from entry and the <b>target</b> is 1.5 &times; ATR(14), exactly as the dashboard shows them. The target is closer than the stop, so a high win rate is needed to break even (about 67% plus fees). Judge the engine by the average R and the equity curve, not by the win rate alone.</li>
+      <li><b>One signal per coin at a time.</b> New signals are ignored until the open one closes.</li>
       <li><b>Pessimistic fills.</b> If one candle touches both the stop and the target, it counts as a loss. If a candle opens past the stop, the exit is that worse price.</li>
-      <li><b>Time limit.</b> After 48 candles without hitting either level, the signal closes at that candle's close.</li>
-      <li><b>Before costs.</b> Results don't include fees, funding or slippage, which lower real results.</li>
-      <li><b>Backtest</b> replays the same rules over past candles. At each candle the signal only sees the 200 candles up to that point, the same as the live dashboard, and the outcome comes only from the candles after it.</li>
+      <li><b>Time limit.</b> After 48 candles (8 days) without hitting either level, the signal closes at that candle's close.</li>
+      <li><b>After costs.</b> Every result already has 0.12% of the position taken off for fees and slippage (round trip). Funding payments on futures are not included.</li>
+      <li><b>Backtest</b> replays the same engine over the last 365 days and is refreshed every week. At each candle the engine only uses data that had closed by then, and the outcome comes only from the candles after it.</li>
+      <li><b>How the model was checked.</b> The engine was trained on Jan 2022 &ndash; Jun 2025 and then tested once on Jul 2025 &ndash; Oct 2026, data it had never seen: <span id="model-test">see below</span>.</li>
     </ul>
   </section>
 </main>
@@ -180,13 +181,21 @@
       return DATA.live_since ? `Recording live since ${day(DATA.live_since)}. ${live.signals} closed, ${DATA.sources.LIVE.open.length} open.` : "Live recording starts with the next candle close.";
     }
     const days = DATA.rules.backtest_days;
-    if (bt.state === "running") return `Backtest running: ${(bt.done || []).length} of ${bt.total} coin and timeframe pairs done. Refresh in a few minutes.`;
-    if (bt.state === "partial") return `Backtest finished for ${(bt.done || []).length} of ${bt.total} coin and timeframe pairs; the rest will be retried automatically.`;
-    if (bt.state === "done") return `Replayed over the last ${days["1h"]} days of 1h candles and ${days["4h"]} days of 4h candles. Finished ${day(bt.finished_at)}.`;
+    if (bt.state === "running") return "Backtest running (about 2 minutes). Refresh shortly.";
+    if (bt.state === "error") return "The backtest could not load price history; it will retry automatically.";
+    if (bt.state === "done" || bt.state === "partial") return `Replayed over the last ${days["4h"]} days of 4h candles. Updated ${day(bt.finished_at)}; refreshed weekly.`;
     return "The backtest starts a few seconds after the server starts.";
   }
 
+  function modelTest() {
+    const t = (DATA.rules || {}).model_test || {};
+    const el = document.getElementById("model-test");
+    if (!el || !t.signals) return;
+    el.textContent = `${t.signals} signals on ${t.coins} coins, ${t.win_rate}% won, average ${t.avg_net_r >= 0 ? "+" : ""}${t.avg_net_r}R per signal after fees, profit factor ${t.profit_factor}, largest drawdown ${t.max_drawdown_r}R`;
+  }
+
   function render() {
+    modelTest();
     document.querySelectorAll("[data-src]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.src === SRC ? "true" : "false"));
     $("src-note").textContent = note();
     const src = DATA.sources[SRC];
@@ -204,7 +213,7 @@
 
     const end = s.equity_1pct;
     $("lede").innerHTML = `Taking every one of these <b>${s.signals}</b> signals with 1% risk would have turned 10,000 USDT into
-      <b class="${cls(end - 10000)}">${money(end)} USDT</b> (${s.return_1pct >= 0 ? "+" : ""}${s.return_1pct.toFixed(1)}%), before fees.`;
+      <b class="${cls(end - 10000)}">${money(end)} USDT</b> (${s.return_1pct >= 0 ? "+" : ""}${s.return_1pct.toFixed(1)}%), after estimated fees.`;
     const fig = (k, v, sub, c) => `<div><dt>${k}</dt><dd class="${c || ""}">${v}<small>${sub}</small></dd></div>`;
     $("figs").innerHTML = [
       fig("Win rate", fmtPct(s.win_rate), `${s.wins} won, ${s.losses} lost`),
