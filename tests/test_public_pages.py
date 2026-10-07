@@ -37,7 +37,7 @@ class _Limiter:
 src = open(os.path.join(ROOT, "main.py"), encoding="utf-8").read().replace("\r\n", "\n")
 block = src[src.index("# TRACK RECORD + PUBLIC PAGES + SEO"):src.index('if __name__ == "__main__":')]
 ns = {"app": app, "limiter": _Limiter(), "os": os, "request": request, "render_template": render_template,
-      "get_candles": lambda **k: None, "signal_core": lambda df: None, "AVAILABLE_COINS": ["BTC/USDT"]}
+      "get_candles": lambda **k: None, "get_signal_engine": lambda: None, "AVAILABLE_COINS": ["BTC/USDT"]}
 exec(compile(block, "main.py (track record block)", "exec"), ns)
 
 
