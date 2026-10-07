@@ -2078,6 +2078,48 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
 # ============================================================
 # ROUTES
 # ============================================================
+# ============================================================
+# signal_core(): ONLY the part of generate_signal() that decides the
+# verdict, confidence and SL/TP (Hawkes + Bayesian + Conformal +
+# quantile volatility) - without the heavy display-only channels.
+# Used by trackrecord.py (live record + walk-forward backtest) so the
+# public track record measures exactly the signal users see.
+# KEEP IN SYNC with the first part of generate_signal().
+# ============================================================
+def signal_core(df):
+    df = df.copy()
+    if _HAS_PANDAS_TA:
+        df["rsi"] = ta.rsi(df["close"], length=14)
+        macd = ta.macd(df["close"])
+        df["macd"] = macd["MACD_12_26_9"]
+        df["macd_signal"] = macd["MACDs_12_26_9"]
+    else:
+        df["rsi"] = _ta_rsi(df["close"], 14)
+        macd_line, macd_signal_line = _ta_macd(df["close"])
+        df["macd"] = macd_line
+        df["macd_signal"] = macd_signal_line
+    df = df.dropna(subset=["rsi", "macd", "macd_signal"]).reset_index(drop=True)
+
+    current_price = float(df.iloc[-1]["close"])
+    buying_pressure, selling_pressure = hawkes_pressure(df)
+    bullish_pct, bearish_pct = bayesian_bullish_bearish(df)
+    confidence_pct, trade_decision = conformal_confidence(bullish_pct, buying_pressure, selling_pressure)
+    if trade_decision == "SKIP":
+        final_verdict = "WAIT"
+    elif bullish_pct > bearish_pct:
+        final_verdict = "LONG"
+    else:
+        final_verdict = "SHORT"
+    returns = df["close"].pct_change().dropna()
+    return {
+        "verdict": final_verdict,
+        "confidence": confidence_pct,
+        "bullish_pct": bullish_pct,
+        "price": current_price,
+        "extreme_move": float(returns.abs().quantile(0.95)),
+    }
+
+
 @app.route("/login", methods=["GET"])
 def login_page():
     # Agar user pehle se login hai to seedha trading interface pe bhej dein
@@ -2430,6 +2472,79 @@ from papertrade import paper_bp, init_papertrade
 app.register_blueprint(paper_bp)
 limiter.limit("300 per minute")(paper_bp)
 init_papertrade(app, available_coins=AVAILABLE_COINS)
+
+
+# ============================================================
+# TRACK RECORD + PUBLIC PAGES + SEO
+# trackrecord.py records every LONG/SHORT the engine gives on a fixed
+# coin list (live) and replays the same rule over history (walk-forward
+# backtest). It uses signal_core() above, i.e. the exact verdict path of
+# generate_signal(). /track-record is login-only until the env var
+# TRACK_RECORD_PUBLIC=on is set.
+# ============================================================
+import re as _re
+from datetime import datetime as _dt
+from trackrecord import track_bp, init_trackrecord, is_public as _track_public
+app.register_blueprint(track_bp)
+limiter.limit("60 per minute")(track_bp)
+init_trackrecord(app, get_candles=get_candles, signal_core=signal_core, available_coins=AVAILABLE_COINS)
+
+
+def _site_globals():
+    ga = (os.environ.get("GA_MEASUREMENT_ID") or "").strip()
+    email = (os.environ.get("SUPPORT_EMAIL") or "").strip()
+    site = (os.environ.get("SITE_URL") or "").strip().rstrip("/")
+    return {
+        "track_record_public": _track_public(),
+        "ga_measurement_id": ga if _re.fullmatch(r"G-[A-Z0-9]{4,20}", ga) else "",
+        "support_email": email if _re.fullmatch(r"[^@\s<>\"']+@[^@\s<>\"']+\.[A-Za-z]{2,}", email) else "",
+        "site_url": site if _re.fullmatch(r"https?://[A-Za-z0-9.\-:]+", site) else "",
+        "current_year": _dt.utcnow().year,
+    }
+
+
+app.context_processor(_site_globals)
+
+
+def _site_base():
+    return _site_globals()["site_url"] or request.url_root.rstrip("/")
+
+
+@app.route("/tools", methods=["GET"])
+def tools_page():
+    return render_template("tools.html")
+
+
+@app.route("/risk-disclosure", methods=["GET"])
+def risk_disclosure_page():
+    return render_template("risk-disclosure.html")
+
+
+@app.route("/robots.txt", methods=["GET"])
+def robots_txt():
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /api/",
+        "Disallow: /auto-trading",
+        "Disallow: /demo-trading",
+        "Disallow: /reset-password",
+        f"Sitemap: {_site_base()}/sitemap.xml",
+    ]
+    return app.response_class("\n".join(lines) + "\n", mimetype="text/plain")
+
+
+@app.route("/sitemap.xml", methods=["GET"])
+def sitemap_xml():
+    base = _site_base()
+    pages = [("/", "1.0"), ("/tools", "0.8"), ("/risk-disclosure", "0.4"), ("/terms", "0.3"), ("/privacy", "0.3")]
+    if _track_public():
+        pages.insert(1, ("/track-record", "0.9"))
+    today = _dt.utcnow().strftime("%Y-%m-%d")
+    urls = "".join(f"<url><loc>{base}{path}</loc><lastmod>{today}</lastmod><priority>{prio}</priority></url>"
+                   for path, prio in pages)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
+    return app.response_class(xml, mimetype="application/xml")
 
 
 if __name__ == "__main__":
