@@ -3,598 +3,400 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signals FM — Demo Trading</title>
-<meta name="description" content="Practice crypto spot and futures trading with live prices and virtual funds.">
-<link rel="stylesheet" hre f="/static/style.css?v=20260812-fx-1">
+<title>Signals FM — Auto-Trade Bot</title>
+<link rel="stylesheet" href="/static/style.css?v=20260812-fx-1">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   [hidden] { display: none !important; }
-  body { align-items: stretch; font-size: 13px; padding: 10px; }
-  .dt-app { max-width: 1760px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
-  .dt-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
-  .mono { font-family: var(--mono); }
-  .pos { color: var(--long); } .neg { color: var(--short); } .dim { color: var(--text-dim); } .faint { color: var(--text-faint); }
-  .warnc { color: var(--wait); }
+  body { align-items: stretch; font-size: 14px; padding: 14px; }
+  .at-wrap { max-width: 1600px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 
-  /* ---------- buttons / inputs ---------- */
-  .dt-btn { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text); padding: 7px 12px; border-radius: 6px;
-            font-family: var(--mono); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: border-color .12s, background .12s; }
-  .dt-btn:hover:not(:disabled) { border-color: var(--text-faint); background: var(--panel-hover); }
-  .dt-btn:disabled { opacity: .45; cursor: not-allowed; }
-  .dt-btn.sm { padding: 4px 8px; font-size: 11px; }
-  .dt-btn.long { background: var(--long); border-color: var(--long); color: #06231a; }
-  .dt-btn.short { background: var(--short); border-color: var(--short); color: #fff; }
-  .dt-btn.long:hover:not(:disabled), .dt-btn.short:hover:not(:disabled) { filter: brightness(1.07); }
-  .dt-btn.ghost { background: transparent; }
-  .dt-btn:focus-visible, .seg button:focus-visible, .tabbar button:focus-visible { outline: 2px solid var(--long); outline-offset: 2px; }
-  .inp, .sel { background: var(--void); border: 1px solid var(--line); color: var(--text); padding: 8px 9px; border-radius: 6px;
-               font-family: var(--mono); font-size: 13px; outline: none; width: 100%; min-width: 0; }
-  .inp:focus, .sel:focus { border-color: var(--text-dim); }
-  .inp.bad { border-color: var(--short); }
-  textarea.inp { resize: vertical; min-height: 64px; font-family: var(--serif); font-size: 13px; }
-  .help { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--line);
-          color: var(--text-faint); font-size: 9.5px; font-style: normal; cursor: pointer; margin-left: 4px; vertical-align: 1px; background: none; padding: 0; font-family: var(--mono); }
-  .help:hover { color: var(--text); border-color: var(--text-dim); }
-
-  .seg { display: flex; background: var(--void); border: 1px solid var(--line); border-radius: 7px; padding: 2px; gap: 2px; }
-  .seg button { flex: 1; background: none; border: none; color: var(--text-dim); font-family: var(--mono); font-size: 12px; font-weight: 700;
-                padding: 7px 6px; border-radius: 5px; cursor: pointer; }
-  .seg button[aria-pressed="true"] { background: var(--panel-hover); color: var(--text); }
-  .seg.side button[data-side="BUY"][aria-pressed="true"] { background: var(--long); color: #06231a; }
-  .seg.side button[data-side="SELL"][aria-pressed="true"] { background: var(--short); color: #fff; }
-
-  /* ---------- top bar ---------- */
-  .dt-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 9px 14px; }
-  .dt-brand { display: flex; align-items: center; gap: 10px; }
-  .dt-brand img { height: 24px; }
-  .dt-brand .name { font-family: var(--heading); font-weight: 700; font-size: 16px; white-space: nowrap; }
-  .dt-brand .sub { font-family: var(--mono); font-size: 12px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
-  .pill { font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--wait); background: var(--wait-dim); border: 1px solid rgba(255,200,87,.35);
-          padding: 3px 8px; border-radius: 20px; white-space: nowrap; letter-spacing: .3px; }
-  .back-link { font-family: var(--mono); font-size: 12px; color: var(--text-dim); text-decoration: none; white-space: nowrap; }
+  /* Top bar */
+  .at-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+            background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; }
+  .at-brand { display: flex; align-items: center; gap: 10px; font-family: var(--heading); font-weight: 700; font-size: 17px; }
+  .at-brand img { height: 26px; }
+  .at-brand span { white-space: nowrap; }
+  @media (max-width: 600px) { .at-brand .sub { display: none; } .at-brand img { display: none; } }
+  .at-brand .sub { font-family: var(--mono); font-size: 12px; color: var(--text-dim); font-weight: 600; }
+  .at-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .back-link { font-family: var(--mono); font-size: 12px; color: var(--text-dim); text-decoration: none; margin-right: 6px; }
   .back-link:hover { color: var(--text); }
-  .dt-acct { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-  .acct-kv { display: flex; flex-direction: column; font-family: var(--mono); line-height: 1.25; }
-  .acct-kv span { font-size: 10px; color: var(--text-faint); white-space: nowrap; }
-  .acct-kv b { font-size: 14px; font-weight: 700; white-space: nowrap; }
-  .acct-btns { display: flex; gap: 6px; }
 
-  /* ---------- layout ---------- */
-  .dt-grid { display: grid; grid-template-columns: 236px minmax(0, 1fr) 344px; gap: 10px; align-items: start; }
-  .dt-center { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-  @media (max-width: 1320px) {
-    .dt-grid { grid-template-columns: minmax(0, 1fr) 330px; }
-    .dt-grid .dt-markets { position: fixed; z-index: 900; top: 0; left: 0; bottom: 0; width: 280px; max-height: none; border-radius: 0;
-                  transform: translateX(-102%); transition: transform .2s; box-shadow: 0 0 40px rgba(0,0,0,.5); }
-    .dt-grid .dt-markets.open { transform: none; }
-    #btn-markets { display: inline-flex !important; }
-  }
-  @media (max-width: 900px) {
-    body { padding: 6px; }
-    .dt-grid { grid-template-columns: minmax(0, 1fr); }
-    .dt-grid .dt-center { display: contents; }
-    .dt-grid .symbar { order: 1; }
-    .dt-grid .dt-chartbox { order: 2; }
-    .dt-grid .dt-order { order: 3; position: static; max-height: none; }
-    .dt-grid .dt-tabs { order: 4; }
-    .dt-acct { gap: 12px; }
-    .dt-brand .sub, .dt-brand img { display: none; }
-  }
-  @media (prefers-reduced-motion: reduce) { .dt-markets { transition: none; } }
+  .btn { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text); padding: 8px 13px; border-radius: 6px;
+         font-family: var(--mono); font-size: 12px; font-weight: 600; cursor: pointer; transition: border-color .15s, background .15s; }
+  .btn:hover:not(:disabled) { border-color: var(--long); background: var(--panel-hover); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: var(--long); color: #06231a; border-color: var(--long); font-weight: 700; }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--long); }
+  .btn-danger { background: var(--short); color: #fff; border-color: var(--short); font-weight: 700; }
+  .btn-danger:hover:not(:disabled) { filter: brightness(1.08); background: var(--short); border-color: var(--short); }
+  .btn-sm { padding: 4px 8px; font-size: 10.5px; }
 
-  /* ---------- markets ---------- */
-  .dt-markets { display: flex; flex-direction: column; max-height: calc(100vh - 92px); position: sticky; top: 10px; }
-  .mk-head { padding: 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
-  .mk-head .row { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 11px; color: var(--text-dim); font-weight: 700; }
-  .mk-list { overflow-y: auto; flex: 1; padding: 4px; }
-  .mk-row { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 6px; padding: 7px 6px; border-radius: 6px; cursor: pointer;
-            font-family: var(--mono); font-size: 12px; border: 1px solid transparent; }
-  .mk-row:hover { background: var(--panel-raised); }
-  .mk-row.active { background: var(--panel-raised); border-color: var(--line); }
-  .mk-row .star { background: none; border: none; color: var(--text-faint); cursor: pointer; padding: 0; font-size: 12px; line-height: 1; }
-  .mk-row .star.on { color: var(--wait); }
-  .mk-row .px { text-align: right; font-size: 11.5px; line-height: 1.35; }
-  .mk-row .chg { font-size: 10.5px; }
-  .mk-sym b { font-weight: 700; } .mk-sym span { color: var(--text-faint); }
+  .conn-badge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 6px; font-family: var(--mono);
+                font-size: 11px; background: var(--panel-raised); border: 1px solid var(--line); }
+  .at-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--short); flex: none; }
+  .at-dot.on { background: var(--long); box-shadow: 0 0 8px var(--long); }
+  .at-dot.warn { background: var(--wait); }
 
-  /* ---------- symbol bar ---------- */
-  .symbar { display: flex; align-items: center; gap: 22px; padding: 10px 14px; flex-wrap: wrap; }
-  .symbar .sym { display: flex; align-items: center; gap: 8px; }
-  .symbar .sym h1 { font-family: var(--heading); font-size: 18px; margin: 0; white-space: nowrap; }
-  .symbar .mkt { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
-  .symbar .last { font-family: var(--mono); font-size: 22px; font-weight: 700; }
-  .sb-kv { display: flex; flex-direction: column; font-family: var(--mono); line-height: 1.3; }
-  .sb-kv span { font-size: 10px; color: var(--text-faint); white-space: nowrap; }
-  .sb-kv b { font-size: 12px; font-weight: 600; white-space: nowrap; }
-  #btn-markets { display: none; }
+  /* Mode strip */
+  .mode-strip { border-radius: 8px; padding: 10px 14px; font-size: 13px; line-height: 1.5; border: 1px solid var(--line); background: var(--panel); }
+  .mode-strip.demo { border-color: var(--wait); background: var(--wait-dim); }
+  .mode-strip.live { border-color: var(--short); background: var(--short-dim); }
+  .mode-strip strong { font-family: var(--mono); }
+  .mode-strip ol { margin: 6px 0 0 18px; }
 
-  /* ---------- chart ---------- */
-  .dt-chartbox { display: flex; flex-direction: column; }
-  .dt-charttools { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .tfs { display: flex; gap: 2px; }
-  .tfs button { background: none; border: none; color: var(--text-dim); font-family: var(--mono); font-size: 11.5px; font-weight: 700; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
-  .tfs button[aria-pressed="true"] { color: var(--text); background: var(--panel-raised); }
-  .legend { display: flex; gap: 12px; font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); flex-wrap: wrap; }
-  .legend i { display: inline-block; width: 12px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 4px; }
-  #chart { height: 430px; width: 100%; }
-  @media (max-width: 900px) { #chart { height: 320px; } }
-  .chart-hint { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); padding: 0 10px 6px; }
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); }
+  .stat .k { font-size: 10.5px; color: var(--text-dim); }
+  .stat .v { font-size: 17px; font-weight: 700; margin-top: 3px; }
+  .stat .s { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+  .pos { color: var(--long); } .neg { color: var(--short); } .dim { color: var(--text-dim); } .faint { color: var(--text-faint); }
 
-  /* ---------- bottom tabs ---------- */
-  .tabbar { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
-  .tabbar button { background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-dim); font-family: var(--mono); font-size: 12px; font-weight: 700;
-                   padding: 8px 10px; cursor: pointer; white-space: nowrap; }
-  .tabbar button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--long); }
-  .tabbar .count { color: var(--text-faint); font-weight: 500; }
-  .tab-body { padding: 8px 10px 12px; min-height: 180px; }
-  .tab-tools { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; font-family: var(--mono); font-size: 11px; color: var(--text-faint); flex-wrap: wrap; }
-  .tbl-wrap { overflow-x: auto; }
-  table.tbl { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
-  .tbl th { text-align: left; color: var(--text-faint); font-weight: 600; font-size: 10px; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  .tbl td { padding: 8px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; vertical-align: top; }
-  .tbl td.wrap { white-space: normal; min-width: 160px; max-width: 280px; }
-  .tbl tr.click { cursor: pointer; }
-  .tbl tr.click:hover td { background: var(--panel-raised); }
-  .tbl .sub { color: var(--text-faint); font-size: 10.5px; }
-  .tbl .acts { display: flex; gap: 4px; }
-  .empty { color: var(--text-faint); text-align: center; padding: 26px 10px; font-size: 12.5px; line-height: 1.6; }
-  .tag-chip { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 10px; background: var(--panel-hover); color: var(--text-dim); }
-  .side-badge { font-weight: 700; }
-  .linkbtn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-family: var(--mono); font-size: 11px; padding: 0; text-decoration: underline dotted; }
-  .linkbtn:hover { color: var(--text); }
+  /* Grid */
+  .grid { display: grid; grid-template-columns: 290px minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+  @media (max-width: 1250px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .panel-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text-dim); border-bottom: 1px solid var(--line);
+                 padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
-  /* ---------- performance ---------- */
-  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; }
-  .kpi { background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; font-family: var(--mono); }
-  .kpi .k { font-size: 10px; color: var(--text-faint); }
-  .kpi .v { font-size: 15px; font-weight: 700; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .kpi .s { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
-  .perf-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
-  @media (max-width: 1100px) { .perf-grid { grid-template-columns: 1fr; } }
-  .perf-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
-  .perf-box h3 { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin: 0 0 8px; font-weight: 700; }
-  #curve { height: 220px; }
-  .tips { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.6; font-family: var(--serif); }
-  .tips li + li { margin-top: 6px; }
+  /* Bot control — the one bold element */
+  .bot-card { border-width: 2px; }
+  .bot-card.running { border-color: var(--long); }
+  .bot-card.paused { border-color: var(--wait); }
+  .bot-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .bot-switch .label { font-family: var(--heading); font-size: 18px; font-weight: 700; }
+  .switch { position: relative; width: 62px; height: 32px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel-raised); cursor: pointer; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--text-faint); transition: transform .2s, background .2s; }
+  .switch[aria-checked="true"] { background: var(--long-dim); border-color: var(--long); }
+  .switch[aria-checked="true"]::after { transform: translateX(30px); background: var(--long); }
+  .switch:disabled { opacity: .45; cursor: not-allowed; }
+  .switch:focus-visible { outline: 2px solid var(--long); outline-offset: 3px; }
+  .bot-state { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); line-height: 1.6; }
 
-  /* ---------- order panel ---------- */
-  .dt-order { display: flex; flex-direction: column; position: sticky; top: 10px; max-height: calc(100vh - 20px); overflow-y: auto; }
-  .op-sec { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
-  .op-sec:last-child { border-bottom: none; }
-  .op-row { display: flex; gap: 6px; align-items: center; }
-  .op-row > * { flex: 1; }
-  .lev-btn { display: flex; justify-content: space-between; align-items: center; }
-  .otabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); }
-  .otabs button { background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-dim); font-family: var(--mono); font-size: 12px; font-weight: 700;
-                  padding: 6px 8px; cursor: pointer; }
-  .otabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
-  .fld { display: flex; flex-direction: column; gap: 4px; }
-  .fld > label, .fld .lbl { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-  .inp-wrap { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 6px; background: var(--void); overflow: hidden; }
-  .inp-wrap:focus-within { border-color: var(--text-dim); }
-  .inp-wrap .inp { border: none; border-radius: 0; background: transparent; }
-  .inp-wrap .suffix { display: flex; align-items: center; padding: 0 8px; font-family: var(--mono); font-size: 11px; color: var(--text-faint); border-left: 1px solid var(--line-soft); }
-  .inp-wrap .sel { border: none; border-left: 1px solid var(--line-soft); border-radius: 0; width: auto; background: transparent; padding: 0 6px; font-size: 11.5px; }
-  .quick { display: flex; gap: 4px; flex-wrap: wrap; }
-  .quick button { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text-dim); font-family: var(--mono); font-size: 10.5px; padding: 3px 7px; border-radius: 4px; cursor: pointer; }
-  .quick button:hover { color: var(--text); border-color: var(--text-faint); }
-  .slider { width: 100%; accent-color: var(--text-dim); margin: 2px 0; }
-  .slider-marks { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9.5px; color: var(--text-faint); }
-  .slider-marks button { background: none; border: none; color: inherit; font: inherit; cursor: pointer; padding: 0; }
-  .slider-marks button:hover { color: var(--text); }
-  .maxline { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); display: flex; justify-content: space-between; gap: 6px; }
-  .chk { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); cursor: pointer; user-select: none; }
-  .chk input { accent-color: var(--long); margin: 0; }
-  .tpsl-grid { display: grid; grid-template-columns: 1fr 76px; gap: 6px; align-items: end; }
-  .tpsl-note { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); margin-top: -2px; }
-  details.op-more summary { cursor: pointer; font-family: var(--mono); font-size: 11px; color: var(--text-dim); list-style: none; }
-  details.op-more summary::-webkit-details-marker { display: none; }
-  details.op-more summary::before { content: "▸ "; }
-  details.op-more[open] summary::before { content: "▾ "; }
-  .summary { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-family: var(--mono); font-size: 11.5px; }
-  .summary dt { color: var(--text-faint); }
-  .summary dd { margin: 0; text-align: right; font-weight: 600; }
-  .warns { display: flex; flex-direction: column; gap: 5px; }
-  .wmsg { font-size: 11.5px; line-height: 1.45; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); font-family: var(--serif); }
-  .wmsg.danger, .wmsg.error { border-color: var(--short); background: var(--short-dim); color: var(--text); }
-  .wmsg.warn { border-color: rgba(255,200,87,.45); background: var(--wait-dim); }
-  .wmsg.info { color: var(--text-dim); }
-  .wmsg b { font-family: var(--mono); font-size: 10.5px; margin-right: 4px; }
-  .submit { width: 100%; padding: 12px; font-size: 13.5px; font-weight: 700; border-radius: 8px; }
-  .submit-note { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); text-align: center; }
-  .sig { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .sig-badge { font-family: var(--mono); font-size: 11.5px; font-weight: 700; padding: 4px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--panel-raised); }
+  /* Coins */
+  .coin-tools { display: flex; gap: 6px; }
+  .coin-tools input { flex: 1; min-width: 0; }
+  .coin-list { display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow-y: auto; }
+  .coin-item { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;
+               background: var(--panel-raised); border: 1px solid transparent; font-family: var(--mono); font-size: 12px; cursor: pointer; }
+  .coin-item:hover { border-color: var(--line); }
+  .coin-item.active { border-color: var(--long); }
+  .coin-item input { margin: 0; accent-color: var(--long); cursor: pointer; }
+  .coin-item .px { text-align: right; font-size: 11px; }
+
+  /* Inputs */
+  .field { display: flex; flex-direction: column; gap: 5px; font-family: var(--mono); font-size: 12px; }
+  .field label { color: var(--text-dim); font-size: 11px; }
+  .field .hint { color: var(--text-faint); font-size: 10.5px; }
+  .inp, .sel { background: var(--void); border: 1px solid var(--line); color: var(--text); padding: 8px; border-radius: 6px;
+               font-family: var(--mono); font-size: 13px; outline: none; width: 100%; }
+  .inp:focus, .sel:focus { border-color: var(--long); }
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+
+  /* Hero */
+  .at-hero { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; }
+  .hero-price { font-family: var(--mono); font-size: 26px; font-weight: 700; }
+  .hero-pair { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  .sig-badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11.5px; font-weight: 700;
+               padding: 5px 9px; border-radius: 5px; background: var(--panel-raised); border: 1px solid var(--line); }
   .sig-badge.LONG { color: var(--long); border-color: var(--long); background: var(--long-dim); }
   .sig-badge.SHORT { color: var(--short); border-color: var(--short); background: var(--short-dim); }
   .sig-badge.WAIT { color: var(--wait); border-color: var(--wait); background: var(--wait-dim); }
+  .hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  #candle-chart { width: 100%; height: 320px; }
 
-  /* ---------- modals ---------- */
-  .modal { display: none; position: fixed; inset: 0; background: rgba(7,10,15,.8); backdrop-filter: blur(3px); z-index: 1000;
-           justify-content: center; align-items: center; padding: 16px; }
+  /* Tables */
+  .tbl-wrap { overflow-x: auto; }
+  table.tbl { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+  .tbl th, .tbl td { padding: 7px 6px; text-align: left; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+  .tbl th { color: var(--text-faint); font-weight: 600; font-size: 10px; }
+  .tbl tr.click { cursor: pointer; }
+  .tbl tr.click:hover { background: var(--panel-hover); }
+  .empty { color: var(--text-faint); text-align: center; padding: 14px 0; font-size: 12px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; }
+  .tab { background: none; border: 1px solid transparent; color: var(--text-dim); font-family: var(--mono); font-size: 11px; font-weight: 700;
+         padding: 4px 8px; border-radius: 5px; cursor: pointer; }
+  .tab[aria-selected="true"] { color: var(--text); border-color: var(--line); background: var(--panel-raised); }
+
+  /* Chat */
+  .chat-box { height: 200px; overflow-y: auto; background: var(--void); border: 1px solid var(--line); border-radius: 6px; padding: 10px;
+              display: flex; flex-direction: column; gap: 7px; font-size: 12px; font-family: var(--mono); }
+  .msg { padding: 6px 10px; border-radius: 6px; max-width: 90%; line-height: 1.45; white-space: pre-wrap; }
+  .msg.user { background: var(--panel-raised); align-self: flex-end; }
+  .msg.ai { background: var(--long-dim); border: 1px solid rgba(54,224,160,.25); align-self: flex-start; }
+  .chat-row { display: flex; gap: 6px; }
+  .chat-row .inp { flex: 1; min-width: 0; }
+
+  /* Log */
+  .log { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; font-family: var(--mono); font-size: 11px; }
+  .log-row { display: grid; grid-template-columns: 52px 46px 1fr; gap: 6px; padding: 4px 2px; border-bottom: 1px solid var(--line-soft); line-height: 1.45; }
+  .log-row .lv { font-weight: 700; font-size: 10px; }
+  .lv.TRADE { color: var(--long); } .lv.WARN { color: var(--wait); } .lv.ERROR { color: var(--short); } .lv.INFO, .lv.SCAN { color: var(--text-faint); }
+
+  /* Modals */
+  .modal { display: none; position: fixed; inset: 0; background: rgba(7,10,15,.82); backdrop-filter: blur(3px); z-index: 1000;
+           justify-content: center; align-items: center; padding: 18px; }
   .modal.open { display: flex; }
-  .mbox { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: 100%; max-width: 460px; max-height: 92vh; overflow-y: auto;
-          padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
-  .mbox.wide { max-width: 720px; }
-  .mhead { display: flex; justify-content: space-between; align-items: center; font-family: var(--heading); font-weight: 700; font-size: 16px; }
-  .mx { background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; line-height: 1; }
-  .mfoot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-  .mnote { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; font-family: var(--serif); }
-  .alert { border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.5; }
+  .modal-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: 100%; max-width: 500px; max-height: 92vh;
+               overflow-y: auto; padding: 22px; display: flex; flex-direction: column; gap: 13px; font-size: 13px; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; font-family: var(--heading); font-weight: 700; font-size: 16px; }
+  .x { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; line-height: 1; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  .note { font-size: 12px; color: var(--text-dim); line-height: 1.55; }
+  .note ul { margin: 4px 0 0 16px; }
+  .alert { border-radius: 6px; padding: 9px 11px; font-size: 12px; line-height: 1.5; }
   .alert.err { background: var(--short-dim); color: var(--short); border: 1px solid var(--short); }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chips button { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 7px 11px; border-radius: 6px; cursor: pointer; }
-  .chips button[aria-pressed="true"] { border-color: var(--long); color: var(--long); background: var(--long-dim); }
-  #m-guide .mbox { overflow: hidden; }
-  .guide { overflow-y: auto; max-height: 60vh; padding-right: 6px; }
-  .guide .term { padding: 6px 8px; margin: 0 -8px; }
-  .guide h3 { font-family: var(--heading); font-size: 14px; margin: 10px 0 4px; }
-  .guide h3:first-child { margin-top: 0; }
-  .guide p, .guide li { font-family: var(--serif); font-size: 13px; line-height: 1.6; color: var(--text-dim); margin: 0; }
-  .guide ul, .guide ol { margin: 4px 0 0; padding-left: 18px; }
-  .guide b { color: var(--text); }
-  .guide .term.flash { animation: flash 1.6s ease-out; border-radius: 6px; }
-  @keyframes flash { 0% { background: var(--long-dim); } 100% { background: transparent; } }
-  .guide-nav { display: flex; flex-wrap: wrap; gap: 4px; }
-  .guide-nav button { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text-dim); font-family: var(--mono); font-size: 10.5px; padding: 3px 7px; border-radius: 4px; cursor: pointer; }
+  .alert.warn { background: var(--wait-dim); border: 1px solid var(--wait); }
+  .alert.ok { background: var(--long-dim); color: var(--long); border: 1px solid var(--long); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; font-family: var(--mono); font-size: 12px; }
+  .kv dt { color: var(--text-dim); } .kv dd { margin: 0; text-align: right; font-weight: 600; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.45; cursor: pointer; }
+  .check input { margin-top: 3px; accent-color: var(--short); }
 
-  .toasts { position: fixed; bottom: 14px; right: 14px; z-index: 1100; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
-  .toast { padding: 10px 12px; border-radius: 8px; font-family: var(--mono); font-size: 12px; line-height: 1.45; background: var(--panel); border: 1px solid var(--line);
-           border-left-width: 3px; box-shadow: 0 10px 28px rgba(0,0,0,.35); }
-  .toast.ok { border-left-color: var(--long); } .toast.err { border-left-color: var(--short); } .toast.warn { border-left-color: var(--wait); }
-  .foot { font-size: 11px; color: var(--text-faint); line-height: 1.6; padding: 2px 4px 10px; font-family: var(--serif); }
-  .foot a { color: inherit; }
+  .toast { position: fixed; bottom: 18px; right: 18px; z-index: 1100; max-width: 380px; padding: 11px 14px; border-radius: 8px;
+           font-family: var(--mono); font-size: 12px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.35);
+           display: none; }
+  .toast.show { display: block; }
+  .toast.err { border-color: var(--short); color: var(--short); }
+  .toast.ok { border-color: var(--long); }
+  @media (prefers-reduced-motion: reduce) { .switch::after { transition: none; } }
+
+  /* Account switcher */
+  .acct-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: var(--panel-raised); }
+  .acct-switch button { background: none; border: none; color: var(--text-dim); font-family: var(--mono); font-size: 12px; font-weight: 700;
+                        padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+  .acct-switch button + button { border-left: 1px solid var(--line); }
+  .acct-switch button[aria-pressed="true"] { color: var(--text); background: var(--panel-hover); }
+  .acct-switch button[aria-pressed="true"][data-mode="demo"] { box-shadow: inset 0 -2px 0 var(--wait); }
+  .acct-switch button[aria-pressed="true"][data-mode="live"] { box-shadow: inset 0 -2px 0 var(--short); }
+  .acct-switch .mini { font-weight: 500; font-size: 10.5px; color: var(--text-faint); }
 </style>
 {% include '_analytics.html' ignore missing %}
 </head>
 <body>
-<div class="dt-app">
+<div class="at-wrap">
 
-  <header class="dt-panel dt-top">
-    <div class="dt-brand">
+  <header class="at-top">
+    <div class="at-brand">
       <a href="/" class="back-link" title="Back to dashboard">← Dashboard</a>
       <img src="{{ url_for('static', filename='logo.png') }}" alt="">
-      <span class="name">Signals FM</span><span class="sub">Demo Trading</span>
-      <span class="pill" title="Live market prices, virtual money">PRACTICE · VIRTUAL USDT</span>
+      <span>Signals FM</span><span class="sub">Auto-Trade Bot</span>
     </div>
-    <div class="dt-acct" aria-live="polite">
-      <div class="acct-kv"><span>Equity<button class="help" data-term="equity" aria-label="What is equity?">?</button></span><b id="a-equity">—</b></div>
-      <div class="acct-kv"><span>Available</span><b id="a-avail">—</b></div>
-      <div class="acct-kv"><span>Unrealized PnL</span><b id="a-upnl">—</b></div>
-      <div class="acct-kv"><span>Return</span><b id="a-return">—</b></div>
-      <div class="acct-kv"><span>Margin ratio<button class="help" data-term="margin_ratio" aria-label="What is margin ratio?">?</button></span><b id="a-mratio">—</b></div>
-      <div class="acct-btns">
-        <button class="dt-btn" id="btn-guide">Guide</button>
-        <button class="dt-btn" id="btn-reset">Reset</button>
+    <div class="at-nav">
+      <div class="acct-switch" role="group" aria-label="Binance account">
+        <button type="button" data-mode="demo" aria-pressed="true"><span class="at-dot" id="sw-dot-demo"></span>Demo <span class="mini" id="sw-mini-demo"></span></button>
+        <button type="button" data-mode="live" aria-pressed="false"><span class="at-dot" id="sw-dot-live"></span>Live <span class="mini" id="sw-mini-live"></span></button>
       </div>
+      <div class="conn-badge"><span class="at-dot" id="conn-dot"></span><span id="conn-text">Not connected</span></div>
+      <button class="btn btn-primary" id="btn-connect">Connect Binance</button>
+      <button class="btn" id="btn-voice">Voice: ON</button>
     </div>
   </header>
 
-  <div class="dt-grid">
-    <!-- Markets -->
-    <aside class="dt-panel dt-markets" id="markets" aria-label="Markets">
-      <div class="mk-head">
-        <div class="row"><span>Markets</span><span id="mk-feed" class="faint"></span></div>
-        <input class="inp" id="mk-search" placeholder="Search coin…" aria-label="Search coins" autocomplete="off">
-        <div class="seg" role="group" aria-label="Filter">
-          <button type="button" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" data-filter="fav" aria-pressed="false">★ Favorites</button>
+  <div class="mode-strip" id="mode-strip">Loading…</div>
+
+  <section class="stats" aria-label="Account summary">
+    <div class="stat"><div class="k">Balance (USDT)</div><div class="v" id="st-balance">—</div><div class="s" id="st-balance-sub">&nbsp;</div></div>
+    <div class="stat"><div class="k">Today's PnL</div><div class="v" id="st-today">—</div><div class="s">Closed trades, UTC day</div></div>
+    <div class="stat"><div class="k">Open PnL</div><div class="v" id="st-unreal">—</div><div class="s" id="st-open-count">0 open</div></div>
+    <div class="stat"><div class="k">Total PnL</div><div class="v" id="st-total">—</div><div class="s" id="st-closed">0 closed</div></div>
+    <div class="stat"><div class="k">Win rate</div><div class="v" id="st-winrate">—</div><div class="s" id="st-wl">&nbsp;</div></div>
+    <div class="stat"><div class="k">Engine</div><div class="v" id="st-engine">—</div><div class="s" id="st-engine-sub">&nbsp;</div></div>
+  </section>
+
+  <div class="grid">
+    <!-- LEFT: bot control + coins -->
+    <div class="col">
+      <div class="panel bot-card" id="bot-card">
+        <div class="bot-switch">
+          <div>
+            <div class="label" id="bot-label">Bot OFF</div>
+            <div class="bot-state" id="bot-sub">Connect Binance first</div>
+          </div>
+          <button class="switch" id="bot-switch" role="switch" aria-checked="false" aria-label="Auto-trade bot on/off" disabled></button>
         </div>
+        <div class="bot-state" id="bot-detail"></div>
+        <button class="btn btn-danger" id="btn-panic" disabled title="Turn the bot off and close every open position">Stop all</button>
       </div>
-      <div class="mk-list" id="mk-list"><div class="empty">Loading prices…</div></div>
-    </aside>
 
-    <main class="dt-center">
-      <section class="dt-panel symbar" aria-label="Selected market">
-        <button class="dt-btn sm" id="btn-markets" aria-controls="markets">☰ Markets</button>
-        <div class="sym"><h1 id="sb-symbol">BTC/USDT</h1><span class="mkt" id="sb-market">Futures</span></div>
-        <div><div class="last" id="sb-last">—</div></div>
-        <div class="sb-kv"><span>24h change</span><b id="sb-chg">—</b></div>
-        <div class="sb-kv"><span>24h high</span><b id="sb-high">—</b></div>
-        <div class="sb-kv"><span>24h low</span><b id="sb-low">—</b></div>
-        <div class="sb-kv"><span>24h volume</span><b id="sb-vol">—</b></div>
-        <div class="sb-kv"><span>Bid / Ask<button class="help" data-term="spread" aria-label="What is the spread?">?</button></span><b id="sb-ba">—</b></div>
-        <div class="sb-kv" id="sb-funding-wrap"><span>Funding / next<button class="help" data-term="funding" aria-label="What is funding?">?</button></span><b id="sb-funding">—</b></div>
-      </section>
+      <div class="panel">
+        <div class="panel-title"><span>Coins</span><span class="faint" id="coin-count">0 / 8 in bot</span></div>
+        <div class="coin-tools"><input class="inp" id="coin-search" placeholder="Search coins…" aria-label="Search coins"></div>
+        <div class="note">Tick a coin to let the bot trade it (max 8). Click a row to view its chart.</div>
+        <div class="coin-list" id="coin-list"></div>
+      </div>
+    </div>
 
-      <section class="dt-panel dt-chartbox" aria-label="Price chart">
-        <div class="dt-charttools">
-          <div class="tfs" id="tfs" role="group" aria-label="Timeframe">
-            <button type="button" data-tf="1m">1m</button><button type="button" data-tf="5m">5m</button>
-            <button type="button" data-tf="15m">15m</button><button type="button" data-tf="1h">1h</button>
-            <button type="button" data-tf="4h">4h</button><button type="button" data-tf="1d">1D</button>
+    <!-- CENTER: hero, chart, settings -->
+    <div class="col">
+      <div class="panel">
+        <div class="at-hero">
+          <div>
+            <div class="hero-pair" id="hero-pair">BTC/USDT</div>
+            <div class="hero-price" id="hero-price">—</div>
+            <div class="faint" style="font-family:var(--mono);font-size:11px;" id="hero-change">&nbsp;</div>
           </div>
-          <div class="legend">
-            <span><i style="border-color:var(--text-dim)"></i>Entry</span>
-            <span><i style="border-color:var(--long);border-top-style:dashed"></i>Take-profit</span>
-            <span><i style="border-color:var(--short);border-top-style:dashed"></i>Stop-loss</span>
-            <span><i style="border-color:var(--wait)"></i>Liquidation</span>
-            <span><i style="border-color:#7aa2ff;border-top-style:dotted"></i>Open order</span>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+            <span class="sig-badge" id="sig-badge">Signal: —</span>
+            <button class="btn btn-sm" id="btn-analyze">Check signal</button>
           </div>
-        </div>
-        <div id="chart"></div>
-        <div class="chart-hint" id="chart-hint">Tip: with a Limit or Stop order selected, click the chart to set the price.</div>
-      </section>
-
-      <section class="dt-panel dt-tabs" aria-label="Account activity">
-        <div class="tabbar" role="tablist">
-          <button role="tab" data-tab="positions" aria-selected="true">Positions <span class="count" id="c-positions">(0)</span></button>
-          <button role="tab" data-tab="orders" aria-selected="false">Open orders <span class="count" id="c-orders">(0)</span></button>
-          <button role="tab" data-tab="history" aria-selected="false">Order history</button>
-          <button role="tab" data-tab="fills" aria-selected="false">Trade history</button>
-          <button role="tab" data-tab="closed" aria-selected="false">Closed trades &amp; journal</button>
-          <button role="tab" data-tab="perf" aria-selected="false">Performance</button>
-          <button role="tab" data-tab="ledger" aria-selected="false">Transactions</button>
-        </div>
-        <div class="tab-body" id="tab-positions"></div>
-        <div class="tab-body" id="tab-orders" hidden></div>
-        <div class="tab-body" id="tab-history" hidden></div>
-        <div class="tab-body" id="tab-fills" hidden></div>
-        <div class="tab-body" id="tab-closed" hidden></div>
-        <div class="tab-body" id="tab-perf" hidden>
-          <div class="kpis" id="perf-kpis"></div>
-          <div class="perf-grid">
-            <div class="perf-box"><h3>Wallet balance over time</h3><div id="curve"></div></div>
-            <div class="perf-box"><h3>Coach notes</h3><ul class="tips" id="perf-tips"></ul></div>
+          <div class="hero-actions">
+            <button class="btn btn-primary" id="btn-long" disabled>Manual LONG</button>
+            <button class="btn btn-danger" id="btn-short" disabled>Manual SHORT</button>
           </div>
-          <div class="perf-grid">
-            <div class="perf-box"><h3>By coin</h3><div class="tbl-wrap" id="perf-coins"></div></div>
-            <div class="perf-box"><h3>Long vs short</h3><div class="tbl-wrap" id="perf-sides"></div></div>
-          </div>
-        </div>
-        <div class="tab-body" id="tab-ledger" hidden></div>
-      </section>
-    </main>
-
-    <!-- Order entry -->
-    <aside class="dt-panel dt-order" aria-label="Place order">
-      <div class="op-sec">
-        <div class="seg" id="seg-market" role="group" aria-label="Market type">
-          <button type="button" data-market="spot" aria-pressed="false">Spot</button>
-          <button type="button" data-market="futures" aria-pressed="true">Futures</button>
-        </div>
-        <div class="op-row" id="lev-row">
-          <button class="dt-btn lev-btn" id="btn-mode"><span id="lbl-mode">Isolated</span><span class="faint">▾</span></button>
-          <button class="dt-btn lev-btn" id="btn-lev"><span id="lbl-lev">5x</span><span class="faint">▾</span></button>
-        </div>
-        <div class="seg side" id="seg-side" role="group" aria-label="Side">
-          <button type="button" data-side="BUY" aria-pressed="true">Buy / Long</button>
-          <button type="button" data-side="SELL" aria-pressed="false">Sell / Short</button>
         </div>
       </div>
 
-      <div class="op-sec">
-        <div class="otabs" role="tablist" aria-label="Order type">
-          <button role="tab" data-otype="LIMIT" aria-selected="true">Limit</button>
-          <button role="tab" data-otype="MARKET" aria-selected="false">Market</button>
-          <button role="tab" data-otype="STOP" aria-selected="false">Stop</button>
-          <button role="tab" data-otype="TRAILING_STOP" aria-selected="false">Trailing</button>
-          <button class="help" data-term="order_types" aria-label="Order types explained" style="align-self:center;margin-left:auto">?</button>
-        </div>
-
-        <div class="fld" id="f-stopkind">
-          <div class="seg" role="group" aria-label="Stop order kind">
-            <button type="button" data-stopkind="STOP_MARKET" aria-pressed="true">Stop-Market</button>
-            <button type="button" data-stopkind="STOP_LIMIT" aria-pressed="false">Stop-Limit</button>
-          </div>
-        </div>
-        <div class="fld" id="f-trigger">
-          <label for="i-trigger">Trigger price <span class="quick"><button type="button" data-fill="trigger">Last</button></span></label>
-          <div class="inp-wrap"><input class="inp" id="i-trigger" inputmode="decimal" autocomplete="off"><span class="suffix">USDT</span></div>
-        </div>
-        <div class="fld" id="f-price">
-          <label for="i-price">Price <span class="quick"><button type="button" data-fill="last">Last</button><button type="button" data-fill="bid">Bid</button><button type="button" data-fill="ask">Ask</button></span></label>
-          <div class="inp-wrap"><input class="inp" id="i-price" inputmode="decimal" autocomplete="off"><span class="suffix">USDT</span></div>
-        </div>
-        <div class="fld" id="f-market-note"><div class="tpsl-note">Executes immediately at the best available price (you pay the spread + taker fee).</div></div>
-        <div class="fld" id="f-callback">
-          <label for="i-callback">Callback rate<button class="help" data-term="trailing" aria-label="What is a trailing stop?">?</button>
-            <span class="quick"><button type="button" data-cb="0.5">0.5%</button><button type="button" data-cb="1">1%</button><button type="button" data-cb="2">2%</button><button type="button" data-cb="3">3%</button></span></label>
-          <div class="inp-wrap"><input class="inp" id="i-callback" inputmode="decimal" value="1" autocomplete="off"><span class="suffix">%</span></div>
-          <label for="i-activation">Activation price (optional)</label>
-          <div class="inp-wrap"><input class="inp" id="i-activation" inputmode="decimal" placeholder="Starts trailing now" autocomplete="off"><span class="suffix">USDT</span></div>
-        </div>
-
-        <div class="fld">
-          <label for="i-size">Size <span class="faint" id="size-conv"></span></label>
-          <div class="inp-wrap">
-            <input class="inp" id="i-size" inputmode="decimal" placeholder="0" autocomplete="off">
-            <select class="sel" id="i-unit" aria-label="Size unit"><option value="base">BTC</option><option value="quote">USDT</option></select>
-          </div>
-          <input type="range" class="slider" id="i-slider" min="0" max="100" step="1" value="0" aria-label="Size as % of maximum">
-          <div class="slider-marks"><button type="button" data-pct="0">0</button><button type="button" data-pct="25">25%</button><button type="button" data-pct="50">50%</button><button type="button" data-pct="75">75%</button><button type="button" data-pct="100">100%</button></div>
-          <div class="maxline"><span>Max <span id="max-size">—</span></span><span>Avail. <span id="avail-small">—</span></span></div>
-        </div>
-
-        <label class="chk"><input type="checkbox" id="i-tpsl"> Take-profit / Stop-loss<button class="help" data-term="tpsl" aria-label="About take-profit and stop-loss">?</button></label>
-        <div id="tpsl-box" hidden>
-          <div class="tpsl-grid">
-            <div class="fld"><label for="i-tp">Take-profit price</label><input class="inp" id="i-tp" inputmode="decimal" autocomplete="off"></div>
-            <div class="fld"><label for="i-tp-pct">Move %</label><input class="inp" id="i-tp-pct" inputmode="decimal" autocomplete="off"></div>
-          </div>
-          <div class="tpsl-note" id="tp-note">&nbsp;</div>
-          <div class="tpsl-grid" style="margin-top:6px">
-            <div class="fld"><label for="i-sl">Stop-loss price</label><input class="inp" id="i-sl" inputmode="decimal" autocomplete="off"></div>
-            <div class="fld"><label for="i-sl-pct">Move %</label><input class="inp" id="i-sl-pct" inputmode="decimal" autocomplete="off"></div>
-          </div>
-          <div class="tpsl-note" id="sl-note">&nbsp;</div>
-        </div>
-
-        <details class="op-more" id="risk-box">
-          <summary>Size by risk<button class="help" data-term="risk" aria-label="Position sizing by risk">?</button></summary>
-          <div class="fld" style="margin-top:8px">
-            <label for="i-risk">Risk per trade (% of equity)</label>
-            <div class="op-row">
-              <div class="inp-wrap"><input class="inp" id="i-risk" inputmode="decimal" value="1" autocomplete="off"><span class="suffix">%</span></div>
-              <button class="dt-btn" id="btn-risk-calc" type="button">Calculate size</button>
-            </div>
-            <div class="tpsl-note" id="risk-note">Needs a stop-loss. The size is set so that hitting the stop loses this % of your equity.</div>
-          </div>
-        </details>
-
-        <div class="op-row" id="opt-row" style="flex-wrap:wrap; gap:10px;">
-          <label class="chk" id="o-reduce-wrap" style="flex:0 0 auto"><input type="checkbox" id="i-reduce"> Reduce-only<button class="help" data-term="reduce_only" aria-label="What is reduce-only?">?</button></label>
-          <label class="chk" id="o-post-wrap" style="flex:0 0 auto"><input type="checkbox" id="i-post"> Post-only<button class="help" data-term="post_only" aria-label="What is post-only?">?</button></label>
-          <div id="o-tif-wrap" style="flex:0 0 92px"><select class="sel" id="i-tif" aria-label="Time in force"><option>GTC</option><option>IOC</option><option>FOK</option></select></div>
-          <button class="help" data-term="tif" id="o-tif-help" aria-label="Time in force explained" style="flex:0 0 auto">?</button>
-        </div>
-
-        <details class="op-more" id="journal-box">
-          <summary>Journal this trade</summary>
-          <div class="fld" style="margin-top:8px">
-            <label for="i-tag">Setup</label>
-            <input class="inp" id="i-tag" list="tag-list" maxlength="40" placeholder="e.g. Breakout" autocomplete="off">
-            <label for="i-notes">Why am I taking this trade?</label>
-            <textarea class="inp" id="i-notes" maxlength="1000" placeholder="Plan, invalidation, what would make me exit…"></textarea>
-          </div>
-        </details>
+      <div class="panel">
+        <div class="panel-title"><span id="chart-title">BTC/USDT</span><span class="faint" id="chart-sub">Entry / SL / TP lines appear on the chart</span></div>
+        <div id="candle-chart"></div>
       </div>
 
-      <div class="op-sec">
-        <dl class="summary" id="sum"></dl>
-        <div class="warns" id="warns"></div>
-        <button class="dt-btn submit long" id="btn-submit" disabled>Enter a size</button>
-        <div class="submit-note" id="submit-note">&nbsp;</div>
-        <label class="chk" style="justify-content:center"><input type="checkbox" id="i-confirm" checked> Confirm before placing orders</label>
+      <div class="panel">
+        <div class="panel-title"><span id="settings-title">Bot settings</span><span class="faint" id="settings-dirty"></span></div>
+        <div class="settings-grid">
+          <div class="field"><label for="s-market">Market</label>
+            <select class="sel" id="s-market"><option value="spot">Spot (LONG only, no leverage)</option><option value="futures">USDT-M Futures (LONG + SHORT)</option></select></div>
+          <div class="field"><label for="s-leverage">Leverage</label><select class="sel" id="s-leverage"></select>
+            <span class="hint">Server cap: 20x. 1–3x is safer to start.</span></div>
+          <div class="field"><label for="s-timeframe">Signal timeframe</label><select class="sel" id="s-timeframe"></select></div>
+          <div class="field"><label for="s-risk">Risk per trade (% of balance)</label><input class="inp" type="number" id="s-risk" min="0.1" max="3" step="0.1">
+            <span class="hint">Loss if the stop-loss is hit (0.1–3%)</span></div>
+          <div class="field"><label for="s-maxpos">Max position size (USDT)</label><input class="inp" type="number" id="s-maxpos" min="10" step="10"></div>
+          <div class="field"><label for="s-maxopen">Max open positions</label><input class="inp" type="number" id="s-maxopen" min="1" max="5" step="1"></div>
+          <div class="field"><label for="s-daily">Daily loss limit (%)</label><input class="inp" type="number" id="s-daily" min="1" max="20" step="0.5">
+            <span class="hint">The bot pauses for the day after this loss</span></div>
+          <div class="field"><label for="s-conf">Min signal confidence (%)</label><input class="inp" type="number" id="s-conf" min="55" max="95" step="1"></div>
+          <div class="field"><label for="s-rr">Reward : Risk</label><input class="inp" type="number" id="s-rr" min="1" max="4" step="0.1">
+            <span class="hint">1.5 = take-profit is 1.5× the stop distance</span></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn" id="btn-reset-settings">Undo</button>
+          <button class="btn btn-primary" id="btn-save-settings">Save settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: positions, assistant, log -->
+    <div class="col">
+      <div class="panel">
+        <div class="panel-title">
+          <div class="tabs" role="tablist">
+            <button class="tab" role="tab" aria-selected="true" data-tab="open">Open</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="history">History</button>
+          </div>
+          <span class="faint" id="pos-note"></span>
+        </div>
+        <div class="tbl-wrap" id="tab-open">
+          <table class="tbl"><thead><tr><th>Coin</th><th>Side</th><th>Entry</th><th>SL / TP</th><th>PnL</th><th></th></tr></thead>
+            <tbody id="open-body"><tr><td colspan="6" class="empty">No open positions</td></tr></tbody></table>
+        </div>
+        <div class="tbl-wrap" id="tab-history" hidden>
+          <table class="tbl"><thead><tr><th>Coin</th><th>Side</th><th>Entry → Exit</th><th>PnL</th><th>Reason</th></tr></thead>
+            <tbody id="history-body"><tr><td colspan="5" class="empty">No closed trades yet</td></tr></tbody></table>
+        </div>
       </div>
 
-      <div class="op-sec">
-        <div class="sig">
-          <div><div class="mono faint" style="font-size:10.5px">SignalX signal <span id="sig-tf"></span></div><span class="sig-badge" id="sig-badge">Not checked</span></div>
-          <div style="display:flex; gap:6px; flex:0 0 auto">
-            <button class="dt-btn sm" id="btn-sig">Check</button>
-            <button class="dt-btn sm" id="btn-sig-use" disabled>Use levels</button>
-          </div>
+      <div class="panel">
+        <div class="panel-title"><span>Assistant</span><span class="faint">Type "help"</span></div>
+        <div class="chat-box" id="chat-box" aria-live="polite"></div>
+        <div class="chat-row">
+          <input class="inp" id="chat-input" placeholder="e.g. status, stop bot, signal eth" aria-label="Assistant command">
+          <button class="btn btn-primary" id="btn-send">Send</button>
+          <button class="btn" id="btn-mic" title="Speak a command" aria-label="Voice command">🎙️</button>
         </div>
-        <div class="tpsl-note" id="sig-note">Practice following (or fading) the SignalX read with real risk rules.</div>
       </div>
-    </aside>
+
+      <div class="panel">
+        <div class="panel-title"><span>Activity log</span>
+          <label class="faint" style="font-family:var(--mono);font-size:10.5px;display:flex;gap:5px;align-items:center;cursor:pointer;">
+            <input type="checkbox" id="log-show-scan"> Show scans</label></div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
   </div>
 
-  <p class="foot">
-    Demo Trading uses live market prices with virtual money. Fills, spread, fees, funding and liquidations are simulated to behave like a real exchange,
-    but real results can differ (order-book depth, latency, exchange-specific rules). Nothing here is financial advice.
-    Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>.
+  <p class="faint" style="font-size:11.5px;line-height:1.6;max-width:900px;">
+    Bot decisions come from the SignalX signal engine (Hawkes + Bayesian, conformal confidence). The engine has not been walk-forward backtested,
+    so there is no guarantee of profit. Crypto trading, especially with leverage, can lose all of the money in the account. Test on the Demo account first.
+    This is not financial advice.
+    Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener" style="color:inherit;">TradingView</a>.
   </p>
 </div>
 
-<datalist id="tag-list">
-  <option value="Breakout"><option value="Pullback"><option value="Trend follow"><option value="Reversal"><option value="Range"><option value="News"><option value="SignalX signal"><option value="Scalp">
-</datalist>
-
-<!-- Confirm order -->
-<div class="modal" id="m-confirm" role="dialog" aria-modal="true" aria-labelledby="m-confirm-title">
-  <div class="mbox">
-    <div class="mhead"><span id="m-confirm-title">Confirm order</span><button class="mx" data-close aria-label="Close">×</button></div>
-    <dl class="summary" id="cf-sum"></dl>
-    <div class="warns" id="cf-warns"></div>
-    <div class="alert err" id="cf-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="cf-go">Place order</button></div>
-  </div>
-</div>
-
-<!-- Leverage / margin mode -->
-<div class="modal" id="m-lev" role="dialog" aria-modal="true" aria-labelledby="m-lev-title">
-  <div class="mbox">
-    <div class="mhead"><span id="m-lev-title">Leverage &amp; margin mode</span><button class="mx" data-close aria-label="Close">×</button></div>
-    <div class="fld">
-      <div class="lbl">Margin mode<button class="help" data-term="margin_mode" aria-label="Isolated vs cross">?</button></div>
-      <div class="seg" id="lv-mode" role="group" aria-label="Margin mode">
-        <button type="button" data-mode="isolated" aria-pressed="true">Isolated</button>
-        <button type="button" data-mode="cross" aria-pressed="false">Cross</button>
-      </div>
+<!-- Connect modal -->
+<div class="modal" id="m-connect" role="dialog" aria-modal="true" aria-labelledby="m-connect-title">
+  <div class="modal-box">
+    <div class="modal-head"><span id="m-connect-title">Connect Binance</span><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="note" id="c-help"></div>
+    <div class="alert warn" id="c-live-warn" hidden>
+      When creating a live key, enable only <b>Reading</b> and <b>Spot/Futures Trading</b>. <b>Keep withdrawals OFF</b> — the server rejects keys with withdrawal permission.
+      Restricting the key to your server's IP is strongly recommended.
     </div>
-    <div class="fld">
-      <div class="lbl"><span>Leverage<button class="help" data-term="leverage" aria-label="What is leverage?">?</button></span><b class="mono" id="lv-val" style="font-size:18px;color:var(--text)">5x</b></div>
-      <input type="range" class="slider" id="lv-slider" min="1" max="125" step="1" value="5" aria-label="Leverage">
-      <div class="quick" id="lv-quick"></div>
+    <div class="field"><label for="c-key">API key</label><input class="inp" id="c-key" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label for="c-secret">Secret key</label><input class="inp" type="password" id="c-secret" autocomplete="new-password" spellcheck="false"></div>
+    <div class="note">Keys are encrypted on the server and never stored in your browser. The secret is never shown again.</div>
+    <div class="alert err" id="c-error" hidden></div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="c-disconnect" hidden>Disconnect</button>
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn btn-primary" id="c-submit">Verify &amp; connect</button>
     </div>
-    <div class="mnote" id="lv-info"></div>
-    <div class="alert err" id="lv-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="lv-save">Confirm</button></div>
   </div>
 </div>
 
-<!-- Close position -->
-<div class="modal" id="m-close" role="dialog" aria-modal="true" aria-labelledby="m-close-title">
-  <div class="mbox">
-    <div class="mhead"><span id="m-close-title">Close position</span><button class="mx" data-close aria-label="Close">×</button></div>
-    <div class="seg" id="cl-type" role="group" aria-label="Close type">
-      <button type="button" data-ctype="MARKET" aria-pressed="true">Market</button>
-      <button type="button" data-ctype="LIMIT" aria-pressed="false">Limit</button>
+<!-- Trade confirm modal -->
+<div class="modal" id="m-trade" role="dialog" aria-modal="true" aria-labelledby="m-trade-title">
+  <div class="modal-box">
+    <div class="modal-head"><span id="m-trade-title">Confirm trade</span><button class="x" data-close aria-label="Close">×</button></div>
+    <dl class="kv" id="t-kv"></dl>
+    <div id="t-signal"></div>
+    <label class="check" id="t-live-wrap" hidden><input type="checkbox" id="t-live-ack">
+      <span>I understand this is a <b>LIVE</b> trade with real money and I can lose it.</span></label>
+    <div class="alert err" id="t-error" hidden></div>
+    <div class="modal-foot">
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn btn-primary" id="t-submit">Place order</button>
     </div>
-    <div class="fld" id="cl-price-wrap" hidden><label for="cl-price">Limit price</label><input class="inp" id="cl-price" inputmode="decimal" autocomplete="off"></div>
-    <div class="fld"><div class="lbl">Amount to close</div><div class="chips" id="cl-pcts"></div></div>
-    <dl class="summary" id="cl-sum"></dl>
-    <div class="alert err" id="cl-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn short" id="cl-go">Close</button></div>
   </div>
 </div>
 
-<!-- Position TP/SL -->
-<div class="modal" id="m-tpsl" role="dialog" aria-modal="true" aria-labelledby="m-tpsl-title">
-  <div class="mbox">
-    <div class="mhead"><span id="m-tpsl-title">Position TP / SL</span><button class="mx" data-close aria-label="Close">×</button></div>
-    <div class="mnote" id="ts-info"></div>
-    <div class="fld"><label for="ts-tp">Take-profit price (empty = none)</label><input class="inp" id="ts-tp" inputmode="decimal" autocomplete="off"><div class="tpsl-note" id="ts-tp-note">&nbsp;</div></div>
-    <div class="fld"><label for="ts-sl">Stop-loss price (empty = none)</label><input class="inp" id="ts-sl" inputmode="decimal" autocomplete="off"><div class="tpsl-note" id="ts-sl-note">&nbsp;</div></div>
-    <div class="alert err" id="ts-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="ts-go">Save</button></div>
-  </div>
-</div>
-
-<!-- Isolated margin -->
-<div class="modal" id="m-margin" role="dialog" aria-modal="true" aria-labelledby="m-margin-title">
-  <div class="mbox">
-    <div class="mhead"><span id="m-margin-title">Adjust margin</span><button class="mx" data-close aria-label="Close">×</button></div>
-    <div class="seg" id="mg-dir" role="group" aria-label="Add or remove">
-      <button type="button" data-dir="1" aria-pressed="true">Add</button>
-      <button type="button" data-dir="-1" aria-pressed="false">Remove</button>
+<!-- Live bot ack modal -->
+<div class="modal" id="m-live" role="dialog" aria-modal="true" aria-labelledby="m-live-title">
+  <div class="modal-box">
+    <div class="modal-head"><span id="m-live-title">Run the bot on your live account?</span><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="note">The bot will place orders on your <b>real Binance account</b> on its own. The signal engine has no guarantee, and leverage makes losses faster.
+      <ul><li>Have you watched results on the Demo account for at least 2–4 weeks?</li>
+      <li>Are risk per trade and the daily loss limit set correctly?</li></ul></div>
+    <label class="check"><input type="checkbox" id="l-ack"><span>I understand the risk and want to run the live bot.</span></label>
+    <div class="modal-foot">
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn btn-danger" id="l-submit" disabled>Turn on live bot</button>
     </div>
-    <div class="fld"><label for="mg-amt">Amount (USDT)</label><input class="inp" id="mg-amt" inputmode="decimal" autocomplete="off"></div>
-    <div class="mnote" id="mg-info"></div>
-    <div class="alert err" id="mg-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="mg-go">Confirm</button></div>
   </div>
 </div>
 
-<!-- Journal edit -->
-<div class="modal" id="m-journal" role="dialog" aria-modal="true" aria-labelledby="m-journal-title">
-  <div class="mbox">
-    <div class="mhead"><span id="m-journal-title">Trade journal</span><button class="mx" data-close aria-label="Close">×</button></div>
-    <div class="mnote" id="jn-info"></div>
-    <div class="fld"><label for="jn-tag">Setup</label><input class="inp" id="jn-tag" list="tag-list" maxlength="40" autocomplete="off"></div>
-    <div class="fld"><label for="jn-notes">Notes &amp; lessons</label><textarea class="inp" id="jn-notes" maxlength="1000" rows="5" placeholder="What went well? What would you do differently?"></textarea></div>
-    <div class="alert err" id="jn-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="jn-go">Save</button></div>
+<!-- Panic modal -->
+<div class="modal" id="m-panic" role="dialog" aria-modal="true" aria-labelledby="m-panic-title">
+  <div class="modal-box">
+    <div class="modal-head"><span id="m-panic-title">Stop everything?</span><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="note" id="p-text"></div>
+    <div class="modal-foot">
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn btn-danger" id="p-both">Stop both accounts</button>
+      <button class="btn btn-danger" id="p-submit">Stop this account</button>
+    </div>
   </div>
 </div>
 
-<!-- Reset -->
-<div class="modal" id="m-reset" role="dialog" aria-modal="true" aria-labelledby="m-reset-title">
-  <div class="mbox">
-    <div class="mhead"><span id="m-reset-title">Reset demo account</span><button class="mx" data-close aria-label="Close">×</button></div>
-    <div class="mnote">Starts a fresh practice session: all positions and open orders are removed and your wallet is set to the balance below.
-      History and performance stats start over for the new session.</div>
-    <div class="fld"><div class="lbl">Starting balance (USDT)</div><div class="chips" id="rs-chips"></div></div>
-    <div class="mnote">Tip: practice with the amount you would really trade with. Practicing with 100,000 when you will trade 500 builds the wrong habits.</div>
-    <div class="alert err" id="rs-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn short" id="rs-go">Reset account</button></div>
-  </div>
-</div>
-
-<!-- Guide -->
-<div class="modal" id="m-guide" role="dialog" aria-modal="true" aria-labelledby="m-guide-title">
-  <div class="mbox wide">
-    <div class="mhead"><span id="m-guide-title">Demo Trading guide</span><button class="mx" data-close aria-label="Close">×</button></div>
-    <div class="guide-nav" id="guide-nav"></div>
-    <div class="guide" id="guide-body"></div>
-    <div class="mfoot"><button class="dt-btn long" data-close>Got it</button></div>
-  </div>
-</div>
-
-<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="toast" id="toast" role="status"></div>
 
 {% raw %}
 <script>
@@ -602,1336 +404,750 @@
   "use strict";
   document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "dark");
 
-  // ================================================================ helpers
+  // ------------------------------------------------------------ helpers
   const $ = (id) => document.getElementById(id);
-  const LS = {
-    get(k, d) { try { const v = localStorage.getItem("signalsfm-demo-" + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem("signalsfm-demo-" + k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
-  };
+  const savedMode = localStorage.getItem("signalsfm-at-account");
   const S = {
-    boot: null, meta: {}, coins: [], brackets: {}, tickers: {}, state: null,
-    symbol: LS.get("symbol", "BTC/USDT"), market: LS.get("market", "futures"), side: "BUY",
-    otype: LS.get("otype", "LIMIT"), stopKind: "STOP_MARKET", tf: LS.get("tf", "1h"),
-    unit: "base", tab: "positions", fav: new Set(LS.get("fav", ["BTC/USDT", "ETH/USDT"])), filter: "all",
-    plan: null, previewSeq: 0, signal: null, handledOrders: new Set(), handledPositions: new Set(),
-    chartKey: "", chartReady: false, lastBar: null,
+    mode: savedMode === "live" ? "live" : "demo",
+    status: null, prices: {}, selected: "BTC/USDT", form: null, formDirty: false,
+    lastLogId: null, signal: null, pendingTrade: null, voice: localStorage.getItem("signalsfm-at-voice") !== "off",
+    refreshSeq: 0,
   };
+  const LABEL = (m) => (m === "live" ? "Live" : "Demo");
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
-  function num(v) {
-    if (v == null) return null;
-    const s = String(v).replace(/,/g, "").trim();
-    if (!s) return null;
-    const n = Number(s);
-    return isFinite(n) ? n : null;
+  function fmtPrice(p) {
+    if (p == null || isNaN(p)) return "—";
+    const n = Number(p);
+    if (n >= 1000) return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
+    return n.toPrecision(4);
   }
-  function decFromStep(step) {
-    if (!step || step <= 0) return null;
-    return Math.max(0, Math.min(10, Math.round(-Math.log10(step))));
-  }
-  function pdec(sym, p) {
-    const m = S.meta[sym];
-    const d = m && decFromStep(m.price_tick);
-    if (d != null) return d;
-    const a = Math.abs(p || 0);
-    return a >= 1000 ? 2 : a >= 10 ? 3 : a >= 1 ? 4 : a >= 0.01 ? 6 : 8;
-  }
-  function fp(sym, p) {
-    if (p == null || !isFinite(p)) return "—";
-    const d = pdec(sym, p);
-    return Number(p).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
-  }
-  function qdec(sym) { const m = S.meta[sym]; const d = m && decFromStep(m.qty_step); return d == null ? 6 : d; }
-  function fq(sym, q) {
-    if (q == null || !isFinite(q)) return "—";
-    return Number(q).toLocaleString("en-US", { maximumFractionDigits: qdec(sym) });
-  }
-  function fu(v, sign) {
-    if (v == null || !isFinite(v)) return "—";
+  function fmtUsd(v, sign) {
+    if (v == null || isNaN(v)) return "—";
     const n = Number(v);
     const s = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return (n < 0 ? "-" : sign && n > 0 ? "+" : "") + s;
+    return (n < 0 ? "-" : sign && n > 0 ? "+" : "") + "$" + s;
   }
-  function fpct(v, sign = true) { return v == null || !isFinite(v) ? "—" : (sign && v > 0 ? "+" : "") + Number(v).toFixed(2) + "%"; }
   function cls(v) { return v > 0 ? "pos" : v < 0 ? "neg" : "dim"; }
-  function base(sym) { return sym.split("/")[0]; }
-  function step(sym) { const m = S.meta[sym]; return (m && m.qty_step) || 1e-8; }
-  function floorStep(q, st) { return st ? Math.floor(q / st + 1e-9) * st : Math.floor(q * 1e8) / 1e8; }
-  function roundTick(sym, p) {
-    const m = S.meta[sym]; const t = m && m.price_tick;
-    return t ? Math.round(p / t) * t : Number(Number(p).toPrecision(8));
+  function ago(iso) {
+    if (!iso) return "never";
+    const sec = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+    if (sec < 60) return Math.round(sec) + "s ago";
+    if (sec < 3600) return Math.round(sec / 60) + "m ago";
+    return Math.round(sec / 3600) + "h ago";
   }
-  function setPriceInput(el, sym, p) { el.value = p == null || !isFinite(p) ? "" : Number(roundTick(sym, p)).toFixed(pdec(sym, p)); }
-  function setQtyInput(el, sym, q) { el.value = q == null || !isFinite(q) || q <= 0 ? "" : String(Number(floorStep(q, step(sym)).toFixed(qdec(sym)))); }
-  function dt(iso) { return iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"; }
-  function dur(sec) {
-    if (sec == null) return "—";
-    if (sec < 60) return Math.round(sec) + "s";
-    if (sec < 3600) return Math.round(sec / 60) + "m";
-    if (sec < 86400) return (sec / 3600).toFixed(1) + "h";
-    return (sec / 86400).toFixed(1) + "d";
+  function hhmm(iso) {
+    if (!iso) return "";
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   }
-  function compact(v) {
-    if (v == null || !isFinite(v)) return "—";
-    const a = Math.abs(v);
-    if (a >= 1e9) return (v / 1e9).toFixed(2) + "B";
-    if (a >= 1e6) return (v / 1e6).toFixed(2) + "M";
-    if (a >= 1e3) return (v / 1e3).toFixed(1) + "K";
-    return v.toFixed(0);
-  }
-  function toast(text, kind, ms) {
-    const box = $("toasts");
-    const t = document.createElement("div");
-    t.className = "toast " + (kind || "");
+  function toast(text, kind) {
+    const t = $("toast");
     t.textContent = text;
-    box.appendChild(t);
-    setTimeout(() => t.remove(), ms || 5500);
-    while (box.children.length > 4) box.firstChild.remove();
+    t.className = "toast show " + (kind || "");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { t.className = "toast"; }, 4500);
   }
   async function api(path, opts) {
     opts = opts || {};
     const init = { method: opts.method || "GET", credentials: "same-origin", headers: {} };
-    if (opts.body !== undefined) { init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opts.body); }
+    if (opts.body !== undefined) {
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(opts.body);
+    }
     let res, data;
-    try { res = await fetch(path, init); } catch (e) { throw new Error("Could not reach the server."); }
+    try {
+      res = await fetch(path, init);
+    } catch (e) {
+      throw new Error("Could not reach the server.");
+    }
     if (res.status === 401) { window.location.href = "/login"; throw new Error("Login required."); }
     try { data = await res.json(); } catch (e) { data = {}; }
     if (!res.ok || data.ok === false) {
-      const err = new Error(data.error || "Request failed (" + res.status + ")");
+      const err = new Error(data.error || ("Request failed (" + res.status + ")"));
       err.status = res.status; err.data = data;
       throw err;
     }
     return data;
   }
-  function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
-  const TYPE_LABEL = { MARKET: "Market", LIMIT: "Limit", STOP_MARKET: "Stop-Market", STOP_LIMIT: "Stop-Limit", TRAILING_STOP: "Trailing stop" };
-  function typeLabel(o) {
-    if (o.source === "TP") return "Take-profit";
-    if (o.source === "SL") return "Stop-loss";
-    if (o.source === "LIQUIDATION") return "Liquidation";
-    return TYPE_LABEL[o.type] || o.type;
-  }
-  const REASON_LABEL = { TP: "Take-profit", SL: "Stop-loss", LIQUIDATION: "Liquidation", TRAILING: "Trailing stop", LIMIT: "Limit order",
-    STOP: "Stop order", MANUAL: "Manual", EXCHANGE: "Exchange", EXTERNAL: "External" };
-
-  // ================================================================ modals
-  let lastFocus = null;
-  function openModal(id) {
-    lastFocus = document.activeElement;
-    $(id).classList.add("open");
-    const f = $(id).querySelector("input:not([type=checkbox]):not([type=range]), .dt-btn.long, .dt-btn.short");
-    if (f) setTimeout(() => f.focus(), 30);
-  }
-  function closeModal(id) { $(id).classList.remove("open"); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+  const withAcct = (body) => Object.assign({ account: S.mode }, body || {});
+  function openModal(id) { $(id).classList.add("open"); const f = $(id).querySelector("input,select,button.btn-primary,button.btn-danger"); if (f) f.focus(); }
+  function closeModal(id) { $(id).classList.remove("open"); }
   document.querySelectorAll(".modal").forEach((m) => {
-    m.addEventListener("click", (e) => { if (e.target === m || e.target.closest("[data-close]")) closeModal(m.id); });
+    m.addEventListener("click", (e) => { if (e.target === m || e.target.hasAttribute("data-close")) closeModal(m.id); });
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    document.querySelectorAll(".modal.open").forEach((m) => closeModal(m.id));
-    $("markets").classList.remove("open");
+    if (e.key === "Escape") document.querySelectorAll(".modal.open").forEach((m) => closeModal(m.id));
   });
 
-  // ================================================================ guide
-  const GUIDE = [
-    ["welcome", "Welcome to Demo Trading", `<p>This is a practice exchange. Prices are <b>live</b>, the money is <b>virtual</b>. Everything else works like a real exchange: spread, fees, leverage, liquidation and funding — so the habits you build here carry over.</p>
-      <ol><li>Pick a coin on the left and choose <b>Spot</b> (buy coins) or <b>Futures</b> (long or short with leverage).</li>
-      <li>Choose an order type, a size and — always — a <b>stop-loss</b>.</li>
-      <li>Read the order summary and warnings before you click.</li>
-      <li>After each trade, write a short note in the journal. The Performance tab turns your history into lessons.</li></ol>`],
-    ["equity", "Equity, wallet & available balance", `<p><b>Wallet balance</b> = starting balance + realized profit/loss − fees − funding. <b>Equity</b> = wallet + unrealized PnL of open positions (what you would have if you closed everything now). <b>Available</b> = what you can still use for new orders after margin locked in positions and open orders.</p>`],
-    ["spread", "Bid, ask & spread", `<p>The <b>bid</b> is the best price buyers pay, the <b>ask</b> the best price sellers accept. A market buy fills at the ask, a market sell at the bid, plus a little price impact for large sizes. The gap (spread) is a hidden cost of every market order.</p>`],
-    ["order_types", "Order types", `<ul><li><b>Market</b> — fills now at the best available price. You pay the spread and the taker fee.</li>
-      <li><b>Limit</b> — fills only at your price or better. If it rests on the book first, it pays the lower maker fee.</li>
-      <li><b>Stop-Market</b> — waits until the price reaches the trigger, then sends a market order. Used for breakouts or to cut losses.</li>
-      <li><b>Stop-Limit</b> — when triggered, places a limit order. Protects you from bad fills, but may not fill at all if the price gaps past your limit.</li>
-      <li><b>Trailing stop</b> — follows the price by a set % and closes when the price turns back by that %.</li></ul>`],
-    ["trailing", "Trailing stop", `<p>A sell trailing stop with a 1% callback follows the highest price reached. If BTC runs from 60,000 to 63,000, the stop sits at 62,370. If the price falls 1% from the high, it closes at market. Optional <b>activation price</b>: trailing only starts once that price is reached.</p>`],
-    ["tpsl", "Take-profit & stop-loss", `<p><b>Stop-loss (SL)</b>: the price where you admit the idea was wrong and exit. <b>Take-profit (TP)</b>: where you lock in the gain. Both close the whole position at market when the last price touches them. Decide both <i>before</i> you enter — it removes emotion from the exit.</p>`],
-    ["risk", "Risk per trade & position size", `<p>Professionals size positions from the stop, not from a feeling. Example: equity 10,000 USDT, risk 1% = 100 USDT. Entry 60,000, stop 59,000 → 1,000 USDT risk per BTC → size 0.1 BTC. "Size by risk" does this math for you (fees included). Keeping risk at 0.5–2% means a losing streak can't knock you out.</p>`],
-    ["rr", "Reward : risk", `<p>R:R compares the profit at TP with the loss at SL. At 1:2 you only need to be right about 33% of the time to break even (before fees). Below 1:1 you need a high win rate just to stay flat.</p>`],
-    ["leverage", "Leverage", `<p>Leverage multiplies your position size relative to the margin you put up. At 10x, 100 USDT controls a 1,000 USDT position — and a 10% move against you wipes the margin. Leverage doesn't change how much you <i>should</i> risk; your stop-loss and size do. Higher leverage also lowers the maximum position you're allowed (brackets).</p>`],
-    ["margin_mode", "Isolated vs cross margin", `<p><b>Isolated</b>: each position has its own margin. If it gets liquidated, you lose only that margin. You can add or remove margin by hand. <b>Cross</b>: all cross positions share your whole free wallet as collateral. Liquidation comes later, but when it comes it can take everything in the cross account.</p>`],
-    ["liquidation", "Liquidation", `<p>When losses eat your margin down to the <b>maintenance margin</b> (0.4% and up, depending on position size), the exchange force-closes the position. In isolated mode you lose the position margin. Keep your stop-loss well before the liquidation price.</p>`],
-    ["margin_ratio", "Margin ratio", `<p>For cross positions: maintenance margin ÷ cross margin balance. At 100% the cross account is liquidated. Above 50–80% you are in danger.</p>`],
-    ["fees", "Fees: maker & taker", `<p>Taker = your order takes liquidity (market orders, crossing limits). Maker = your limit order rests on the book first. Futures here: maker 0.02%, taker 0.05% of position value. Spot: 0.10%. Fees are charged on entry <i>and</i> exit — with frequent trading they add up fast.</p>`],
-    ["funding", "Funding (futures)", `<p>Perpetual futures have no expiry; a funding payment every 8 hours keeps them near the spot price. Here it is a fixed 0.01%: positions open at 00:00, 08:00 and 16:00 UTC — longs pay, shorts receive (position value × 0.01%).</p>`],
-    ["reduce_only", "Reduce-only", `<p>The order may only shrink or close an existing position, never open a new one or flip it. Use it for take-profit and stop orders so they can't accidentally open a position in the other direction.</p>`],
-    ["post_only", "Post-only", `<p>The limit order is only accepted if it rests on the book (maker). If it would fill immediately as a taker, it is rejected. Useful to guarantee the lower maker fee.</p>`],
-    ["tif", "Time in force", `<p><b>GTC</b> (good till canceled): stays open until filled or canceled. <b>IOC</b> (immediate or cancel): fills what it can right now, cancels the rest. <b>FOK</b> (fill or kill): fills completely right now or is canceled. In this simulator orders fill in full, so IOC and FOK behave the same.</p>`],
-    ["roe", "PnL vs ROE", `<p><b>PnL</b> is profit in USDT. <b>ROE</b> (return on equity) is PnL ÷ the margin you used. With leverage, ROE swings much more than the price: at 10x a 1% move is a 10% ROE.</p>`],
-    ["mfe", "Best / worst during the trade (MFE / MAE)", `<p>The Closed trades tab shows how far the price moved in your favor (best, MFE) and against you (worst, MAE) while you were in the trade. Big MFE but small profit = you exit too early or give back gains. Large MAE on winners = your stops may be too wide.</p>`],
-  ];
-  $("guide-nav").innerHTML = GUIDE.map(([k, t]) => `<button type="button" data-g="${k}">${esc(t.split(":")[0].split("&")[0].trim())}</button>`).join("");
-  $("guide-body").innerHTML = GUIDE.map(([k, t, h]) => `<div class="term" id="g-${k}"><h3>${esc(t)}</h3>${h}</div>`).join("");
-  function openGuide(key) {
-    openModal("m-guide");
-    const el = $("g-" + key) || $("g-" + ({ equity: "equity" }[key] || "welcome"));
-    if (el) setTimeout(() => {
-      el.scrollIntoView({ block: "start", behavior: "smooth" });
-      el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
-    }, 60);
+  // ------------------------------------------------------------ voice
+  function speak(text) {
+    if (!S.voice || !("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "en-US";
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* ignore */ }
   }
-  $("guide-nav").addEventListener("click", (e) => { const b = e.target.closest("[data-g]"); if (b) openGuide(b.dataset.g); });
-  document.addEventListener("click", (e) => {
-    const h = e.target.closest(".help[data-term]");
-    if (!h) return;
-    e.preventDefault(); e.stopPropagation();
-    openGuide(h.dataset.term);
-  }, true);
-  $("btn-guide").addEventListener("click", () => openGuide("welcome"));
+  function renderVoice() { $("btn-voice").textContent = S.voice ? "Voice: ON" : "Voice: OFF"; }
+  $("btn-voice").addEventListener("click", () => {
+    S.voice = !S.voice;
+    localStorage.setItem("signalsfm-at-voice", S.voice ? "on" : "off");
+    if (!S.voice && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    renderVoice();
+  });
+  renderVoice();
 
-  // ================================================================ chart
-  let chart = null, candle = null, lines = [];
+  // ------------------------------------------------------------ account switcher
+  function renderSwitcher() {
+    document.querySelectorAll(".acct-switch button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === S.mode ? "true" : "false"));
+    const accts = S.status && S.status.accounts;
+    ["demo", "live"].forEach((m) => {
+      const a = accts && accts[m];
+      $("sw-dot-" + m).className = "at-dot" + (a && a.bot_enabled ? " on" : a && a.connected ? " warn" : "");
+      $("sw-mini-" + m).textContent = !a || !a.connected ? "" : a.bot_enabled ? "bot on" : a.open_positions ? a.open_positions + " open" : "";
+      $("sw-dot-" + m).title = !a || !a.connected ? "Not connected" : a.bot_enabled ? "Bot running" : "Connected, bot off";
+    });
+  }
+  function switchAccount(mode) {
+    if (mode === S.mode) return;
+    if (S.formDirty && !confirm("You have unsaved settings. Switch account and discard them?")) return;
+    S.mode = mode;
+    localStorage.setItem("signalsfm-at-account", mode);
+    S.status = null; S.form = null; S.formDirty = false; S.lastLogId = null;
+    $("settings-dirty").textContent = "";
+    renderSwitcher();
+    chat("ai", `Switched to the ${LABEL(mode)} account.`);
+    refresh().then(() => { loadCandles(false); drawPositionLines(); });
+  }
+  document.querySelectorAll(".acct-switch button").forEach((b) => b.addEventListener("click", () => switchAccount(b.dataset.mode)));
+  renderSwitcher();
+
+  // ------------------------------------------------------------ chart
+  let chart = null, series = null, priceLines = [];
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
   function initChart() {
-    if (!window.LightweightCharts) { $("chart").innerHTML = '<div class="empty">Chart library failed to load.</div>'; return; }
+    if (!window.LightweightCharts) { $("candle-chart").innerHTML = '<div class="empty">Chart library failed to load.</div>'; return; }
     const LC = window.LightweightCharts;
-    chart = LC.createChart($("chart"), {
+    chart = LC.createChart($("candle-chart"), {
       autoSize: true,
-      layout: { background: { type: "solid", color: cssVar("--panel") || "#11161e" }, textColor: cssVar("--text-dim") || "#8b96a5",
-                fontFamily: "IBM Plex Mono, monospace", fontSize: 11, attributionLogo: false },
+      layout: { background: { type: "solid", color: cssVar("--void") || "#070a0f" }, textColor: cssVar("--text-dim") || "#8b96a5", fontFamily: "IBM Plex Mono, monospace", attributionLogo: false },
       grid: { vertLines: { color: cssVar("--line-soft") || "#1a222c" }, horzLines: { color: cssVar("--line-soft") || "#1a222c" } },
       rightPriceScale: { borderColor: cssVar("--line") || "#27303b" },
-      timeScale: { borderColor: cssVar("--line") || "#27303b", timeVisible: true, secondsVisible: false },
+      timeScale: { borderColor: cssVar("--line") || "#27303b", timeVisible: true },
     });
     const up = cssVar("--long") || "#36e0a0", down = cssVar("--short") || "#ff526b";
-    candle = chart.addSeries(LC.CandlestickSeries, { upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
-    chart.subscribeClick((param) => {
-      if (!param || !param.point) return;
-      const p = candle.coordinateToPrice(param.point.y);
-      if (p == null || !isFinite(p) || p <= 0) return;
-      if (S.otype === "LIMIT") setPriceInput($("i-price"), S.symbol, p);
-      else if (S.otype === "STOP") {
-        setPriceInput($("i-trigger"), S.symbol, p);
-        if (S.stopKind === "STOP_LIMIT" && !num($("i-price").value)) setPriceInput($("i-price"), S.symbol, p);
-      } else if (S.otype === "TRAILING_STOP") setPriceInput($("i-activation"), S.symbol, p);
-      else return;
-      onFormChange();
+    series = chart.addSeries(LC.CandlestickSeries, {
+      upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down,
     });
   }
-  function applyPriceFormat() {
-    if (!candle) return;
-    const t = S.tickers[S.symbol];
-    const d = pdec(S.symbol, t ? t.last : null);
-    const m = S.meta[S.symbol];
-    candle.applyOptions({ priceFormat: { type: "price", precision: d, minMove: m && m.price_tick ? m.price_tick : Math.pow(10, -d) } });
-  }
-  async function loadCandles(full) {
-    if (!candle) return;
-    const sym = S.symbol, tf = S.tf, key = sym + "|" + tf;
-    if (full) { S.chartKey = key; S.chartReady = false; }
-    else if (!S.chartReady || S.chartKey !== key) return;
+  async function loadCandles(fit) {
+    if (!series) return;
+    const tf = (S.status && S.status.settings.timeframe) || "1h";
     try {
-      const r = await fetch(`/candles?coin=${encodeURIComponent(sym)}&timeframe=${tf}&limit=${full ? 300 : 3}`, { credentials: "same-origin" });
+      const r = await fetch(`/candles?coin=${encodeURIComponent(S.selected)}&timeframe=${tf}&limit=200`, { credentials: "same-origin" });
       const d = await r.json();
-      if (S.chartKey !== key) return;
-      if (!r.ok || !d.candles) throw new Error(d.error || "no data");
-      const bars = d.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
-      if (full) {
-        applyPriceFormat();
-        candle.setData(bars);
-        chart.timeScale().fitContent();
-        S.chartReady = true;
-      } else {
-        bars.forEach((b) => { if (!S.lastBar || b.time >= S.lastBar.time) candle.update(b); });
+      if (!r.ok || !d.candles) throw new Error(d.error || "candles");
+      series.setData(d.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
+      if (fit) chart.timeScale().fitContent();
+      if (d.last_price != null) $("hero-price").textContent = "$" + fmtPrice(d.last_price);
+      $("chart-sub").textContent = tf + " candles";
+    } catch (e) {
+      $("chart-sub").textContent = "Chart data unavailable";
+    }
+  }
+  function drawPositionLines() {
+    if (!series) return;
+    priceLines.forEach((l) => series.removePriceLine(l));
+    priceLines = [];
+    const pos = S.status && S.status.positions.find((p) => p.symbol === S.selected);
+    if (!pos) return;
+    const add = (price, color, title, style) => priceLines.push(series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
+    add(pos.entry_price, cssVar("--text-dim") || "#8b96a5", "Entry", 0);
+    add(pos.stop_loss, cssVar("--short") || "#ff526b", "SL", 2);
+    add(pos.take_profit, cssVar("--long") || "#36e0a0", "TP", 2);
+  }
+
+  // ------------------------------------------------------------ coins
+  function botCoins() { return S.form ? S.form.coins : []; }
+  function renderCoins() {
+    const st = S.status;
+    if (!st) return;
+    const q = $("coin-search").value.trim().toUpperCase();
+    const list = $("coin-list");
+    const coins = st.options.coins.filter((c) => !q || c.includes(q));
+    list.innerHTML = "";
+    coins.forEach((c) => {
+      const p = S.prices[c];
+      const row = document.createElement("div");
+      row.className = "coin-item" + (c === S.selected ? " active" : "");
+      const checked = botCoins().includes(c);
+      const chg = p && p.change_pct != null ? `<span class="${cls(p.change_pct)}">${p.change_pct > 0 ? "+" : ""}${p.change_pct.toFixed(2)}%</span>` : "";
+      row.innerHTML = `<input type="checkbox" ${checked ? "checked" : ""} aria-label="Bot trades ${esc(c)}">
+        <span>${esc(c.replace("/USDT", ""))}<span class="faint">/USDT</span></span>
+        <span class="px">${p ? "$" + fmtPrice(p.last) : ""}<br>${chg}</span>`;
+      const cb = row.querySelector("input");
+      cb.addEventListener("click", (e) => e.stopPropagation());
+      cb.addEventListener("change", () => {
+        const set = new Set(botCoins());
+        if (cb.checked) {
+          if (set.size >= st.options.max_coins) { cb.checked = false; toast(`Up to ${st.options.max_coins} coins`, "err"); return; }
+          set.add(c);
+        } else set.delete(c);
+        S.form.coins = st.options.coins.filter((x) => set.has(x));
+        markDirty(); renderCoinCount();
+      });
+      row.addEventListener("click", () => selectCoin(c));
+      list.appendChild(row);
+    });
+    renderCoinCount();
+  }
+  function renderCoinCount() {
+    if (S.status) $("coin-count").textContent = `${botCoins().length} / ${S.status.options.max_coins} in bot`;
+  }
+  $("coin-search").addEventListener("input", renderCoins);
+
+  async function loadPrices() {
+    if (!S.status) return;
+    const want = new Set(botCoins());
+    want.add(S.selected);
+    S.status.positions.forEach((p) => want.add(p.symbol));
+    try {
+      const d = await api("/api/autotrade/prices?symbols=" + encodeURIComponent([...want].join(",")));
+      Object.assign(S.prices, d.prices || {});
+      renderCoins();
+      const p = S.prices[S.selected];
+      if (p) {
+        $("hero-price").textContent = "$" + fmtPrice(p.last);
+        $("hero-change").innerHTML = p.change_pct != null ? `<span class="${cls(p.change_pct)}">${p.change_pct > 0 ? "+" : ""}${p.change_pct.toFixed(2)}% (24h)</span>` : "&nbsp;";
       }
-      if (bars.length) S.lastBar = Object.assign({}, bars[bars.length - 1]);
-    } catch (e) {
-      if (full) { candle.setData([]); toast(`Chart data is unavailable for ${sym} (${tf}).`, "warn"); }
-    }
+    } catch (e) { /* prices are optional */ }
   }
-  function tickLastBar() {
-    const t = S.tickers[S.symbol];
-    if (!candle || !S.chartReady || !S.lastBar || !t) return;
-    const p = t.last;
-    if (!(p > 0)) return;
-    const b = S.lastBar;
-    b.close = p; b.high = Math.max(b.high, p); b.low = Math.min(b.low, p);
-    candle.update(Object.assign({}, b));
-  }
-  function drawLines() {
-    if (!candle) return;
-    lines.forEach((l) => candle.removePriceLine(l));
-    lines = [];
-    const add = (price, color, title, style, width) => {
-      if (price == null || !isFinite(price) || price <= 0) return;
-      lines.push(candle.createPriceLine({ price, color, lineWidth: width || 1, lineStyle: style, axisLabelVisible: true, title }));
-    };
-    if (S.state) {
-      S.state.positions.filter((p) => p.symbol === S.symbol).forEach((p) => {
-        add(p.entry_price, cssVar("--text-dim"), `${p.market === "spot" ? "Spot" : p.leverage + "x"} ${p.side} ${fq(p.symbol, p.qty)}`, 0, 2);
-        add(p.tp_price, cssVar("--long"), "TP", 2);
-        add(p.sl_price, cssVar("--short"), "SL", 2);
-        add(p.liq_price, cssVar("--wait"), "Liq.", 0);
-      });
-      S.state.orders.filter((o) => o.symbol === S.symbol).forEach((o) => {
-        let px = o.trigger_price;
-        if (o.type === "LIMIT" || (o.type === "STOP_LIMIT" && o.triggered)) px = o.price;
-        if (o.type === "TRAILING_STOP") {
-          px = o.trail_active && o.trail_extreme ? o.trail_extreme * (o.side === "SELL" ? 1 - o.callback_pct / 100 : 1 + o.callback_pct / 100) : o.activation_price;
-        }
-        add(px, "#7aa2ff", `${o.side === "BUY" ? "Buy" : "Sell"} ${TYPE_LABEL[o.type]}`, 1);
-      });
-    }
-    if ($("i-tpsl").checked) {
-      add(num($("i-tp").value), cssVar("--long"), "New TP", 3);
-      add(num($("i-sl").value), cssVar("--short"), "New SL", 3);
-    }
-  }
-  $("tfs").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-tf]");
-    if (!b || b.dataset.tf === S.tf) return;
-    S.tf = b.dataset.tf; LS.set("tf", S.tf);
-    renderTfs(); loadCandles(true).then(drawLines);
-  });
-  function renderTfs() { document.querySelectorAll("#tfs [data-tf]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.tf === S.tf ? "true" : "false")); }
 
-  // ================================================================ markets
-  function renderMarkets() {
-    const q = $("mk-search").value.trim().toUpperCase();
-    let coins = S.coins.filter((c) => !q || c.includes(q));
-    if (S.filter === "fav") coins = coins.filter((c) => S.fav.has(c));
-    const list = $("mk-list");
-    if (!coins.length) {
-      list.innerHTML = `<div class="empty">${S.filter === "fav" ? "No favorites yet. Tap ☆ next to a coin." : "No coin matches your search."}</div>`;
-      return;
-    }
-    list.innerHTML = coins.map((c) => {
-      const t = S.tickers[c];
-      const on = S.fav.has(c);
-      return `<div class="mk-row${c === S.symbol ? " active" : ""}" data-sym="${esc(c)}" role="button" tabindex="0" aria-label="${esc(c)}">
-        <button class="star${on ? " on" : ""}" data-star="${esc(c)}" aria-label="${on ? "Remove from" : "Add to"} favorites">${on ? "★" : "☆"}</button>
-        <span class="mk-sym"><b>${esc(base(c))}</b><span>/USDT</span></span>
-        <span class="px">${t ? fp(c, t.last) : "—"}<br><span class="chg ${t ? cls(t.change_pct) : ""}">${t && t.change_pct != null ? fpct(t.change_pct) : ""}</span></span></div>`;
-    }).join("");
+  function selectCoin(c) {
+    S.selected = c;
+    S.signal = null;
+    $("hero-pair").textContent = c;
+    $("chart-title").textContent = c;
+    $("hero-price").textContent = S.prices[c] ? "$" + fmtPrice(S.prices[c].last) : "—";
+    $("hero-change").innerHTML = "&nbsp;";
+    renderSignal();
+    renderCoins();
+    loadCandles(true).then(drawPositionLines);
+    loadPrices();
   }
-  $("mk-list").addEventListener("click", (e) => {
-    const star = e.target.closest("[data-star]");
-    if (star) {
-      const c = star.dataset.star;
-      if (S.fav.has(c)) S.fav.delete(c); else S.fav.add(c);
-      LS.set("fav", [...S.fav]); renderMarkets();
-      return;
-    }
-    const row = e.target.closest("[data-sym]");
-    if (row) { selectSymbol(row.dataset.sym); $("markets").classList.remove("open"); }
-  });
-  $("mk-list").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    const row = e.target.closest("[data-sym]");
-    if (row) { e.preventDefault(); selectSymbol(row.dataset.sym); $("markets").classList.remove("open"); }
-  });
-  $("mk-search").addEventListener("input", renderMarkets);
-  document.querySelectorAll(".mk-head [data-filter]").forEach((b) => b.addEventListener("click", () => {
-    S.filter = b.dataset.filter;
-    document.querySelectorAll(".mk-head [data-filter]").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
-    renderMarkets();
-  }));
-  $("btn-markets").addEventListener("click", (e) => { e.stopPropagation(); $("markets").classList.toggle("open"); });
-  document.addEventListener("click", (e) => {
-    const m = $("markets");
-    if (m.classList.contains("open") && !m.contains(e.target)) m.classList.remove("open");
-  });
 
-  async function refreshTickers() {
+  // ------------------------------------------------------------ signal
+  function renderSignal() {
+    const b = $("sig-badge");
+    const s = S.signal;
+    if (!s) { b.className = "sig-badge"; b.textContent = "Signal: —"; return; }
+    b.className = "sig-badge " + (s.verdict || "");
+    b.textContent = `${s.verdict} · ${Math.round(s.confidence)}% · ${s.timeframe}`;
+  }
+  async function analyze(symbol) {
+    symbol = symbol || S.selected;
+    const tf = (S.status && S.status.settings.timeframe) || "1h";
+    $("btn-analyze").disabled = true; $("btn-analyze").textContent = "Analyzing…";
     try {
-      const d = await api("/api/paper/tickers");
-      d.tickers.forEach((t) => { S.tickers[t.symbol] = t; });
-      $("mk-feed").textContent = d.tickers.length ? "● live" : "feed offline";
-      $("mk-feed").className = d.tickers.length ? "pos" : "neg";
-      renderMarkets(); renderSymbolBar(); tickLastBar();
+      const d = await api(`/api/autotrade/signal?symbol=${encodeURIComponent(symbol)}&timeframe=${tf}`);
+      if (symbol === S.selected) { S.signal = d; renderSignal(); }
+      return d;
     } catch (e) {
-      $("mk-feed").textContent = "feed offline"; $("mk-feed").className = "neg";
+      toast(e.message, "err");
+      return null;
+    } finally {
+      $("btn-analyze").disabled = false; $("btn-analyze").textContent = "Check signal";
     }
   }
+  $("btn-analyze").addEventListener("click", () => analyze());
 
-  function selectSymbol(sym, initial) {
-    if (!S.coins.includes(sym)) return;
-    const changed = sym !== S.symbol;
-    S.symbol = sym; LS.set("symbol", sym);
-    if (changed || initial) {
-      const t = S.tickers[sym];
-      ["i-trigger", "i-tp", "i-sl", "i-tp-pct", "i-sl-pct", "i-size", "i-activation"].forEach((id) => { $(id).value = ""; });
-      $("i-slider").value = 0;
-      setPriceInput($("i-price"), sym, t ? t.last : null);
-      S.signal = null; renderSignal();
-      S.lastBar = null;
-      loadCandles(true).then(drawLines);
-    }
-    renderMarkets(); renderSymbolBar(); renderOrderForm(); onFormChange();
+  // ------------------------------------------------------------ settings form
+  function fillSelect(id, values, fmt) {
+    $(id).innerHTML = values.map((v) => `<option value="${esc(v)}">${esc(fmt ? fmt(v) : v)}</option>`).join("");
   }
-
-  function renderSymbolBar() {
-    const sym = S.symbol;
-    const t = S.tickers[sym];
-    $("sb-symbol").textContent = sym;
-    $("sb-market").textContent = S.market === "futures" ? "Perpetual" : "Spot";
-    $("sb-funding-wrap").hidden = S.market !== "futures";
-    if (!t) return;
-    $("sb-last").textContent = fp(sym, t.last);
-    $("sb-last").className = "last " + (t.change_pct >= 0 ? "pos" : "neg");
-    $("sb-chg").textContent = fpct(t.change_pct); $("sb-chg").className = cls(t.change_pct);
-    $("sb-high").textContent = fp(sym, t.high);
-    $("sb-low").textContent = fp(sym, t.low);
-    $("sb-vol").textContent = compact(t.vol_quote) + " USDT";
-    const spread = t.bid && t.ask ? (t.ask - t.bid) / t.last * 100 : null;
-    $("sb-ba").textContent = t.bid && t.ask ? `${fp(sym, t.bid)} / ${fp(sym, t.ask)}` : "—";
-    $("sb-ba").title = spread != null ? `Spread ${spread.toFixed(4)}%` : "";
-    document.title = `${fp(sym, t.last)} ${base(sym)} · Demo Trading · Signals FM`;
+  function formFromSettings(s) { return JSON.parse(JSON.stringify(s)); }
+  function writeForm() {
+    const f = S.form;
+    $("s-market").value = f.market_type;
+    $("s-leverage").value = String(f.leverage);
+    $("s-leverage").disabled = f.market_type === "spot";
+    $("s-timeframe").value = f.timeframe;
+    $("s-risk").value = f.risk_pct;
+    $("s-maxpos").value = f.max_position_usdt;
+    $("s-maxopen").value = f.max_open_positions;
+    $("s-daily").value = f.daily_loss_limit_pct;
+    $("s-conf").value = f.min_confidence;
+    $("s-rr").value = f.reward_risk;
   }
-  function renderFunding() {
-    if (!S.state || !S.boot) return;
-    const ms = Date.parse(S.state.next_funding_at) - Date.now();
-    const s = Math.max(0, Math.floor(ms / 1000));
-    const hh = String(Math.floor(s / 3600)).padStart(2, "0"), mm = String(Math.floor(s % 3600 / 60)).padStart(2, "0"), ss = String(s % 60).padStart(2, "0");
-    $("sb-funding").textContent = `${S.boot.options.funding_rate_pct.toFixed(4)}% · ${hh}:${mm}:${ss}`;
+  function readForm() {
+    const f = S.form;
+    f.market_type = $("s-market").value;
+    f.leverage = f.market_type === "spot" ? 1 : parseInt($("s-leverage").value, 10);
+    f.timeframe = $("s-timeframe").value;
+    f.risk_pct = parseFloat($("s-risk").value);
+    f.max_position_usdt = parseFloat($("s-maxpos").value);
+    f.max_open_positions = parseInt($("s-maxopen").value, 10);
+    f.daily_loss_limit_pct = parseFloat($("s-daily").value);
+    f.min_confidence = parseFloat($("s-conf").value);
+    f.reward_risk = parseFloat($("s-rr").value);
   }
-
-  // ================================================================ state / account
-  async function refreshState() {
-    let st;
-    try { st = await api("/api/paper/state"); } catch (e) { return; }
-    const prev = S.state;
-    S.state = st;
-    detectEvents(prev, st);
-    renderAccount(); renderPositions(); renderOrders(); renderLevBar(); updateMaxSize(); drawLines(); renderFunding();
-  }
-  function renderAccount() {
-    const a = S.state.account;
-    $("a-equity").textContent = fu(a.equity) + " USDT";
-    $("a-avail").textContent = fu(a.available) + " USDT";
-    $("a-upnl").textContent = fu(a.upnl, true); $("a-upnl").className = cls(a.upnl);
-    $("a-return").textContent = fpct(a.return_pct); $("a-return").className = cls(a.return_pct);
-    const mr = a.margin_ratio;
-    $("a-mratio").textContent = mr == null ? "—" : mr.toFixed(2) + "%";
-    $("a-mratio").className = mr == null ? "" : mr >= 80 ? "neg" : mr >= 50 ? "warnc" : "pos";
-    $("c-positions").textContent = `(${S.state.positions.length})`;
-    $("c-orders").textContent = `(${S.state.orders.length})`;
-    $("avail-small").textContent = fu(a.available) + " USDT";
-  }
-  function detectEvents(prev, st) {
-    if (!prev) return;
-    const curOrders = new Set(st.orders.map((o) => o.id));
-    const goneOrders = prev.orders.filter((o) => !curOrders.has(o.id) && !S.handledOrders.has(o.id));
-    const curPos = new Set(st.positions.map((p) => p.id));
-    const gonePos = prev.positions.filter((p) => !curPos.has(p.id) && !S.handledPositions.has(p.id));
-    const filledSymbols = new Set();
-    const tasks = [];
-    if (goneOrders.length) {
-      tasks.push(api("/api/paper/history?kind=orders&limit=40").then((d) => {
-        goneOrders.forEach((o) => {
-          const r = d.rows.find((x) => x.id === o.id);
-          if (!r) return;
-          const what = `${r.side === "BUY" ? "Buy" : "Sell"} ${typeLabel(r)} ${base(r.symbol)}`;
-          if (r.status === "FILLED") { filledSymbols.add(r.symbol); toast(`${what} filled @ ${fp(r.symbol, r.avg_price)}`, "ok"); }
-          else if (r.status === "REJECTED") toast(`${what} rejected: ${r.reason || ""}`, "err", 9000);
-          else if (r.status === "CANCELED" && r.reason && r.reason !== "Canceled by you") toast(`${what} canceled: ${r.reason}`, "warn");
-        });
-      }).catch(() => {}));
-    }
-    Promise.all(tasks).then(() => {
-      if (!gonePos.length) return;
-      api("/api/paper/history?kind=closed&limit=10").then((d) => {
-        gonePos.forEach((p) => {
-          const r = d.rows.find((x) => x.symbol === p.symbol && x.market === p.market && x.side === p.side);
-          if (!r) return;
-          if (filledSymbols.has(p.symbol) && !["TP", "SL", "LIQUIDATION"].includes(r.close_reason)) return;
-          const why = { TP: "Take-profit hit", SL: "Stop-loss hit", LIQUIDATION: "LIQUIDATED", TRAILING: "Trailing stop hit" }[r.close_reason] || "Position closed";
-          toast(`${why}: ${p.side} ${p.symbol} · net ${fu(r.net_pnl, true)} USDT`, r.close_reason === "LIQUIDATION" ? "err" : r.net_pnl >= 0 ? "ok" : "warn", 10000);
-        });
-        if (S.tab === "closed") loadTab("closed");
-      }).catch(() => {});
-    });
-  }
-
-  // ================================================================ order form
-  function curPos() { return S.state ? S.state.positions.find((p) => p.symbol === S.symbol && p.market === S.market) : null; }
-  function levSettings() {
-    if (S.market !== "futures") return { leverage: 1, margin_mode: "spot" };
-    const p = curPos();
-    if (p) return { leverage: p.leverage, margin_mode: p.margin_mode };
-    const s = S.state && S.state.symbol_settings[S.symbol];
-    return s || { leverage: S.boot.options.default_leverage, margin_mode: S.boot.options.default_margin_mode };
-  }
-  function feeRate(liq) { const f = S.boot.options.fees[S.market]; return (liq === "MAKER" ? f.maker : f.taker) / 100; }
-  function bracketRows(sym) { return (S.boot && S.boot.options.brackets[sym]) || []; }
-  function maxNotional(lev, sym) {
-    let cap = 0;
-    for (const r of bracketRows(sym || S.symbol)) { if (r.max_leverage >= lev) cap = r.to; else break; }
-    return cap;
-  }
-  function mmrFor(notional, sym) {
-    const rows = bracketRows(sym);
-    for (const r of rows) if (notional <= r.to) return r.mmr_pct / 100;
-    return rows.length ? rows[rows.length - 1].mmr_pct / 100 : 0.005;
-  }
-  function refPrice() {
-    const t = S.tickers[S.symbol];
-    const last = t ? t.last : null;
-    const pr = num($("i-price").value), tr = num($("i-trigger").value);
-    if (S.otype === "LIMIT") return pr || last;
-    if (S.otype === "STOP") return S.stopKind === "STOP_LIMIT" ? (pr || tr || last) : (tr || last);
-    if (S.otype === "TRAILING_STOP") return num($("i-activation").value) || last;
-    if (!t) return null;
-    return S.side === "BUY" ? (t.ask || last) : (t.bid || last);
-  }
-  function maxQty() {
-    if (!S.state || !S.boot) return 0;
-    const p = refPrice();
-    if (!p) return 0;
-    const avail = Math.max(0, S.state.account.available);
-    const pos = curPos();
-    if (S.market === "spot") {
-      if (S.side === "BUY") return floorStep(avail / (p * (1 + feeRate("TAKER"))), step(S.symbol));
-      const pending = S.state.orders.filter((o) => o.market === "spot" && o.symbol === S.symbol && o.side === "SELL").reduce((a, o) => a + o.qty, 0);
-      return Math.max(0, floorStep((pos ? pos.qty : 0) - pending, step(S.symbol)));
-    }
-    const dir = S.side === "BUY" ? "LONG" : "SHORT";
-    const opp = pos && pos.side !== dir ? pos.qty : 0;
-    if ($("i-reduce").checked) return opp;
-    const lev = levSettings().leverage;
-    let q = avail / (p * (1 / lev + feeRate("TAKER")));
-    const same = pos && pos.side === dir ? pos.qty * p : 0;
-    q = Math.min(q, Math.max(0, (maxNotional(lev) - same) / p));
-    return floorStep(q + opp, step(S.symbol));
-  }
-  function qtyFromForm() {
-    const v = num($("i-size").value);
-    if (!v || v <= 0) return null;
-    if (S.unit === "base") return v;
-    const p = refPrice();
-    return p ? v / p : null;
-  }
-  function updateMaxSize() {
-    const mq = maxQty();
-    const p = refPrice();
-    $("max-size").textContent = S.unit === "base" ? `${fq(S.symbol, mq)} ${base(S.symbol)}` : `${fu(mq * (p || 0))} USDT`;
-  }
-  function renderLevBar() {
-    const s = levSettings();
-    $("lbl-mode").textContent = s.margin_mode === "cross" ? "Cross" : "Isolated";
-    $("lbl-lev").textContent = s.leverage + "x";
-  }
-
-  function renderOrderForm() {
-    const fut = S.market === "futures";
-    document.querySelectorAll("#seg-market [data-market]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.market === S.market ? "true" : "false"));
-    document.querySelectorAll("#seg-side [data-side]").forEach((b) => {
-      b.setAttribute("aria-pressed", b.dataset.side === S.side ? "true" : "false");
-      b.textContent = fut ? (b.dataset.side === "BUY" ? "Buy / Long" : "Sell / Short") : (b.dataset.side === "BUY" ? "Buy" : "Sell");
-    });
-    document.querySelectorAll(".otabs [data-otype]").forEach((b) => b.setAttribute("aria-selected", b.dataset.otype === S.otype ? "true" : "false"));
-    document.querySelectorAll("#f-stopkind [data-stopkind]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.stopkind === S.stopKind ? "true" : "false"));
-    const isStop = S.otype === "STOP", isLimitish = S.otype === "LIMIT" || (isStop && S.stopKind === "STOP_LIMIT");
-    $("lev-row").hidden = !fut;
-    $("f-stopkind").hidden = !isStop;
-    $("f-trigger").hidden = !isStop;
-    $("f-price").hidden = !isLimitish;
-    $("f-market-note").hidden = S.otype !== "MARKET";
-    $("f-callback").hidden = S.otype !== "TRAILING_STOP";
-    $("o-reduce-wrap").hidden = !fut;
-    $("o-post-wrap").hidden = !isLimitish;
-    $("o-tif-wrap").hidden = !(S.otype === "LIMIT");
-    $("o-tif-help").hidden = !(S.otype === "LIMIT");
-    $("i-unit").options[0].textContent = base(S.symbol);
-    $("i-unit").value = S.unit;
-    $("chart-hint").hidden = !(S.otype === "LIMIT" || isStop || S.otype === "TRAILING_STOP");
-    $("chart-hint").textContent = S.otype === "TRAILING_STOP" ? "Tip: click the chart to set the activation price."
-      : `Tip: click the chart to set the ${isStop ? "trigger" : "limit"} price.`;
-    renderLevBar(); renderSymbolBar();
-  }
-
-  function onFormChange() {
-    const q = qtyFromForm();
-    const p = refPrice();
-    $("size-conv").textContent = !q || !p ? "" : S.unit === "base" ? `≈ ${fu(q * p)} USDT` : `≈ ${fq(S.symbol, q)} ${base(S.symbol)}`;
-    const mq = maxQty();
-    if (q && mq > 0) $("i-slider").value = Math.min(100, Math.round(q / mq * 100));
-    else if (!q) $("i-slider").value = 0;
-    updateMaxSize();
-    drawLines();
-    schedulePreview(250);
-  }
-
-  function setSide(side) {
-    S.side = side;
-    renderOrderForm();
-    if (num($("i-tp-pct").value) != null) tpslSync("tp", "pct");
-    if (num($("i-sl-pct").value) != null) tpslSync("sl", "pct");
-    onFormChange();
-  }
-  $("seg-side").addEventListener("click", (e) => { const b = e.target.closest("[data-side]"); if (b) setSide(b.dataset.side); });
-  $("seg-market").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-market]");
-    if (!b || b.dataset.market === S.market) return;
-    S.market = b.dataset.market; LS.set("market", S.market);
-    if (S.market === "spot") $("i-reduce").checked = false;
-    renderOrderForm(); onFormChange(); drawLines();
+  function markDirty() { S.formDirty = true; $("settings-dirty").textContent = "Unsaved changes"; $("settings-dirty").className = "pos"; }
+  ["s-market", "s-leverage", "s-timeframe", "s-risk", "s-maxpos", "s-maxopen", "s-daily", "s-conf", "s-rr"].forEach((id) => {
+    $(id).addEventListener("input", () => { if (!S.form) return; readForm(); $("s-leverage").disabled = S.form.market_type === "spot"; markDirty(); });
   });
-  document.querySelector(".otabs").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-otype]");
-    if (!b) return;
-    S.otype = b.dataset.otype; LS.set("otype", S.otype);
-    const t = S.tickers[S.symbol];
-    if ((S.otype === "LIMIT" || S.otype === "STOP") && !num($("i-price").value) && t) setPriceInput($("i-price"), S.symbol, t.last);
-    renderOrderForm(); onFormChange();
+  $("btn-reset-settings").addEventListener("click", () => {
+    if (!S.status) return;
+    S.form = formFromSettings(S.status.settings); S.formDirty = false;
+    $("settings-dirty").textContent = ""; writeForm(); renderCoins();
   });
-  $("f-stopkind").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-stopkind]");
-    if (!b) return;
-    S.stopKind = b.dataset.stopkind;
-    renderOrderForm(); onFormChange();
-  });
-  document.querySelectorAll("[data-fill]").forEach((b) => b.addEventListener("click", (e) => {
-    e.preventDefault();
-    const t = S.tickers[S.symbol];
-    if (!t) return;
-    const v = { last: t.last, bid: t.bid || t.last, ask: t.ask || t.last, trigger: t.last }[b.dataset.fill];
-    setPriceInput(b.dataset.fill === "trigger" ? $("i-trigger") : $("i-price"), S.symbol, v);
-    onFormChange();
-  }));
-  document.querySelectorAll("[data-cb]").forEach((b) => b.addEventListener("click", (e) => { e.preventDefault(); $("i-callback").value = b.dataset.cb; onFormChange(); }));
-  ["i-price", "i-trigger", "i-callback", "i-activation", "i-size", "i-notes", "i-tag"].forEach((id) => $(id).addEventListener("input", onFormChange));
-  ["i-reduce", "i-post", "i-tif"].forEach((id) => $(id).addEventListener("change", onFormChange));
-  $("i-unit").addEventListener("change", () => {
-    const q = qtyFromForm();
-    S.unit = $("i-unit").value;
-    const p = refPrice();
-    if (q && p) $("i-size").value = S.unit === "base" ? String(Number(floorStep(q, step(S.symbol)).toFixed(qdec(S.symbol)))) : (q * p).toFixed(2);
-    onFormChange();
-  });
-  function setSizeFromPct(pct) {
-    const mq = maxQty();
-    const q = mq * pct / 100;
-    const p = refPrice();
-    if (!q) { $("i-size").value = ""; }
-    else if (S.unit === "base") setQtyInput($("i-size"), S.symbol, q);
-    else $("i-size").value = (floorStep(q, step(S.symbol)) * (p || 0)).toFixed(2);
-    $("i-slider").value = pct;
-    onFormChange();
-  }
-  $("i-slider").addEventListener("input", () => setSizeFromPct(Number($("i-slider").value)));
-  document.querySelectorAll(".slider-marks [data-pct]").forEach((b) => b.addEventListener("click", () => setSizeFromPct(Number(b.dataset.pct))));
-
-  // TP / SL linking
-  function tpslSync(which, from) {
-    const ref = refPrice();
-    if (!ref) return;
-    const priceEl = $("i-" + which), pctEl = $("i-" + which + "-pct");
-    const up = (which === "tp") === (S.side === "BUY");
-    if (from === "pct") {
-      const pct = num(pctEl.value);
-      if (pct == null) { priceEl.value = ""; return; }
-      setPriceInput(priceEl, S.symbol, ref * (1 + (up ? 1 : -1) * Math.abs(pct) / 100));
-    } else {
-      const p = num(priceEl.value);
-      pctEl.value = p ? Math.abs((p - ref) / ref * 100).toFixed(2) : "";
-    }
-  }
-  $("i-tp").addEventListener("input", () => { tpslSync("tp", "price"); onFormChange(); });
-  $("i-sl").addEventListener("input", () => { tpslSync("sl", "price"); onFormChange(); });
-  $("i-tp-pct").addEventListener("input", () => { tpslSync("tp", "pct"); onFormChange(); });
-  $("i-sl-pct").addEventListener("input", () => { tpslSync("sl", "pct"); onFormChange(); });
-  $("i-tpsl").addEventListener("change", () => { $("tpsl-box").hidden = !$("i-tpsl").checked; onFormChange(); });
-
-  // Size by risk
-  $("btn-risk-calc").addEventListener("click", () => {
-    const r = num($("i-risk").value);
-    const sl = $("i-tpsl").checked ? num($("i-sl").value) : null;
-    const ref = refPrice();
-    if (!r || r <= 0) { $("risk-note").textContent = "Enter the % of equity you are willing to lose."; return; }
-    if (!sl) {
-      $("i-tpsl").checked = true; $("tpsl-box").hidden = false;
-      $("risk-note").innerHTML = '<span class="warnc">Set a stop-loss first — sizing by risk needs to know where you exit.</span>';
-      $("i-sl").focus();
-      return;
-    }
-    if (!ref || !S.state) return;
-    const equity = S.state.account.equity;
-    const riskUsd = equity * r / 100;
-    const perUnit = Math.abs(ref - sl) + ref * feeRate(S.otype === "LIMIT" ? "MAKER" : "TAKER") + sl * feeRate("TAKER");
-    let q = floorStep(riskUsd / perUnit, step(S.symbol));
-    const mq = maxQty();
-    let capped = false;
-    if (q > mq) { q = mq; capped = true; }
-    S.unit = "base"; $("i-unit").value = "base";
-    setQtyInput($("i-size"), S.symbol, q);
-    $("risk-note").innerHTML = `Risking ${fu(riskUsd)} USDT (${r}% of ${fu(equity)}) → ${fq(S.symbol, q)} ${esc(base(S.symbol))}.` +
-      (capped ? ' <span class="warnc">Capped by your available margin / leverage.</span>' : "");
-    onFormChange();
-  });
-
-  // ---------------------------------------------------------------- preview
-  let previewTimer = null;
-  function buildReq() {
-    const type = S.otype === "STOP" ? S.stopKind : S.otype;
-    const tpsl = $("i-tpsl").checked;
-    const q = qtyFromForm();
-    return {
-      market: S.market, symbol: S.symbol, side: S.side, type,
-      qty: q ? floorStep(q, step(S.symbol)) : null,
-      price: type === "LIMIT" || type === "STOP_LIMIT" ? num($("i-price").value) : null,
-      trigger_price: type === "STOP_MARKET" || type === "STOP_LIMIT" ? num($("i-trigger").value) : null,
-      callback_pct: type === "TRAILING_STOP" ? num($("i-callback").value) : null,
-      activation_price: type === "TRAILING_STOP" ? num($("i-activation").value) : null,
-      reduce_only: S.market === "futures" && $("i-reduce").checked,
-      post_only: (type === "LIMIT" || type === "STOP_LIMIT") && $("i-post").checked,
-      tif: type === "LIMIT" ? $("i-tif").value : "GTC",
-      tp_price: tpsl ? num($("i-tp").value) : null, sl_price: tpsl ? num($("i-sl").value) : null,
-      notes: $("i-notes").value.trim() || null, tag: $("i-tag").value.trim() || null,
-    };
-  }
-  function schedulePreview(ms) { clearTimeout(previewTimer); previewTimer = setTimeout(runPreview, ms || 0); }
-  async function runPreview() {
-    if (!S.boot) return;
-    const req = buildReq();
-    if (!req.qty) { S.plan = null; renderPlan(null); return; }
-    const seq = ++S.previewSeq;
-    try {
-      const d = await api("/api/paper/preview", { method: "POST", body: req });
-      if (seq !== S.previewSeq) return;
-      S.plan = d.plan; renderPlan(d.plan);
-    } catch (e) {
-      if (seq === S.previewSeq) { S.plan = { errors: [e.message], warnings: [] }; renderPlan(S.plan); }
-    }
-  }
-  function planRows(plan, withOrder) {
-    const sym = S.symbol, fut = S.market === "futures", long = S.side === "BUY";
-    const rows = [];
-    if (withOrder) {
-      rows.push(["Order", `${fut ? (long ? "Long" : "Short") : (long ? "Buy" : "Sell")} · ${TYPE_LABEL[plan.type] || plan.type}`]);
-      rows.push(["Size", `${fq(sym, plan.qty)} ${esc(base(sym))}`]);
-      if (plan.trigger_price) rows.push(["Trigger", `${plan.trigger_dir === "UP" ? "≥ " : "≤ "}${fp(sym, plan.trigger_price)}`]);
-      if (plan.price && (plan.type === "LIMIT" || plan.type === "STOP_LIMIT")) rows.push(["Limit price", fp(sym, plan.price)]);
-      if (plan.callback_pct) rows.push(["Callback", plan.callback_pct + "%"]);
-      if (fut) rows.push(["Leverage", `${plan.leverage}x ${plan.margin_mode}`]);
-    }
-    if (plan.est_price == null) return rows;
-    rows.push(["Est. price", fp(sym, plan.est_price) + ` <span class="faint">${plan.liquidity === "MAKER" ? "maker" : "taker"}</span>`]);
-    rows.push(["Order value", fu(plan.notional) + " USDT"]);
-    if (fut) rows.push(["Margin required", fu(plan.margin_required) + " USDT"]);
-    else if (long) rows.push(["Cost", fu(plan.margin_required) + " USDT"]);
-    rows.push([`Fee (${(plan.fee_rate_pct || 0).toFixed(2)}%)`, fu(plan.fee) + " USDT"]);
-    if (fut && plan.result_qty > 0) {
-      rows.push(["Est. liq. price", plan.liq_price ? `<span class="warnc">${fp(sym, plan.liq_price)}</span>` +
-        (plan.liq_distance_pct != null ? ` <span class="faint">${plan.liq_distance_pct.toFixed(1)}% away</span>` : "") : "None"]);
-    }
-    if (plan.realized_est) rows.push(["Realized PnL", `<span class="${cls(plan.realized_est)}">${fu(plan.realized_est, true)}</span>`]);
-    if (plan.tp) rows.push(["At take-profit", `<span class="pos">${fu(plan.tp.pnl, true)}</span>` + (fut && plan.tp.roe_pct != null ? ` <span class="faint">ROE ${fpct(plan.tp.roe_pct)}</span>` : "")]);
-    if (plan.sl) rows.push(["At stop-loss", `<span class="neg">${fu(plan.sl.pnl, true)}</span>` + (plan.risk_pct_equity != null ? ` <span class="faint">${plan.risk_pct_equity.toFixed(2)}% of equity</span>` : "")]);
-    if (plan.rr != null) rows.push(["Reward : risk", `<b class="${plan.rr >= 1.5 ? "pos" : plan.rr >= 1 ? "" : "warnc"}">1 : ${plan.rr.toFixed(2)}</b>`]);
-    if (plan.available_after != null) rows.push(["Available after", fu(plan.available_after) + " USDT"]);
-    return rows;
-  }
-  function warnHtml(plan) {
-    const LBL = { error: "ERROR", danger: "DANGER", warn: "CAUTION", info: "NOTE" };
-    const w = (plan.errors || []).map((e) => ({ level: "error", text: e })).concat(plan.warnings || []);
-    return w.map((x) => `<div class="wmsg ${x.level}"><b>${LBL[x.level] || ""}</b>${esc(x.text)}</div>`).join("");
-  }
-  function submitLabel(plan) {
-    const b = base(S.symbol);
-    const type = S.otype === "STOP" ? S.stopKind : S.otype;
-    const kind = TYPE_LABEL[type];
-    if (S.market === "spot") return `${S.side === "BUY" ? "Buy" : "Sell"} ${b} · ${kind}`;
-    const eff = plan && plan.effect;
-    const opp = S.side === "BUY" ? "Short" : "Long";
-    if (eff === "close") return `Close ${opp} · ${kind}`;
-    if (eff === "reduce") return `Reduce ${opp} · ${kind}`;
-    if (eff === "flip") return `Flip to ${S.side === "BUY" ? "Long" : "Short"} · ${kind}`;
-    if (eff === "increase") return `Add to ${S.side === "BUY" ? "Long" : "Short"} ${b} · ${kind}`;
-    return `${S.side === "BUY" ? "Open Long" : "Open Short"} ${b} · ${kind}`;
-  }
-  function renderPlan(plan) {
-    const btn = $("btn-submit");
-    btn.className = "dt-btn submit " + (S.side === "BUY" ? "long" : "short");
-    if (!plan) {
-      $("sum").innerHTML = ""; $("warns").innerHTML = "";
-      btn.disabled = true; btn.textContent = "Enter a size";
-      $("submit-note").innerHTML = "&nbsp;"; $("tp-note").innerHTML = "&nbsp;"; $("sl-note").innerHTML = "&nbsp;";
-      return;
-    }
-    $("sum").innerHTML = planRows(plan, false).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
-    $("warns").innerHTML = warnHtml(plan);
-    const fut = S.market === "futures";
-    $("tp-note").innerHTML = plan.tp ? `PnL ≈ <span class="pos">${fu(plan.tp.pnl, true)} USDT</span>` + (fut ? ` · ROE ${fpct(plan.tp.roe_pct)}` : "") : "&nbsp;";
-    $("sl-note").innerHTML = plan.sl ? `PnL ≈ <span class="neg">${fu(plan.sl.pnl, true)} USDT</span>` + (plan.risk_pct_equity != null ? ` · ${plan.risk_pct_equity.toFixed(2)}% of equity` : "") : "&nbsp;";
-    const hasErr = (plan.errors || []).length > 0;
-    btn.disabled = hasErr;
-    btn.textContent = submitLabel(plan);
-    $("submit-note").textContent = hasErr ? "Fix the error above to continue."
-      : plan.immediate ? "Executes immediately." : "Waits until the price reaches your order.";
-  }
-
-  // ---------------------------------------------------------------- submit
-  $("i-confirm").checked = LS.get("confirm", true);
-  $("i-confirm").addEventListener("change", () => LS.set("confirm", $("i-confirm").checked));
-  $("btn-submit").addEventListener("click", async () => {
-    await runPreview();
-    if (!S.plan || (S.plan.errors || []).length) return;
-    if ($("i-confirm").checked) openConfirm(); else placeOrder(false);
-  });
-  function openConfirm() {
-    const plan = S.plan;
-    $("m-confirm-title").textContent = submitLabel(plan);
-    $("cf-sum").innerHTML = planRows(plan, true).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
-    $("cf-warns").innerHTML = warnHtml({ errors: [], warnings: (plan.warnings || []).filter((w) => w.level !== "info") });
-    $("cf-err").hidden = true;
-    $("cf-go").className = "dt-btn " + (S.side === "BUY" ? "long" : "short");
-    $("cf-go").textContent = "Place order";
-    openModal("m-confirm");
-  }
-  $("cf-go").addEventListener("click", () => placeOrder(true));
-  async function placeOrder(fromModal) {
-    const req = buildReq();
-    const btn = fromModal ? $("cf-go") : $("btn-submit");
+  $("btn-save-settings").addEventListener("click", async () => {
+    if (!S.form) return;
+    readForm();
+    const btn = $("btn-save-settings");
     btn.disabled = true;
-    const pos = curPos();
     try {
-      const d = await api("/api/paper/orders", { method: "POST", body: req });
-      if (fromModal) closeModal("m-confirm");
-      const o = d.order;
-      S.handledOrders.add(o.id);
-      if (pos && d.plan && (d.plan.effect === "close" || d.plan.effect === "flip") && o.status === "FILLED") S.handledPositions.add(pos.id);
-      if (o.status === "FILLED") {
-        toast(`${o.side === "BUY" ? "Bought" : "Sold"} ${fq(o.symbol, o.qty)} ${base(o.symbol)} @ ${fp(o.symbol, o.avg_price)} · fee ${fu(o.fee)} USDT` + (o.reason ? ` · ${o.reason}` : ""), "ok");
-      } else if (o.status === "EXPIRED") {
-        toast(`${o.tif} order expired — it could not fill immediately.`, "warn");
-      } else {
-        toast(`${TYPE_LABEL[o.type]} order placed. Find it under "Open orders".`, "ok");
-      }
-      $("i-size").value = ""; $("i-slider").value = 0; $("i-notes").value = ""; $("i-tag").value = "";
-      $("i-tp").value = ""; $("i-sl").value = ""; $("i-tp-pct").value = ""; $("i-sl-pct").value = "";
-      S.plan = null; renderPlan(null);
-      await refreshState();
-      if (["history", "fills", "closed", "ledger", "perf"].includes(S.tab)) loadTab(S.tab);
+      const d = await api("/api/autotrade/settings", { method: "POST", body: withAcct(S.form) });
+      S.form = formFromSettings(d.settings); S.formDirty = false;
+      $("settings-dirty").textContent = "Saved"; $("settings-dirty").className = "faint";
+      writeForm();
+      toast(`${LABEL(S.mode)} settings saved`, "ok");
+      await refresh();
+      loadCandles(false);
     } catch (e) {
-      if (fromModal) { $("cf-err").textContent = e.message; $("cf-err").hidden = false; }
-      else toast(e.message, "err", 8000);
+      toast(e.message, "err");
     } finally { btn.disabled = false; }
-  }
-
-  // ================================================================ leverage modal
-  let levCtx = { mode: "isolated" };
-  function openLev() {
-    if (S.market !== "futures" || !S.meta[S.symbol]) return;
-    const s = levSettings();
-    const max = S.meta[S.symbol].max_leverage;
-    levCtx = { mode: s.margin_mode };
-    $("m-lev-title").textContent = `${S.symbol} · leverage & margin`;
-    $("lv-slider").max = max; $("lv-slider").value = s.leverage;
-    const quick = [1, 2, 3, 5, 10, 20, 50, 75, 100, 125].filter((x) => x <= max);
-    if (!quick.includes(max)) quick.push(max);
-    $("lv-quick").innerHTML = quick.map((x) => `<button type="button" data-lev="${x}">${x}x</button>`).join("");
-    const locked = !!curPos() || S.state.orders.some((o) => o.market === "futures" && o.symbol === S.symbol);
-    $("lv-err").hidden = !locked;
-    $("lv-err").textContent = locked ? `You have an open ${S.symbol} futures position or order. Close it and cancel its orders to change leverage or margin mode.` : "";
-    $("lv-save").disabled = locked;
-    renderLevModal();
-    openModal("m-lev");
-  }
-  function renderLevModal() {
-    const lev = Number($("lv-slider").value);
-    $("lv-val").textContent = lev + "x";
-    document.querySelectorAll("#lv-mode [data-mode]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === levCtx.mode ? "true" : "false"));
-    const cap = maxNotional(lev);
-    let html = `Max position at <b>${lev}x</b>: <b>${fu(cap).replace(".00", "")} USDT</b>.<br>A ${(100 / lev).toFixed(2)}% move against you wipes the initial margin — liquidation comes a little sooner because of maintenance margin.`;
-    if (lev >= 50) html += `<br><span class="neg">Extreme leverage: normal market noise can liquidate you within minutes.</span>`;
-    else if (lev >= 20) html += `<br><span class="warnc">High leverage. Most beginners do better at 2–10x.</span>`;
-    html += `<br>${levCtx.mode === "cross" ? "<b>Cross</b>: the whole free wallet backs your cross positions." : "<b>Isolated</b>: you can only lose the margin of this position."}`;
-    $("lv-info").innerHTML = html;
-  }
-  $("lv-slider").addEventListener("input", renderLevModal);
-  $("lv-quick").addEventListener("click", (e) => { const b = e.target.closest("[data-lev]"); if (b) { $("lv-slider").value = b.dataset.lev; renderLevModal(); } });
-  $("lv-mode").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (b) { levCtx.mode = b.dataset.mode; renderLevModal(); } });
-  $("btn-lev").addEventListener("click", openLev);
-  $("btn-mode").addEventListener("click", openLev);
-  $("lv-save").addEventListener("click", async () => {
-    $("lv-save").disabled = true;
-    try {
-      await api("/api/paper/leverage", { method: "POST", body: { symbol: S.symbol, leverage: Number($("lv-slider").value), margin_mode: levCtx.mode } });
-      closeModal("m-lev");
-      await refreshState();
-      onFormChange();
-      toast(`${S.symbol}: ${$("lv-slider").value}x ${levCtx.mode}`, "ok");
-    } catch (e) { $("lv-err").textContent = e.message; $("lv-err").hidden = false; }
-    finally { $("lv-save").disabled = false; }
   });
 
-  // ================================================================ tabs
-  document.querySelector(".tabbar").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-tab]");
-    if (!b) return;
-    S.tab = b.dataset.tab;
-    document.querySelectorAll(".tabbar [data-tab]").forEach((x) => x.setAttribute("aria-selected", x === b ? "true" : "false"));
-    document.querySelectorAll(".tab-body").forEach((x) => { x.hidden = x.id !== "tab-" + S.tab; });
-    loadTab(S.tab);
-  });
-  function loadTab(tab) {
-    if (tab === "positions") return renderPositions();
-    if (tab === "orders") return renderOrders();
-    if (tab === "perf") return loadStats();
-    const kind = { history: "orders", fills: "fills", closed: "closed", ledger: "ledger" }[tab];
-    api(`/api/paper/history?kind=${kind}&limit=200`).then((d) => {
-      ({ history: renderHistory, fills: renderFills, closed: renderClosed, ledger: renderLedger })[tab](d.rows);
-    }).catch((e) => { $("tab-" + tab).innerHTML = `<div class="empty">Could not load: ${esc(e.message)}</div>`; });
+  // ------------------------------------------------------------ status render
+  function renderStatus() {
+    const st = S.status;
+    const acct = st.account;
+    const L = LABEL(S.mode);
+    renderSwitcher();
+    $("settings-title").textContent = `${L} bot settings`;
+
+    const dot = $("conn-dot");
+    if (st.connected) {
+      dot.className = "at-dot " + (acct.balance_error ? "warn" : "on");
+      $("conn-text").textContent = `Binance ${L} · ${acct.key_hint || ""}`;
+      $("btn-connect").textContent = "Manage account";
+      $("btn-connect").className = "btn";
+    } else {
+      dot.className = "at-dot";
+      $("conn-text").textContent = `${L} not connected`;
+      $("btn-connect").textContent = `Connect ${L}`;
+      $("btn-connect").className = "btn btn-primary";
+    }
+
+    const strip = $("mode-strip");
+    if (!st.ready.encryption || !st.ready.ccxt) {
+      strip.className = "mode-strip live";
+      strip.innerHTML = `<strong>Setup incomplete.</strong> The server is missing ${!st.ready.encryption ? "the <b>AUTOTRADE_ENCRYPTION_KEY</b> environment variable" : "the <b>ccxt</b> library"}, so Binance cannot be connected. Add it in Railway Variables.`;
+    } else if (!st.connected) {
+      strip.className = "mode-strip" + (S.mode === "live" ? " live" : "");
+      strip.innerHTML = S.mode === "demo"
+        ? `<strong>Get started with Demo (no real money):</strong><ol>
+          <li>Create an API key on <b>demo.binance.com</b> (Profile → API Management).</li>
+          <li>Click <b>Connect Demo</b> above and paste the API key and secret.</li>
+          <li>Pick your coins and settings below, click <b>Save settings</b>, then turn the bot on.</li></ol>`
+        : `<strong>Live account — real money.</strong> Create an API key on <b>binance.com</b> with withdrawals disabled, then click <b>Connect Live</b>.
+           Your Demo account and bot keep running separately.`;
+    } else if (S.mode === "demo") {
+      strip.className = "mode-strip demo";
+      strip.innerHTML = `<strong>DEMO account</strong> — Binance Demo Trading. Orders go to the real Binance engine, but the money is not real. Watch results here for a few weeks before going live.`;
+    } else {
+      strip.className = "mode-strip live";
+      strip.innerHTML = `<strong>LIVE account — real money.</strong> Every order uses real funds in your Binance account.`;
+    }
+    if (st.connected && acct.balance_error) {
+      strip.innerHTML += `<div class="alert err" style="margin-top:8px;">${esc(acct.balance_error)}</div>`;
+    }
+
+    if (st.connected && acct.balance_usdt != null) {
+      $("st-balance").textContent = fmtUsd(acct.balance_usdt);
+      $("st-balance-sub").textContent = `${acct.balance_market || st.settings.market_type} · free USDT · ${ago(acct.balance_at)}`;
+    } else { $("st-balance").textContent = "—"; $("st-balance-sub").innerHTML = "&nbsp;"; }
+    const s = st.stats;
+    $("st-today").textContent = fmtUsd(s.realized_today, true); $("st-today").className = "v " + cls(s.realized_today);
+    $("st-unreal").textContent = fmtUsd(s.unrealized, true); $("st-unreal").className = "v " + cls(s.unrealized);
+    $("st-open-count").textContent = `${st.positions.length} open`;
+    $("st-total").textContent = fmtUsd(s.total_pnl, true); $("st-total").className = "v " + cls(s.total_pnl);
+    $("st-closed").textContent = `${s.closed_count} closed`;
+    $("st-winrate").textContent = s.win_rate == null ? "—" : s.win_rate + "%";
+    $("st-wl").textContent = s.closed_count ? `${s.wins} won · ${s.losses} lost` : "\u00a0";
+    $("st-engine").textContent = st.engine.online ? "Online" : "Offline";
+    $("st-engine").className = "v " + (st.engine.online ? "pos" : "neg");
+    $("st-engine-sub").textContent = st.engine.heartbeat_at ? "heartbeat " + ago(st.engine.heartbeat_at) : "not started yet";
+
+    const bot = st.bot;
+    const card = $("bot-card"), sw = $("bot-switch");
+    sw.disabled = !st.connected;
+    sw.setAttribute("aria-checked", bot.enabled ? "true" : "false");
+    sw.setAttribute("aria-label", `${L} bot on/off`);
+    card.className = "panel bot-card" + (bot.enabled ? (bot.paused_until ? " paused" : " running") : "");
+    $("bot-label").textContent = `${L} bot ` + (bot.enabled ? (bot.paused_until ? "PAUSED" : "ON") : "OFF");
+    if (!st.connected) $("bot-sub").textContent = `Connect the ${L} account first`;
+    else if (!bot.enabled) $("bot-sub").textContent = "Not taking new trades";
+    else if (bot.paused_until) $("bot-sub").textContent = `${bot.pause_reason} — paused until ${hhmm(bot.paused_until)}`;
+    else $("bot-sub").textContent = `Scans signals every ${st.settings.timeframe === "15m" ? "3" : st.settings.timeframe === "1h" ? "5" : "10"} min`;
+    const det = [];
+    det.push(`${st.settings.market_type === "futures" ? "Futures " + st.settings.leverage + "x" : "Spot"} · risk ${st.settings.risk_pct}% · min ${st.settings.min_confidence}%`);
+    det.push(`Last scan: ${ago(bot.last_scan_at)}`);
+    if (bot.enabled && !st.engine.online) det.push(`<span class="neg">Engine offline — no trades will be placed. Check the server logs.</span>`);
+    $("bot-detail").innerHTML = det.join("<br>");
+    const anyActive = Object.values(st.accounts).some((a) => a.bot_enabled || a.open_positions);
+    $("btn-panic").disabled = !anyActive;
+
+    $("btn-long").disabled = !st.connected;
+    $("btn-short").disabled = !st.connected || st.settings.market_type === "spot";
+    $("btn-short").title = st.settings.market_type === "spot" ? "No SHORT on spot — choose Futures in the settings" : "";
+
+    renderPositions();
+    renderLog();
   }
-  function table(head, rows) {
-    return `<div class="tbl-wrap"><table class="tbl"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
-  }
-  function mktLabel(p) { return p.market === "spot" ? "Spot" : `${p.leverage}x ${p.margin_mode === "cross" ? "Cross" : "Isolated"}`; }
 
   function renderPositions() {
-    const el = $("tab-positions");
-    if (!S.state) return;
-    const ps = S.state.positions;
-    if (!ps.length) {
-      el.innerHTML = `<div class="empty">No open positions.<br>Choose a coin, set a size and a stop-loss, and place a practice trade from the order panel.</div>`;
-      return;
+    const st = S.status;
+    const ob = $("open-body");
+    if (!st.positions.length) ob.innerHTML = `<tr><td colspan="6" class="empty">No open positions</td></tr>`;
+    else {
+      ob.innerHTML = st.positions.map((p) => `<tr class="click" data-sym="${esc(p.symbol)}">
+        <td>${esc(p.symbol.replace("/USDT", ""))}<br><span class="faint">${p.leverage}x ${esc(p.source)}</span></td>
+        <td class="${p.side === "LONG" ? "pos" : "neg"}">${p.side}</td>
+        <td>${fmtPrice(p.entry_price)}<br><span class="faint">now ${fmtPrice(p.last_price)}</span></td>
+        <td><span class="neg">${fmtPrice(p.stop_loss)}</span><br><span class="pos">${fmtPrice(p.take_profit)}</span></td>
+        <td class="${cls(p.unrealized_pnl)}">${fmtUsd(p.unrealized_pnl, true)}</td>
+        <td>${p.status === "OPEN" ? `<button class="btn btn-danger btn-sm" data-close-id="${p.id}">Close</button>` : `<span class="faint">closing…</span>`}</td></tr>`).join("");
     }
-    const rows = ps.map((p) => {
-      const sym = p.symbol;
-      let margin = `${fu(p.margin)}`;
-      if (p.market === "futures" && p.margin_mode === "isolated") margin += ` <button class="linkbtn" data-act="margin" data-id="${p.id}" title="Add or remove margin">±</button>`;
-      return `<tr class="click" data-sym="${esc(sym)}" data-market="${p.market}">
-        <td><b>${esc(sym)}</b><div class="sub">${mktLabel(p)}${p.tag ? ` · <span class="tag-chip">${esc(p.tag)}</span>` : ""}</div></td>
-        <td><span class="side-badge ${p.side === "LONG" ? "pos" : "neg"}">${p.market === "spot" ? "HOLD" : p.side}</span></td>
-        <td>${fq(sym, p.qty)} ${esc(base(sym))}<div class="sub">${fu(p.notional)} USDT</div></td>
-        <td>${fp(sym, p.entry_price)}</td>
-        <td>${fp(sym, p.mark)}${p.price_live ? "" : ' <span class="warnc" title="Price feed delayed">!</span>'}</td>
-        <td class="warnc">${p.liq_price ? fp(sym, p.liq_price) : "—"}</td>
-        <td>${margin}<div class="sub">${p.market === "spot" ? "cost" : p.margin_mode}</div></td>
-        <td class="${cls(p.upnl)}">${fu(p.upnl, true)}<div class="sub ${cls(p.upnl)}">${fpct(p.roe_pct)}</div></td>
-        <td><span class="pos">${p.tp_price ? fp(sym, p.tp_price) : "—"}</span> / <span class="neg">${p.sl_price ? fp(sym, p.sl_price) : "—"}</span>
-          <div><button class="linkbtn" data-act="tpsl" data-id="${p.id}">Edit</button></div></td>
-        <td><div class="acts"><button class="dt-btn sm" data-act="close" data-id="${p.id}">Close</button>
-          <button class="dt-btn sm ghost" data-act="pjournal" data-id="${p.id}" title="Journal">✎</button></div></td></tr>`;
+    ob.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => selectCoin(tr.dataset.sym)));
+    ob.querySelectorAll("[data-close-id]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); closePosition(+b.dataset.closeId, b); }));
+    $("pos-note").textContent = st.positions.length ? "SL/TP monitored by the bot" : "";
+
+    const hb = $("history-body");
+    if (!st.history.length) hb.innerHTML = `<tr><td colspan="5" class="empty">No closed trades yet</td></tr>`;
+    else hb.innerHTML = st.history.map((p) => `<tr>
+        <td>${esc(p.symbol.replace("/USDT", ""))}<br><span class="faint">${hhmm(p.closed_at)}</span></td>
+        <td class="${p.side === "LONG" ? "pos" : "neg"}">${p.side}</td>
+        <td>${fmtPrice(p.entry_price)} → ${fmtPrice(p.exit_price)}</td>
+        <td class="${cls(p.pnl_usdt)}">${fmtUsd(p.pnl_usdt, true)}</td>
+        <td>${esc(p.close_reason || "")}</td></tr>`).join("");
+    drawPositionLines();
+  }
+
+  function renderLog() {
+    const showScan = $("log-show-scan").checked;
+    const rows = S.status.logs.filter((l) => showScan || l.level !== "SCAN");
+    $("log").innerHTML = rows.length ? rows.map((l) => `<div class="log-row"><span class="faint">${hhmm(l.created_at)}</span><span class="lv ${esc(l.level)}">${esc(l.level)}</span><span>${esc(l.message)}</span></div>`).join("")
+      : `<div class="empty">No activity yet</div>`;
+  }
+  $("log-show-scan").addEventListener("change", () => S.status && renderLog());
+
+  function announceNewTrades(prevLastId) {
+    if (prevLastId == null) return;
+    const fresh = S.status.logs.filter((l) => l.id > prevLastId && (l.level === "TRADE" || l.level === "WARN")).reverse();
+    fresh.forEach((l) => {
+      chat("ai", `[${LABEL(S.mode)}] ${l.message}`);
+      if (l.level === "TRADE") {
+        const m = l.message.match(/^(OPEN|CLOSE) (LONG|SHORT) (\S+)/);
+        if (m) speak(`${m[3].replace("/USDT", "")} ${m[2].toLowerCase()} trade ${m[1] === "OPEN" ? "opened" : "closed"}`);
+      }
     });
-    el.innerHTML = table(["Coin", "Side", "Size", "Entry", "Mark", "Liq. price", "Margin", "PnL (ROE)", "TP / SL", ""], rows);
-  }
-  $("tab-positions").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-act]");
-    if (b) {
-      e.stopPropagation();
-      const p = S.state.positions.find((x) => x.id === Number(b.dataset.id));
-      if (!p) return;
-      if (b.dataset.act === "close") openClose(p);
-      else if (b.dataset.act === "tpsl") openTpsl(p);
-      else if (b.dataset.act === "margin") openMargin(p);
-      else if (b.dataset.act === "pjournal") openJournal("position", p);
-      return;
-    }
-    const row = e.target.closest("tr[data-sym]");
-    if (row) {
-      if (row.dataset.market !== S.market) { S.market = row.dataset.market; LS.set("market", S.market); }
-      selectSymbol(row.dataset.sym);
-    }
-  });
-
-  function renderOrders() {
-    const el = $("tab-orders");
-    if (!S.state) return;
-    const os = S.state.orders;
-    if (!os.length) {
-      el.innerHTML = `<div class="empty">No open orders.<br>Limit, stop and trailing orders wait here until the price reaches them — even when you close this page.</div>`;
-      return;
-    }
-    const rows = os.slice().reverse().map((o) => {
-      const sym = o.symbol;
-      let trig = "—";
-      if (o.type === "STOP_MARKET" || o.type === "STOP_LIMIT") trig = `${o.trigger_dir === "UP" ? "≥" : "≤"} ${fp(sym, o.trigger_price)}${o.triggered ? ' <span class="pos">triggered</span>' : ""}`;
-      if (o.type === "TRAILING_STOP") trig = `${o.callback_pct}%` + (o.trail_active ? ` from ${fp(sym, o.trail_extreme)}` : ` · activates at ${fp(sym, o.activation_price)}`);
-      const flags = [o.reduce_only ? "Reduce-only" : "", o.post_only ? "Post-only" : "", o.type === "LIMIT" ? o.tif : ""].filter(Boolean).join(" · ") || "—";
-      return `<tr class="click" data-sym="${esc(sym)}" data-market="${o.market}">
-        <td>${dt(o.created_at)}</td><td><b>${esc(sym)}</b><div class="sub">${o.market === "spot" ? "Spot" : o.leverage + "x"}</div></td>
-        <td>${TYPE_LABEL[o.type]}</td><td class="${o.side === "BUY" ? "pos" : "neg"}">${o.side}</td>
-        <td>${o.price && (o.type === "LIMIT" || o.type === "STOP_LIMIT") ? fp(sym, o.price) : "Market"}</td>
-        <td>${trig}</td><td>${fq(sym, o.qty)}</td><td class="sub">${flags}</td>
-        <td><span class="pos">${o.tp_price ? fp(sym, o.tp_price) : "—"}</span> / <span class="neg">${o.sl_price ? fp(sym, o.sl_price) : "—"}</span></td>
-        <td><button class="dt-btn sm" data-cancel="${o.id}">Cancel</button></td></tr>`;
-    });
-    el.innerHTML = `<div class="tab-tools"><span>Margin reserved for open orders: ${fu(S.state.account.order_margin)} USDT</span>
-      <button class="dt-btn sm" id="btn-cancel-all">Cancel all</button></div>` +
-      table(["Time", "Coin", "Type", "Side", "Price", "Trigger / trail", "Qty", "Options", "TP / SL", ""], rows);
-  }
-  $("tab-orders").addEventListener("click", async (e) => {
-    const c = e.target.closest("[data-cancel]");
-    if (c) {
-      e.stopPropagation();
-      const id = Number(c.dataset.cancel);
-      S.handledOrders.add(id); c.disabled = true;
-      try { await api(`/api/paper/orders/${id}/cancel`, { method: "POST", body: {} }); toast("Order canceled", "ok"); }
-      catch (err) { toast(err.message, "err"); }
-      refreshState();
-      return;
-    }
-    if (e.target.closest("#btn-cancel-all")) {
-      if (!confirm("Cancel all open orders?")) return;
-      S.state.orders.forEach((o) => S.handledOrders.add(o.id));
-      try { const d = await api("/api/paper/orders/cancel-all", { method: "POST", body: {} }); toast(`${d.canceled} order(s) canceled`, "ok"); }
-      catch (err) { toast(err.message, "err"); }
-      refreshState();
-      return;
-    }
-    const row = e.target.closest("tr[data-sym]");
-    if (row) { if (row.dataset.market !== S.market) { S.market = row.dataset.market; LS.set("market", S.market); } selectSymbol(row.dataset.sym); }
-  });
-
-  function renderHistory(rows) {
-    const el = $("tab-history");
-    if (!rows.length) { el.innerHTML = `<div class="empty">No order history in this session yet.</div>`; return; }
-    const SC = { FILLED: "pos", CANCELED: "dim", REJECTED: "neg", EXPIRED: "warnc" };
-    el.innerHTML = table(["Time", "Coin", "Type", "Side", "Price / trigger", "Qty", "Avg. fill", "Fee", "Status", "Info"], rows.map((o) => {
-      const sym = o.symbol;
-      const px = o.type === "LIMIT" || o.type === "STOP_LIMIT" ? fp(sym, o.price) : o.trigger_price ? "trig. " + fp(sym, o.trigger_price) : o.type === "TRAILING_STOP" ? o.callback_pct + "% trail" : "Market";
-      return `<tr><td>${dt(o.updated_at || o.created_at)}</td><td><b>${esc(sym)}</b><div class="sub">${o.market === "spot" ? "Spot" : o.leverage + "x"}</div></td>
-        <td>${typeLabel(o)}${o.reduce_only ? '<div class="sub">reduce-only</div>' : ""}</td><td class="${o.side === "BUY" ? "pos" : "neg"}">${o.side}</td>
-        <td>${px}</td><td>${fq(sym, o.qty)}</td><td>${o.avg_price ? fp(sym, o.avg_price) : "—"}</td>
-        <td>${o.fee != null ? fu(o.fee) + `<div class="sub">${(o.liquidity || "").toLowerCase()}</div>` : "—"}</td>
-        <td class="${SC[o.status] || ""}">${o.status}</td><td class="wrap sub">${esc(o.reason || "")}</td></tr>`;
-    }));
-  }
-  function renderFills(rows) {
-    const el = $("tab-fills");
-    if (!rows.length) { el.innerHTML = `<div class="empty">No trades in this session yet.</div>`; return; }
-    el.innerHTML = table(["Time", "Coin", "Side", "Price", "Qty", "Value", "Fee", "Role", "Realized PnL"], rows.map((f) => `<tr>
-      <td>${dt(f.created_at)}</td><td><b>${esc(f.symbol)}</b><div class="sub">${f.market === "spot" ? "Spot" : "Futures"}</div></td>
-      <td class="${f.side === "BUY" ? "pos" : "neg"}">${f.side}</td><td>${fp(f.symbol, f.price)}</td><td>${fq(f.symbol, f.qty)}</td>
-      <td>${fu(f.qty * f.price)}</td><td>${fu(f.fee)}</td><td>${f.liquidity === "MAKER" ? "Maker" : "Taker"}</td>
-      <td class="${cls(f.realized)}">${f.realized ? fu(f.realized, true) : "—"}</td></tr>`));
-  }
-  let closedRows = [];
-  function renderClosed(rows) {
-    closedRows = rows;
-    const el = $("tab-closed");
-    if (!rows.length) { el.innerHTML = `<div class="empty">No closed trades yet. When a position closes it lands here with its result, so you can write down what you learned.</div>`; return; }
-    el.innerHTML = table(["Closed", "Coin", "Side", "Size", "Entry → exit", "Net PnL (ROE)", "Fees + funding", "Held", "Exit", "Best / worst", "Setup & notes"], rows.map((c) => {
-      const sym = c.symbol;
-      return `<tr><td>${dt(c.closed_at)}</td><td><b>${esc(sym)}</b><div class="sub">${mktLabel(c)}</div></td>
-        <td class="${c.side === "LONG" ? "pos" : "neg"}">${c.market === "spot" ? "SPOT" : c.side}${c.sl_used ? "" : '<div class="sub warnc" title="No stop-loss was used">no SL</div>'}</td>
-        <td>${fq(sym, c.qty)}</td><td>${fp(sym, c.entry_price)} → ${fp(sym, c.exit_price)}</td>
-        <td class="${cls(c.net_pnl)}"><b>${fu(c.net_pnl, true)}</b><div class="sub ${cls(c.net_pnl)}">${fpct(c.roe_pct)}</div></td>
-        <td>${fu((c.fees || 0) + (c.funding || 0))}</td><td>${dur(c.duration_sec)}</td>
-        <td class="${c.close_reason === "LIQUIDATION" ? "neg" : ""}">${REASON_LABEL[c.close_reason] || c.close_reason}</td>
-        <td><span class="pos">${fpct(c.mfe_pct)}</span> / <span class="neg">${fpct(c.mae_pct)}</span></td>
-        <td class="wrap">${c.tag ? `<span class="tag-chip">${esc(c.tag)}</span> ` : ""}<span class="sub">${esc(c.notes || "")}</span>
-          <div><button class="linkbtn" data-cjournal="${c.id}">${c.notes || c.tag ? "Edit" : "Add note"}</button></div></td></tr>`;
-    }));
-  }
-  $("tab-closed").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-cjournal]");
-    if (!b) return;
-    const c = closedRows.find((x) => x.id === Number(b.dataset.cjournal));
-    if (c) openJournal("closed", c);
-  });
-  function renderLedger(rows) {
-    const el = $("tab-ledger");
-    if (!rows.length) { el.innerHTML = `<div class="empty">No transactions yet.</div>`; return; }
-    const T = { DEPOSIT: "Starting balance", FEE: "Trading fee", REALIZED_PNL: "Realized PnL", FUNDING: "Funding", LIQUIDATION_FEE: "Liquidation fee", INSURANCE: "Insurance fund" };
-    el.innerHTML = table(["Time", "Type", "Coin", "Amount (USDT)", "Wallet after"], rows.map((r) => `<tr>
-      <td>${dt(r.created_at)}</td><td>${T[r.type] || r.type}</td><td>${esc(r.symbol || "—")}</td>
-      <td class="${cls(r.amount)}">${fu(r.amount, true)}</td><td>${fu(r.balance_after)}</td></tr>`));
   }
 
-  // ---------------------------------------------------------------- performance
-  let curveChart = null, curveSeries = null;
-  function ensureCurve() {
-    if (curveSeries || !window.LightweightCharts) return;
-    const LC = window.LightweightCharts;
-    curveChart = LC.createChart($("curve"), {
-      autoSize: true,
-      layout: { background: { type: "solid", color: "transparent" }, textColor: cssVar("--text-dim"), fontFamily: "IBM Plex Mono, monospace", fontSize: 10.5, attributionLogo: false },
-      grid: { vertLines: { visible: false }, horzLines: { color: cssVar("--line-soft") } },
-      rightPriceScale: { borderColor: cssVar("--line") }, timeScale: { borderColor: cssVar("--line"), timeVisible: true },
-      handleScroll: false, handleScale: false,
-    });
-    curveSeries = curveChart.addSeries(LC.AreaSeries, { lineColor: cssVar("--long"), topColor: "rgba(54,224,160,.28)", bottomColor: "rgba(54,224,160,0)", lineWidth: 2, priceLineVisible: false });
-  }
-  async function loadStats() {
-    let s;
-    try { s = (await api("/api/paper/stats")).stats; } catch (e) { $("perf-kpis").innerHTML = `<div class="empty">Could not load: ${esc(e.message)}</div>`; return; }
-    const k = (label, value, sub, c) => `<div class="kpi"><div class="k">${label}</div><div class="v ${c || ""}">${value}</div><div class="s">${sub || "&nbsp;"}</div></div>`;
-    const pf = s.profit_factor == null ? (s.gross_profit > 0 ? "∞" : "—") : s.profit_factor.toFixed(2);
-    $("perf-kpis").innerHTML = [
-      k("Net PnL (closed)", fu(s.net_pnl, true), `Return ${fpct(s.return_pct)} incl. open`, cls(s.net_pnl)),
-      k("Win rate", s.win_rate == null ? "—" : s.win_rate.toFixed(1) + "%", `${s.wins} won · ${s.losses} lost`),
-      k("Profit factor", pf, `Gross ${fu(s.gross_profit)} / ${fu(s.gross_loss)}`, s.profit_factor >= 1.5 ? "pos" : s.profit_factor != null && s.profit_factor < 1 ? "neg" : ""),
-      k("Expectancy / trade", fu(s.expectancy, true), "Average net result per trade", cls(s.expectancy)),
-      k("Avg win / avg loss", `${fu(s.avg_win)} / ${fu(s.avg_loss)}`, s.payoff_ratio ? `Payoff ratio ${s.payoff_ratio.toFixed(2)}` : ""),
-      k("Max drawdown", s.max_drawdown_pct ? "-" + s.max_drawdown_pct.toFixed(2) + "%" : "0%", "Largest peak-to-trough fall", s.max_drawdown_pct > 20 ? "neg" : ""),
-      k("Trades", String(s.trades), `Avg. hold ${dur(s.avg_duration_sec)}`),
-      k("Fees + funding", fu(s.fees_paid + s.funding_paid), `Fees ${fu(s.fees_paid)} · funding ${fu(s.funding_paid)}`),
-      k("Stop-loss used", s.sl_usage_pct == null ? "—" : s.sl_usage_pct.toFixed(0) + "%", "Trades that had a stop-loss", s.sl_usage_pct != null && s.sl_usage_pct < 80 ? "warnc" : "pos"),
-      k("Liquidations", String(s.liquidations), s.liquidations ? "Lower leverage / tighter stops" : "Keep it at zero", s.liquidations ? "neg" : "pos"),
-      k("Streaks", `${s.best_win_streak}W / ${s.worst_loss_streak}L`, "Longest win / loss streak"),
-      k("Avg. best / worst", `${fpct(s.avg_mfe_pct)} / ${fpct(s.avg_mae_pct)}`, "Price move for / against you"),
-    ].join("");
-    ensureCurve();
-    if (curveSeries) {
-      const pts = [];
-      s.curve.forEach((p) => {
-        const t = Math.floor(Date.parse(p.t) / 1000);
-        if (pts.length && t <= pts[pts.length - 1].time) pts[pts.length - 1].value = p.v;
-        else pts.push({ time: t, value: p.v });
-      });
-      const eqT = Math.floor(Date.now() / 1000);
-      if (!pts.length || eqT > pts[pts.length - 1].time) pts.push({ time: eqT, value: s.equity });
-      curveSeries.setData(pts);
-      curveChart.timeScale().fitContent();
-    }
-    const tips = [];
-    if (s.trades < 10) tips.push(`You have ${s.trades} closed trade${s.trades === 1 ? "" : "s"}. Judge a strategy after 20–30 trades — small samples are mostly luck.`);
-    if (s.sl_usage_pct != null && s.sl_usage_pct < 80) tips.push(`Only ${s.sl_usage_pct.toFixed(0)}% of your trades had a stop-loss. Set one on every trade, before you enter.`);
-    if (s.liquidations > 0) tips.push(`You were liquidated ${s.liquidations} time${s.liquidations > 1 ? "s" : ""}. Use lower leverage and keep the stop-loss well before the liquidation price.`);
-    if (s.payoff_ratio && s.win_rate != null) {
-      const be = 100 / (1 + s.payoff_ratio);
-      tips.push(`With your payoff ratio of ${s.payoff_ratio.toFixed(2)}, you need a win rate above ${be.toFixed(0)}% to be profitable — you are at ${s.win_rate.toFixed(0)}%.`);
-    }
-    if (s.avg_win && s.avg_loss && Math.abs(s.avg_loss) > s.avg_win) tips.push("Your average loss is larger than your average win. Cut losers at the stop and give winners room to reach the target.");
-    if (s.trades >= 5 && s.fees_paid > Math.abs(s.net_pnl) * 0.5) tips.push("Fees are a big share of your results. Fewer, better trades — or limit (maker) orders — keep more of the edge.");
-    if (s.max_drawdown_pct > 20) tips.push(`A ${s.max_drawdown_pct.toFixed(0)}% drawdown is deep. Smaller risk per trade (1% or less) keeps losing streaks survivable.`);
-    if (s.worst_loss_streak >= 4) tips.push(`You had ${s.worst_loss_streak} losses in a row. Decide in advance to pause after 3 straight losses and review the journal.`);
-    if (!tips.length) tips.push("Good discipline so far. Keep journaling each setup — over time the 'By coin' and long/short tables show where your edge really is.");
-    $("perf-tips").innerHTML = tips.map((t) => `<li>${esc(t)}</li>`).join("");
-    $("perf-coins").innerHTML = s.by_symbol.length ? table(["Coin", "Trades", "Win rate", "Net PnL"], s.by_symbol.map((r) =>
-      `<tr><td><b>${esc(r.symbol)}</b></td><td>${r.count}</td><td>${r.win_rate.toFixed(0)}%</td><td class="${cls(r.net)}">${fu(r.net, true)}</td></tr>`)) : '<div class="empty">No trades yet.</div>';
-    $("perf-sides").innerHTML = table(["Side", "Trades", "Win rate", "Net PnL"], [["Long", s.long], ["Short", s.short]].map(([n, r]) =>
-      `<tr><td><b>${n}</b></td><td>${r.count}</td><td>${r.win_rate == null ? "—" : r.win_rate.toFixed(0) + "%"}</td><td class="${cls(r.net)}">${fu(r.net, true)}</td></tr>`));
-  }
-
-  // ================================================================ position modals
-  let closeCtx = null;
-  function openClose(p) {
-    closeCtx = { pos: p, type: "MARKET", frac: 1 };
-    $("m-close-title").textContent = `Close ${p.market === "spot" ? "holding" : p.side.toLowerCase()} · ${p.symbol}`;
-    setPriceInput($("cl-price"), p.symbol, p.mark);
-    $("cl-pcts").innerHTML = [25, 50, 75, 100].map((x) => `<button type="button" data-frac="${x / 100}" aria-pressed="${x === 100}">${x}%</button>`).join("");
-    $("cl-err").hidden = true;
-    renderClose();
-    openModal("m-close");
-  }
-  function renderClose() {
-    const c = closeCtx, p = c.pos;
-    document.querySelectorAll("#cl-type [data-ctype]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.ctype === c.type ? "true" : "false"));
-    document.querySelectorAll("#cl-pcts [data-frac]").forEach((b) => b.setAttribute("aria-pressed", Number(b.dataset.frac) === c.frac ? "true" : "false"));
-    $("cl-price-wrap").hidden = c.type !== "LIMIT";
-    const px = c.type === "MARKET" ? p.mark : num($("cl-price").value);
-    const qty = p.qty * c.frac;
-    const rate = (S.boot.options.fees[p.market][c.type === "LIMIT" ? "maker" : "taker"]) / 100;
-    const pnl = px ? (p.side === "LONG" ? (px - p.entry_price) : (p.entry_price - px)) * qty - px * qty * rate : null;
-    $("cl-sum").innerHTML = [
-      ["Close size", `${fq(p.symbol, qty)} ${esc(base(p.symbol))}`],
-      ["Price", c.type === "MARKET" ? `≈ ${fp(p.symbol, p.mark)} (market)` : (px ? fp(p.symbol, px) : "—")],
-      ["Est. PnL after fee", pnl == null ? "—" : `<span class="${cls(pnl)}">${fu(pnl, true)} USDT</span>`],
-    ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
-    $("cl-go").textContent = c.type === "MARKET" ? `Close ${Math.round(c.frac * 100)}% at market` : "Place limit close";
-  }
-  $("cl-type").addEventListener("click", (e) => { const b = e.target.closest("[data-ctype]"); if (b) { closeCtx.type = b.dataset.ctype; renderClose(); } });
-  $("cl-pcts").addEventListener("click", (e) => { const b = e.target.closest("[data-frac]"); if (b) { closeCtx.frac = Number(b.dataset.frac); renderClose(); } });
-  $("cl-price").addEventListener("input", renderClose);
-  $("cl-go").addEventListener("click", async () => {
-    const c = closeCtx;
-    $("cl-go").disabled = true; $("cl-err").hidden = true;
+  // ------------------------------------------------------------ refresh loop
+  async function refresh() {
+    const seq = ++S.refreshSeq;
+    const mode = S.mode;
     try {
-      const d = await api(`/api/paper/positions/${c.pos.id}/close`, { method: "POST", body: { fraction: c.frac, type: c.type, price: c.type === "LIMIT" ? num($("cl-price").value) : null } });
-      if (c.type === "MARKET") {
-        if (c.frac >= 1) S.handledPositions.add(c.pos.id);
-        if (d.fill) S.handledOrders.add(d.fill.order_id);
-        toast(`Closed ${fq(c.pos.symbol, d.fill.qty)} ${base(c.pos.symbol)} @ ${fp(c.pos.symbol, d.fill.price)} · realized ${fu(d.fill.realized, true)} USDT`, d.fill.realized >= 0 ? "ok" : "warn");
-      } else toast("Limit close order placed (reduce-only).", "ok");
-      closeModal("m-close");
-      await refreshState();
-      if (S.tab !== "positions" && S.tab !== "orders") loadTab(S.tab);
-    } catch (e) { $("cl-err").textContent = e.message; $("cl-err").hidden = false; }
-    finally { $("cl-go").disabled = false; }
-  });
-
-  let tsCtx = null;
-  function openTpsl(p) {
-    tsCtx = p;
-    $("m-tpsl-title").textContent = `TP / SL · ${p.side} ${p.symbol}`;
-    $("ts-info").innerHTML = `Entry ${fp(p.symbol, p.entry_price)} · mark ${fp(p.symbol, p.mark)}${p.liq_price ? ` · liquidation <span class="warnc">${fp(p.symbol, p.liq_price)}</span>` : ""}. Both close the whole position at market when the last price touches them.`;
-    $("ts-tp").value = p.tp_price ? fp(p.symbol, p.tp_price).replace(/,/g, "") : "";
-    $("ts-sl").value = p.sl_price ? fp(p.symbol, p.sl_price).replace(/,/g, "") : "";
-    $("ts-err").hidden = true;
-    renderTpsl();
-    openModal("m-tpsl");
-  }
-  function renderTpsl() {
-    const p = tsCtx;
-    const rate = S.boot.options.fees[p.market].taker / 100;
-    const out = (lvl) => (p.side === "LONG" ? lvl - p.entry_price : p.entry_price - lvl) * p.qty - lvl * p.qty * rate - (p.fees || 0) - (p.funding || 0) + (p.realized || 0);
-    const tp = num($("ts-tp").value), sl = num($("ts-sl").value);
-    const eq = S.state.account.equity;
-    $("ts-tp-note").innerHTML = tp ? `Net result ≈ <span class="${cls(out(tp))}">${fu(out(tp), true)} USDT</span>` : "&nbsp;";
-    $("ts-sl-note").innerHTML = sl ? `Net result ≈ <span class="${cls(out(sl))}">${fu(out(sl), true)} USDT</span> (${(Math.abs(Math.min(0, out(sl))) / eq * 100).toFixed(2)}% of equity)` +
-      (p.liq_price && ((p.side === "LONG" && sl <= p.liq_price) || (p.side === "SHORT" && sl >= p.liq_price)) ? ' <span class="neg">— beyond liquidation!</span>' : "") : "&nbsp;";
-  }
-  $("ts-tp").addEventListener("input", renderTpsl);
-  $("ts-sl").addEventListener("input", renderTpsl);
-  $("ts-go").addEventListener("click", async () => {
-    $("ts-go").disabled = true; $("ts-err").hidden = true;
-    try {
-      await api(`/api/paper/positions/${tsCtx.id}/tpsl`, { method: "POST", body: { tp_price: num($("ts-tp").value), sl_price: num($("ts-sl").value) } });
-      closeModal("m-tpsl"); toast("TP / SL updated", "ok"); refreshState();
-    } catch (e) { $("ts-err").textContent = e.message; $("ts-err").hidden = false; }
-    finally { $("ts-go").disabled = false; }
-  });
-
-  let mgCtx = null;
-  function openMargin(p) {
-    mgCtx = { pos: p, dir: 1 };
-    $("m-margin-title").textContent = `Adjust margin · ${p.side} ${p.symbol}`;
-    $("mg-amt").value = ""; $("mg-err").hidden = true;
-    renderMargin();
-    openModal("m-margin");
-  }
-  function renderMargin() {
-    const p = mgCtx.pos;
-    document.querySelectorAll("#mg-dir [data-dir]").forEach((b) => b.setAttribute("aria-pressed", Number(b.dataset.dir) === mgCtx.dir ? "true" : "false"));
-    const amt = num($("mg-amt").value) || 0;
-    const newM = p.margin + mgCtx.dir * amt;
-    const mmr = mmrFor(p.entry_price * p.qty, p.symbol);
-    const liq = p.side === "LONG" ? (p.entry_price * p.qty - newM) / (p.qty * (1 - mmr)) : (p.entry_price * p.qty + newM) / (p.qty * (1 + mmr));
-    $("mg-info").innerHTML = `Current margin <b>${fu(p.margin)} USDT</b> · available ${fu(S.state.account.available)} USDT<br>` +
-      `Liquidation price now <span class="warnc">${fp(p.symbol, p.liq_price)}</span>` +
-      (amt ? ` → after: <span class="warnc">${liq > 0 ? fp(p.symbol, liq) : "none"}</span>` : "") +
-      `<br>Adding margin moves liquidation further away; it does <i>not</i> change your PnL.`;
-  }
-  $("mg-dir").addEventListener("click", (e) => { const b = e.target.closest("[data-dir]"); if (b) { mgCtx.dir = Number(b.dataset.dir); renderMargin(); } });
-  $("mg-amt").addEventListener("input", renderMargin);
-  $("mg-go").addEventListener("click", async () => {
-    const amt = num($("mg-amt").value);
-    if (!amt || amt <= 0) { $("mg-err").textContent = "Enter an amount."; $("mg-err").hidden = false; return; }
-    $("mg-go").disabled = true; $("mg-err").hidden = true;
-    try {
-      await api(`/api/paper/positions/${mgCtx.pos.id}/margin`, { method: "POST", body: { amount: mgCtx.dir * amt } });
-      closeModal("m-margin"); toast("Margin updated", "ok"); refreshState();
-    } catch (e) { $("mg-err").textContent = e.message; $("mg-err").hidden = false; }
-    finally { $("mg-go").disabled = false; }
-  });
-
-  let jnCtx = null;
-  function openJournal(kind, row) {
-    jnCtx = { kind, row };
-    $("m-journal-title").textContent = kind === "closed" ? "Trade review" : "Trade journal";
-    $("jn-info").innerHTML = kind === "closed"
-      ? `${esc(row.side)} ${esc(row.symbol)} · net <span class="${cls(row.net_pnl)}">${fu(row.net_pnl, true)} USDT</span> · exit: ${REASON_LABEL[row.close_reason] || row.close_reason}`
-      : `${esc(row.side)} ${esc(row.symbol)} · open position`;
-    $("jn-tag").value = row.tag || ""; $("jn-notes").value = row.notes || "";
-    $("jn-err").hidden = true;
-    openModal("m-journal");
-  }
-  $("jn-go").addEventListener("click", async () => {
-    const path = jnCtx.kind === "closed" ? `/api/paper/closed/${jnCtx.row.id}/journal` : `/api/paper/positions/${jnCtx.row.id}/journal`;
-    $("jn-go").disabled = true;
-    try {
-      await api(path, { method: "POST", body: { tag: $("jn-tag").value, notes: $("jn-notes").value } });
-      closeModal("m-journal"); toast("Journal saved", "ok");
-      if (jnCtx.kind === "closed") loadTab("closed"); else refreshState();
-    } catch (e) { $("jn-err").textContent = e.message; $("jn-err").hidden = false; }
-    finally { $("jn-go").disabled = false; }
-  });
-
-  // ================================================================ reset
-  let rsChoice = 10000;
-  $("btn-reset").addEventListener("click", () => {
-    rsChoice = S.state ? S.state.account.start_balance : 10000;
-    $("rs-chips").innerHTML = S.boot.options.start_balances.map((b) => `<button type="button" data-bal="${b}" aria-pressed="${b === rsChoice}">${b.toLocaleString("en-US")}</button>`).join("");
-    $("rs-err").hidden = true;
-    openModal("m-reset");
-  });
-  $("rs-chips").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-bal]");
-    if (!b) return;
-    rsChoice = Number(b.dataset.bal);
-    document.querySelectorAll("#rs-chips [data-bal]").forEach((x) => x.setAttribute("aria-pressed", Number(x.dataset.bal) === rsChoice ? "true" : "false"));
-  });
-  $("rs-go").addEventListener("click", async () => {
-    $("rs-go").disabled = true;
-    try {
-      if (S.state) { S.state.orders.forEach((o) => S.handledOrders.add(o.id)); S.state.positions.forEach((p) => S.handledPositions.add(p.id)); }
-      await api("/api/paper/reset", { method: "POST", body: { start_balance: rsChoice } });
-      closeModal("m-reset");
-      toast(`New practice session started with ${rsChoice.toLocaleString("en-US")} USDT.`, "ok");
-      await refreshState();
-      loadTab(S.tab); onFormChange();
-    } catch (e) { $("rs-err").textContent = e.message; $("rs-err").hidden = false; }
-    finally { $("rs-go").disabled = false; }
-  });
-
-  // ================================================================ SignalX signal
-  function renderSignal() {
-    const d = S.signal;
-    const b = $("sig-badge");
-    if (!d) { b.className = "sig-badge"; b.textContent = "Not checked"; $("sig-tf").textContent = ""; $("btn-sig-use").disabled = true; return; }
-    b.className = "sig-badge " + (d.verdict || "");
-    b.textContent = `${d.verdict} · ${Math.round(d.confidence)}%`;
-    $("sig-tf").textContent = `(${d.timeframe})`;
-    $("btn-sig-use").disabled = !(d.verdict === "LONG" || d.verdict === "SHORT");
-  }
-  $("btn-sig").addEventListener("click", async () => {
-    const tf = ["15m", "1h", "4h"].includes(S.tf) ? S.tf : "1h";
-    const sym = S.symbol;
-    $("btn-sig").disabled = true; $("sig-badge").textContent = "Analyzing…"; $("sig-badge").className = "sig-badge";
-    try {
-      const d = await api(`/api/autotrade/signal?symbol=${encodeURIComponent(sym)}&timeframe=${tf}`);
-      if (sym !== S.symbol) return;
-      S.signal = d; renderSignal();
-      $("sig-note").textContent = d.verdict === "WAIT" ? "No clear setup right now — waiting is also a position." :
-        `Volatility (95%): ${d.volatility_pct != null ? d.volatility_pct.toFixed(2) + "%" : "n/a"}. "Use levels" fills side, stop-loss and target for you to review.`;
+      const d = await api("/api/autotrade/status?account=" + mode);
+      if (seq !== S.refreshSeq || mode !== S.mode) return;  // stale response after an account switch
+      const prevLast = S.lastLogId;
+      const first = !S.status;
+      S.status = d;
+      S.lastLogId = d.logs.length ? d.logs[0].id : (prevLast || 0);
+      if (!$("s-leverage").options.length) {
+        fillSelect("s-leverage", d.options.leverage, (v) => v + "x");
+        fillSelect("s-timeframe", d.options.timeframes);
+      }
+      if (first || !S.formDirty) { S.form = formFromSettings(d.settings); writeForm(); }
+      renderStatus();
+      if (first) renderCoins();
+      else announceNewTrades(prevLast);
     } catch (e) {
-      S.signal = null; renderSignal();
-      $("sig-badge").textContent = "Unavailable";
-      $("sig-note").textContent = e.message;
-    } finally { $("btn-sig").disabled = false; }
+      if (!S.status) $("mode-strip").innerHTML = `<div class="alert err">Could not load status: ${esc(e.message)}</div>`;
+    }
+  }
+
+  // ------------------------------------------------------------ actions
+  // Connect
+  $("btn-connect").addEventListener("click", () => {
+    const st = S.status;
+    const live = S.mode === "live";
+    $("c-error").hidden = true;
+    $("c-key").value = ""; $("c-secret").value = "";
+    $("c-disconnect").hidden = !(st && st.connected);
+    $("m-connect-title").textContent = `${st && st.connected ? "Manage" : "Connect"} Binance ${LABEL(S.mode)} account`;
+    $("c-live-warn").hidden = !live;
+    $("c-help").innerHTML = (st && st.connected ? `Connected key: <b>${esc(st.account.key_hint || "")}</b>. Paste a new key below to replace it.<br>` : "") +
+      (live ? "Create the key on <b>binance.com</b> → Profile → API Management."
+            : "Create the key on <b>demo.binance.com</b> → Profile → API Management.") +
+      " The market (Spot/Futures) follows this account's bot settings.";
+    openModal("m-connect");
   });
-  $("btn-sig-use").addEventListener("click", () => {
-    const d = S.signal;
-    if (!d || !(d.verdict === "LONG" || d.verdict === "SHORT")) return;
-    if (d.verdict === "SHORT" && S.market === "spot") { toast("This is a SHORT signal. Switch to Futures to practice shorting.", "warn"); return; }
-    setSide(d.verdict === "LONG" ? "BUY" : "SELL");
-    const slPct = Math.min(6, Math.max(0.4, d.volatility_pct || 1.5));
-    $("i-tpsl").checked = true; $("tpsl-box").hidden = false;
-    $("i-sl-pct").value = slPct.toFixed(2); $("i-tp-pct").value = (slPct * 1.5).toFixed(2);
-    tpslSync("tp", "pct"); tpslSync("sl", "pct");
-    if (!$("i-tag").value) $("i-tag").value = "SignalX signal";
-    $("sig-note").textContent = `Stop at the signal's 95% volatility (${slPct.toFixed(2)}%), target 1.5× that. Now size it with "Size by risk".`;
-    $("risk-box").open = true;
-    onFormChange();
+  $("c-submit").addEventListener("click", async () => {
+    const btn = $("c-submit");
+    btn.disabled = true; btn.textContent = "Verifying…"; $("c-error").hidden = true;
+    try {
+      const d = await api("/api/autotrade/connect", { method: "POST", body: withAcct({ api_key: $("c-key").value.trim(), api_secret: $("c-secret").value.trim() }) });
+      $("c-key").value = ""; $("c-secret").value = "";
+      closeModal("m-connect");
+      chat("ai", `Binance ${LABEL(d.mode)} connected. Balance: ${fmtUsd(d.balance_usdt)} USDT.` + (d.note ? "\n" + d.note : ""));
+      speak(`Binance ${LABEL(d.mode)} connected`);
+      await refresh();
+    } catch (e) {
+      $("c-error").textContent = e.message; $("c-error").hidden = false;
+    } finally { btn.disabled = false; btn.textContent = "Verify & connect"; }
+  });
+  $("c-disconnect").addEventListener("click", async () => {
+    if (!confirm(`Disconnect the ${LABEL(S.mode)} account? Its saved API keys will be deleted from the server.`)) return;
+    try {
+      await api("/api/autotrade/disconnect", { method: "POST", body: withAcct({}) });
+      closeModal("m-connect"); chat("ai", `${LABEL(S.mode)} account disconnected and keys deleted.`); await refresh();
+    } catch (e) { $("c-error").textContent = e.message; $("c-error").hidden = false; }
   });
 
-  // ================================================================ boot
-  async function boot() {
-    initChart();
-    renderTfs();
+  // Bot toggle
+  async function setBot(enabled, ackLive) {
     try {
-      const b = await api("/api/paper/bootstrap");
-      S.boot = b;
-      b.coins.forEach((c) => { S.meta[c.symbol] = c; });
-      S.coins = b.coins.map((c) => c.symbol);
+      await api("/api/autotrade/bot", { method: "POST", body: withAcct({ enabled, ack_live: !!ackLive }) });
+      const L = LABEL(S.mode);
+      chat("ai", enabled ? `${L} bot is ON. It checks signals on every scan and only trades when all of your settings are met.`
+        : `${L} bot is OFF. Open positions are still monitored for SL/TP.`);
+      speak(`${L} bot ${enabled ? "started" : "stopped"}`);
+      await refresh();
+      return true;
     } catch (e) {
-      $("mk-list").innerHTML = `<div class="empty">Could not load markets: ${esc(e.message)}</div>`;
-      return;
+      if (e.status === 428) { $("l-ack").checked = false; $("l-submit").disabled = true; openModal("m-live"); }
+      else toast(e.message, "err");
+      return false;
     }
-    if (!S.coins.length) { $("mk-list").innerHTML = '<div class="empty">No markets available right now.</div>'; return; }
-    if (!S.coins.includes(S.symbol)) S.symbol = S.coins[0];
-    if (!["spot", "futures"].includes(S.market)) S.market = "futures";
-    if (!["LIMIT", "MARKET", "STOP", "TRAILING_STOP"].includes(S.otype)) S.otype = "LIMIT";
-    await Promise.all([refreshTickers(), refreshState()]);
-    selectSymbol(S.symbol, true);
-    renderPositions();
-    if (!LS.get("seen-guide", false)) { openGuide("welcome"); LS.set("seen-guide", true); }
-    setInterval(() => { if (!document.hidden) refreshState(); }, 2000);
-    setInterval(() => { if (!document.hidden) refreshTickers(); }, 4000);
-    setInterval(() => { if (!document.hidden) loadCandles(false); }, 10000);
-    setInterval(() => { if (!document.hidden && ["history", "fills", "closed", "ledger", "perf"].includes(S.tab)) loadTab(S.tab); }, 20000);
-    setInterval(() => { if (!document.hidden && qtyFromForm()) schedulePreview(0); }, 5000);
-    setInterval(renderFunding, 1000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshState(); refreshTickers(); } });
   }
-  boot();
+  function requestBot(enabled) {
+    if (enabled && S.formDirty) { toast("Save your settings first", "err"); return; }
+    if (enabled && S.mode === "live") {
+      $("l-ack").checked = false; $("l-submit").disabled = true; openModal("m-live"); return;
+    }
+    setBot(enabled);
+  }
+  $("bot-switch").addEventListener("click", () => S.status && requestBot(!S.status.bot.enabled));
+  $("l-ack").addEventListener("change", () => { $("l-submit").disabled = !$("l-ack").checked; });
+  $("l-submit").addEventListener("click", async () => { closeModal("m-live"); await setBot(true, true); });
+
+  // Panic
+  function openPanic() {
+    const a = S.status.accounts;
+    const other = S.mode === "live" ? "demo" : "live";
+    $("p-text").innerHTML = `<b>Stop this account</b> turns the ${LABEL(S.mode)} bot off and closes its ${a[S.mode].open_positions} open position(s) at market price.<br>` +
+      `<b>Stop both accounts</b> also stops the ${LABEL(other)} bot and closes its ${a[other].open_positions} position(s).`;
+    openModal("m-panic");
+  }
+  async function doPanic(scope) {
+    $("p-submit").disabled = true; $("p-both").disabled = true;
+    try {
+      const d = await api("/api/autotrade/panic", { method: "POST", body: { account: scope } });
+      chat("ai", `Stop all (${scope === "all" ? "both accounts" : LABEL(scope)}): bot off, ${d.closed} position(s) closed.`);
+      speak("Everything stopped");
+    } catch (e) {
+      const f = (e.data && e.data.failed) || [];
+      chat("ai", "Some positions could not be closed: " + f.map((x) => x.symbol + " (" + x.error + ")").join(", ") + "\nCheck your Binance app now!");
+      toast("Some positions did not close — check Binance", "err");
+    } finally {
+      $("p-submit").disabled = false; $("p-both").disabled = false;
+      closeModal("m-panic"); refresh();
+    }
+  }
+  $("btn-panic").addEventListener("click", openPanic);
+  $("p-submit").addEventListener("click", () => doPanic(S.mode));
+  $("p-both").addEventListener("click", () => doPanic("all"));
+
+  // Close one
+  async function closePosition(id, btn) {
+    const p = S.status.positions.find((x) => x.id === id);
+    if (!p || !confirm(`Close the ${p.symbol} ${p.side} position at market price?`)) return;
+    if (btn) btn.disabled = true;
+    try {
+      const d = await api(`/api/autotrade/positions/${id}/close`, { method: "POST", body: {} });
+      chat("ai", `${p.symbol} closed. PnL: ${fmtUsd(d.pnl_usdt, true)}`);
+    } catch (e) { toast(e.message, "err"); }
+    refresh();
+  }
+
+  // Manual trade
+  async function previewTrade(side, symbol) {
+    symbol = symbol || S.selected;
+    if (S.formDirty) { toast("Save your settings first", "err"); return; }
+    const live = S.mode === "live";
+    $("t-error").hidden = true;
+    $("t-kv").innerHTML = `<dt>Calculating…</dt><dd></dd>`;
+    $("t-signal").innerHTML = "";
+    $("t-live-wrap").hidden = !live; $("t-live-ack").checked = false;
+    $("t-submit").disabled = true;
+    $("m-trade-title").textContent = `${side} ${symbol} · ${LABEL(S.mode)}`;
+    S.pendingTrade = null;
+    openModal("m-trade");
+    try {
+      const d = await api("/api/autotrade/manual", { method: "POST", body: withAcct({ symbol, side, confirm: false }) });
+      S.pendingTrade = { symbol, side, mode: S.mode };
+      $("t-kv").innerHTML = `
+        <dt>Account</dt><dd>${d.mode === "live" ? '<span class="neg">LIVE</span>' : "DEMO"} · ${esc(d.market_type)} ${d.leverage}x</dd>
+        <dt>Price (approx.)</dt><dd>$${fmtPrice(d.price)}</dd>
+        <dt>Quantity</dt><dd>${d.amount} ${esc(symbol.split("/")[0])}</dd>
+        <dt>Position size</dt><dd>${fmtUsd(d.notional_usdt)}</dd>
+        <dt>Margin used</dt><dd>${fmtUsd(d.margin_usdt)} / free ${fmtUsd(d.free_usdt)}</dd>
+        <dt>Stop-loss</dt><dd class="neg">$${fmtPrice(d.stop_loss)} (−${d.sl_pct}%)</dd>
+        <dt>Take-profit</dt><dd class="pos">$${fmtPrice(d.take_profit)} (+${d.tp_pct}%)</dd>
+        <dt>Loss if SL is hit</dt><dd class="neg">≈ ${fmtUsd(d.risk_usdt)}</dd>`;
+      const sg = d.signal;
+      if (sg) {
+        const agree = sg.verdict === side;
+        $("t-signal").innerHTML = `<div class="alert ${agree ? "ok" : "warn"}">Signal (${esc(sg.timeframe)}): <b>${esc(sg.verdict)}</b> ${Math.round(sg.confidence)}%. ${agree ? "The signal agrees with this trade." : "Heads up: the signal does not agree with this trade."}</div>`;
+      }
+      $("t-submit").disabled = live;
+    } catch (e) {
+      $("t-kv").innerHTML = "";
+      $("t-error").textContent = e.message; $("t-error").hidden = false;
+    }
+  }
+  $("t-live-ack").addEventListener("change", () => { $("t-submit").disabled = !$("t-live-ack").checked || !S.pendingTrade; });
+  $("t-submit").addEventListener("click", async () => {
+    const t = S.pendingTrade; if (!t) return;
+    const btn = $("t-submit"); btn.disabled = true; btn.textContent = "Placing order…";
+    try {
+      const d = await api("/api/autotrade/manual", { method: "POST", body: { account: t.mode, symbol: t.symbol, side: t.side, confirm: true, ack_live: $("t-live-ack").checked } });
+      closeModal("m-trade");
+      chat("ai", `[${LABEL(t.mode)}] ${t.side} ${t.symbol} opened @ $${fmtPrice(d.entry_price)}\nSL $${fmtPrice(d.stop_loss)} · TP $${fmtPrice(d.take_profit)}`);
+      speak("Trade opened");
+      S.pendingTrade = null;
+      await refresh();
+    } catch (e) {
+      $("t-error").textContent = e.message; $("t-error").hidden = false;
+      btn.disabled = t.mode === "live" && !$("t-live-ack").checked;
+    } finally { btn.textContent = "Place order"; }
+  });
+  $("btn-long").addEventListener("click", () => previewTrade("LONG"));
+  $("btn-short").addEventListener("click", () => previewTrade("SHORT"));
+
+  // Tabs
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", x === t ? "true" : "false"));
+    $("tab-open").hidden = t.dataset.tab !== "open";
+    $("tab-history").hidden = t.dataset.tab !== "history";
+  }));
+
+  // ------------------------------------------------------------ assistant
+  function chat(who, text) {
+    const box = $("chat-box");
+    const m = document.createElement("div");
+    m.className = "msg " + who;
+    m.textContent = text;
+    box.appendChild(m);
+    box.scrollTop = box.scrollHeight;
+  }
+  function findCoin(words) {
+    if (!S.status) return null;
+    for (const w of words) {
+      const c = S.status.options.coins.find((x) => x.split("/")[0].toLowerCase() === w);
+      if (c) return c;
+    }
+    return null;
+  }
+  const HAS = (words, list) => list.some((k) => words.includes(k));
+  const STOP_WORDS = ["stop", "off", "pause", "disable", "halt"];
+  const START_WORDS = ["start", "on", "resume", "enable", "run"];
+
+  async function handleCommand(text) {
+    const st = S.status;
+    const L = LABEL(S.mode);
+    const words = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    const coin = findCoin(words);
+    let reply;
+
+    if (HAS(words, ["help", "commands"])) {
+      reply = "Commands:\n• status / balance\n• start bot / stop bot\n• switch to live / switch to demo\n• signal btc\n• buy btc / short eth (opens a confirmation)\n• positions\n• stop all";
+    } else if (HAS(words, ["switch", "use", "go"]) && HAS(words, ["live", "demo"])) {
+      const target = words.includes("live") ? "live" : "demo";
+      if (target === S.mode) reply = `You are already on the ${LABEL(target)} account.`;
+      else { switchAccount(target); return; }
+    } else if (HAS(words, ["all", "everything", "panic", "emergency"]) && HAS(words, STOP_WORDS.concat(["close", "exit", "panic", "emergency"]))) {
+      openPanic(); reply = "Opened the Stop all confirmation.";
+    } else if (HAS(words, ["bot", "auto", "autotrade", "trading"]) && HAS(words, STOP_WORDS)) {
+      if (!st.bot.enabled) reply = `The ${L} bot is already off.`;
+      else { await setBot(false); return; }
+    } else if (HAS(words, ["bot", "auto", "autotrade", "trading"]) && HAS(words, START_WORDS)) {
+      if (!st.connected) reply = `Connect the ${L} account first (Connect button at the top).`;
+      else if (st.bot.enabled) reply = `The ${L} bot is already on.`;
+      else { requestBot(true); return; }
+    } else if (coin && HAS(words, ["buy", "long"])) {
+      if (!st.connected) reply = `Connect the ${L} account first.`;
+      else { selectCoin(coin); previewTrade("LONG", coin); reply = `Opened a LONG preview for ${coin} on ${L}. Check the size and SL/TP, then confirm.`; }
+    } else if (coin && HAS(words, ["sell", "short"])) {
+      if (!st.connected) reply = `Connect the ${L} account first.`;
+      else if (st.settings.market_type === "spot") {
+        const open = st.positions.find((p) => p.symbol === coin);
+        reply = open ? `To close the ${coin} spot position, use its Close button in the Open table.` : "SHORT is not available on spot. Choose Futures in the settings.";
+      } else { selectCoin(coin); previewTrade("SHORT", coin); reply = `Opened a SHORT preview for ${coin} on ${L}. Confirm to place it.`; }
+    } else if (HAS(words, ["signal", "analysis", "analyze"]) || (coin && words.length <= 2)) {
+      const c = coin || S.selected;
+      if (c !== S.selected) selectCoin(c);
+      chat("ai", `Checking the ${c} signal…`);
+      const sg = await analyze(c);
+      reply = sg ? `${c} (${sg.timeframe}): ${sg.verdict} — ${Math.round(sg.confidence)}% confidence. ${sg.verdict === "WAIT" ? "No trade setup right now." : sg.confidence >= st.settings.min_confidence ? "Above the bot's minimum confidence." : "Below the bot's minimum confidence, so the bot will not take it."}` : "Could not get the signal.";
+    } else if (HAS(words, ["position", "positions", "trades", "open"])) {
+      reply = st.positions.length ? st.positions.map((p) => `${p.side} ${p.symbol}: ${fmtUsd(p.unrealized_pnl, true)} (SL ${fmtPrice(p.stop_loss)}, TP ${fmtPrice(p.take_profit)})`).join("\n") : `No open positions on ${L}.`;
+    } else if (HAS(words, ["status", "balance", "pnl", "profit", "summary"])) {
+      const other = S.mode === "live" ? "demo" : "live";
+      const o = st.accounts[other];
+      if (!st.connected) reply = `The ${L} account is not connected.`;
+      else reply = `${L}: balance ${fmtUsd(st.account.balance_usdt)} USDT · bot ${st.bot.enabled ? "ON" : "OFF"}${st.bot.paused_until ? " (paused)" : ""} · engine ${st.engine.online ? "online" : "offline"}\nToday: ${fmtUsd(st.stats.realized_today, true)} · open: ${st.positions.length} (${fmtUsd(st.stats.unrealized, true)})`;
+      reply += `\n${LABEL(other)}: ${o.connected ? (o.bot_enabled ? "bot ON" : "bot OFF") + ", " + o.open_positions + " open" : "not connected"}`;
+    } else {
+      reply = "Sorry, I didn't understand that. Type \"help\" to see the commands.";
+    }
+    chat("ai", reply);
+    speak(reply.split("\n")[0]);
+  }
+  function send() {
+    const inp = $("chat-input");
+    const text = inp.value.trim();
+    if (!text || !S.status) return;
+    chat("user", text);
+    inp.value = "";
+    handleCommand(text);
+  }
+  $("btn-send").addEventListener("click", send);
+  $("chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+  $("btn-mic").addEventListener("click", () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast("Voice input is not supported in this browser (try Chrome)", "err"); return; }
+    const r = new SR();
+    r.lang = "en-US";
+    r.onresult = (ev) => { $("chat-input").value = ev.results[0][0].transcript; send(); };
+    r.onerror = () => toast("Could not understand the audio", "err");
+    r.start();
+  });
+
+  // ------------------------------------------------------------ boot
+  chat("ai", "Hi! I'm your auto-trade assistant. Type \"help\" to see what I can do. Trades are always placed through a confirmation window.");
+  initChart();
+  refresh().then(() => selectCoin(S.selected));
+  setInterval(refresh, 5000);
+  setInterval(loadPrices, 15000);
+  setInterval(() => loadCandles(false), 20000);
+  setInterval(() => { if (S.status) renderStatus(); }, 15000);
 })();
 </script>
 {% endraw %}
