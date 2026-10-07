@@ -69,7 +69,7 @@ TIMEFRAME_SCAN_SEC = {"15m": 180, "1h": 300, "4h": 600}
 TIMEFRAME_MINUTES = {"15m": 15, "1h": 60, "4h": 240}
 MAX_COINS = 8
 SL_MIN_PCT = 0.4           # stop-loss at least 0.4% away
-SL_MAX_PCT = 6.0           # and at most 6%
+SL_MAX_PCT = 15.0          # and at most 15% (engine v2 stops are 3 x ATR on 4h candles)
 SL_FALLBACK_PCT = 1.5      # used when the signal has no volatility figure
 LIQ_SAFETY_FRACTION = 0.6  # SL must sit within 60% of the liquidation distance
 BACKUP_STOP_EXTRA = 0.25   # futures backup stop sits 25% beyond the bot SL
@@ -103,6 +103,7 @@ MONITOR_INTERVAL_SEC = max(5, int(os.environ.get("AUTOTRADE_MONITOR_SEC", "10") 
 _hooks = {
     "get_candles": None,
     "generate_signal": None,
+    "engine_signal": None,
     "data_exchange": None,
     "available_coins": None,
 }
@@ -860,6 +861,28 @@ def get_signal(symbol, timeframe, max_age_sec=300):
         hit = _signal_cache.get(key)
         if hit and now - hit[0] <= max_age_sec:
             return hit[1]
+    engine_signal = _hooks.get("engine_signal")
+    if engine_signal:
+        # Signal engine v2 (4h candles): same signal as the dashboard and the track record.
+        res = engine_signal(symbol)
+        if res.get("error"):
+            raise RuntimeError(res["error"])
+        sl_pct, tp_pct = _f(res.get("sl_pct")), _f(res.get("tp_pct"))
+        summary = {
+            "symbol": symbol,
+            "timeframe": res.get("timeframe") or "4h",
+            "verdict": res.get("verdict"),
+            "confidence": _f(res.get("confidence"), 0.0),
+            "volatility_pct": sl_pct,
+            "reward_risk": round(tp_pct / sl_pct, 4) if sl_pct and tp_pct else None,
+            "last_price": _f(res.get("entry")),
+            "trend": "Bullish" if (_f(res.get("p_long"), 0) >= _f(res.get("p_short"), 0)) else "Bearish",
+            "engine_version": res.get("engine_version"),
+            "computed_at": _iso(_utcnow()),
+        }
+        with _signal_cache_lock:
+            _signal_cache[key] = (now, summary)
+        return summary
     get_candles = _hooks.get("get_candles")
     generate_signal = _hooks.get("generate_signal")
     if not get_candles or not generate_signal:
@@ -936,7 +959,8 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
         raise TradeError(_error_text(e))
 
     vol = (signal or {}).get("volatility_pct")
-    plan, err = plan_levels(side, price, vol, settings["reward_risk"], leverage)
+    rr = (signal or {}).get("reward_risk") or settings["reward_risk"]  # engine levels when the signal has them
+    plan, err = plan_levels(side, price, vol, rr, leverage)
     if err:
         raise TradeError(err)
     notional, risk_usdt = size_position(free, settings["risk_pct"], plan["sl_pct"],
@@ -970,7 +994,7 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
 
     fill = order["average"] or price
     filled = order["filled"] or amount
-    plan, _ = plan_levels(side, fill, vol, settings["reward_risk"], 1)  # levels from the actual fill
+    plan, _ = plan_levels(side, fill, vol, rr, 1)  # levels from the actual fill
     sl = client.price_to_precision(symbol, plan["stop_loss"])
     tp = client.price_to_precision(symbol, plan["take_profit"])
     now = _utcnow()
@@ -1394,13 +1418,15 @@ def start_engine():
 
 
 def init_autotrade(app=None, *, get_candles=None, generate_signal=None, data_exchange=None,
-                   available_coins=None, start=True):
+                   available_coins=None, start=True, engine_signal=None):
     """Called from main.py. Injects the signal functions, creates tables and
     starts the background engine."""
     if get_candles and not _hooks["get_candles"]:
         _hooks["get_candles"] = get_candles
     if generate_signal and not _hooks["generate_signal"]:
         _hooks["generate_signal"] = generate_signal
+    if engine_signal and not _hooks["engine_signal"]:
+        _hooks["engine_signal"] = engine_signal
     if data_exchange is not None and _hooks["data_exchange"] is None:
         _hooks["data_exchange"] = data_exchange
     if available_coins and not _hooks["available_coins"]:
