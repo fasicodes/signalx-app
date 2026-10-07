@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — 19-Channel Market Readout</title>
 <meta name="description" content="Multi-channel quantitative signals for crypto, forex, and gold — Hawkes process, Bayesian classification, and conformal confidence, in one readout.">
+{% set seo_title = "Signals FM: quantitative crypto signals with an honest confidence score" %}{% set seo_path = "/" %}
+{% set seo_description = "A 19-channel read on each market, a public track record, risk-free Demo Trading and an optional Auto-Trade bot with built-in risk limits." %}
+{% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -107,6 +110,18 @@
   .usecard p { color: var(--text-dim); font-size: 13px; line-height: 1.6; margin: 0 0 10px; }
   .usecard a { font-family: var(--mono); font-size: 11.5px; color: var(--accent-bright); text-decoration:none; }
 
+  .platform-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; }
+  .platform-grid .pcard { grid-column: span 2; }
+  .platform-grid .pcard:nth-child(n+4) { grid-column: span 3; }
+  .platform-grid .pcard:nth-child(4):last-child { grid-column: span 6; }
+  .pcard { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px;
+           text-decoration: none; color: inherit; transition: border-color .15s; }
+  .pcard:hover { border-color: var(--accent); }
+  .pcard h3 { font-family: var(--heading); font-size: 16px; margin: 0 0 8px; }
+  .pcard p { color: var(--text-dim); font-size: 13.5px; line-height: 1.6; margin: 0 0 16px; flex: 1; }
+  .pcard .plink { font-family: var(--mono); font-size: 12px; color: var(--accent-bright); }
+  @media (max-width: 900px) { .platform-grid { grid-template-columns: 1fr; } .platform-grid .pcard { grid-column: auto !important; } }
+
   .cta-banner {
     background: linear-gradient(120deg, #0e2b1c, #0a1a12); border: 1px solid var(--line); border-radius: 16px;
     padding: 40px 36px; display:flex; align-items:center; justify-content:space-between; gap: 24px; flex-wrap: wrap;
@@ -138,18 +153,18 @@
   <nav>
     <a href="/" class="logo"><img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM"><span>Signals FM</span></a>
     <div class="nav-links">
-      <a href="#home">Home</a>
       <a href="#features">Features</a>
+      <a href="#platform">Platform</a>
+      {% if track_record_public %}<a href="/track-record">Track record</a>{% endif %}
+      <a href="/tools">Trading tools</a>
       <a href="#pricing">Pricing</a>
-      <a href="#use-cases">Use Cases</a>
-      <a href="#about">Company</a>
     </div>
     <div class="nav-right">
       <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme" title="Toggle light/dark mode">
         <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </button>
       <a href="/login" class="btn btn-ghost">Log in</a>
-      <a href="/login" class="btn btn-accent">Get Started Free</a>
+      <a href="/login" class="btn btn-accent">Create free account</a>
     </div>
   </nav>
 
@@ -159,8 +174,8 @@
       <h1>Market signals.<br>Smarter trades.<br><span class="grad">Better decisions.</span></h1>
       <p class="sub">Signals FM runs a Hawkes-process pressure model, a Bayesian direction classifier, and conformal confidence scoring on every read — so each signal ships with an honest probability, not just an arrow.</p>
       <div class="hero-ctas">
-        <a href="/login" class="btn btn-accent btn-lg">Start Free Trial →</a>
-        <a href="#features" class="btn btn-ghost btn-lg">See How It Works</a>
+        <a href="/login" class="btn btn-accent btn-lg">Create free account</a>
+        <a href="#platform" class="btn btn-ghost btn-lg">See what's inside</a>
       </div>
       <div class="trust-row">
         <div><b>19</b> readout channels</div>
@@ -227,6 +242,43 @@
     </div>
   </section>
 
+  <section id="platform">
+    <div class="section-head">
+      <div class="eyebrow">Platform</div>
+      <h2>Read the market, practice, then automate</h2>
+      <p>Every part of Signals FM is built around the same idea: know your risk before you trade.</p>
+    </div>
+    <div class="platform-grid">
+      <a class="pcard" href="/login">
+        <h3>Signal dashboard</h3>
+        <p>A long, short or wait read on 30 coins, with a confidence score, a stop-loss and a target from the market's own volatility.</p>
+        <span class="plink">Open the dashboard</span>
+      </a>
+      <a class="pcard" href="/demo-trading">
+        <h3>Demo Trading</h3>
+        <p>Trade spot and futures with live prices and virtual money. Real fees, leverage, liquidation and funding, plus a warning before every risky order.</p>
+        <span class="plink">Start practicing</span>
+      </a>
+      <a class="pcard" href="/auto-trading">
+        <h3>Auto-Trade bot</h3>
+        <p>Let the bot trade the signals on your own Binance account, with a stop-loss on every trade, a daily loss limit and a Stop all button.</p>
+        <span class="plink">Set up the bot</span>
+      </a>
+      {% if track_record_public %}
+      <a class="pcard" href="/track-record">
+        <h3>Public track record</h3>
+        <p>Every signal on eight major coins is logged automatically with its result, wins and losses, so you can judge the engine yourself.</p>
+        <span class="plink">See every result</span>
+      </a>
+      {% endif %}
+      <a class="pcard" href="/tools">
+        <h3>Free trading tools</h3>
+        <p>Position size, liquidation price, risk/reward and drawdown calculators. No account needed.</p>
+        <span class="plink">Use the calculators</span>
+      </a>
+    </div>
+  </section>
+
   <section id="use-cases">
     <div class="section-head">
       <div class="eyebrow">Use Cases</div>
@@ -255,20 +307,20 @@
   <section id="pricing">
     <div class="section-head">
       <div class="eyebrow">Pricing</div>
-      <h2>Start free, upgrade when you need more.</h2>
-      <p>Simple access, no hidden fees.</p>
+      <h2>Free while we're in beta.</h2>
+      <p>Every feature is free during the beta. Paid plans will be announced in advance, and nothing changes without notice.</p>
     </div>
     <div class="cta-banner">
       <div>
         <h3>Join Signals FM today</h3>
-        <p>Create a free account and get access to the live 19-channel readout — no card required to start.</p>
+        <p>Create a free account for the 19-channel readout, Demo Trading and the Auto-Trade bot. No card needed.</p>
         <div class="cta-checks">
-          <span>✓ Free to start</span>
-          <span>✓ No credit card required</span>
-          <span>✓ Cancel anytime</span>
+          <span>✓ All features free in beta</span>
+          <span>✓ No card needed</span>
+          <span>✓ Practice with virtual money first</span>
         </div>
       </div>
-      <a href="/login" class="btn btn-accent btn-lg">Start Free Trial →</a>
+      <a href="/login" class="btn btn-accent btn-lg">Create free account</a>
     </div>
   </section>
 
@@ -291,8 +343,9 @@
       <div class="footer-col">
         <h4>Product</h4>
         <a href="#features">Features</a>
+        {% if track_record_public %}<a href="/track-record">Track record</a>{% endif %}
+        <a href="/tools">Trading tools</a>
         <a href="#pricing">Pricing</a>
-        <a href="#use-cases">Use Cases</a>
       </div>
       <div class="footer-col">
         <h4>Account</h4>
@@ -301,8 +354,9 @@
       </div>
       <div class="footer-col">
         <h4>Legal</h4>
-        <a href="/terms">Terms &amp; Risk Disclaimer</a>
-        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of use</a>
+        <a href="/privacy">Privacy policy</a>
+        <a href="/risk-disclosure">Risk disclosure</a>
       </div>
     </div>
     <div class="disclaimer">
