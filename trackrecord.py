@@ -2,34 +2,28 @@
 Signal Track Record - Signals FM
 ================================
 
-Measures how the SignalX verdict actually performs, two ways:
+Measures how the Signals FM signal (signal_engine.py, v2) actually performs:
 
-  1. LIVE record. At every candle close (1h and 4h) the engine reads the
-     signal for a fixed list of coins - the same coins every time, so
-     nothing is cherry-picked - and records every LONG / SHORT. Each
-     record is then followed candle by candle until its take-profit,
-     stop-loss or time limit is reached.
+  1. LIVE record. At every 4-hour candle close the engine reads the signal
+     for a fixed list of coins - the same coins every time, so nothing is
+     cherry-picked - and records every LONG / SHORT. Each record is then
+     followed candle by candle until its target, stop or time limit.
 
-  2. Walk-forward BACKTEST. The same rule replayed over past candles:
-     at each historical candle the signal only sees the 200 candles up to
-     that point (exactly what a user would have seen), and the outcome is
-     taken from the candles that came after. No look-ahead.
+  2. BACKTEST over the last 365 days, re-run every 7 days and whenever the
+     engine version changes. Every candle only uses data that had closed
+     by then (no look-ahead).
 
 Rules (same for both, shown on the page):
   * Entry   = close of the signal candle.
-  * Stop    = entry -/+ the signal's 95th-percentile candle move (the SL
-              the dashboard shows).  Target = 1.5 x that distance (the TP
+  * Stop    = 3 x ATR(14) from entry, Target = 1.5 x ATR(14) (the levels
               the dashboard shows).
-  * One open signal per coin and timeframe; new signals are ignored until
-    it closes.
-  * If one candle touches both SL and TP, it counts as a LOSS.
+  * One open signal per coin; new signals are ignored until it closes.
+  * If one candle touches both stop and target, it counts as a LOSS.
   * If a candle opens beyond the stop, the exit is that (worse) open.
-  * After 48 candles without SL/TP the signal closes at that candle's
-    close ("expired").
-  * Results are in R (1R = distance from entry to stop), before fees.
-
-The verdict comes from main.signal_core() - the exact Hawkes + Bayesian +
-Conformal path of generate_signal() - injected via init_trackrecord().
+  * After 48 candles (8 days) without stop/target the signal closes at that
+    candle's close ("expired").
+  * Results are in R (1R = distance from entry to stop) AFTER estimated
+    fees and slippage of 0.12% of the position (round trip).
 
 ENVIRONMENT
   TRACK_RECORD_PUBLIC   "on" -> /track-record is visible to everyone.
@@ -49,21 +43,22 @@ from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, redirect, render_template, session, url_for
 
 from db import get_db_connection
+import signal_engine as se
 
 track_bp = Blueprint("trackrecord", __name__)
 
 TRACKED_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "BNB/USDT", "DOGE/USDT", "ADA/USDT", "LINK/USDT"]
-TIMEFRAMES = {"1h": 3600, "4h": 14400}
-WINDOW = 200                 # candles the signal sees (same as /signal)
+TIMEFRAMES = {"4h": 14400}  # the v2 engine works on 4-hour candles
 MAX_BARS = 48                # time limit per signal, in candles
-REWARD_RISK = 1.5            # TP distance = 1.5 x SL distance (as on the dashboard)
-BACKTEST_DAYS = {"1h": 60, "4h": 240}
+REWARD_RISK = 0.5            # target 1.5 x ATR / stop 3 x ATR
+BACKTEST_DAYS = {"4h": 365}
+BACKTEST_REFRESH_DAYS = 7
 MIN_RISK = 1e-9
-CONF_BUCKETS = ((55, 60), (60, 70), (70, 80), (80, 101))
+CONF_BUCKETS = ((60, 70), (70, 75), (75, 80), (80, 101))
 ENGINE_LOCK_NAME = "signalx_trackrecord_engine"
 EVAL_EVERY_SEC = 300
 
-_hooks = {"get_candles": None, "signal_core": None, "available_coins": None}
+_hooks = {"get_candles": None, "engine": None, "available_coins": None}
 
 
 # ===========================================================================
@@ -215,12 +210,9 @@ def _add_counts(source, delta):
 # ===========================================================================
 # Pure logic
 # ===========================================================================
-def plan_trade(side, entry, extreme_move):
-    """SL / TP exactly like the dashboard (quantile_volatility), unrounded."""
-    m = max(float(extreme_move or 0), 0.0)
-    if side == "LONG":
-        return entry * (1 - m), entry * (1 + m * REWARD_RISK)
-    return entry * (1 + m), entry * (1 - m * REWARD_RISK)
+def net_r(r, entry, sl):
+    """Gross R minus round-trip fees/slippage (in R)."""
+    return float(r) - se.cost_r(float(entry), float(sl))
 
 
 def evaluate(side, entry, sl, tp, bars, max_bars=MAX_BARS):
@@ -271,7 +263,7 @@ def conf_bucket(conf):
     for lo, hi in CONF_BUCKETS:
         if lo <= conf < hi:
             return f"{lo}–{min(hi, 100)}%" if hi <= 100 else f"{lo}%+"
-    return "<55%"
+    return f"<{CONF_BUCKETS[0][0]}%"
 
 
 def compute_stats(rows):
@@ -337,7 +329,7 @@ def compute_stats(rows):
         "avg_bars": sum(int(r.get("bars_held") or 0) for r in rows) / n if n else None,
         "best_win_streak": best_w, "worst_loss_streak": best_l, "by_status": statuses,
         "by_coin": group(lambda r: r["symbol"]),
-        "by_timeframe": group(lambda r: r["timeframe"], ["1h", "4h"]),
+        "by_timeframe": group(lambda r: r["timeframe"], ["4h"]),
         "by_side": group(lambda r: r["side"], ["LONG", "SHORT"]),
         "by_confidence": group(lambda r: conf_bucket(float(r["confidence"])), bucket_order),
         "curve": curve,
@@ -398,37 +390,26 @@ def fetch_history(symbol, timeframe, start):
     return pd.concat(frames).drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
 
 
-def read_signal(window_df):
-    res = _hooks["signal_core"](window_df)
-    return {
-        "verdict": res["verdict"], "confidence": float(res["confidence"]),
-        "bullish_pct": _f(res.get("bullish_pct")), "price": float(res["price"]),
-        "extreme_move": float(res["extreme_move"]),
-    }
-
-
 def _insert_signal(cur, source, symbol, timeframe, sig, bar_time, tf_sec, outcome=None):
+    """sig: {verdict, confidence, p_long, entry, stop_loss, take_profit}."""
     side = sig["verdict"]
-    entry = sig["price"]
-    sl, tp = plan_trade(side, entry, sig["extreme_move"])
+    entry, sl, tp = float(sig["entry"]), float(sig["stop_loss"]), float(sig["take_profit"])
     risk_pct = abs(entry - sl) / entry * 100
     signal_at = bar_time + timedelta(seconds=tf_sec)
-    vals = {
-        "status": "OPEN", "exit_price": None, "exit_at": None, "r": None, "pnl": None,
-        "bars": 0, "mfe": None, "mae": None,
-    }
+    vals = {"status": "OPEN", "exit_price": None, "exit_at": None, "r": None, "pnl": None, "bars": 0, "mfe": None, "mae": None}
     if outcome and outcome.get("resolved"):
+        r = net_r(outcome["r"], entry, sl)
         vals.update({
             "status": outcome["status"], "exit_price": outcome["exit_price"],
-            "exit_at": outcome["exit_time"] + timedelta(seconds=tf_sec), "r": outcome["r"],
-            "pnl": outcome["pnl_pct"], "bars": outcome["bars_held"], "mfe": outcome["mfe_r"], "mae": outcome["mae_r"],
+            "exit_at": outcome["exit_time"] + timedelta(seconds=tf_sec), "r": r, "pnl": r * risk_pct,
+            "bars": outcome["bars_held"], "mfe": outcome["mfe_r"], "mae": outcome["mae_r"],
         })
     try:
         cur.execute(
             """INSERT INTO track_signals (source, symbol, timeframe, side, confidence, bullish_pct, entry_price,
                stop_loss, take_profit, risk_pct, bar_time, signal_at, status, exit_price, exit_at, r_multiple, pnl_pct,
                bars_held, mfe_r, mae_r, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (source, symbol, timeframe, side, sig["confidence"], sig.get("bullish_pct"), entry, sl, tp, risk_pct,
+            (source, symbol, timeframe, side, sig["confidence"], sig.get("p_long"), entry, sl, tp, risk_pct,
              bar_time, signal_at, vals["status"], vals["exit_price"], vals["exit_at"], vals["r"], vals["pnl"],
              vals["bars"], vals["mfe"], vals["mae"], _utcnow()),
         )
@@ -438,71 +419,117 @@ def _insert_signal(cur, source, symbol, timeframe, sig, bar_time, tf_sec, outcom
 
 
 # ===========================================================================
-# Walk-forward backtest
+# Backtest (whole universe at once: the model needs the market context)
 # ===========================================================================
-def backtest_pair(symbol, timeframe, now=None, df=None):
-    """Replays the signal over history. Returns (recorded, verdict_counts)."""
-    tf_sec = TIMEFRAMES[timeframe]
-    now = now or _utcnow()
-    if df is None:
-        start = now - timedelta(days=BACKTEST_DAYS[timeframe]) - timedelta(seconds=tf_sec * (WINDOW + 5))
-        df = fetch_history(symbol, timeframe, start)
-    if df is None or len(df) < WINDOW + 10:
-        return 0, {}
-    df = _closed_only(df, tf_sec, now).reset_index(drop=True)
-    bars = _df_to_bars(df)
-    counts = {}
-    recorded = 0
-    i = WINDOW - 1
-    n = len(df)
-    with _Cursor() as cur:
-        while i < n - 1:
-            window = df.iloc[i - WINDOW + 1: i + 1].copy()
-            try:
-                sig = read_signal(window)
-            except Exception:
+def backtest_frames(frames, symbols, start_time, counts=None):
+    """frames: {symbol: 4h candle DataFrame (closed only)} incl. the 16-coin
+    universe. Returns {symbol: [(sig, bar_time, outcome), ...]} for trades
+    whose signal candle is at/after start_time. Pure (no DB)."""
+    feats = {sym: se.coin_features(df) for sym, df in frames.items() if df is not None and len(df) >= 60}
+    if "BTC/USDT" not in feats:
+        raise RuntimeError("no Bitcoin history")
+    mkt = se.market_block({s: feats.get(s) for s in se.UNIVERSE})
+    btc = se.btc_block(feats["BTC/USDT"])
+    out = {}
+    for sym in symbols:
+        F = feats.get(sym)
+        if F is None:
+            continue
+        X = se.assemble(F, btc, mkt, sym=sym)
+        pl, ps, cl, cs = se.score(X)
+        bars = _df_to_bars(frames[sym])
+        times = [b["time"] for b in bars]
+        i = next((k for k, t in enumerate(times) if t >= start_time), len(times))
+        trades = []
+        while i < len(bars) - 1:
+            side, _best = se.decide(pl[i], ps[i])
+            if counts is not None:
+                _count_verdict(counts, "BACKTEST", se.TIMEFRAME, side)
+            if side == "WAIT":
                 i += 1
                 continue
-            _count_verdict(counts, "BACKTEST", timeframe, sig["verdict"])
-            if sig["verdict"] not in ("LONG", "SHORT"):
-                i += 1
-                time.sleep(0)
-                continue
-            sl, tp = plan_trade(sig["verdict"], sig["price"], sig["extreme_move"])
-            out = evaluate(sig["verdict"], sig["price"], sl, tp, bars[i + 1:])
-            if not out["resolved"]:
+            entry, atr = float(F["close"].iloc[i]), float(F["atr"].iloc[i])
+            sl, tp = se.levels(side, entry, atr)
+            outcome = evaluate(side, entry, sl, tp, bars[i + 1:])
+            if not outcome["resolved"]:
                 break  # still running at the end of history - the live record takes over
-            if _insert_signal(cur, "BACKTEST", symbol, timeframe, sig, bars[i]["time"], tf_sec, out):
-                recorded += 1
-            i += out["bars_held"]  # next signal can come at the close of the exit candle
-            time.sleep(0)  # let web requests run between windows
-    return recorded, counts
+            sig = {"verdict": side, "confidence": round(float(max(cl[i], cs[i])) * 100, 1),
+                   "p_long": round(float(cl[i]) * 100, 1), "entry": entry, "stop_loss": sl, "take_profit": tp}
+            trades.append((sig, bars[i]["time"], outcome))
+            i += outcome["bars_held"]  # next signal can come at the close of the exit candle
+        out[sym] = trades
+    return out
 
 
-def run_backtests():
-    pairs = [(s, tf) for tf in TIMEFRAMES for s in tracked_coins()]
+def _backtest_due(status, now):
+    if status.get("version") != se.ENGINE_VERSION:
+        return True
+    fin = _to_dt(status.get("finished_at"))
+    if status.get("state") == "done":
+        return fin is None or now - fin >= timedelta(days=BACKTEST_REFRESH_DAYS)
+    if status.get("state") == "error":       # e.g. exchange down: retry hourly, not every loop
+        return fin is None or now - fin >= timedelta(hours=1)
+    return True
+
+
+def run_backtests(now=None, force=False):
+    now = now or _utcnow()
     status = meta_get("bt_status", {}) or {}
-    done = set(tuple(p) for p in status.get("done", []))
-    todo = [p for p in pairs if p not in done]
-    if not todo:
+    if not force and not _backtest_due(status, now):
         return
-    status.update({"state": "running", "total": len(pairs), "started_at": status.get("started_at") or _iso(_utcnow())})
+    tf = se.TIMEFRAME
+    tf_sec = TIMEFRAMES[tf]
+    start_time = now - timedelta(days=BACKTEST_DAYS[tf])
+    fetch_from = start_time - timedelta(seconds=tf_sec * (se.HISTORY_BARS + 5))
+    status = {"state": "running", "version": se.ENGINE_VERSION, "started_at": _iso(now), "errors": {}}
     meta_set("bt_status", status)
-    for symbol, tf in todo:
+    frames = {}
+    for sym in sorted(set(se.UNIVERSE) | set(tracked_coins())):
         try:
-            n, counts = backtest_pair(symbol, tf)
-            _add_counts("BACKTEST", counts)
-            print(f"[trackrecord] backtest {symbol} {tf}: {n} signals")
-            done.add((symbol, tf))
-            status.get("errors", {}).pop(f"{symbol} {tf}", None)
-        except Exception as e:  # not marked done: retried on the next start
-            print(f"[trackrecord] backtest {symbol} {tf} failed: {e}")
-            status.setdefault("errors", {})[f"{symbol} {tf}"] = str(e)[:160]
-        status["done"] = sorted([list(p) for p in done])
+            df = fetch_history(sym, tf, fetch_from)
+            frames[sym] = _closed_only(df, tf_sec, now) if df is not None else None
+        except Exception as e:
+            status["errors"][sym] = str(e)[:160]
+        time.sleep(0)
+    counts = {}
+    try:
+        result = backtest_frames(frames, tracked_coins(), start_time, counts)
+    except Exception as e:
+        status.update({"state": "error", "error": str(e)[:200], "finished_at": _iso(now)})
         meta_set("bt_status", status)
-    status.update({"state": "done" if len(done) >= len(pairs) else "partial", "finished_at": _iso(_utcnow())})
+        return
+    recorded = 0
+    with _Cursor() as cur:
+        cur.execute("DELETE FROM track_signals WHERE source='BACKTEST'")
+        for sym, trades in result.items():
+            for sig, bar_time, outcome in trades:
+                if _insert_signal(cur, "BACKTEST", sym, tf, sig, bar_time, tf_sec, outcome):
+                    recorded += 1
+        total = meta_get("verdicts", {}, cur) or {}
+        total.pop(f"BACKTEST:{tf}", None)
+        total.update(counts)
+        meta_set("verdicts", total, cur)
+    print(f"[trackrecord] backtest v{se.ENGINE_VERSION}: {recorded} signals")
+    missing = [s for s in tracked_coins() if s not in result]
+    status.update({"state": "done" if not missing else "partial", "recorded": recorded, "missing": missing,
+                   "finished_at": _iso(now), "total": len(tracked_coins()), "done": [[s, tf] for s in result]})
+    if missing:
+        status["state"] = "done"  # retried with the weekly refresh; errors are listed
     meta_set("bt_status", status)
     _cache.clear()
+
+
+def ensure_engine_version():
+    """A new engine version starts a fresh record (old results measured a different signal)."""
+    if meta_get("engine_version") == se.ENGINE_VERSION:
+        return False
+    with _Cursor() as cur:
+        cur.execute("DELETE FROM track_signals")
+        cur.execute("DELETE FROM track_meta")
+    meta_set("engine_version", se.ENGINE_VERSION)
+    _cache.clear()
+    print(f"[trackrecord] engine v{se.ENGINE_VERSION}: track record reset")
+    return True
 
 
 # ===========================================================================
@@ -512,26 +539,22 @@ def live_scan(timeframe, now=None):
     tf_sec = TIMEFRAMES[timeframe]
     now = now or _utcnow()
     counts = {}
+    engine = _hooks.get("engine")
+    if engine is None:
+        return
     with _Cursor() as cur:
         cur.execute("SELECT symbol FROM track_signals WHERE source='LIVE' AND status='OPEN' AND timeframe=%s", (timeframe,))
         open_syms = {r["symbol"] for r in cur.fetchall() or []}
     for symbol in tracked_coins():
         try:
-            df = _hooks["get_candles"](symbol=symbol, timeframe=timeframe, limit=WINDOW + 3)
-            df = _closed_only(df, tf_sec, now)
-            if df is None or len(df) < WINDOW:
-                continue
-            df = df.iloc[-WINDOW:].reset_index(drop=True)
-            sig = read_signal(df)
+            sig = engine.signal(symbol, now)
         except Exception as e:
-            print(f"[trackrecord] live scan {symbol} {timeframe} failed: {e}")
+            print(f"[trackrecord] live scan {symbol} failed: {e}")
             continue
         _count_verdict(counts, "LIVE", timeframe, sig["verdict"])
         if sig["verdict"] in ("LONG", "SHORT") and symbol not in open_syms:
-            bar_time = _df_to_bars(df.iloc[-1:])[0]["time"]
             with _Cursor() as cur:
-                _insert_signal(cur, "LIVE", symbol, timeframe, sig, bar_time, tf_sec)
-        time.sleep(0.2)
+                _insert_signal(cur, "LIVE", symbol, timeframe, sig, sig["bar_time"], tf_sec)
     _add_counts("LIVE", counts)
     _cache.clear()
 
@@ -543,7 +566,7 @@ def live_evaluate(now=None):
         rows = cur.fetchall() or []
     for r in rows:
         tf = r["timeframe"]
-        tf_sec = TIMEFRAMES.get(tf, 3600)
+        tf_sec = TIMEFRAMES.get(tf, 14400)
         try:
             bar_time = _to_dt(r["bar_time"])
             since_ms = int((bar_time - datetime(1970, 1, 1)).total_seconds() * 1000) + tf_sec * 1000
@@ -556,8 +579,10 @@ def live_evaluate(now=None):
                     cur.execute(
                         """UPDATE track_signals SET status=%s, exit_price=%s, exit_at=%s, r_multiple=%s, pnl_pct=%s,
                            bars_held=%s, mfe_r=%s, mae_r=%s WHERE id=%s AND status='OPEN'""",
-                        (out["status"], out["exit_price"], out["exit_time"] + timedelta(seconds=tf_sec), out["r"],
-                         out["pnl_pct"], out["bars_held"], out["mfe_r"], out["mae_r"], r["id"]),
+                        (out["status"], out["exit_price"], out["exit_time"] + timedelta(seconds=tf_sec),
+                         net_r(out["r"], r["entry_price"], r["stop_loss"]),
+                         net_r(out["r"], r["entry_price"], r["stop_loss"]) * float(r["risk_pct"]),
+                         out["bars_held"], out["mfe_r"], out["mae_r"], r["id"]),
                     )
                 else:
                     cur.execute("UPDATE track_signals SET bars_held=%s, mfe_r=%s, mae_r=%s WHERE id=%s AND status='OPEN'",
@@ -586,6 +611,9 @@ def engine_step(now=None):
             meta_set(key, slot)
             live_scan(tf, now)
             actions.append(f"scan:{tf}")
+    if _backtest_due(meta_get("bt_status", {}) or {}, now):
+        run_backtests(now)
+        actions.append("backtest")
     last_eval = meta_get("last_eval_epoch", 0) or 0
     if epoch - float(last_eval) >= EVAL_EVERY_SEC:
         meta_set("last_eval_epoch", epoch)
@@ -596,6 +624,7 @@ def engine_step(now=None):
 
 
 def _engine_loop(lock_conn):
+    _safe(ensure_engine_version)
     _safe(run_backtests)
     while True:
         lock_conn.ping(reconnect=False)
@@ -642,12 +671,14 @@ _started = False
 _start_lock = threading.Lock()
 
 
-def init_trackrecord(app=None, *, get_candles=None, signal_core=None, available_coins=None, start=True):
+def init_trackrecord(app=None, *, get_candles=None, engine=None, available_coins=None, start=True, signal_core=None):
     global _started
     if get_candles:
         _hooks["get_candles"] = get_candles
-    if signal_core:
-        _hooks["signal_core"] = signal_core
+    if engine is not None:
+        _hooks["engine"] = engine
+    elif get_candles and _hooks.get("engine") is None:
+        _hooks["engine"] = se.LiveEngine(get_candles)
     if available_coins:
         _hooks["available_coins"] = list(available_coins)
     try:
@@ -704,8 +735,10 @@ def build_summary():
         out["live_since"] = meta_get("live_since", None, cur)
         out["heartbeat"] = meta_get("heartbeat", None, cur)
     out["rules"] = {
-        "coins": tracked_coins(), "timeframes": list(TIMEFRAMES), "window": WINDOW, "max_bars": MAX_BARS,
-        "reward_risk": REWARD_RISK, "backtest_days": BACKTEST_DAYS,
+        "coins": tracked_coins(), "timeframes": list(TIMEFRAMES), "max_bars": MAX_BARS,
+        "reward_risk": REWARD_RISK, "backtest_days": BACKTEST_DAYS, "engine_version": se.ENGINE_VERSION,
+        "sl_atr": se.model().sl_atr, "tp_atr": se.model().tp_atr, "fees_pct": se.COST_ROUND_TRIP * 100,
+        "model_test": se.test_stats(),
     }
     out["public"] = is_public()
     out["generated_at"] = _iso(_utcnow())
