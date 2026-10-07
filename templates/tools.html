@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free crypto trading calculators: position size, liquidation price, risk/reward | Signals FM</title>
+<meta name="description" content="Free calculators for crypto traders: position size from your risk, futures liquidation price, risk/reward and break-even win rate, drawdown recovery, and PnL / ROE. They run in your browser.">
+{% set seo_title = "Free crypto trading calculators" %}
+{% set seo_description = "Position size, liquidation price, risk/reward, drawdown recovery and PnL calculators. Free, no sign-up." %}
+{% set seo_path = "/tools" %}
+{% include '_seo.html' ignore missing %}
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<style>
+  .layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 40px; align-items: start; }
+  .toc { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); }
+  .toc a { text-decoration: none; color: var(--text-dim); font-size: 14px; padding: 6px 0 6px 14px; margin-left: -1px; border-left: 2px solid transparent; }
+  .toc a:hover { color: var(--text); }
+  .toc a.on { color: var(--text); border-left-color: var(--accent); }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { position: static; flex-direction: row; flex-wrap: wrap; border-left: none; gap: 8px; }
+    .toc a { border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px; margin: 0; } .toc a.on { border-color: var(--accent); } }
+  .tool { padding: 34px 0; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
+  .tool:first-child { border-top: none; padding-top: 0; }
+  .tool-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+  @media (max-width: 760px) { .tool-grid { grid-template-columns: 1fr; } }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .fields .full { grid-column: 1 / -1; }
+  .unit { position: relative; }
+  .unit .pinput { padding-right: 52px; }
+  .unit span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 12.5px; color: var(--text-faint); pointer-events: none; }
+  .result { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .result .big { font-family: var(--mono); font-size: 30px; font-weight: 600; line-height: 1.15; }
+  .result .big-sub { color: var(--text-dim); font-size: 14px; margin: 4px 0 14px; }
+  .rows { display: grid; grid-template-columns: 1fr auto; gap: 7px 16px; font-size: 14px; margin: 0; }
+  .rows dt { color: var(--text-dim); }
+  .rows dd { margin: 0; font-family: var(--mono); text-align: right; }
+  .callout { margin-top: 14px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; line-height: 1.5; }
+  .callout.bad { background: var(--short-dim); border: 1px solid var(--short); }
+  .callout.warn { background: var(--wait-dim); border: 1px solid var(--wait); }
+  .callout.ok { background: var(--long-dim); border: 1px solid var(--long); }
+  .explain { color: var(--text-dim); font-size: 14px; max-width: 68ch; margin: 14px 0 0; }
+
+  /* price ladder */
+  .ladder-wrap { margin-top: 16px; }
+  #ladder { display: block; width: 100%; height: 230px; }
+  #ladder .rail { stroke: var(--line); stroke-width: 2; }
+  #ladder .zone-loss { fill: var(--short-dim); } #ladder .zone-win { fill: var(--long-dim); }
+  #ladder .tick { stroke-width: 2; }
+  #ladder .t-entry { stroke: var(--text); } #ladder .t-stop { stroke: var(--short); } #ladder .t-target { stroke: var(--long); } #ladder .t-liq { stroke: var(--wait); stroke-dasharray: 5 4; }
+  #ladder text { font: 12.5px var(--body); fill: var(--text-dim); }
+  #ladder text.v { font-family: var(--mono); fill: var(--text); }
+  #ladder text.liq { fill: var(--wait); }
+
+  table.mini { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
+  table.mini th { text-align: left; color: var(--text-faint); font-weight: 600; font-size: 12.5px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  table.mini td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); }
+  table.mini td:first-child { font-family: var(--body); }
+  table.mini tr.hl td { background: var(--panel-raised); }
+  .cta { margin-top: 56px; display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap;
+         border: 1px solid var(--line); border-radius: 14px; padding: 24px; background: var(--panel); }
+  .cta h2 { font-family: var(--display); font-size: 22px; margin: 0 0 4px; }
+  .cta p { margin: 0; color: var(--text-dim); max-width: 60ch; }
+</style>
+</head>
+<body>
+{% set active = 'tools' %}
+{% include '_public_nav.html' %}
+
+<main class="wrap">
+  <section class="phead">
+    <h1>Know the numbers before you click buy.</h1>
+    <p>Free calculators for position size, liquidation price, risk and reward, drawdown and profit. They run entirely in your browser, and nothing you type is sent or saved.</p>
+  </section>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Calculators">
+      <a href="#position-size">Position size</a>
+      <a href="#liquidation">Liquidation price</a>
+      <a href="#risk-reward">Risk / reward</a>
+      <a href="#drawdown">Drawdown recovery</a>
+      <a href="#pnl">Profit and ROE</a>
+    </nav>
+
+    <div>
+      <!-- Position size -->
+      <section class="tool" id="position-size" aria-labelledby="ps-h">
+        <h2 class="sec" id="ps-h">Position size calculator</h2>
+        <p class="sec-sub">Size the trade from where you'd be wrong, not from how confident you feel. Direction is taken from the stop: a stop below entry is a long.</p>
+        <div class="tool-grid">
+          <div class="fields">
+            <div class="pfield"><label for="ps-bal">Account balance</label><div class="unit"><input class="pinput" id="ps-bal" inputmode="decimal" value="10000"><span>USDT</span></div></div>
+            <div class="pfield"><label for="ps-risk">Risk per trade</label><div class="unit"><input class="pinput" id="ps-risk" inputmode="decimal" value="1"><span>%</span></div></div>
+            <div class="pfield"><label for="ps-entry">Entry price</label><input class="pinput" id="ps-entry" inputmode="decimal" value="60000"></div>
+            <div class="pfield"><label for="ps-stop">Stop-loss price</label><input class="pinput" id="ps-stop" inputmode="decimal" value="58800"></div>
+            <div class="pfield"><label for="ps-tp">Take-profit price (optional)</label><input class="pinput" id="ps-tp" inputmode="decimal" value="62400"></div>
+            <div class="pfield"><label for="ps-lev">Leverage</label><div class="unit"><input class="pinput" id="ps-lev" inputmode="decimal" value="5"><span>x</span></div></div>
+            <div class="pfield full"><label for="ps-fee">Fee per side</label><div class="unit"><input class="pinput" id="ps-fee" inputmode="decimal" value="0.05"><span>%</span></div></div>
+          </div>
+          <div class="result" aria-live="polite">
+            <div class="big" id="ps-size">—</div>
+            <div class="big-sub" id="ps-size-sub">&nbsp;</div>
+            <dl class="rows" id="ps-rows"></dl>
+            <div class="ladder-wrap"><svg id="ladder" role="img" aria-label="Entry, stop, target and liquidation on a price scale"></svg></div>
+            <div id="ps-callout"></div>
+          </div>
+        </div>
+        <p class="explain">The loss at the stop includes the fee on the way in and on the way out. Leverage doesn't change the size you should trade; it only changes how much margin you lock up, and how close liquidation sits.</p>
+      </section>
+
+      <!-- Liquidation -->
+      <section class="tool" id="liquidation" aria-labelledby="lq-h">
+        <h2 class="sec" id="lq-h">Liquidation price calculator</h2>
+        <p class="sec-sub">For an isolated-margin futures position. Maintenance margin is usually 0.4% to 0.5% for small positions and rises for large ones.</p>
+        <div class="tool-grid">
+          <div class="fields">
+            <div class="pfield full"><label>Direction</label>
+              <div class="pseg" role="group" aria-label="Direction" id="lq-side"><button type="button" data-v="LONG" aria-pressed="true">Long</button><button type="button" data-v="SHORT" aria-pressed="false">Short</button></div></div>
+            <div class="pfield"><label for="lq-entry">Entry price</label><input class="pinput" id="lq-entry" inputmode="decimal" value="60000"></div>
+            <div class="pfield"><label for="lq-lev">Leverage</label><div class="unit"><input class="pinput" id="lq-lev" inputmode="decimal" value="10"><span>x</span></div></div>
+            <div class="pfield full"><label for="lq-mmr">Maintenance margin rate</label><div class="unit"><input class="pinput" id="lq-mmr" inputmode="decimal" value="0.5"><span>%</span></div></div>
+          </div>
+          <div class="result" aria-live="polite">
+            <div class="big" id="lq-price">—</div>
+            <div class="big-sub" id="lq-sub">&nbsp;</div>
+            <table class="mini" id="lq-table"></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Risk / reward -->
+      <section class="tool" id="risk-reward" aria-labelledby="rr-h">
+        <h2 class="sec" id="rr-h">Risk / reward and break-even win rate</h2>
+        <p class="sec-sub">How often you need to be right depends on how much you win when you're right compared with what you lose when you're wrong.</p>
+        <div class="tool-grid">
+          <div class="fields">
+            <div class="pfield"><label for="rr-reward">Average win</label><div class="unit"><input class="pinput" id="rr-reward" inputmode="decimal" value="2"><span>R</span></div></div>
+            <div class="pfield"><label for="rr-risk">Average loss</label><div class="unit"><input class="pinput" id="rr-risk" inputmode="decimal" value="1"><span>R</span></div></div>
+            <div class="pfield full"><label for="rr-wr">Your win rate</label><div class="unit"><input class="pinput" id="rr-wr" inputmode="decimal" value="40"><span>%</span></div></div>
+          </div>
+          <div class="result" aria-live="polite">
+            <div class="big" id="rr-be">—</div>
+            <div class="big-sub">win rate needed to break even</div>
+            <dl class="rows" id="rr-rows"></dl>
+            <div id="rr-callout"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Drawdown -->
+      <section class="tool" id="drawdown" aria-labelledby="dd-h">
+        <h2 class="sec" id="dd-h">Drawdown recovery</h2>
+        <p class="sec-sub">Losses and gains aren't symmetric. After a 50% loss you need a 100% gain just to get back to where you started.</p>
+        <div class="tool-grid">
+          <div class="fields">
+            <div class="pfield"><label for="dd-risk">Risk per trade</label><div class="unit"><input class="pinput" id="dd-risk" inputmode="decimal" value="2"><span>%</span></div></div>
+            <div class="pfield"><label for="dd-streak">Losses in a row</label><input class="pinput" id="dd-streak" inputmode="numeric" value="8"></div>
+          </div>
+          <div class="result" aria-live="polite">
+            <div class="big" id="dd-left">—</div>
+            <div class="big-sub" id="dd-sub">&nbsp;</div>
+            <table class="mini" id="dd-table"></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PnL -->
+      <section class="tool" id="pnl" aria-labelledby="pn-h">
+        <h2 class="sec" id="pn-h">Profit and ROE calculator</h2>
+        <p class="sec-sub">Profit after fees, and the return on the margin you used. With leverage, ROE moves much faster than the price.</p>
+        <div class="tool-grid">
+          <div class="fields">
+            <div class="pfield full"><label>Direction</label>
+              <div class="pseg" role="group" aria-label="Direction" id="pn-side"><button type="button" data-v="LONG" aria-pressed="true">Long</button><button type="button" data-v="SHORT" aria-pressed="false">Short</button></div></div>
+            <div class="pfield"><label for="pn-entry">Entry price</label><input class="pinput" id="pn-entry" inputmode="decimal" value="3000"></div>
+            <div class="pfield"><label for="pn-exit">Exit price</label><input class="pinput" id="pn-exit" inputmode="decimal" value="3150"></div>
+            <div class="pfield"><label for="pn-qty">Size (coins)</label><input class="pinput" id="pn-qty" inputmode="decimal" value="1"></div>
+            <div class="pfield"><label for="pn-lev">Leverage</label><div class="unit"><input class="pinput" id="pn-lev" inputmode="decimal" value="10"><span>x</span></div></div>
+            <div class="pfield full"><label for="pn-fee">Fee per side</label><div class="unit"><input class="pinput" id="pn-fee" inputmode="decimal" value="0.05"><span>%</span></div></div>
+          </div>
+          <div class="result" aria-live="polite">
+            <div class="big" id="pn-pnl">—</div>
+            <div class="big-sub" id="pn-sub">&nbsp;</div>
+            <dl class="rows" id="pn-rows"></dl>
+          </div>
+        </div>
+      </section>
+
+      <div class="cta">
+        <div><h2>Practice with these numbers, risk-free</h2>
+          <p>Demo Trading uses live prices and virtual money, with real fees, leverage and liquidation, and it shows these same numbers before every order.</p></div>
+        <a class="pbtn primary" href="/demo-trading">Open Demo Trading</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+{% include '_public_footer.html' %}
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const num = (id) => { const v = Number(String($(id).value).replace(/,/g, "").trim()); return isFinite(v) && String($(id).value).trim() !== "" ? v : null; };
+  const usd = (v, sign) => v == null || !isFinite(v) ? "—" : (v < 0 ? "−" : sign && v > 0 ? "+" : "") + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " USDT";
+  const pct = (v, d = 2, sign) => v == null || !isFinite(v) ? "—" : (v < 0 ? "−" : sign && v > 0 ? "+" : "") + Math.abs(v).toFixed(d) + "%";
+  function px(p) {
+    if (p == null || !isFinite(p)) return "—";
+    const a = Math.abs(p);
+    const d = a >= 1000 ? 2 : a >= 10 ? 3 : a >= 1 ? 4 : 6;
+    return p.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  const qty = (q) => q == null || !isFinite(q) ? "—" : q.toLocaleString("en-US", { maximumFractionDigits: q >= 100 ? 2 : q >= 1 ? 4 : 6 });
+  const rows = (pairs) => pairs.map(([k, v, c]) => `<dt>${k}</dt><dd class="${c || ""}">${v}</dd>`).join("");
+  const callout = (kind, text) => `<div class="callout ${kind}">${text}</div>`;
+  const cls = (v) => v > 0 ? "pos" : v < 0 ? "neg" : "";
+  function liqPrice(side, entry, lev, mmr) {
+    return side === "LONG" ? entry * (1 - 1 / lev) / (1 - mmr) : entry * (1 + 1 / lev) / (1 + mmr);
+  }
+
+  // ---------------------------------------------------------------- position size
+  function positionSize() {
+    const bal = num("ps-bal"), risk = num("ps-risk"), entry = num("ps-entry"), stop = num("ps-stop"), tp = num("ps-tp"),
+      lev = Math.max(1, num("ps-lev") || 1), fee = (num("ps-fee") || 0) / 100;
+    const out = $("ps-callout");
+    if (!bal || !risk || !entry || !stop || bal <= 0 || risk <= 0 || entry <= 0 || stop <= 0 || stop === entry) {
+      $("ps-size").textContent = "—"; $("ps-size-sub").textContent = "Enter balance, risk, entry and a stop that differs from entry.";
+      $("ps-rows").innerHTML = ""; $("ladder").innerHTML = ""; out.innerHTML = ""; return;
+    }
+    const side = stop < entry ? "LONG" : "SHORT";
+    const riskUsd = bal * risk / 100;
+    const perUnit = Math.abs(entry - stop) + (entry + stop) * fee;
+    const q = riskUsd / perUnit;
+    const notional = q * entry;
+    const margin = notional / lev;
+    const mmr = 0.005;
+    const liq = lev > 1 ? liqPrice(side, entry, lev, mmr) : (side === "SHORT" ? liqPrice(side, entry, 1, mmr) : null);
+    let tpPnl = null, rr = null, tpBad = false;
+    if (tp) {
+      tpBad = side === "LONG" ? tp <= entry : tp >= entry;
+      if (!tpBad) { tpPnl = Math.abs(tp - entry) * q - (entry + tp) * q * fee; rr = tpPnl / riskUsd; }
+    }
+    $("ps-size").textContent = `${qty(q)} coins`;
+    $("ps-size-sub").textContent = `${side === "LONG" ? "Long" : "Short"} worth ${usd(notional)}`;
+    $("ps-rows").innerHTML = rows([
+      ["Loss if the stop hits", usd(-riskUsd), "neg"],
+      ["Stop distance", pct(Math.abs(entry - stop) / entry * 100)],
+      [`Margin needed at ${lev}x`, usd(margin)],
+      ["Profit at target", tpPnl == null ? "—" : usd(tpPnl, true), tpPnl > 0 ? "pos" : ""],
+      ["Reward : risk", rr == null ? "—" : `1 : ${rr.toFixed(2)}`],
+      ["Liquidation price", liq ? px(liq) : "None"],
+    ]);
+    let msg = "";
+    if (margin > bal) msg += callout("bad", `This needs ${usd(margin)} of margin but the account has ${usd(bal)}. Raise the leverage a little or risk less.`);
+    if (liq && ((side === "LONG" && liq >= stop) || (side === "SHORT" && liq <= stop))) msg += callout("bad", `Liquidation at ${px(liq)} comes before your stop at ${px(stop)}. Use less leverage.`);
+    else if (tpBad) msg += callout("warn", `A ${side === "LONG" ? "long" : "short"}'s target must be ${side === "LONG" ? "above" : "below"} the entry.`);
+    else if (risk > 2) msg += callout("warn", `Risking ${risk}% per trade: eight losses in a row would cost ${pct((1 - Math.pow(1 - risk / 100, 8)) * 100, 0)} of the account.`);
+    else if (rr != null && rr < 1) msg += callout("warn", `At 1 : ${rr.toFixed(2)} you need to win more than ${pct(100 / (1 + rr), 0)} of trades just to break even.`);
+    else msg += callout("ok", "Liquidation sits beyond your stop, and the risk is within a range most professionals use.");
+    out.innerHTML = msg;
+    drawLadder(side, entry, stop, tpBad ? null : tp, liq);
+  }
+
+  function drawLadder(side, entry, stop, tp, liq) {
+    const svg = $("ladder");
+    const W = svg.clientWidth || 420, H = 230, x = 120, padT = 16, padB = 16;
+    const levels = [entry, stop].concat(tp ? [tp] : []).concat(liq ? [liq] : []);
+    let lo = Math.min(...levels), hi = Math.max(...levels);
+    const pad = (hi - lo) * 0.08 || entry * 0.01;
+    lo -= pad; hi += pad;
+    const Y = (p) => padT + (H - padT - padB) * (1 - (p - lo) / (hi - lo));
+    const marks = [[entry, "t-entry", "Entry"], [stop, "t-stop", "Stop-loss"]];
+    if (tp) marks.push([tp, "t-target", "Target"]);
+    if (liq) marks.push([liq, "t-liq", "Liquidation"]);
+    // spread the text labels at least 17px apart so close levels stay readable
+    const placed = marks.map((m) => ({ m, y: Y(m[0]), ly: Y(m[0]) })).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < placed.length; i++) placed[i].ly = Math.max(placed[i].ly, placed[i - 1].ly + 17);
+    const over = placed.length ? placed[placed.length - 1].ly - (H - 6) : 0;
+    if (over > 0) placed.forEach((p) => { p.ly -= over; });
+    for (let i = placed.length - 2; i >= 0; i--) placed[i].ly = Math.min(placed[i].ly, placed[i + 1].ly - 17);
+    const mark = (p) => {
+      const [price, cl, label] = p.m;
+      return `<line class="tick ${cl}" x1="${x - 18}" x2="${x + 18}" y1="${p.y}" y2="${p.y}"></line>
+        <text x="${x - 26}" y="${p.ly + 4}" text-anchor="end" class="${cl === "t-liq" ? "liq" : ""}">${label}</text>
+        <text x="${x + 28}" y="${p.ly + 4}" class="v">${px(price)}</text>`;
+    };
+    let out = `<line class="rail" x1="${x}" x2="${x}" y1="${padT}" y2="${H - padB}"></line>`;
+    const ys = Y(stop), ye = Y(entry);
+    out += `<rect class="zone-loss" x="${x - 18}" width="36" y="${Math.min(ys, ye)}" height="${Math.abs(ys - ye)}"></rect>`;
+    if (tp) { const yt = Y(tp); out += `<rect class="zone-win" x="${x - 18}" width="36" y="${Math.min(yt, ye)}" height="${Math.abs(yt - ye)}"></rect>`; }
+    out += placed.map(mark).join("");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.innerHTML = out;
+  }
+
+  // ---------------------------------------------------------------- liquidation
+  const sideOf = (id) => document.querySelector(`#${id} [aria-pressed="true"]`).dataset.v;
+  function liquidation() {
+    const side = sideOf("lq-side"), entry = num("lq-entry"), lev = num("lq-lev"), mmr = (num("lq-mmr") ?? 0.5) / 100;
+    if (!entry || !lev || entry <= 0 || lev < 1) { $("lq-price").textContent = "—"; $("lq-sub").textContent = "Enter an entry price and a leverage of 1x or more."; $("lq-table").innerHTML = ""; return; }
+    const liq = liqPrice(side, entry, lev, mmr);
+    const dist = Math.abs(liq - entry) / entry * 100;
+    $("lq-price").textContent = side === "LONG" && lev <= 1 ? "None" : px(liq);
+    $("lq-sub").textContent = side === "LONG" && lev <= 1 ? "A 1x long can't be liquidated." : `a ${pct(dist)} move ${side === "LONG" ? "down" : "up"} from entry`;
+    const levs = [2, 3, 5, 10, 20, 50, 100];
+    $("lq-table").innerHTML = `<thead><tr><th>Leverage</th><th>Liquidation</th><th>Move needed</th></tr></thead><tbody>` +
+      levs.map((l) => { const p = liqPrice(side, entry, l, mmr); return `<tr class="${l === lev ? "hl" : ""}"><td>${l}x</td><td>${px(p)}</td><td>${pct(Math.abs(p - entry) / entry * 100)}</td></tr>`; }).join("") + "</tbody>";
+  }
+
+  // ---------------------------------------------------------------- risk / reward
+  function riskReward() {
+    const w = num("rr-reward"), l = num("rr-risk"), wr = num("rr-wr");
+    if (!w || !l || w <= 0 || l <= 0) { $("rr-be").textContent = "—"; $("rr-rows").innerHTML = ""; $("rr-callout").innerHTML = ""; return; }
+    const be = l / (w + l) * 100;
+    $("rr-be").textContent = pct(be, 1);
+    const pairs = [["Reward : risk", `1 : ${(w / l).toFixed(2)}`]];
+    let msg = "";
+    if (wr != null && wr >= 0 && wr <= 100) {
+      const exp = wr / 100 * w - (1 - wr / 100) * l;
+      pairs.push(["Expected result per trade", `${exp >= 0 ? "+" : "−"}${Math.abs(exp).toFixed(2)}R`, cls(exp)]);
+      pairs.push(["Over 100 trades", `${exp >= 0 ? "+" : "−"}${Math.abs(exp * 100).toFixed(0)}R`, cls(exp)]);
+      msg = exp > 0 ? callout("ok", `At ${wr}% wins this setup makes money over time, as long as you stick to the stop.`)
+        : callout("bad", `At ${wr}% wins this setup loses money over time. Raise the win rate above ${pct(be, 1)} or let winners run further.`);
+    }
+    $("rr-rows").innerHTML = rows(pairs);
+    $("rr-callout").innerHTML = msg;
+  }
+
+  // ---------------------------------------------------------------- drawdown
+  function drawdown() {
+    const r = num("dd-risk"), n = Math.round(num("dd-streak") || 0);
+    if (r == null || r <= 0 || r >= 100 || n < 0) { $("dd-left").textContent = "—"; $("dd-sub").textContent = "Enter a risk between 0 and 100%."; return; }
+    const left = Math.pow(1 - r / 100, n) * 100;
+    const need = (100 / left - 1) * 100;
+    $("dd-left").textContent = pct(left, 1);
+    $("dd-sub").textContent = `of the account left after ${n} losses in a row at ${r}% each. Getting back to the start needs +${need.toFixed(1)}%.`;
+    const ls = [10, 20, 30, 40, 50, 75, 90];
+    $("dd-table").innerHTML = `<thead><tr><th>Account down</th><th>Gain needed to recover</th></tr></thead><tbody>` +
+      ls.map((l) => `<tr><td>−${l}%</td><td>+${(l / (100 - l) * 100).toFixed(1)}%</td></tr>`).join("") + "</tbody>";
+  }
+
+  // ---------------------------------------------------------------- pnl
+  function pnl() {
+    const side = sideOf("pn-side"), e = num("pn-entry"), x = num("pn-exit"), q = num("pn-qty"), lev = Math.max(1, num("pn-lev") || 1), fee = (num("pn-fee") || 0) / 100;
+    if (!e || !x || !q || e <= 0 || x <= 0 || q <= 0) { $("pn-pnl").textContent = "—"; $("pn-sub").textContent = "Enter entry, exit and size."; $("pn-rows").innerHTML = ""; return; }
+    const gross = (side === "LONG" ? x - e : e - x) * q;
+    const fees = (e + x) * q * fee;
+    const net = gross - fees;
+    const margin = e * q / lev;
+    $("pn-pnl").textContent = usd(net, true);
+    $("pn-pnl").className = "big " + cls(net);
+    $("pn-sub").textContent = `net profit after ${usd(fees)} in fees`;
+    $("pn-rows").innerHTML = rows([
+      ["Price change", pct((x - e) / e * 100, 2, true)],
+      ["Gross profit", usd(gross, true), cls(gross)],
+      [`Margin used at ${lev}x`, usd(margin)],
+      ["ROE (return on margin)", pct(net / margin * 100, 2, true), cls(net)],
+    ]);
+  }
+
+  // ---------------------------------------------------------------- wiring
+  const calc = { ps: positionSize, lq: liquidation, rr: riskReward, dd: drawdown, pn: pnl };
+  document.querySelectorAll(".pinput").forEach((el) => el.addEventListener("input", () => calc[el.id.split("-")[0]]()));
+  document.querySelectorAll(".pseg").forEach((g) => g.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    g.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    calc[g.id.split("-")[0]]();
+  }));
+  Object.values(calc).forEach((f) => f());
+  window.addEventListener("resize", () => positionSize());
+
+  const links = [...document.querySelectorAll(".toc a")];
+  const io = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting) links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + en.target.id));
+    });
+  }, { rootMargin: "-30% 0px -60% 0px" }) : null;
+  if (io) document.querySelectorAll(".tool").forEach((s) => io.observe(s));
+})();
+</script>
+</body>
+</html>
