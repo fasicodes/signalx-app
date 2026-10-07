@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Track record: every Signals FM signal and its result</title>
+<meta name="description" content="Every long and short Signals FM gives on BTC, ETH, SOL and five more coins, recorded automatically with its stop-loss, target and result. Live record plus a walk-forward backtest.">
+{% set seo_title = "Signals FM track record" %}{% set seo_path = "/track-record" %}{% set seo_description = "Every long and short Signals FM gives, logged automatically with its stop, target and result in R." %}
+{% include '_seo.html' ignore missing %}
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<style>
+  .src-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 26px; }
+  .src-note { color: var(--text-faint); font-size: 13.5px; }
+  .private-note { margin-top: 18px; border: 1px solid var(--wait); background: var(--wait-dim); border-radius: 10px; padding: 12px 14px;
+                  font-size: 14px; max-width: 760px; }
+  .lede { font-family: var(--display); font-size: clamp(20px, 2.6vw, 27px); line-height: 1.35; font-weight: 600; max-width: 34ch; margin: 0 0 28px; }
+  .lede b { font-weight: 700; }
+  .figs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .figs div { padding: 14px 16px 16px 0; }
+  .figs div + div { padding-left: 16px; border-left: 1px solid var(--line); }
+  .figs dt { font-size: 13px; color: var(--text-dim); }
+  .figs dd { margin: 4px 0 0; font-family: var(--mono); font-size: 24px; font-weight: 600; }
+  .figs dd small { display: block; font-family: var(--body); font-size: 12.5px; color: var(--text-faint); font-weight: 400; margin-top: 2px; }
+  @media (max-width: 820px) { .figs { grid-template-columns: repeat(2, 1fr); } .figs div { padding-left: 0 !important; border-left: none !important; border-bottom: 1px solid var(--line-soft); } }
+
+  /* the result tape */
+  .tape-sec { padding: 34px 0 26px; }
+  .tape-box { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 16px 12px; }
+  #tape { display: block; width: 100%; height: 190px; }
+  #tape .b-pos { fill: var(--long); } #tape .b-neg { fill: var(--short); } #tape .b-exp { opacity: .55; }
+  #tape .zero { stroke: var(--line); stroke-width: 1; }
+  #tape rect:hover { opacity: .7; }
+  .tape-axis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; color: var(--text-faint); margin-top: 6px; }
+  .tape-tip { position: absolute; pointer-events: none; background: var(--panel-raised); border: 1px solid var(--line); border-radius: 8px;
+              padding: 7px 10px; font-size: 13px; white-space: nowrap; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+
+  #curve { display: block; width: 100%; height: 240px; }
+  #curve .area { fill: var(--long-dim); } #curve .line { fill: none; stroke: var(--long); stroke-width: 2; }
+  #curve .base { stroke: var(--text-faint); stroke-dasharray: 4 4; stroke-width: 1; }
+  #curve text { fill: var(--text-faint); font: 12px var(--mono); }
+
+  .conf-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 210px; gap: 14px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+  .conf-row .lbl { font-family: var(--mono); font-size: 14px; }
+  .conf-bar { position: relative; height: 12px; background: var(--panel-raised); border-radius: 6px; overflow: hidden; }
+  .conf-bar span { position: absolute; inset: 0 auto 0 0; background: var(--long); border-radius: 6px; }
+  .conf-bar i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text-dim); }
+  .conf-row .stat { font-family: var(--mono); font-size: 13.5px; text-align: right; white-space: nowrap; }
+  @media (max-width: 600px) { .conf-row { grid-template-columns: 70px minmax(0, 1fr); } .conf-row .stat { grid-column: 1 / -1; text-align: left; } }
+  .conf-key { font-size: 13px; color: var(--text-faint); margin-top: 10px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .side-l { color: var(--long); font-weight: 600; } .side-s { color: var(--short); font-weight: 600; }
+  .st { font-size: 13px; font-weight: 600; }
+  .empty { border: 1px dashed var(--line); border-radius: 12px; padding: 28px; color: var(--text-dim); max-width: 760px; }
+  .rules ul { margin: 0; padding-left: 20px; max-width: 76ch; color: var(--text-dim); }
+  .rules li { margin: 0 0 10px; }
+  .rules li b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+{% set active = 'track' %}
+{% include '_public_nav.html' %}
+
+<main class="wrap">
+  <section class="phead">
+    <h1>Every signal, recorded. Wins and losses.</h1>
+    <p>At every 1-hour and 4-hour candle close, Signals FM reads the same eight coins and logs every long or short it gives, with the
+      stop-loss and target shown on the dashboard. Nothing is picked afterwards. Results are in R: 1R is the distance from entry to stop.</p>
+    <div class="src-row">
+      <div class="pseg" role="group" aria-label="Which results">
+        <button type="button" data-src="LIVE" aria-pressed="true">Live record</button>
+        <button type="button" data-src="BACKTEST" aria-pressed="false">Backtest</button>
+      </div>
+      <span class="src-note" id="src-note">Loading…</span>
+    </div>
+    {% if not public %}
+    <div class="private-note">This page is visible only to logged-in users while you review it. To publish it for everyone,
+      set <b>TRACK_RECORD_PUBLIC=on</b> in the server settings.</div>
+    {% endif %}
+  </section>
+
+  <div id="content" hidden>
+    <section class="block" style="border-top:none;padding-top:8px">
+      <p class="lede" id="lede"></p>
+      <dl class="figs" id="figs"></dl>
+    </section>
+
+    <section class="tape-sec">
+      <h2 class="sec">Result tape</h2>
+      <p class="sec-sub">One bar per signal, oldest on the left. Bars above the line made money, bars below lost; height is the result in R. Faded bars hit the time limit.</p>
+      <div class="tape-box" id="tape-box">
+        <svg id="tape" role="img" aria-label="Result of each signal"></svg>
+        <div class="tape-axis"><span id="tape-start"></span><span id="tape-end"></span></div>
+        <div class="tape-tip" id="tape-tip" hidden></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2 class="sec">10,000 USDT, risking 1% on every signal</h2>
+      <p class="sec-sub">What the account would look like if every signal had been taken with the same 1% risk, compounding, before fees.</p>
+      <svg id="curve" role="img" aria-label="Account balance over time"></svg>
+    </section>
+
+    <section class="block">
+      <h2 class="sec">Does a higher confidence win more often?</h2>
+      <p class="sec-sub">Win rate by the confidence the signal showed at the time. The grey mark is the win rate needed to break even with this payoff.</p>
+      <div id="conf"></div>
+      <p class="conf-key" id="conf-key"></p>
+    </section>
+
+    <section class="block grid2">
+      <div><h2 class="sec">By coin</h2><div class="ptable-wrap" id="by-coin"></div></div>
+      <div><h2 class="sec">By timeframe and direction</h2><div class="ptable-wrap" id="by-tf"></div></div>
+    </section>
+
+    <section class="block" id="open-sec">
+      <h2 class="sec">Open right now</h2>
+      <p class="sec-sub">Signals that have not reached their stop, target or time limit yet.</p>
+      <div class="ptable-wrap" id="open"></div>
+    </section>
+
+    <section class="block">
+      <h2 class="sec">Latest signals</h2>
+      <div class="ptable-wrap" id="recent"></div>
+    </section>
+  </div>
+
+  <div id="empty" class="empty" hidden></div>
+
+  <section class="block rules" id="rules">
+    <h2 class="sec">How this is measured</h2>
+    <ul id="rules-list">
+      <li><b>Same coins, every candle.</b> BTC, ETH, SOL, XRP, BNB, DOGE, ADA and LINK are read at every 1h and 4h close. Every long or short is logged.</li>
+      <li><b>Entry</b> is the close of the candle that gave the signal.</li>
+      <li><b>Stop-loss</b> is the signal's 95th-percentile candle move away from entry, and the <b>target</b> is 1.5 times that distance, exactly as the dashboard shows them.</li>
+      <li><b>One signal per coin and timeframe at a time.</b> New signals are ignored until the open one closes.</li>
+      <li><b>Pessimistic fills.</b> If one candle touches both the stop and the target, it counts as a loss. If a candle opens past the stop, the exit is that worse price.</li>
+      <li><b>Time limit.</b> After 48 candles without hitting either level, the signal closes at that candle's close.</li>
+      <li><b>Before costs.</b> Results don't include fees, funding or slippage, which lower real results.</li>
+      <li><b>Backtest</b> replays the same rules over past candles. At each candle the signal only sees the 200 candles up to that point, the same as the live dashboard, and the outcome comes only from the candles after it.</li>
+    </ul>
+  </section>
+</main>
+
+{% include '_public_footer.html' %}
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  let DATA = null;
+  let SRC = "LIVE";
+
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtR = (r) => r == null || !isFinite(r) ? "—" : (r > 0 ? "+" : r < 0 ? "−" : "") + Math.abs(r).toFixed(2) + "R";
+  const fmtPct = (v, d = 1) => v == null || !isFinite(v) ? "—" : v.toFixed(d) + "%";
+  const money = (v) => Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const cls = (v) => v > 0 ? "pos" : v < 0 ? "neg" : "dim";
+  const day = (iso) => iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+  const when = (iso) => iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+  function price(p) {
+    if (p == null) return "—";
+    const a = Math.abs(p);
+    const d = a >= 1000 ? 2 : a >= 10 ? 3 : a >= 1 ? 4 : 6;
+    return Number(p).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  const STATUS = { TP: ["Target hit", "pos"], SL: ["Stopped out", "neg"], EXPIRED: ["Time limit", "dim"], OPEN: ["Open", "dim"] };
+
+  function table(head, rows, numCols) {
+    return `<table class="ptable"><thead><tr>${head.map((h, i) => `<th class="${numCols.includes(i) ? "num" : ""}">${h}</th>`).join("")}</tr></thead>
+      <tbody>${rows.join("")}</tbody></table>`;
+  }
+
+  function note() {
+    const live = DATA.sources.LIVE.stats, bt = DATA.backtest_status || {};
+    if (SRC === "LIVE") {
+      return DATA.live_since ? `Recording live since ${day(DATA.live_since)}. ${live.signals} closed, ${DATA.sources.LIVE.open.length} open.` : "Live recording starts with the next candle close.";
+    }
+    const days = DATA.rules.backtest_days;
+    if (bt.state === "running") return `Backtest running: ${(bt.done || []).length} of ${bt.total} coin and timeframe pairs done. Refresh in a few minutes.`;
+    if (bt.state === "partial") return `Backtest finished for ${(bt.done || []).length} of ${bt.total} coin and timeframe pairs; the rest will be retried automatically.`;
+    if (bt.state === "done") return `Replayed over the last ${days["1h"]} days of 1h candles and ${days["4h"]} days of 4h candles. Finished ${day(bt.finished_at)}.`;
+    return "The backtest starts a few seconds after the server starts.";
+  }
+
+  function render() {
+    document.querySelectorAll("[data-src]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.src === SRC ? "true" : "false"));
+    $("src-note").textContent = note();
+    const src = DATA.sources[SRC];
+    const s = src.stats;
+    if (!s.signals) {
+      $("content").hidden = true;
+      $("empty").hidden = false;
+      $("empty").innerHTML = SRC === "LIVE"
+        ? `No live signal has closed yet. ${src.open.length ? `${src.open.length} signal${src.open.length > 1 ? "s are" : " is"} open right now; ` : ""}the first results usually appear within a day. Switch to <b>Backtest</b> to see the same rules on past candles.`
+        : (DATA.backtest_status.state === "running" ? "The backtest is still running. Refresh this page in a few minutes." : "The backtest has not produced results yet.");
+      return;
+    }
+    $("empty").hidden = true;
+    $("content").hidden = false;
+
+    const end = s.equity_1pct;
+    $("lede").innerHTML = `Taking every one of these <b>${s.signals}</b> signals with 1% risk would have turned 10,000 USDT into
+      <b class="${cls(end - 10000)}">${money(end)} USDT</b> (${s.return_1pct >= 0 ? "+" : ""}${s.return_1pct.toFixed(1)}%), before fees.`;
+    const fig = (k, v, sub, c) => `<div><dt>${k}</dt><dd class="${c || ""}">${v}<small>${sub}</small></dd></div>`;
+    $("figs").innerHTML = [
+      fig("Win rate", fmtPct(s.win_rate), `${s.wins} won, ${s.losses} lost`),
+      fig("Average per signal", fmtR(s.avg_r), `${fmtR(s.total_r)} in total`, cls(s.avg_r)),
+      fig("Profit factor", s.profit_factor == null ? "—" : s.profit_factor.toFixed(2), "Gross R won ÷ gross R lost", s.profit_factor >= 1 ? "pos" : "neg"),
+      fig("Largest drop", "−" + s.max_drawdown_pct.toFixed(1) + "%", "Peak to low, at 1% risk"),
+      fig("Break-even win rate", fmtPct(s.breakeven_win_rate), "Needed with this payoff"),
+    ].join("");
+
+    drawTape(src);
+    drawCurve(s);
+    drawConf(s);
+    $("by-coin").innerHTML = table(["Coin", "Signals", "Win rate", "Total"], s.by_coin.map((d) =>
+      `<tr><td>${esc(d.key)}</td><td class="num">${d.count}</td><td class="num">${fmtPct(d.win_rate)}</td><td class="num ${cls(d.total_r)}">${fmtR(d.total_r)}</td></tr>`), [1, 2, 3]);
+    const tf = s.by_timeframe.map((d) => `<tr><td>${esc(d.key)} candles</td><td class="num">${d.count}</td><td class="num">${fmtPct(d.win_rate)}</td><td class="num ${cls(d.total_r)}">${fmtR(d.total_r)}</td></tr>`)
+      .concat(s.by_side.map((d) => `<tr><td class="${d.key === "LONG" ? "side-l" : "side-s"}">${d.key === "LONG" ? "Longs" : "Shorts"}</td><td class="num">${d.count}</td><td class="num">${fmtPct(d.win_rate)}</td><td class="num ${cls(d.total_r)}">${fmtR(d.total_r)}</td></tr>`));
+    $("by-tf").innerHTML = table(["Group", "Signals", "Win rate", "Total"], tf, [1, 2, 3]);
+
+    $("open-sec").hidden = SRC !== "LIVE";
+    $("open").innerHTML = src.open.length ? table(["Since", "Coin", "Direction", "Confidence", "Entry", "Stop", "Target", "Best so far"], src.open.map((r) =>
+      `<tr><td>${when(r.signal_at)}</td><td>${esc(r.symbol)} <span class="faint">${r.timeframe}</span></td><td class="${r.side === "LONG" ? "side-l" : "side-s"}">${r.side === "LONG" ? "Long" : "Short"}</td>
+       <td class="num">${r.confidence.toFixed(1)}%</td><td class="num">${price(r.entry_price)}</td><td class="num">${price(r.stop_loss)}</td><td class="num">${price(r.take_profit)}</td>
+       <td class="num ${cls(r.mfe_r)}">${fmtR(r.mfe_r)}</td></tr>`), [3, 4, 5, 6, 7]) : `<p class="dim">Nothing open at the moment.</p>`;
+
+    const recent = src.recent.filter((r) => r.status !== "OPEN").slice(0, 40);
+    $("recent").innerHTML = table(["Signal time", "Coin", "Direction", "Confidence", "Entry", "Stop", "Target", "Outcome", "Result"], recent.map((r) => {
+      const st = STATUS[r.status] || [r.status, "dim"];
+      return `<tr><td>${when(r.signal_at)}</td><td>${esc(r.symbol)} <span class="faint">${r.timeframe}</span></td>
+        <td class="${r.side === "LONG" ? "side-l" : "side-s"}">${r.side === "LONG" ? "Long" : "Short"}</td><td class="num">${r.confidence.toFixed(1)}%</td>
+        <td class="num">${price(r.entry_price)}</td><td class="num">${price(r.stop_loss)}</td><td class="num">${price(r.take_profit)}</td>
+        <td><span class="st ${st[1]}">${st[0]}</span> <span class="faint">after ${r.bars_held} candle${r.bars_held === 1 ? "" : "s"}</span></td>
+        <td class="num ${cls(r.r_multiple)}">${fmtR(r.r_multiple)}</td></tr>`;
+    }), [3, 4, 5, 6, 8]);
+  }
+
+  // ---------------------------------------------------------------- tape
+  let tapeRows = [];
+  function drawTape(src) {
+    tapeRows = src.tape || [];
+    const svg = $("tape");
+    const W = svg.clientWidth || 1000, H = 190, mid = H / 2;
+    const list = tapeRows.slice(-Math.max(40, Math.floor(W / 4)));
+    const maxR = Math.max(1.5, Math.min(3, ...list.map((r) => Math.abs(r.r_multiple || 0))));
+    const bw = W / Math.max(list.length, 1);
+    const gap = bw > 5 ? 1.5 : bw > 2.5 ? 0.6 : 0;
+    let out = `<line class="zero" x1="0" x2="${W}" y1="${mid}" y2="${mid}"></line>`;
+    list.forEach((r, i) => {
+      const v = Math.max(-maxR, Math.min(maxR, r.r_multiple || 0));
+      const h = Math.max(1.5, Math.abs(v) / maxR * (mid - 8));
+      const y = v >= 0 ? mid - h : mid;
+      out += `<rect data-i="${i}" x="${(i * bw + gap / 2).toFixed(2)}" y="${y.toFixed(2)}" width="${Math.max(0.8, bw - gap).toFixed(2)}" height="${h.toFixed(2)}" class="${v >= 0 ? "b-pos" : "b-neg"}${r.status === "EXPIRED" ? " b-exp" : ""}"></rect>`;
+    });
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.innerHTML = out;
+    svg.setAttribute("aria-label", `Result of the last ${list.length} signals: ${list.filter((r) => r.r_multiple > 0).length} wins and ${list.filter((r) => r.r_multiple <= 0).length} losses`);
+    $("tape-start").textContent = list.length ? (list.length < tapeRows.length ? `Last ${list.length} signals, from ` : "") + day(list[0].signal_at) : "";
+    $("tape-end").textContent = list.length ? day(list[list.length - 1].signal_at) : "";
+    svg.onmousemove = (e) => {
+      const t = e.target.closest("rect");
+      const tip = $("tape-tip");
+      if (!t) { tip.hidden = true; return; }
+      const r = list[Number(t.dataset.i)];
+      const st = STATUS[r.status] || [r.status];
+      tip.innerHTML = `<b>${esc(r.symbol)}</b> ${r.timeframe} ${r.side === "LONG" ? "long" : "short"}, ${when(r.signal_at)}<br>${st[0]}: <span class="${cls(r.r_multiple)}">${fmtR(r.r_multiple)}</span>`;
+      tip.hidden = false;
+      const box = $("tape-box").getBoundingClientRect();
+      const x = Math.min(e.clientX - box.left + 12, box.width - tip.offsetWidth - 8);
+      tip.style.left = Math.max(8, x) + "px";
+      tip.style.top = Math.max(4, e.clientY - box.top - 54) + "px";
+    };
+    svg.onmouseleave = () => { $("tape-tip").hidden = true; };
+  }
+
+  // ---------------------------------------------------------------- curve
+  function drawCurve(s) {
+    const svg = $("curve");
+    const W = svg.clientWidth || 1000, H = 240, padL = 64, padR = 10, padT = 10, padB = 26;
+    const pts = [{ t: s.first_signal_at, equity: 10000 }].concat(s.curve);
+    const ts = pts.map((p) => Date.parse(p.t));
+    const t0 = Math.min(...ts), t1 = Math.max(...ts) || t0 + 1;
+    const vals = pts.map((p) => p.equity);
+    let lo = Math.min(...vals, 10000), hi = Math.max(...vals, 10000);
+    const pad = (hi - lo) * 0.1 || 100;
+    lo -= pad; hi += pad;
+    const X = (t) => padL + (W - padL - padR) * ((t - t0) / Math.max(1, t1 - t0));
+    const Y = (v) => padT + (H - padT - padB) * (1 - (v - lo) / (hi - lo));
+    const line = pts.map((p, i) => `${i ? "L" : "M"}${X(ts[i]).toFixed(1)},${Y(p.equity).toFixed(1)}`).join("");
+    const area = `${line}L${X(ts[ts.length - 1]).toFixed(1)},${H - padB}L${X(ts[0]).toFixed(1)},${H - padB}Z`;
+    const ticks = [lo + pad, (lo + hi) / 2, hi - pad];
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.innerHTML = `<path class="area" d="${area}"></path>
+      <line class="base" x1="${padL}" x2="${W - padR}" y1="${Y(10000)}" y2="${Y(10000)}"></line>
+      <path class="line" d="${line}"></path>
+      ${ticks.map((v) => `<text x="${padL - 8}" y="${Y(v) + 4}" text-anchor="end">${money(v)}</text>`).join("")}
+      <text x="${padL}" y="${H - 6}">${day(new Date(t0).toISOString())}</text>
+      <text x="${W - padR}" y="${H - 6}" text-anchor="end">${day(new Date(t1).toISOString())}</text>`;
+  }
+
+  // ---------------------------------------------------------------- confidence
+  function drawConf(s) {
+    const be = s.breakeven_win_rate;
+    $("conf").innerHTML = s.by_confidence.map((d) => `<div class="conf-row">
+        <span class="lbl">${esc(d.key)}</span>
+        <div class="conf-bar" title="${d.win_rate.toFixed(1)}% win rate"><span style="width:${Math.min(100, d.win_rate).toFixed(1)}%"></span>${be ? `<i style="left:${Math.min(100, be).toFixed(1)}%"></i>` : ""}</div>
+        <span class="stat">${fmtPct(d.win_rate)} <span class="faint">of ${d.count}</span> <span class="${cls(d.avg_r)}">${fmtR(d.avg_r)}</span></span>
+      </div>`).join("") || `<p class="dim">Not enough signals yet.</p>`;
+    $("conf-key").textContent = be ? `Break-even win rate with this payoff: ${be.toFixed(1)}%. Buckets with fewer than 30 signals are mostly noise.` : "";
+  }
+
+  // ---------------------------------------------------------------- load
+  async function load() {
+    try {
+      const r = await fetch("/api/track-record", { credentials: "same-origin" });
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error(d.error || "Could not load the track record.");
+      DATA = d;
+      const live = d.sources.LIVE.stats.signals, bt = d.sources.BACKTEST.stats.signals;
+      if (!sessionStorage.getItem("tr-src")) SRC = live >= 20 || !bt ? "LIVE" : "BACKTEST";
+      render();
+    } catch (e) {
+      $("src-note").textContent = e.message;
+    }
+  }
+  try { SRC = sessionStorage.getItem("tr-src") || SRC; } catch (e) { /* ignore */ }
+  document.querySelectorAll("[data-src]").forEach((b) => b.addEventListener("click", () => {
+    SRC = b.dataset.src;
+    try { sessionStorage.setItem("tr-src", SRC); } catch (e) { /* ignore */ }
+    if (DATA) render();
+  }));
+  let rt = null;
+  window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => DATA && render(), 150); });
+  load();
+  setInterval(load, 120000);
+})();
+</script>
+</body>
+</html>
