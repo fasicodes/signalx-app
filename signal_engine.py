@@ -229,6 +229,8 @@ def coin_features(df4h):
     for k in (6, 24, 42, 180):
         F[f"z{k}"] = (lr - lr.shift(k)) / (vol * np.sqrt(k))
     F["timestamp"] = df["timestamp"].values
+    for k in ("open", "high", "low"):
+        F[k] = df[k].astype(float).values
     F["close"] = c.values
     return F
 
@@ -367,6 +369,74 @@ def price_round(x):
 
 
 # ===========================================================================
+# following a trade (same rules as the track record) + replay
+# ===========================================================================
+def follow(side, entry, sl, tp, o, h, l, c, start, max_bars=None):
+    """Walks candles start.. (arrays, closed candles only). Same pessimistic
+    rules as trackrecord.evaluate(): gap past the stop -> exit at the open,
+    stop and target in one candle -> stop, time limit -> close.
+    Returns (status or None if still open, exit_price, bars_held)."""
+    max_bars = max_bars or model().max_bars
+    n = len(c)
+    for k in range(max_bars):
+        j = start + k
+        if j >= n:
+            return None, None, k
+        if side == "LONG":
+            if o[j] <= sl:
+                return "SL", float(o[j]), k + 1
+            if l[j] <= sl:
+                return "SL", float(sl), k + 1
+            if h[j] >= tp:
+                return "TP", float(tp), k + 1
+        else:
+            if o[j] >= sl:
+                return "SL", float(o[j]), k + 1
+            if h[j] >= sl:
+                return "SL", float(sl), k + 1
+            if l[j] <= tp:
+                return "TP", float(tp), k + 1
+        if k + 1 == max_bars:
+            return "EXPIRED", float(c[j]), k + 1
+    return None, None, max_bars
+
+
+def replay(F, pl, ps, cl, cs, lookback=300):
+    """One trade at a time per coin, replayed over the last `lookback`
+    candles. Returns (active trade or None, last closed trade or None)."""
+    o, h, l, c = (F[k].to_numpy(float) for k in ("open", "high", "low", "close"))
+    atr = F["atr"].to_numpy(float)
+    ts = pd.to_datetime(F["timestamp"]).to_list()
+    n = len(F)
+    i = max(240, n - lookback)
+    active = last = None
+    while i < n:
+        side, _ = decide(pl[i], ps[i])
+        if side == "WAIT" or not np.isfinite(atr[i]):
+            i += 1
+            continue
+        sl, tp = levels(side, c[i], atr[i])
+        status, exit_px, held = follow(side, c[i], sl, tp, o, h, l, c, i + 1)
+        trade = {
+            "side": side, "entry": float(c[i]), "stop_loss": float(sl), "take_profit": float(tp),
+            "atr": float(atr[i]), "confidence": round(float(cl[i] if side == "LONG" else cs[i]) * 100, 1),
+            "bar_time": ts[i].to_pydatetime(), "signal_at": ts[i].to_pydatetime() + timedelta(seconds=TF_SEC),
+            "bars_held": int(held),
+        }
+        if status is None:
+            trade["expires_at"] = trade["signal_at"] + timedelta(seconds=TF_SEC * model().max_bars)
+            active = trade
+            break
+        risk = abs(trade["entry"] - sl)
+        r = ((exit_px - trade["entry"]) if side == "LONG" else (trade["entry"] - exit_px)) / risk
+        trade.update({"status": status, "exit_price": exit_px, "r": round(r - cost_r(trade["entry"], sl), 3),
+                      "closed_at": ts[min(i + held, n - 1)].to_pydatetime() + timedelta(seconds=TF_SEC)})
+        last = trade
+        i += held
+    return active, last
+
+
+# ===========================================================================
 # live engine (fetches candles, caches per closed 4h candle)
 # ===========================================================================
 def _utcnow():
@@ -422,8 +492,13 @@ class LiveEngine:
         if hit and hit[0] == bar:
             return hit[1]
         df = self.fetch(symbol, now=now)
+        if df is not None and len(df) and pd.Timestamp(df["timestamp"].iloc[-1]) < pd.Timestamp(bar):
+            time.sleep(2)                       # the exchange has not published the new candle yet
+            df = self.fetch(symbol, now=now)
         if df is None or len(df) < 60:
             raise ValueError(f"Not enough 4h history for {symbol}.")
+        if pd.Timestamp(df["timestamp"].iloc[-1]) < pd.Timestamp(bar):
+            raise ValueError(f"The latest 4h candle for {symbol} is not available yet.")
         F = coin_features(df)
         self._frames[symbol] = (bar, F)
         return F
@@ -455,36 +530,62 @@ class LiveEngine:
                 return hit[1]
             mkt, btc = self.market(bar, now)
             F = self.frame(symbol, bar, now)
-            X = assemble(F, btc, mkt, sym=symbol).iloc[[-1]]
+            X = assemble(F, btc, mkt, sym=symbol)
             pl, ps, cl, cs = score(X)
-            side, best = decide(pl[0], ps[0])
-            row = F.iloc[-1]
-            entry, atr = float(row["close"]), float(row["atr"])
-            sl, tp = levels(side, entry, atr)
+            active, last = replay(F, pl, ps, cl, cs)
             m = model()
+            row = F.iloc[-1]
+            bar_time = pd.Timestamp(row["timestamp"]).to_pydatetime()
+            p_long, p_short = float(cl[-1]), float(cs[-1])
+            best_raw = float(max(pl[-1], ps[-1]))
             res = {
                 "engine_version": ENGINE_VERSION,
                 "timeframe": TIMEFRAME,
-                "verdict": side,
-                "confidence": round(float(max(cl[0], cs[0])) * 100, 1),
-                "p_long": round(float(cl[0]) * 100, 1),
-                "p_short": round(float(cs[0]) * 100, 1),
-                "raw_best": round(float(best), 4),
+                # verdict = the trade the engine is in right now (one at a time per coin), else WAIT
+                "verdict": active["side"] if active else "WAIT",
+                "fresh": bool(active and active["bar_time"] == bar_time),
+                "confidence": active["confidence"] if active else round(max(p_long, p_short) * 100, 1),
+                "p_long": round(p_long * 100, 1),
+                "p_short": round(p_short * 100, 1),
+                "bias": "LONG" if p_long >= p_short else "SHORT",
+                # how close the current candle came to a signal (100 = signal threshold)
+                "strength": round(min(best_raw / m.threshold, 1.5) * 100, 1) if np.isfinite(best_raw) else None,
                 "threshold": m.threshold,
-                "entry": entry,
-                "stop_loss": sl,
-                "take_profit": tp,
-                "atr": atr,
-                "atr_pct": round(atr / entry * 100, 3),
-                "sl_pct": round(m.sl_atr * atr / entry * 100, 3),
-                "tp_pct": round(m.tp_atr * atr / entry * 100, 3),
+                "entry": active["entry"] if active else None,
+                "stop_loss": active["stop_loss"] if active else None,
+                "take_profit": active["take_profit"] if active else None,
+                "atr": active["atr"] if active else float(row["atr"]),
+                "sl_pct": round(m.sl_atr * active["atr"] / active["entry"] * 100, 3) if active else None,
+                "tp_pct": round(m.tp_atr * active["atr"] / active["entry"] * 100, 3) if active else None,
                 "max_bars": m.max_bars,
-                "bar_time": pd.Timestamp(row["timestamp"]).to_pydatetime(),
-                "signal_at": pd.Timestamp(row["timestamp"]).to_pydatetime() + timedelta(seconds=TF_SEC),
-                "next_update": pd.Timestamp(row["timestamp"]).to_pydatetime() + timedelta(seconds=2 * TF_SEC),
+                "active": active,
+                "last_closed": last,
+                "last_close": float(row["close"]),
+                "history_bars": int(len(F)),
+                "bar_time": bar_time,
+                "next_update": bar_time + timedelta(seconds=2 * TF_SEC),
             }
             self._signals[symbol] = (bar, res)
             return res
+
+
+def progress(active, price):
+    """Where a running trade stands at the live price: R so far and how far
+    along the way to the target (positive) or the stop (negative), in %."""
+    if not active or price is None or not np.isfinite(price):
+        return None
+    sgn = 1 if active["side"] == "LONG" else -1
+    risk = abs(active["entry"] - active["stop_loss"])
+    reward = abs(active["take_profit"] - active["entry"])
+    move = sgn * (float(price) - active["entry"])
+    pct = move / reward * 100 if move >= 0 else move / risk * 100
+    state = "running"
+    if move >= reward:
+        state = "target_touched"
+    elif -move >= risk:
+        state = "stop_touched"
+    return {"price": float(price), "r_now": round(move / risk, 3), "pct": round(max(-100.0, min(100.0, pct)), 1),
+            "move_pct": round(sgn * (float(price) / active["entry"] - 1) * 100, 2), "state": state}
 
 
 def test_stats():
