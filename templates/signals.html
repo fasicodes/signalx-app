@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261008">
 <style>
   .strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 8px; }
   .strip > div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
@@ -46,6 +47,12 @@
 
   .ptable td .meter { width: 110px; display: inline-block; vertical-align: middle; margin-right: 8px; }
   .status { font: 600 12px var(--mono); }
+  /* match the app: tabular sans numbers, sentence-case badges */
+  .strip dd, .lv b, .num { font-family: var(--body); font-variant-numeric: tabular-nums; }
+  .side { font: 600 12.5px var(--body); letter-spacing: 0; }
+  .tag-new { font: 600 12px var(--body); }
+  .warn-box { background: var(--wait-dim); border: 1px solid var(--wait); border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; }
+  .tag-forming { font: 600 11.5px var(--body); color: var(--wait); background: var(--wait-dim); padding: 2px 8px; border-radius: 5px; margin-left: 6px; }
   .empty-box { border: 1px dashed var(--line); border-radius: 12px; padding: 22px; color: var(--text-dim); text-align: center; }
 
   .alerts { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: grid; gap: 14px; max-width: 760px; }
@@ -62,9 +69,9 @@
 </style>
 {% include '_analytics.html' ignore missing %}
 </head>
-<body>
+<body class="app">
 {% set active = 'signals' %}
-{% include '_public_nav.html' %}
+{% include '_app_nav.html' %}
 
 <main class="wrap">
   <div class="phead">
@@ -85,12 +92,14 @@
   <section class="block" id="sec-active" hidden>
     <h2 class="sec">Active signals</h2>
     <p class="sec-sub">Entry is the 4-hour close that gave the signal. The bar shows where the live price sits between the stop (left) and the target (right).</p>
+    <div class="warn-box" id="same-side" hidden></div>
     <div class="cards" id="cards"></div>
   </section>
 
   <section class="block" id="sec-watch" hidden>
     <h2 class="sec">Closest to a signal</h2>
-    <p class="sec-sub">No signal yet. The meter shows how close the model's conviction came at the last close (100% = a signal).</p>
+    <p class="sec-sub">No signal yet. The meter shows how close the model's conviction came at the last close (100% = a signal).
+      "Setup forming" means very close, but still not a trade: when that band was tested as signals it lost money after fees.</p>
     <div class="watch" id="watch"></div>
   </section>
 
@@ -173,8 +182,8 @@
     else if (p.state === "stop_touched") line = `<b class="neg">Stop touched</b> (confirms at the candle close)`;
     else if (p.pct != null) line = `Now <b class="num">${price(p.price)}</b> · <b class="${p.move_pct >= 0 ? "pos" : "neg"}">${p.move_pct >= 0 ? "+" : ""}${p.move_pct}%</b> · ${Math.abs(p.pct)}% of the way to the ${p.pct >= 0 ? "target" : "stop"}`;
     return `<article class="card ${r.fresh ? "fresh" : ""}">
-      <div class="card-head"><span class="coin">${coin(r.symbol)}</span><span class="side ${a.side}">${a.side}</span>
-        ${r.fresh ? '<span class="tag-new">NEW</span>' : ""}
+      <div class="card-head"><span class="coin">${coin(r.symbol)}</span><span class="side ${a.side}">${a.side === "LONG" ? "Long" : "Short"}</span>
+        ${r.fresh ? '<span class="tag-new">New</span>' : ""}
         <span class="since">${ago(a.signal_at)}<br>${dayTime(a.signal_at)}</span></div>
       <div class="lv"><div><span>Entry</span><b>${price(a.entry)}</b></div><div><span>Stop</span><b class="neg">${price(a.stop_loss)}</b></div><div><span>Target</span><b class="pos">${price(a.take_profit)}</b></div></div>
       <div><div class="track"><span class="mid"></span><span class="dot" style="left:${pos}%;background:${col}"></span></div>
@@ -216,16 +225,19 @@
       $("c-win-sub").textContent = `${d.test.signals} signals, ${d.test.avg_net_r >= 0 ? "+" : ""}${d.test.avg_net_r}R avg after fees`;
     }
     $("sec-active").hidden = d.loading;
+    const w = d.same_side_warning;
+    $("same-side").hidden = !w;
+    if (w) $("same-side").textContent = `${w.count} of ${w.total} active signals are ${w.side.toLowerCase()}. Coins tend to move together, so these can win or lose at the same time. Don't put full risk on all of them at once.`;
     $("cards").innerHTML = act.length ? act.map(card).join("") :
       '<div class="empty-box">No active signals right now. The engine is waiting for a strong setup; the coins closest to one are listed below.</div>';
     $("sec-watch").hidden = d.loading || !wait.length;
     $("watch").innerHTML = wait.slice(0, 6).map((r) => `<div class="w">
-        <div class="top"><span class="coin" style="font-size:16px">${coin(r.symbol)}</span><span class="lean">leaning ${lean(r)}</span></div>
+        <div class="top"><span class="coin" style="font-size:16px">${coin(r.symbol)}${r.setup_forming ? '<span class="tag-forming">Setup forming</span>' : ""}</span><span class="lean">leaning ${lean(r)}</span></div>
         ${meter(r.strength)}<small>${Math.round(r.strength || 0)}% of the way to a signal${r.limited_history ? " · new coin, short history" : ""}</small></div>`).join("");
     $("sec-all").hidden = d.loading;
     $("all").innerHTML = rows.map((r) => {
-      if (r.state === "ACTIVE") return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status"><span class="side ${r.active.side}">${r.active.side}</span>${r.fresh ? ' <span class="tag-new">NEW</span>' : ""}</td><td>${lean(r)}</td><td>active since ${dayTime(r.active.signal_at)}</td><td>${lastSig(r)}</td></tr>`;
-      if (r.state === "WAIT") return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status" style="color:var(--wait)">WAIT</td><td>${lean(r)}</td><td>${meter(r.strength)}<span class="num">${Math.round(r.strength || 0)}%</span></td><td>${lastSig(r)}</td></tr>`;
+      if (r.state === "ACTIVE") return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status"><span class="side ${r.active.side}">${r.active.side === "LONG" ? "Long" : "Short"}</span>${r.fresh ? ' <span class="tag-new">New</span>' : ""}</td><td>${lean(r)}</td><td>active since ${dayTime(r.active.signal_at)}</td><td>${lastSig(r)}</td></tr>`;
+      if (r.state === "WAIT") return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status" style="color:var(--wait)">WAIT${r.setup_forming ? '<span class="tag-forming">forming</span>' : ""}</td><td>${lean(r)}</td><td>${meter(r.strength)}<span class="num">${Math.round(r.strength || 0)}%</span></td><td>${lastSig(r)}</td></tr>`;
       return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status faint">${r.state === "LOADING" ? "loading" : "unavailable"}</td><td colspan="3" class="faint">${esc(r.error || "")}</td></tr>`;
     }).join("");
     desktopNotify(act.filter((r) => r.fresh));
