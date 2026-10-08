@@ -1856,6 +1856,10 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         trend = "Bullish" if bullish_pct > bearish_pct else "Bearish"
 
     volatility_data = quantile_volatility(df, current_price, "WAIT")
+    if engine.get("active"):
+        engine["progress"] = signal_engine.progress(
+            {k: (float(v) if k in ("entry", "stop_loss", "take_profit") else v) for k, v in engine["active"].items()},
+            current_price)
     if final_verdict in ("LONG", "SHORT"):
         volatility_data["stop_loss"] = signal_engine.price_round(engine["stop_loss"])
         volatility_data["take_profit"] = signal_engine.price_round(engine["take_profit"])
@@ -2101,13 +2105,25 @@ def engine_signal(symbol):
         res = dict(get_signal_engine().signal(symbol))
     except Exception as e:
         return {"error": f"Signal engine unavailable: {str(e)[:160]}"}
-    for k in ("bar_time", "signal_at", "next_update"):
-        if res.get(k) is not None:
-            res[k] = res[k].isoformat() + "Z"
-    for k in ("entry", "stop_loss", "take_profit", "atr"):
-        if res.get(k) is not None:
-            res[k] = signal_engine.price_round(res[k])
-    return res
+    return _jsonable(res)
+
+
+def _jsonable(obj):
+    """Datetimes -> ISO strings, prices -> sensible precision (also nested)."""
+    import datetime as _dtm
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if k in ("entry", "stop_loss", "take_profit", "atr", "exit_price", "last_close", "price") and isinstance(v, float):
+                out[k] = signal_engine.price_round(v)
+            else:
+                out[k] = _jsonable(v)
+        return out
+    if isinstance(obj, list):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, _dtm.datetime):
+        return obj.replace(microsecond=0).isoformat() + "Z"
+    return obj
 
 
 # ============================================================
@@ -2466,6 +2482,27 @@ from papertrade import paper_bp, init_papertrade
 app.register_blueprint(paper_bp)
 limiter.limit("300 per minute")(paper_bp)
 init_papertrade(app, available_coins=AVAILABLE_COINS)
+
+
+# ============================================================
+# SIGNALS BOARD + SIGNAL ALERTS - signalboard.py
+# Reads signal engine v2 for every crypto coin after each 4h close,
+# stores every NEW signal once and notifies subscribed users (bell +
+# optional email). Page: /signals (login required).
+# ============================================================
+from signalboard import signalboard_bp, init_signalboard
+from mailer import send_email as _send_email
+app.register_blueprint(signalboard_bp)
+limiter.limit("60 per minute")(signalboard_bp)
+
+
+def _ticker_prices(symbols):
+    tickers = exchange.fetch_tickers(list(symbols))
+    return {s: float(t["last"]) for s, t in tickers.items() if t and t.get("last")}
+
+
+init_signalboard(app, engine_signal=engine_signal, coins=[c for c in AVAILABLE_COINS if not _is_forex_pair(c)],
+                 prices=_ticker_prices, send_email=_send_email)
 
 
 # ============================================================
