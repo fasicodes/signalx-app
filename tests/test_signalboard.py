@@ -212,5 +212,26 @@ e = u1.get("/api/signals/events").get_json()
 check(e["ok"] and e["events"][0]["signal_at"].endswith("Z") and len(e["events"]) >= 2, "recent events feed")
 pg = u1.get("/signals")
 check(pg.status_code == 200 and b"Live signals board" in pg.data and b"Signal alerts" in pg.data, "page renders")
+check("same_side_warning" in d and d["counts"]["forming"] >= 0, "board reports same-direction warning + forming count")
+STATE.update({"BTC/USDT": "old", "ETH/USDT": "old", "SOL/USDT": "new"})
+sb._board["bar"] = None
+sb.board_step(nxt + timedelta(hours=8))
+d = u1.get("/api/signals/board").get_json()
+w = d["same_side_warning"]
+check(w and w["side"] == "LONG" and w["count"] == 3 and w["total"] == 3, "3 active signals the same way -> warning")
+STATE.update({"SOL/USDT": "wait"})
+
+print("\n[4] one-click unsubscribe")
+sb._hooks["secret"] = "unit-secret"
+html = sb._email_html([{"symbol": "A/USDT", "side": "LONG", "entry": 1, "stop_loss": 0.9, "take_profit": 1.05, "confidence": 70}], user_id=1)
+import re as _re
+tok = _re.search(r"unsubscribe\?t=([^\"]+)", html).group(1)
+check(sb._unsub_user(tok) == 1 and sb._unsub_user(tok + "x") is None, "signed token, tampering rejected")
+r = cl.get("/signals/unsubscribe?t=" + tok)
+q.execute("SELECT email, enabled FROM signal_alert_subs WHERE user_id=1")
+row = q.fetchone()
+check(r.status_code == 200 and b"Email alerts are off" in r.data and row["email"] == 0 and row["enabled"] == 1,
+      "no login needed: email off, bell alerts kept")
+check(cl.get("/signals/unsubscribe?t=bad").status_code == 400, "bad link -> clear message")
 
 print(f"\nALL {passed} CHECKS PASSED")
