@@ -552,9 +552,10 @@ def live_scan(timeframe, now=None):
             print(f"[trackrecord] live scan {symbol} failed: {e}")
             continue
         _count_verdict(counts, "LIVE", timeframe, sig["verdict"])
-        if sig["verdict"] in ("LONG", "SHORT") and symbol not in open_syms:
+        # only signals that started on the candle that just closed (older ones were already recorded or predate the record)
+        if sig["verdict"] in ("LONG", "SHORT") and sig.get("fresh") and symbol not in open_syms:
             with _Cursor() as cur:
-                _insert_signal(cur, "LIVE", symbol, timeframe, sig, sig["bar_time"], tf_sec)
+                _insert_signal(cur, "LIVE", symbol, timeframe, sig, sig["active"]["bar_time"], tf_sec)
     _add_counts("LIVE", counts)
     _cache.clear()
 
