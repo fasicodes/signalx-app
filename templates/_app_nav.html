@@ -1,100 +1,149 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0a100e">
-<title>Signals FM</title>
-<meta name="robots" content="noindex">
-<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261008">
-<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
-{% include '_analytics.html' ignore missing %}
-</head>
-<body class="app">
-{% set active = 'home' %}
-{% include '_app_nav.html' %}
-
-<main class="d-wrap" id="main">
-  <div class="d-col">
-    <button class="d-coin" id="coin-btn" type="button" aria-haspopup="dialog" aria-controls="coin-sheet">
-      <img id="coin-icon" src="" alt="">
-      <span><span class="sym" id="coin-sym">BTC/USDT</span><span class="kind" id="coin-kind">Crypto</span></span>
-      <span class="px"><b class="tnum" id="coin-price">--</b><small class="tnum" id="coin-chg">&nbsp;</small></span>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-    </button>
-
-    <section class="d-card d-sig" id="sig" data-state="LOADING" aria-live="polite">
-      <div class="d-sig-top">
-        <div>
-          <span class="d-pill" id="sig-pill" hidden></span>
-          <p class="d-verdict" id="sig-verdict">Loading</p>
-        </div>
-        <div class="d-prob" id="sig-prob" hidden><b class="tnum" id="sig-prob-v">--</b><span id="sig-prob-l">win chance</span></div>
-      </div>
-      <p class="d-status" id="sig-status">Reading the market…</p>
-      <div id="sig-body"></div>
-    </section>
-
-    <section class="d-card" id="brief-card" hidden>
-      <div class="d-head"><h2 class="d-h2">Market brief</h2><p class="d-note" id="brief-time"></p></div>
-      <dl class="d-brief" id="brief"></dl>
-      <p class="d-note" style="margin-top:10px">Context from 4-hour candles. Not a signal on its own.</p>
-    </section>
-  </div>
-
-  <div class="d-col">
-    <section class="d-card">
-      <div class="d-head">
-        <h2 class="d-h2" id="chart-title">Chart</h2>
-        <div class="d-tf" role="group" aria-label="Chart timeframe">
-          <button type="button" data-tf="1h" aria-pressed="false">1h</button>
-          <button type="button" data-tf="4h" aria-pressed="true">4h</button>
-          <button type="button" data-tf="1d" aria-pressed="false">1D</button>
+{# App navigation for logged-in pages: top bar (all sizes) + bottom tab bar (phones).
+   Set `active` before including: home | signals | demo | bot | more #}
+<header class="an-top">
+  <div class="an-top-in">
+    <a href="/" class="an-brand" aria-label="Signals FM home">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="" width="32" height="27"><span>Signals FM</span>
+    </a>
+    <nav class="an-links" aria-label="Main">
+      <a href="/"{% if active == 'home' %} aria-current="page"{% endif %}>Home</a>
+      <a href="/signals"{% if active == 'signals' %} aria-current="page"{% endif %}>Signals</a>
+      <a href="/demo-trading"{% if active == 'demo' %} aria-current="page"{% endif %}>Demo trading</a>
+      <a href="/auto-trading"{% if active == 'bot' %} aria-current="page"{% endif %}>Auto-trade</a>
+      <a href="/track-record">Track record</a>
+      <a href="/tools">Tools</a>
+    </nav>
+    <div class="an-right">
+      <button class="an-icon" id="an-theme" type="button" aria-label="Switch light or dark theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
+      </button>
+      <div class="an-pop-wrap">
+        <button class="an-icon" id="an-bell" type="button" aria-label="Notifications" aria-expanded="false" aria-controls="an-notes">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+          <span class="an-badge" id="an-badge" hidden></span>
+        </button>
+        <div class="an-pop" id="an-notes" hidden>
+          <div class="an-pop-head"><b>Notifications</b><button type="button" class="an-link-btn" id="an-readall">Mark all read</button></div>
+          <div class="an-pop-list" id="an-notes-list"><p class="an-empty">Loading…</p></div>
+          <a class="an-pop-foot" href="/signals#alerts">Signal alert settings</a>
         </div>
       </div>
-      <div class="d-chart" id="chart"><div class="d-chart-msg" id="chart-msg">Loading chart…</div></div>
-      <p class="d-credit">Signals are made on 4-hour candles; dashed lines show the active signal's levels. Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>.</p>
-    </section>
-
-    <section class="d-card" id="others">
-      <div class="d-head"><h2 class="d-h2">Signals right now</h2><a class="d-more-link" href="/signals">All coins</a></div>
-      <div class="d-warn" id="others-warn" hidden></div>
-      <div class="d-strip" id="others-list"><p class="d-empty">Loading…</p></div>
-    </section>
-
-    <section class="d-card" id="proof" hidden>
-      <div class="d-head"><h2 class="d-h2">How the engine is tested</h2></div>
-      <p class="d-copy" style="margin:0" id="proof-text"></p>
-      <div class="d-proof" id="proof-stats"></div>
-      <a class="d-more-link" href="/track-record">See the track record</a>
-    </section>
+      <div class="an-pop-wrap">
+        <button class="an-avatar" id="an-user" type="button" aria-label="Account menu" aria-expanded="false" aria-controls="an-menu">
+          {{ (user_email or session.get('email') or '?')[:1] | upper }}
+        </button>
+        <div class="an-pop an-menu" id="an-menu" hidden>
+          <p class="an-menu-email">{{ user_email or session.get('email') or '' }}</p>
+          <a href="/advanced">Advanced analysis</a>
+          <a href="/track-record">Track record</a>
+          <a href="/tools">Trading tools</a>
+          <a href="/signals#alerts">Signal alerts</a>
+          <a href="/risk-disclosure">Risk disclosure</a>
+          <button type="button" id="an-logout">Log out</button>
+        </div>
+      </div>
+    </div>
   </div>
-</main>
+</header>
 
-<footer class="d-foot">
-  Signals come from a model and lose regularly; each loss is about twice the size of each win. Results include 0.12% fees.
-  Not financial advice. <a href="/advanced">Advanced analysis</a> · <a href="/risk-disclosure">Risk disclosure</a>
-</footer>
+<nav class="an-tabs" aria-label="App">
+  <a href="/"{% if active == 'home' %} aria-current="page"{% endif %}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg><span>Home</span></a>
+  <a href="/signals"{% if active == 'signals' %} aria-current="page"{% endif %}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg><span>Signals</span></a>
+  <a href="/demo-trading"{% if active == 'demo' %} aria-current="page"{% endif %}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-3 3 2 4-5"/></svg><span>Demo</span></a>
+  <a href="/auto-trading"{% if active == 'bot' %} aria-current="page"{% endif %}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/></svg><span>Bot</span></a>
+  <button type="button" id="an-more"{% if active == 'more' %} aria-current="page"{% endif %} aria-expanded="false" aria-controls="an-sheet">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>More</span></button>
+</nav>
 
-<div class="d-sheet" id="coin-sheet" hidden>
-  <div class="d-sheet-panel" role="dialog" aria-modal="true" aria-label="Choose a market">
+<div class="an-sheet" id="an-sheet" hidden>
+  <div class="an-sheet-panel" role="dialog" aria-modal="true" aria-label="More">
     <span class="an-grip" aria-hidden="true"></span>
-    <div class="d-sheet-head">
-      <input class="d-search" id="coin-search" type="search" placeholder="Search coins and pairs" autocomplete="off" aria-label="Search">
-      <button class="d-close" id="coin-close" type="button" aria-label="Close">&times;</button>
-    </div>
-    <div class="d-tabs2" role="group" aria-label="Market">
-      <button type="button" data-kind="crypto" aria-pressed="true">Crypto</button>
-      <button type="button" data-kind="forex" aria-pressed="false">Forex &amp; gold</button>
-    </div>
-    <div class="d-list" id="coin-list"></div>
+    <p class="an-menu-email">{{ user_email or session.get('email') or '' }}</p>
+    <a href="/track-record">Track record</a>
+    <a href="/tools">Trading tools</a>
+    <a href="/advanced">Advanced analysis</a>
+    <a href="/signals#alerts">Signal alerts</a>
+    <a href="/risk-disclosure">Risk disclosure</a>
+    <button type="button" class="an-sheet-logout">Log out</button>
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}?v=20261008" defer></script>
-</body>
-</html>
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  try { root.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "dark"); } catch (e) {}
+  var $ = function (id) { return document.getElementById(id); };
+  $("an-theme").addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("signalsfm-theme", next); } catch (e) {}
+    document.dispatchEvent(new CustomEvent("themechange"));
+  });
+
+  function toggle(btn, pop, open) {
+    var willOpen = open === undefined ? pop.hidden : open;
+    pop.hidden = !willOpen;
+    btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    return willOpen;
+  }
+  var pops = [[$("an-bell"), $("an-notes")], [$("an-user"), $("an-menu")]];
+  pops.forEach(function (p) {
+    p[0].addEventListener("click", function (e) {
+      e.stopPropagation();
+      pops.forEach(function (q) { if (q !== p) toggle(q[0], q[1], false); });
+      if (toggle(p[0], p[1]) && p[1].id === "an-notes") loadNotes();
+    });
+  });
+  document.addEventListener("click", function (e) {
+    pops.forEach(function (p) { if (!p[1].contains(e.target)) toggle(p[0], p[1], false); });
+  });
+  var sheet = $("an-sheet"), more = $("an-more");
+  more.addEventListener("click", function () { sheet.hidden = false; more.setAttribute("aria-expanded", "true"); });
+  sheet.addEventListener("click", function (e) { if (e.target === sheet) { sheet.hidden = true; more.setAttribute("aria-expanded", "false"); } });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    sheet.hidden = true;
+    pops.forEach(function (p) { toggle(p[0], p[1], false); });
+  });
+
+  function logout() {
+    fetch("/api/logout", { method: "POST", credentials: "same-origin" }).finally(function () { location.href = "/"; });
+  }
+  $("an-logout").addEventListener("click", logout);
+  sheet.querySelector(".an-sheet-logout").addEventListener("click", logout);
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function ago(iso) {
+    if (!iso) return "";
+    var d = new Date(/Z$|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + "Z");
+    var m = Math.max(0, Math.round((Date.now() - d) / 60000));
+    if (m < 60) return m + " min ago";
+    var h = Math.floor(m / 60);
+    return h < 48 ? h + " h ago" : Math.floor(h / 24) + " days ago";
+  }
+  function badge() {
+    fetch("/api/notifications/unread-count", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
+      var n = d.unread_count || 0, b = $("an-badge");
+      b.hidden = !n; b.textContent = n > 9 ? "9+" : n;
+    }).catch(function () {});
+  }
+  function loadNotes() {
+    fetch("/api/notifications?limit=12", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
+      var list = d.notifications || [];
+      $("an-notes-list").innerHTML = list.length ? list.map(function (n) {
+        return '<div class="an-note' + (n.is_read ? "" : " unread") + '"><b>' + esc(n.title) + "</b><span>" + esc(n.message) + "</span><small>" + ago(n.created_at) + "</small></div>";
+      }).join("") : '<p class="an-empty">No notifications yet. Turn on signal alerts to hear about new signals.</p>';
+    }).catch(function () { $("an-notes-list").innerHTML = '<p class="an-empty">Notifications could not load. Try again in a moment.</p>'; });
+  }
+  $("an-readall").addEventListener("click", function () {
+    fetch("/api/notifications/read-all", { method: "POST", credentials: "same-origin" }).then(function () { badge(); loadNotes(); });
+  });
+  badge();
+  setInterval(badge, 60000);
+})();
+</script>
