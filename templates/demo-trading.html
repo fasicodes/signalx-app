@@ -81,7 +81,9 @@
     .dt-grid .dt-tabs { order: 4; }
     .dt-acct { gap: 12px; }
     .dt-brand .sub, .dt-brand img { display: none; }
+    .dt-brand { flex-wrap: wrap; row-gap: 6px; }
   }
+  @media (max-width: 420px) { .dt-brand .pill .long { display: none; } }
   @media (prefers-reduced-motion: reduce) { .dt-markets { transition: none; } }
 
   /* ---------- markets ---------- */
@@ -256,7 +258,7 @@
       <a href="/" class="back-link" title="Back to dashboard">← Dashboard</a>
       <img src="{{ url_for('static', filename='logo.png') }}" alt="">
       <span class="name">Signals FM</span><span class="sub">Demo Trading</span>
-      <span class="pill" title="Live market prices, virtual money">PRACTICE · VIRTUAL USDT</span>
+      <span class="pill" title="Live market prices, virtual money">PRACTICE<span class="long"> · VIRTUAL USDT</span></span>
     </div>
     <div class="dt-acct" aria-live="polite">
       <div class="acct-kv"><span>Equity<button class="help" data-term="equity" aria-label="What is equity?">?</button></span><b id="a-equity">—</b></div>
