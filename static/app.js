@@ -102,9 +102,58 @@
     document.title = `${sym} | Signals FM`;
     $("chart-title").textContent = `${base(sym)} chart`;
     renderLoading();
+    updateProLinks();
     loadEngine();
     loadChart();
+    loadInternals();
     renderOthers();
+  }
+
+  // ---------------------------------------------------------------- pro terminal links (carry the coin)
+  function updateProLinks() {
+    const q = `?coin=${encodeURIComponent(S.coin)}`;
+    document.querySelectorAll(".d-tool[data-pro]").forEach((a) => { a.href = `/advanced${q}#${a.dataset.pro}`; });
+    const link = (id, href) => { const el = $(id); if (el) el.href = href; };
+    link("pt-open", `/advanced${q}`);
+    link("adv-chart-link", `/advanced${q}#livechart`);
+    link("internals-link", `/advanced${q}#microstructure`);
+  }
+
+  // ---------------------------------------------------------------- market internals (the analysis channels)
+  const cap = (x) => (x ? String(x).charAt(0).toUpperCase() + String(x).slice(1).toLowerCase().replace(/_/g, " ") : "");
+  async function loadInternals(quiet) {
+    const sym = S.coin;
+    if (!$("internals") || !$("internals-tiles")) return;      // page without the card
+    if (S.kind !== "crypto") { $("internals").hidden = true; return; }
+    if (!quiet) { $("internals").hidden = false; $("internals-tiles").innerHTML = '<p class="d-empty">Reading the order book…</p>'; }
+    let d;
+    try { d = await getJSON(`/signal?coin=${encodeURIComponent(sym)}&timeframe=1h`); } catch (e) { return; }
+    if (sym !== S.coin) return;
+    if (d.error) { $("internals-tiles").innerHTML = `<p class="d-empty">These readings are not available right now: ${esc(d.error)}</p>`; return; }
+    const ofi = d.order_flow || {}, vp = d.toxic_flow || {}, rg = d.market_regime || {}, ms = d.market_strength || {};
+    const f = d.funding_open_interest || {}, mg = (d.liquidity_magnet_target || {}).magnet, cr = d.market_crash_risk || {};
+    const num = (v) => v != null && !isNaN(v);
+    const tox = { HIGH_TOXICITY: "High: informed traders are active", MODERATE_TOXICITY: "Moderate", LOW_TOXICITY: "Low: calm, mixed flow" };
+    const verdict = String(d.final_verdict || "WAIT").toLowerCase();
+    const tiles = [
+      ["Order flow", num(ofi.ofi_score) ? signed(ofi.ofi_score, 2) : "--", num(ofi.ofi_score) ? (ofi.ofi_score >= 0 ? "Buyers more aggressive" : "Sellers more aggressive") : "No order-book data",
+       num(ofi.ofi_score) ? (ofi.ofi_score >= 0 ? "c-long" : "c-short") : ""],
+      ["Toxic flow (VPIN)", num(vp.vpin_score) ? Number(vp.vpin_score).toFixed(2) : "--", tox[vp.toxicity] || "No trade data", ""],
+      ["Market regime", rg.regime === "Trending" || rg.regime === "Ranging" ? rg.regime : "--", "Hidden Markov model on 1h candles", ""],
+      ["Market strength", num(ms.score) ? `${Math.round(ms.score)}/100` : "--", cap(ms.label) || "No data",
+       ms.bias === "BUY" ? "c-long" : ms.bias === "SELL" ? "c-short" : ""],
+      ["Funding rate", num(f.funding_rate_pct) ? signed(f.funding_rate_pct, 4) + "%" : "--",
+       num(f.funding_rate_pct) ? (f.funding_rate_pct >= 0 ? "Longs pay shorts" : "Shorts pay longs") : "No perpetual market", ""],
+      ["Liquidity magnet", mg ? price(mg.price) : "--", mg ? `${mg.side === "SUPPORT" ? "Support" : "Resistance"}, ${mg.distance_pct}% away` : "No large order cluster",
+       mg ? (mg.side === "SUPPORT" ? "c-long" : "c-short") : ""],
+      ["Crash risk", num(cr.score) ? `${Math.round(cr.score)}/100` : "--", cap(cr.label) || "No data",
+       cr.label === "ELEVATED" ? "c-short" : cr.label === "WATCH" ? "c-amber" : ""],
+      ["Channels agreeing", d.concept_total ? `${d.concept_agree_count} of ${d.concept_total}` : "--",
+       d.concept_total ? `with the ${verdict} verdict` : "No directional verdict to compare", ""],
+    ];
+    $("internals").hidden = false;
+    $("internals-tiles").innerHTML = tiles.map(([k, v, sub, cls]) =>
+      `<dl class="d-tile"><dt>${esc(k)}</dt><dd class="tnum ${cls}">${esc(v)}<small>${esc(sub)}</small></dd></dl>`).join("");
   }
 
   // ---------------------------------------------------------------- signal panel
@@ -448,6 +497,7 @@
     selectCoin(pickDefault());
     setInterval(() => { if (visible()) loadEngine(true); }, 30000);
     setInterval(() => { if (visible()) loadBoard(); }, 60000);
+    setInterval(() => { if (visible()) loadInternals(true); }, 60000);
     setInterval(refreshChart, 30000);
     document.addEventListener("visibilitychange", () => { if (visible()) { loadEngine(true); refreshChart(); } });
   }
