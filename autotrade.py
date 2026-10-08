@@ -868,10 +868,14 @@ def get_signal(symbol, timeframe, max_age_sec=300):
         if res.get("error"):
             raise RuntimeError(res["error"])
         sl_pct, tp_pct = _f(res.get("sl_pct")), _f(res.get("tp_pct"))
+        active = res.get("active") or {}
         summary = {
             "symbol": symbol,
             "timeframe": res.get("timeframe") or "4h",
-            "verdict": res.get("verdict"),
+            # the bot only enters on a signal from the candle that just closed, never late
+            "verdict": res.get("verdict") if res.get("fresh") else "WAIT",
+            "active_side": active.get("side"),
+            "active_since": active.get("signal_at"),
             "confidence": _f(res.get("confidence"), 0.0),
             "volatility_pct": sl_pct,
             "reward_risk": round(tp_pct / sl_pct, 4) if sl_pct and tp_pct else None,
