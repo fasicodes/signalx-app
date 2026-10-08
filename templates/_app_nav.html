@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a100e">
+<title>Signals FM</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261008">
+<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
+{% include '_analytics.html' ignore missing %}
+</head>
+<body class="app">
+{% set active = 'home' %}
+{% include '_app_nav.html' %}
+
+<main class="d-wrap" id="main">
+  <div class="d-col">
+    <button class="d-coin" id="coin-btn" type="button" aria-haspopup="dialog" aria-controls="coin-sheet">
+      <img id="coin-icon" src="" alt="">
+      <span><span class="sym" id="coin-sym">BTC/USDT</span><span class="kind" id="coin-kind">Crypto</span></span>
+      <span class="px"><b class="tnum" id="coin-price">--</b><small class="tnum" id="coin-chg">&nbsp;</small></span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+
+    <section class="d-card d-sig" id="sig" data-state="LOADING" aria-live="polite">
+      <div class="d-sig-top">
+        <div>
+          <span class="d-pill" id="sig-pill" hidden></span>
+          <p class="d-verdict" id="sig-verdict">Loading</p>
+        </div>
+        <div class="d-prob" id="sig-prob" hidden><b class="tnum" id="sig-prob-v">--</b><span id="sig-prob-l">win chance</span></div>
+      </div>
+      <p class="d-status" id="sig-status">Reading the market…</p>
+      <div id="sig-body"></div>
+    </section>
+
+    <section class="d-card" id="brief-card" hidden>
+      <div class="d-head"><h2 class="d-h2">Market brief</h2><p class="d-note" id="brief-time"></p></div>
+      <dl class="d-brief" id="brief"></dl>
+      <p class="d-note" style="margin-top:10px">Context from 4-hour candles. Not a signal on its own.</p>
+    </section>
+  </div>
+
+  <div class="d-col">
+    <section class="d-card">
+      <div class="d-head">
+        <h2 class="d-h2" id="chart-title">Chart</h2>
+        <div class="d-tf" role="group" aria-label="Chart timeframe">
+          <button type="button" data-tf="1h" aria-pressed="false">1h</button>
+          <button type="button" data-tf="4h" aria-pressed="true">4h</button>
+          <button type="button" data-tf="1d" aria-pressed="false">1D</button>
+        </div>
+      </div>
+      <div class="d-chart" id="chart"><div class="d-chart-msg" id="chart-msg">Loading chart…</div></div>
+      <p class="d-credit">Signals are made on 4-hour candles; dashed lines show the active signal's levels. Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>.</p>
+    </section>
+
+    <section class="d-card" id="others">
+      <div class="d-head"><h2 class="d-h2">Signals right now</h2><a class="d-more-link" href="/signals">All coins</a></div>
+      <div class="d-warn" id="others-warn" hidden></div>
+      <div class="d-strip" id="others-list"><p class="d-empty">Loading…</p></div>
+    </section>
+
+    <section class="d-card" id="proof" hidden>
+      <div class="d-head"><h2 class="d-h2">How the engine is tested</h2></div>
+      <p class="d-copy" style="margin:0" id="proof-text"></p>
+      <div class="d-proof" id="proof-stats"></div>
+      <a class="d-more-link" href="/track-record">See the track record</a>
+    </section>
+  </div>
+</main>
+
+<footer class="d-foot">
+  Signals come from a model and lose regularly; each loss is about twice the size of each win. Results include 0.12% fees.
+  Not financial advice. <a href="/advanced">Advanced analysis</a> · <a href="/risk-disclosure">Risk disclosure</a>
+</footer>
+
+<div class="d-sheet" id="coin-sheet" hidden>
+  <div class="d-sheet-panel" role="dialog" aria-modal="true" aria-label="Choose a market">
+    <span class="an-grip" aria-hidden="true"></span>
+    <div class="d-sheet-head">
+      <input class="d-search" id="coin-search" type="search" placeholder="Search coins and pairs" autocomplete="off" aria-label="Search">
+      <button class="d-close" id="coin-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="d-tabs2" role="group" aria-label="Market">
+      <button type="button" data-kind="crypto" aria-pressed="true">Crypto</button>
+      <button type="button" data-kind="forex" aria-pressed="false">Forex &amp; gold</button>
+    </div>
+    <div class="d-list" id="coin-list"></div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}?v=20261008" defer></script>
+</body>
+</html>
