@@ -36,7 +36,7 @@
         <img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM" style="height:32px; width:auto;">
         <span class="brand-name">Signals FM</span>
       </div>
-      <span class="brand-tagline">Advanced analysis</span>
+      <span class="brand-tagline">Pro terminal</span>
     </div>
     <div class="topbar-right">
       <div class="live-clock"><span class="dot"></span><span id="clock-text">--:--:--</span></div>
@@ -45,7 +45,7 @@
 
       <a href="/auto-trading" style="margin-left:8px;background:var(--panel-raised);border:1px solid var(--line);color:var(--long);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">AUTO TRADE</a>
 
-      <a href="/" style="margin-left:12px;background:var(--accent);border:1px solid var(--accent);color:#03140b;border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">SIMPLE VIEW</a>
+      <a href="/" style="margin-left:12px;background:var(--accent);border:1px solid var(--accent);color:#03140b;border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">HOME</a>
       <a href="/signals" style="margin-left:8px;background:var(--panel-raised);border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">SIGNALS</a>
       <a href="/track-record" style="margin-left:8px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">TRACK RECORD</a>
 
@@ -129,7 +129,7 @@
       <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="side-drawer-brand-logo">
       <div class="side-drawer-brand-text">
         <span class="side-drawer-brand-name">Signals FM</span>
-        <span class="side-drawer-brand-tag">Advanced analysis</span>
+        <span class="side-drawer-brand-tag">Pro terminal</span>
       </div>
     </div>
     <div class="side-drawer-head">
@@ -257,6 +257,7 @@
         <option value="ATOM/USDT">ATOM / USDT</option>
       </optgroup>
       <optgroup label="FOREX">
+        <option value="XAU/USD">XAU / USD</option>
         <option value="EUR/USD">EUR / USD</option>
         <option value="USD/JPY">USD / JPY</option>
         <option value="GBP/USD">GBP / USD</option>
@@ -1247,7 +1248,7 @@
 
 </div>
 
-<script src="/static/script.js?v=20260814-accuracy-fix"></script>
+<script src="/static/script.js?v=20261008-pro"></script>
 <script>
 // Standalone controller for the homepage info sidebar (Contact/About/
 // Privacy/Terms/Disclaimer). Fully independent of script.js and the
@@ -2934,5 +2935,37 @@
 </script>
 
 <script src="{{ url_for('static', filename='premium-ui.js') }}?v=20260814-premium-2"></script>
+<script>
+/* Deep links from the app menu: /advanced?coin=ETH/USDT#livechart opens that coin on that tab.
+   Tabs: microstructure, extended, liquidity, livechart. Side-menu sections: watchlist, alerts, risk-calc,
+   active-trades, trade-history, trade-journal, pnl-dashboard, about, contact, privacy, terms, disclaimer. */
+(function () {
+  var PANELS = ["microstructure", "extended", "liquidity", "livechart"];
+  var INFOS = ["watchlist", "alerts", "risk-calc", "active-trades", "trade-history", "trade-journal", "pnl-dashboard",
+               "about", "contact", "privacy", "terms", "disclaimer"];
+  var ran = false;
+  function go() {
+    var coin = (new URLSearchParams(location.search).get("coin") || "").toUpperCase();
+    var hash = (location.hash || "").replace("#", "");
+    var sel = document.getElementById("coin-select");
+    if (coin && sel && [].some.call(sel.options, function (o) { return o.value === coin; }) && sel.value !== coin) {
+      if (typeof selectCoin === "function") selectCoin(coin); else { sel.value = coin; sel.dispatchEvent(new Event("change")); }
+    }
+    if (INFOS.indexOf(hash) >= 0) {
+      var b = document.querySelector('.home-info-tab[data-info="' + hash + '"]');
+      if (b) b.click();
+      return;
+    }
+    var wantsPanel = PANELS.indexOf(hash) >= 0;
+    if ((coin || wantsPanel) && !ran && typeof runAnalysis === "function") { ran = true; runAnalysis(true); }
+    if (wantsPanel) {
+      var t = document.querySelector('.panel-tab[data-panel="' + hash + '"]');
+      if (t) { t.click(); setTimeout(function () { t.scrollIntoView({ behavior: "smooth", block: "start" }); }, 400); }
+    }
+  }
+  if (document.readyState === "complete") setTimeout(go, 0); else window.addEventListener("load", function () { setTimeout(go, 0); });
+  window.addEventListener("hashchange", function () { ran = true; go(); });
+})();
+</script>
 </body>
 </html>
