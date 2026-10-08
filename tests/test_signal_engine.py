@@ -113,13 +113,42 @@ Xall = se.assemble(se.coin_features(DATA["ETH/USDT"]), se.btc_block(se.coin_feat
 pl2, ps2, _, _ = se.score(Xall.iloc[[899]])
 check(abs(pl2[0] - pl[0]) < 1e-9 and abs(ps2[0] - ps[0]) < 1e-9, "later candles do not change an earlier signal")
 for side in ("LONG", "SHORT"):
-    sl, tp = se.levels(side, res["entry"], res["atr"])
-    ok = (sl < res["entry"] < tp) if side == "LONG" else (tp < res["entry"] < sl)
-    check(ok and abs(abs(res["entry"] - sl) - 2 * abs(tp - res["entry"])) < 1e-9, f"{side} stop is twice the target distance")
-if res["verdict"] != "WAIT":
-    check(res["stop_loss"] is not None and res["take_profit"] is not None, "levels returned with a signal")
+    e0 = res["last_close"]
+    sl, tp = se.levels(side, e0, res["atr"])
+    ok = (sl < e0 < tp) if side == "LONG" else (tp < e0 < sl)
+    check(ok and abs(abs(e0 - sl) - 2 * abs(tp - e0)) < 1e-9, f"{side} stop is twice the target distance")
+if res["active"]:
+    a = res["active"]
+    check(res["verdict"] == a["side"] and res["stop_loss"] == a["stop_loss"] and res["fresh"] == (a["bar_time"] == res["bar_time"]),
+          "active trade drives verdict, levels and freshness")
 else:
-    check(res["stop_loss"] is None and res["take_profit"] is None, "no levels on WAIT")
+    check(res["verdict"] == "WAIT" and res["stop_loss"] is None and not res["fresh"], "no active trade -> WAIT, no levels")
+check(res["bias"] in ("LONG", "SHORT") and res["strength"] is not None and res["strength"] > 0, "WAIT still shows bias + strength")
+
+# replay with a forced decision rule: active / last trade follow the one-at-a-time rules
+orig = se.decide
+k = {"n": 0}
+
+
+def every_9th(pl, ps):
+    k["n"] += 1
+    return (("LONG" if pl >= ps else "SHORT") if k["n"] % 9 == 0 else "WAIT"), max(pl, ps)
+
+
+se.decide = every_9th
+FX = se.coin_features(DATA["SOL/USDT"].iloc[:900])
+Xs = se.assemble(FX, se.btc_block(frames["BTC/USDT"]), mkt, "SOL/USDT")
+a1, b1, c1, d1 = se.score(Xs)
+act, last = se.replay(FX, a1, b1, c1, d1)
+check(last is not None and last["status"] in ("TP", "SL", "EXPIRED") and last["closed_at"] > last["signal_at"], "last closed trade reported")
+if act:
+    check(act["bars_held"] < 48 and act["expires_at"] > act["signal_at"], "active trade is still inside its 8-day window")
+se.decide = orig
+fake = {"side": "LONG", "entry": 100.0, "stop_loss": 94.0, "take_profit": 103.0}
+pr = se.progress(fake, 101.5)
+check(pr["pct"] == 50.0 and abs(pr["r_now"] - 0.25) < 1e-12 and pr["state"] == "running", "progress toward target")
+check(se.progress(fake, 97.0)["pct"] == -50.0 and se.progress(fake, 93.0)["state"] == "stop_touched", "progress toward stop")
+check(se.progress({**fake, "side": "SHORT", "stop_loss": 106.0, "take_profit": 97.0}, 97.0)["state"] == "target_touched", "short target")
 CLOCK["now"] = (T4[901] + pd.Timedelta(minutes=1)).to_pydatetime()
 res3 = eng.signal("ETH/USDT", CLOCK["now"])
 check(res3["bar_time"] == T4[900].to_pydatetime() and len(calls) > n_calls, "new candle close -> fresh signal")
