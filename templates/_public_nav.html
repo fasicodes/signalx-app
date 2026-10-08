@@ -14,7 +14,7 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
       </button>
       {% if session.get('user_id') %}
-        <a href="/" class="pbtn primary">Open dashboard</a>
+        <a href="/" class="pbtn primary"><span class="cta-long">Open dashboard</span><span class="cta-short">Dashboard</span></a>
       {% else %}
         <a href="/login" class="pbtn">Log in</a>
         <a href="/login" class="pbtn primary"><span class="cta-long">Create free account</span><span class="cta-short">Sign up</span></a>
