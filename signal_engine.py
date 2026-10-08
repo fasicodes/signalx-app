@@ -61,6 +61,7 @@ class _Model:
         self.cal_x = np.asarray(m["calibration"]["x"], dtype=float)
         self.cal_y = np.asarray(m["calibration"]["y"], dtype=float)
         self.threshold = float(m["threshold"])
+        self.watch_threshold = float(m.get("watch_threshold", m["threshold"]))
         self.sl_atr = float(m["levels"]["sl_atr"])
         self.tp_atr = float(m["levels"]["tp_atr"])
         self.max_bars = int(m["levels"]["max_bars"])
@@ -487,17 +488,17 @@ class LiveEngine:
         df["timestamp"] = pd.to_datetime(df["timestamp"])
         return closed_only(df, now)
 
-    def frame(self, symbol, bar, now=None):
+    def frame(self, symbol, bar, now=None, strict=True):
         hit = self._frames.get(symbol)
         if hit and hit[0] == bar:
             return hit[1]
         df = self.fetch(symbol, now=now)
-        if df is not None and len(df) and pd.Timestamp(df["timestamp"].iloc[-1]) < pd.Timestamp(bar):
+        if strict and df is not None and len(df) and pd.Timestamp(df["timestamp"].iloc[-1]) < pd.Timestamp(bar):
             time.sleep(2)                       # the exchange has not published the new candle yet
             df = self.fetch(symbol, now=now)
         if df is None or len(df) < 60:
             raise ValueError(f"Not enough 4h history for {symbol}.")
-        if pd.Timestamp(df["timestamp"].iloc[-1]) < pd.Timestamp(bar):
+        if strict and pd.Timestamp(df["timestamp"].iloc[-1]) < pd.Timestamp(bar):
             raise ValueError(f"The latest 4h candle for {symbol} is not available yet.")
         F = coin_features(df)
         self._frames[symbol] = (bar, F)
@@ -550,6 +551,8 @@ class LiveEngine:
                 "bias": "LONG" if p_long >= p_short else "SHORT",
                 # how close the current candle came to a signal (100 = signal threshold)
                 "strength": round(min(best_raw / m.threshold, 1.5) * 100, 1) if np.isfinite(best_raw) else None,
+                # close to a signal, but in a band that lost money when tested as signals -> watch only, never traded
+                "setup_forming": bool(not active and np.isfinite(best_raw) and best_raw >= m.watch_threshold),
                 "threshold": m.threshold,
                 "entry": active["entry"] if active else None,
                 "stop_loss": active["stop_loss"] if active else None,
@@ -561,6 +564,7 @@ class LiveEngine:
                 "active": active,
                 "last_closed": last,
                 "last_close": float(row["close"]),
+                "brief": market_brief(F),
                 "history_bars": int(len(F)),
                 "bar_time": bar_time,
                 "next_update": bar_time + timedelta(seconds=2 * TF_SEC),
@@ -586,6 +590,65 @@ def progress(active, price):
         state = "stop_touched"
     return {"price": float(price), "r_now": round(move / risk, 3), "pct": round(max(-100.0, min(100.0, pct)), 1),
             "move_pct": round(sgn * (float(price) / active["entry"] - 1) * 100, 2), "state": state}
+
+
+def brief_for(engine, symbol, now=None):
+    """Market brief for any symbol (forex too: markets close at weekends, so the
+    latest candle may be older than the last 4h slot - that is fine here)."""
+    bar = last_closed_bar(now)
+    key = ("brief", symbol)
+    hit = engine._frames.get(key)
+    if hit and hit[0] == bar:
+        return hit[1]
+    df = engine.fetch(symbol, now=now)
+    if df is None or len(df) < 60:
+        raise ValueError(f"Not enough 4h history for {symbol}.")
+    out = market_brief(coin_features(df))
+    engine._frames[key] = (bar, out)
+    return out
+
+
+def market_brief(F):
+    """Plain-language market context from a coin_features() frame (last closed 4h candle).
+    Works for any symbol with 4h candles (crypto or forex). Not a signal."""
+    if F is None or len(F) < 60:
+        return None
+    r = F.iloc[-1]
+
+    def num(k):
+        v = r.get(k)
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return None
+        return v if np.isfinite(v) else None
+
+    c = num("close")
+    d50, d200, hd50 = num("d_sma50"), num("d_sma200"), num("h_d_sma50")
+    if d50 is not None and d200 is not None and d50 > 0 and d200 > 0:
+        trend = "up"
+    elif d50 is not None and d200 is not None and d50 < 0 and d200 < 0:
+        trend = "down"
+    else:
+        trend = "sideways"
+    rsi = num("rsi14")
+    momentum = None if rsi is None else ("overbought" if rsi >= 70 else "oversold" if rsi <= 30 else
+                                         "strong" if rsi >= 55 else "weak" if rsi <= 45 else "neutral")
+    rank = num("atr_rank")
+    vol = None if rank is None else ("high" if rank >= 0.8 else "calm" if rank <= 0.2 else "normal")
+    tail = F.tail(20)
+    hi, lo = float(tail["high"].max()), float(tail["low"].min())
+    prev = F["close"].iloc[-7] if len(F) > 7 else None
+    return {
+        "price": c, "trend": trend, "daily_trend": None if hd50 is None else ("up" if hd50 > 0 else "down"),
+        "rsi": None if rsi is None else round(rsi, 1), "momentum": momentum,
+        "atr_pct": None if num("atr_pct") is None else round(num("atr_pct") * 100, 2), "volatility": vol,
+        "range_high": hi, "range_low": lo,
+        "to_high_pct": round((hi / c - 1) * 100, 2) if c else None,
+        "to_low_pct": round((lo / c - 1) * 100, 2) if c else None,
+        "change_24h_pct": round((c / float(prev) - 1) * 100, 2) if c and prev else None,
+        "bar_time": pd.Timestamp(r["timestamp"]).to_pydatetime(),
+    }
 
 
 def test_stats():
