@@ -502,7 +502,7 @@ function renderHero(data) {
 // of all 19 channels currently point the same way as that verdict) and
 // keeps a short rolling history, refreshing on its own every 10s.
 
-const ACCURACY_POLL_MS = 5000;
+const ACCURACY_POLL_MS = 30000; // /signal is cached ~30s on the server
 const ACCURACY_GAUGE_ARC = Math.PI * 50; // path radius 50, half-circle
 const ACCURACY_HISTORY_MAX = 6;
 let accuracyPollTimer = null;
