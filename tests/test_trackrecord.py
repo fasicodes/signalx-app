@@ -123,6 +123,24 @@ check(o["status"] == "EXPIRED" and o["bars_held"] == 48 and close_to(o["r"], 0.1
 o = tr.evaluate("LONG", 100, 98, 103, flat[:10])
 check(not o["resolved"] and o["bars_held"] == 10 and close_to(o["mfe_r"], 0.25), "still open: tracks best excursion")
 
+rng2 = np.random.default_rng(3)
+mism = 0
+for _ in range(300):
+    n_ = 60
+    cc = 100 * np.cumprod(1 + rng2.normal(0, 0.01, n_))
+    oo = np.r_[100, cc[:-1]] * (1 + rng2.normal(0, 0.004, n_))
+    hh = np.maximum(oo, cc) * (1 + rng2.uniform(0, 0.01, n_))
+    ll = np.minimum(oo, cc) * (1 - rng2.uniform(0, 0.01, n_))
+    side = "LONG" if rng2.random() < 0.5 else "SHORT"
+    e = cc[0]
+    sl_, tp_ = se.levels(side, e, e * 0.008)
+    bs = [bar(T0 + timedelta(hours=4 * i), oo[i], hh[i], ll[i], cc[i]) for i in range(1, n_)]
+    ref = tr.evaluate(side, e, sl_, tp_, bs)
+    st_, px, held = se.follow(side, e, sl_, tp_, oo, hh, ll, cc, 1)
+    if ref["status"] != st_ or not close_to(ref["exit_price"], px) or ref["bars_held"] != held:
+        mism += 1
+check(mism == 0, "engine's trade follower == track record rules (300 random trades)")
+
 print("\n[2] stats")
 rows = [
     {"id": 1, "symbol": "BTC/USDT", "timeframe": "4h", "side": "LONG", "confidence": 72, "r_multiple": 1.5, "status": "TP",
@@ -192,6 +210,17 @@ check(exp["status"] == out["status"] and close_to(exp["r"], out["r"]), "outcome 
 ok_seq = all(idx[trades[k + 1][1]] >= idx[trades[k][1]] + trades[k][2]["bars_held"] for k in range(len(trades) - 1))
 check(ok_seq, "one signal at a time per coin")
 check(counts["BACKTEST:4h"]["WAIT"] > 0 and sum(counts["BACKTEST:4h"].values()) > len(trades), "verdict counts kept (incl. WAIT)")
+# the dashboard's replay (active / last trade) agrees with the backtest from the same start candle
+FB = se.coin_features(FRAMES["BTC/USDT"])
+featsU = {s_: se.coin_features(d_) for s_, d_ in FRAMES.items()}
+XB = se.assemble(FB, se.btc_block(featsU["BTC/USDT"]), se.market_block(featsU), "BTC/USDT")
+calls_seen["n"] = 0
+res_bt = tr.backtest_frames(FRAMES, ["BTC/USDT"], T4[N - 300].to_pydatetime())["BTC/USDT"]
+calls_seen["n"] = 0
+pl_, ps_, cl_, cs_ = se.score(XB)
+act_, last_ = se.replay(FB, pl_, ps_, cl_, cs_, lookback=300)
+check(last_ is not None and res_bt and last_["bar_time"] == res_bt[-1][1] and last_["status"] == res_bt[-1][2]["status"],
+      "replay's last closed trade == backtest's last trade")
 
 orig_fetch, orig_coins = tr.fetch_history, tr._hooks.get("available_coins")
 tr._hooks["available_coins"] = ["BTC/USDT", "ETH/USDT"]
@@ -250,8 +279,16 @@ class FakeEngine:
         closed = df[df["timestamp"] + pd.Timedelta(hours=4) <= pd.Timestamp(now)]
         last = closed.iloc[-1]
         e = float(last["close"])
-        return {"verdict": "LONG", "confidence": 74.0, "p_long": 74.0, "entry": e, "stop_loss": e * 0.97,
-                "take_profit": e * 1.015, "bar_time": last["timestamp"].to_pydatetime()}
+        bt = last["timestamp"].to_pydatetime()
+        prev = closed.iloc[-2]
+        if symbol == "ETH/USDT" and STALE["on"]:   # an older trade still running -> not recorded again
+            return {"verdict": "LONG", "fresh": False, "confidence": 74.0, "entry": float(prev["close"]),
+                    "stop_loss": 1.0, "take_profit": 2.0, "active": {"bar_time": prev["timestamp"].to_pydatetime()}}
+        return {"verdict": "LONG", "fresh": True, "confidence": 74.0, "p_long": 74.0, "entry": e, "stop_loss": e * 0.97,
+                "take_profit": e * 1.015, "bar_time": bt, "active": {"bar_time": bt}}
+
+
+STALE = {"on": False}
 
 
 tr.run_backtests = lambda *a, **k: None
@@ -274,12 +311,18 @@ t_next = (base["timestamp"].iloc[-1] + pd.Timedelta(hours=4, minutes=1)).to_pyda
 acts = tr.engine_step(t_next)
 q = Conn().cursor(); q.execute("SELECT * FROM track_signals WHERE source='LIVE'"); live = q.fetchall()
 check("scan:4h" in acts and len(live) == 2, "candle close -> one signal per coin")
+STALE["on"] = True
 r = [x for x in live if x["symbol"] == "BTC/USDT"][0]
 check(pd.Timestamp(r["bar_time"]) == base["timestamp"].iloc[-1] and r["status"] == "OPEN", "uses the just-closed candle")
 check(close_to(r["entry_price"], base["close"].iloc[-1]) and close_to(r["stop_loss"], r["entry_price"] * 0.97), "entry + stop recorded")
 tr.engine_step(t_next + timedelta(hours=4))
 q = Conn().cursor(); q.execute("SELECT COUNT(*) AS n FROM track_signals WHERE source='LIVE'")
 check(q.fetchone()["n"] == 2, "no new signal while one is open on that coin")
+q.execute("DELETE FROM track_signals WHERE source='LIVE' AND symbol='ETH/USDT'")
+tr.engine_step(t_next + timedelta(hours=8))
+q.execute("SELECT COUNT(*) AS n FROM track_signals WHERE source='LIVE' AND symbol='ETH/USDT'")
+check(q.fetchone()["n"] == 0, "a trade that started on an older candle is not recorded late")
+STALE["on"] = False
 entry = r["entry_price"]
 ext = base.copy()
 t_last = ext["timestamp"].iloc[-1]
@@ -316,7 +359,7 @@ tr._cache.clear()
 d = cl.get("/api/track-record").get_json()
 check(d["ok"] and d["public"] and d["sources"]["BACKTEST"]["stats"]["signals"] == n and
       d["sources"]["LIVE"]["stats"]["signals"] == 1, "public API returns live + backtest stats")
-check(len(d["sources"]["LIVE"]["open"]) >= 1 and d["rules"]["max_bars"] == 48 and d["rules"]["model_test"]["signals"] > 0,
+check(isinstance(d["sources"]["LIVE"]["open"], list) and d["rules"]["max_bars"] == 48 and d["rules"]["model_test"]["signals"] > 0,
       "open signals, rules and model test stats exposed")
 page = cl.get("/track-record")
 check(page.status_code == 200 and b"Track record" in page.data, "public page renders")
