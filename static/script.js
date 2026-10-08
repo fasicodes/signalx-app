@@ -491,7 +491,9 @@ function renderHero(data) {
   document.getElementById("hero-macd").textContent = fmtNum(data.macd, 4);
 
   const tag = document.getElementById("hero-trend-tag");
-  tag.textContent = `${data.coin || ""} · ${data.timeframe || ""} · ${data.trend || "--"}`.toUpperCase();
+  const eng = data.engine || {};
+  const state = eng.active ? (eng.fresh ? "NEW 4H SIGNAL" : "ACTIVE 4H SIGNAL") : "4H ENGINE · NO SETUP";
+  tag.textContent = `${data.coin || ""} · ${state} · ${data.trend || "--"}`.toUpperCase();
 }
 
 /* ---------------------------- accuracy score (Ch.01-05 signaling-concept agreement) ---------------------------- */
@@ -500,7 +502,7 @@ function renderHero(data) {
 // of all 19 channels currently point the same way as that verdict) and
 // keeps a short rolling history, refreshing on its own every 10s.
 
-const ACCURACY_POLL_MS = 5000;
+const ACCURACY_POLL_MS = 30000; // /signal is cached ~30s on the server
 const ACCURACY_GAUGE_ARC = Math.PI * 50; // path radius 50, half-circle
 const ACCURACY_HISTORY_MAX = 6;
 let accuracyPollTimer = null;
@@ -626,8 +628,14 @@ function renderTier1(data) {
   const utcTime = (iso) => {
     if (!iso) return "--";
     const d = new Date(iso);
-    return isNaN(d) ? "--" : d.toISOString().slice(11, 16) + " UTC";
+    return isNaN(d) ? "--" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
+  const when = (iso) => {
+    const d = new Date(iso);
+    return isNaN(d) ? "--" : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+  const act = eng.active || null;
+  const prog = eng.progress || null;
 
   cards.push(channelCard({
     id: 1, title: "Win Probability", model: "signal engine v2 · 4h",
@@ -654,11 +662,18 @@ function renderTier1(data) {
     body: `
       <div class="dual-split">
         <div class="dual-item"><span class="dual-label">ENTRY (4H CLOSE)</span><span class="dual-value">${isTrade ? fmtPrice(eng.entry) : "--"}</span></div>
+        <div class="dual-item"><span class="dual-label">STARTED</span><span class="dual-value">${act ? when(act.signal_at) : "--"}</span></div>
         <div class="dual-item"><span class="dual-label">STOP LOSS</span><span class="dual-value text-short">${isTrade ? fmtPrice(data.stop_loss) : "--"}</span></div>
         <div class="dual-item"><span class="dual-label">TAKE PROFIT</span><span class="dual-value text-long">${isTrade ? fmtPrice(data.take_profit) : "--"}</span></div>
         <div class="dual-item"><span class="dual-label">TIME LIMIT</span><span class="dual-value">8 days</span></div>
       </div>
-      <div class="channel-detail">${isTrade ? `stop ${fmtPct(eng.sl_pct, 2)} away · target ${fmtPct(eng.tp_pct, 2)} away` : "levels appear when there is a LONG or SHORT signal"}</div>`
+      <div class="channel-detail">${isTrade
+        ? (prog ? (prog.state === "target_touched" ? "target touched at the live price (confirms at the 4h close)"
+                 : prog.state === "stop_touched" ? "stop touched at the live price (confirms at the 4h close)"
+                 : `live ${fmtPrice(prog.price)} · ${prog.move_pct >= 0 ? "+" : ""}${prog.move_pct}% · ${Math.abs(prog.pct)}% of the way to the ${prog.pct >= 0 ? "target" : "stop"}`)
+               : `stop ${fmtPct(eng.sl_pct, 2)} away · target ${fmtPct(eng.tp_pct, 2)} away`)
+          + (act ? ` · ends ${when(act.expires_at)}` : "")
+        : "levels appear while a LONG or SHORT signal is active"}</div>`
   }));
 
   cards.push(channelCard({
@@ -675,12 +690,17 @@ function renderTier1(data) {
       : `<div class="channel-detail">test results unavailable</div>`
   }));
 
+  const leanPct = eng.bias === "LONG" ? eng.p_long : eng.p_short;
   cards.push(channelCard({
     id: 4, title: "Decision", model: "top ~3% setups only",
-    body: `
-      ${badge(isTrade ? "TRADE" : "WAIT", isTrade ? "long" : "wait")}
+    body: isTrade ? `
+      ${badge(eng.fresh ? "NEW SIGNAL" : "ACTIVE", "long")}
       <div class="channel-main">${fmtPct(data.confidence_pct)}</div>
-      <div class="channel-detail">next check ${utcTime(eng.next_update)}</div>`
+      <div class="channel-detail">win probability when it started · next check ${utcTime(eng.next_update)}</div>`
+      : `
+      ${badge("WAIT", "wait")}
+      <div class="channel-main">${eng.strength != null ? Math.round(eng.strength) + "%" : "--"}</div>
+      <div class="channel-detail">of the way to a signal · leaning ${eng.bias || "--"} (${fmtPct(leanPct)}) · next check ${utcTime(eng.next_update)} · <a href="/signals" style="color:var(--accent)">see all coins</a></div>`
   }));
 
   cards.push(channelCard({
