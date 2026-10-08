@@ -271,6 +271,8 @@ AVAILABLE_COINS = [
 # the friendly "coming soon" guard that keeps a Forex selection from
 # hitting the crypto-only exchange and blowing up with a raw ccxt error.
 FOREX_PAIRS = [
+    # Metals
+    "XAU/USD",
     # Majors
     "EUR/USD", "USD/JPY", "GBP/USD", "USD/CHF", "AUD/USD",
     "USD/CAD", "NZD/USD",
@@ -314,54 +316,15 @@ FOREX_RESAMPLE = {
 
 
 def get_forex_candles(symbol, timeframe="1h", limit=200, since=None):
-    """Forex OHLC candles via Yahoo Finance (yfinance) - free, no API key.
-    NOTE: unlike the crypto/ccxt path, Yahoo has no order book, funding
-    rate, or open-interest data, so this only powers price/candle-based
-    features (chart + the price-action channels in generate_signal), not
-    the order-book channels (OFI, VPIN, depth profile, spoofing) or the
-    Liquidity Scanner, which stay crypto-only - see the /liquidity route.
-    """
-    import yfinance as yf
-
-    ticker = _forex_yf_symbol(symbol)
-    resample_rule = None
-    if timeframe in FOREX_RESAMPLE:
-        interval, period = FOREX_RESAMPLE[timeframe][0], "60d"
-        resample_rule = FOREX_RESAMPLE[timeframe][1]
-    else:
-        interval, period = FOREX_YF_DIRECT.get(timeframe, ("60m", "730d"))
-
-    data = yf.Ticker(ticker).history(period=period, interval=interval, auto_adjust=False)
-    if data is None or data.empty:
-        raise ValueError(f"No forex data available for {symbol} ({timeframe})")
-
-    data = data.reset_index()
-    time_col = "Datetime" if "Datetime" in data.columns else "Date"
-    df = pd.DataFrame({
-        "timestamp": pd.to_datetime(data[time_col], utc=True).dt.tz_localize(None),
-        "open": data["Open"].astype(float),
-        "high": data["High"].astype(float),
-        "low": data["Low"].astype(float),
-        "close": data["Close"].astype(float),
-        "volume": data["Volume"].astype(float) if "Volume" in data.columns else 0.0,
-    })
-
-    if resample_rule:
-        df = (
-            df.set_index("timestamp")
-            .resample(resample_rule)
-            .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
-            .dropna()
-            .reset_index()
-        )
-
-    if since is not None:
-        since_dt = pd.to_datetime(since, unit="ms")
-        df = df[df["timestamp"] >= since_dt].reset_index(drop=True)
-
-    df = df.tail(limit).reset_index(drop=True)
+    """Forex / gold OHLC candles. forex_data.py uses Twelve Data when
+    TWELVEDATA_API_KEY is set (reliable from servers) and Yahoo Finance
+    otherwise, with caching so many users on one chart cost one request.
+    No order book / funding exists for forex, so only price-based features
+    work for these pairs."""
+    import forex_data
+    df = forex_data.get_candles(symbol, timeframe=timeframe, limit=limit, since=since)
     if df.empty:
-        raise ValueError(f"No forex data available for {symbol} ({timeframe}) in the requested range")
+        raise ValueError(f"No forex data available for {symbol} ({timeframe})")
     return df
 
 
@@ -2143,6 +2106,19 @@ def home():
     if "user_id" not in session:
         return render_template("landing.html")
     return render_template(
+        "dashboard.html",
+        user_email=session.get("email", ""),
+        user_avatar=session.get("avatar_url"),
+        active="home",
+    )
+
+
+@app.route("/advanced", methods=["GET"])
+def advanced_dashboard():
+    # The full 27-channel analysis view (the previous dashboard).
+    if "user_id" not in session:
+        return redirect(url_for("login_page"))
+    return render_template(
         "design.html",
         user_email=session.get("email", ""),
         user_avatar=session.get("avatar_url"),
@@ -2185,15 +2161,67 @@ def signal_endpoint():
     if _is_forex_pair(coin):
         orderbook = False
 
+    key = (coin, timeframe, orderbook)
+    hit = _SIGNAL_RESPONSE_CACHE.get(key)
+    if hit and time.time() - hit[0] < _SIGNAL_RESPONSE_TTL:
+        return jsonify(hit[1])
     try:
         df = get_candles(symbol=coin, timeframe=timeframe)
         result = generate_signal(df, symbol=coin, include_orderbook=orderbook)
         result["coin"] = coin
         result["timeframe"] = timeframe
         _cache_signal_result(coin, result)
+        _SIGNAL_RESPONSE_CACHE[key] = (time.time(), result)
+        if len(_SIGNAL_RESPONSE_CACHE) > 300:
+            _SIGNAL_RESPONSE_CACHE.clear()
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+# /signal runs ~27 analysis channels (order book, HMM, ...). Many users and the
+# dashboard's polling would otherwise recompute them every few seconds.
+_SIGNAL_RESPONSE_CACHE = {}
+_SIGNAL_RESPONSE_TTL = 30
+_PRICE_CACHE = {}
+
+
+def _live_price_cached(symbol, ttl=10):
+    hit = _PRICE_CACHE.get(symbol)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    try:
+        price = float(get_live_price(symbol))
+    except Exception:
+        return hit[1] if hit else None
+    _PRICE_CACHE[symbol] = (time.time(), price)
+    return price
+
+
+@app.route("/api/engine", methods=["GET"])
+def engine_endpoint():
+    """Light endpoint for the dashboard: the v2 engine's state for one symbol
+    (active trade with live progress, or WAIT with lean/closeness), plus a
+    plain-language market brief. Forex gets the brief and chart only."""
+    coin = (request.args.get("coin") or "BTC/USDT").upper()
+    if coin not in AVAILABLE_COINS and coin not in FOREX_PAIRS:
+        return jsonify({"ok": False, "error": "Unknown coin or pair."}), 400
+    price = _live_price_cached(coin)
+    if _is_forex_pair(coin):
+        try:
+            brief = signal_engine.brief_for(get_signal_engine(), coin)
+            err = None
+        except Exception as e:
+            brief, err = None, f"Forex data is not available right now: {str(e)[:140]}"
+        return jsonify(_jsonable({"ok": True, "coin": coin, "asset": "forex", "price": price, "brief": brief,
+                                  "error": err, "engine": None}))
+    eng = engine_signal(coin)
+    if eng.get("active"):
+        eng["progress"] = signal_engine.progress(
+            {k: (float(v) if k in ("entry", "stop_loss", "take_profit") else v) for k, v in eng["active"].items()},
+            price if price is not None else eng.get("last_close"))
+    return jsonify(_jsonable({"ok": True, "coin": coin, "asset": "crypto", "price": price, "brief": eng.get("brief"),
+                              "engine": eng, "test": signal_engine.test_stats(), "error": eng.get("error")}))
 
 
 @app.route("/coins", methods=["GET"])
