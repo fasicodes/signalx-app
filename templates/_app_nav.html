@@ -1,18 +1,20 @@
-{# App navigation for logged-in pages: top bar (all sizes) + bottom tab bar (phones).
-   Set `active` before including: home | signals | demo | bot | more #}
+{# App navigation for logged-in pages.
+   Top bar on every size; a left side menu that stays open on wide screens and
+   slides in on phones/tablets (hamburger or the "Menu" tab); a bottom tab bar on phones.
+   Set `active` before including: home | signals | pro | demo | bot #}
+{% macro item(href, label, key, icon) -%}
+<a href="{{ href }}" class="an-item"{% if active == key %} aria-current="page"{% endif %}>
+  <svg viewBox="0 0 24 24" aria-hidden="true">{{ icon | safe }}</svg><span>{{ label }}</span>
+</a>
+{%- endmacro %}
 <header class="an-top">
   <div class="an-top-in">
+    <button class="an-icon an-burger" id="an-burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="an-side">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
     <a href="/" class="an-brand" aria-label="Signals FM home">
       <img src="{{ url_for('static', filename='logo.png') }}" alt="" width="32" height="27"><span>Signals FM</span>
     </a>
-    <nav class="an-links" aria-label="Main">
-      <a href="/"{% if active == 'home' %} aria-current="page"{% endif %}>Home</a>
-      <a href="/signals"{% if active == 'signals' %} aria-current="page"{% endif %}>Signals</a>
-      <a href="/demo-trading"{% if active == 'demo' %} aria-current="page"{% endif %}>Demo trading</a>
-      <a href="/auto-trading"{% if active == 'bot' %} aria-current="page"{% endif %}>Auto-trade</a>
-      <a href="/track-record">Track record</a>
-      <a href="/tools">Tools</a>
-    </nav>
     <div class="an-right">
       <button class="an-icon" id="an-theme" type="button" aria-label="Switch light or dark theme">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
@@ -34,11 +36,9 @@
         </button>
         <div class="an-pop an-menu" id="an-menu" hidden>
           <p class="an-menu-email">{{ user_email or session.get('email') or '' }}</p>
-          <a href="/advanced">Advanced analysis</a>
-          <a href="/track-record">Track record</a>
-          <a href="/tools">Trading tools</a>
           <a href="/signals#alerts">Signal alerts</a>
-          <a href="/risk-disclosure">Risk disclosure</a>
+          <a href="/advanced#alerts">Price alerts</a>
+          <a href="/advanced#pnl-dashboard">P&amp;L dashboard</a>
           <button type="button" id="an-logout">Log out</button>
         </div>
       </div>
@@ -46,31 +46,58 @@
   </div>
 </header>
 
+<div class="an-side-backdrop" id="an-side-backdrop" hidden></div>
+<aside class="an-side" id="an-side" aria-label="Menu">
+  <p class="an-side-email">{{ user_email or session.get('email') or '' }}</p>
+  <nav aria-label="Trade">
+    <p class="an-group">Trade</p>
+    {{ item("/", "Home", "home", '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>') }}
+    {{ item("/signals", "Signals board", "signals", '<path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/>') }}
+    {{ item("/advanced", "Pro terminal", "pro", '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14l3-3 3 2 4-5M8 21h8"/>') }}
+    {{ item("/advanced#livechart", "Advanced chart", "pro-chart", '<path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/>') }}
+    {{ item("/advanced#liquidity", "Liquidity scanner", "pro-liq", '<circle cx="12" cy="12" r="8"/><path d="M12 12l5-3"/><circle cx="12" cy="12" r="2"/>') }}
+    {{ item("/demo-trading", "Demo trading", "demo", '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-3 3 2 4-5"/>') }}
+    {{ item("/auto-trading", "Auto-trade bot", "bot", '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/>') }}
+  </nav>
+  <nav aria-label="My trading">
+    <p class="an-group">My trading</p>
+    {{ item("/advanced#watchlist", "Watchlist", "watchlist", '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>') }}
+    {{ item("/advanced#alerts", "Price alerts", "alerts", '<path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/>') }}
+    {{ item("/signals#alerts", "Signal alerts", "sigalerts", '<path d="M12 3v3M5.6 5.6l2.1 2.1M3 12h3M18.4 5.6l-2.1 2.1M21 12h-3"/><circle cx="12" cy="14" r="5"/>') }}
+    {{ item("/advanced#active-trades", "Active trades", "active-trades", '<path d="M4 17l5-6 4 4 7-9"/>') }}
+    {{ item("/advanced#trade-history", "Trade history", "trade-history", '<path d="M4 12a8 8 0 102.6-5.9"/><path d="M4 4v4h4M12 8v4l3 2"/>') }}
+    {{ item("/advanced#trade-journal", "Trade journal", "journal", '<path d="M6 3h12v18l-6-3-6 3z"/>') }}
+    {{ item("/advanced#pnl-dashboard", "P&L dashboard", "pnl", '<path d="M4 19V9M10 19V4M16 19v-7M22 19H2"/>') }}
+    {{ item("/advanced#risk-calc", "Risk calculator", "risk", '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>') }}
+  </nav>
+  <nav aria-label="Research">
+    <p class="an-group">Research</p>
+    {{ item("/track-record", "Track record", "track", '<path d="M4 4h16v16H4z"/><path d="M8 15l3-3 2 2 3-4"/>') }}
+    {{ item("/tools", "Trading tools", "tools", '<path d="M14.7 6.3a4 4 0 00-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 005.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/>') }}
+  </nav>
+  <nav aria-label="Help">
+    <p class="an-group">Help</p>
+    {{ item("/advanced#about", "About", "about", '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>') }}
+    {{ item("/advanced#contact", "Contact us", "contact", '<path d="M4 6h16v12H4z"/><path d="M4 7l8 6 8-6"/>') }}
+    {{ item("/risk-disclosure", "Risk disclosure", "riskd", '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.01"/>') }}
+    {{ item("/privacy", "Privacy policy", "privacy", '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>') }}
+    {{ item("/terms", "Terms", "terms", '<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h6M9 16h6"/>') }}
+  </nav>
+  <button type="button" class="an-side-logout" id="an-side-logout">Log out</button>
+</aside>
+
 <nav class="an-tabs" aria-label="App">
   <a href="/"{% if active == 'home' %} aria-current="page"{% endif %}>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg><span>Home</span></a>
   <a href="/signals"{% if active == 'signals' %} aria-current="page"{% endif %}>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg><span>Signals</span></a>
+  <a href="/advanced"{% if active == 'pro' %} aria-current="page"{% endif %}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14l3-3 3 2 4-5M8 21h8"/></svg><span>Pro</span></a>
   <a href="/demo-trading"{% if active == 'demo' %} aria-current="page"{% endif %}>
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-3 3 2 4-5"/></svg><span>Demo</span></a>
-  <a href="/auto-trading"{% if active == 'bot' %} aria-current="page"{% endif %}>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/></svg><span>Bot</span></a>
-  <button type="button" id="an-more"{% if active == 'more' %} aria-current="page"{% endif %} aria-expanded="false" aria-controls="an-sheet">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>More</span></button>
+  <button type="button" id="an-menu-tab" aria-expanded="false" aria-controls="an-side">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
 </nav>
-
-<div class="an-sheet" id="an-sheet" hidden>
-  <div class="an-sheet-panel" role="dialog" aria-modal="true" aria-label="More">
-    <span class="an-grip" aria-hidden="true"></span>
-    <p class="an-menu-email">{{ user_email or session.get('email') or '' }}</p>
-    <a href="/track-record">Track record</a>
-    <a href="/tools">Trading tools</a>
-    <a href="/advanced">Advanced analysis</a>
-    <a href="/signals#alerts">Signal alerts</a>
-    <a href="/risk-disclosure">Risk disclosure</a>
-    <button type="button" class="an-sheet-logout">Log out</button>
-  </div>
-</div>
 
 <script>
 (function () {
@@ -85,6 +112,19 @@
     document.dispatchEvent(new CustomEvent("themechange"));
   });
 
+  // side menu (slides in below 1024px)
+  var side = $("an-side"), back = $("an-side-backdrop"), openers = [$("an-burger"), $("an-menu-tab")];
+  function setSide(open) {
+    side.classList.toggle("open", open);
+    back.hidden = !open;
+    openers.forEach(function (b) { b.setAttribute("aria-expanded", open ? "true" : "false"); });
+    document.body.classList.toggle("an-lock", open);
+  }
+  openers.forEach(function (b) { b.addEventListener("click", function () { setSide(!side.classList.contains("open")); }); });
+  back.addEventListener("click", function () { setSide(false); });
+  side.querySelectorAll("a").forEach(function (a) { a.addEventListener("click", function () { setSide(false); }); });
+
+  // popovers: notifications + account
   function toggle(btn, pop, open) {
     var willOpen = open === undefined ? pop.hidden : open;
     pop.hidden = !willOpen;
@@ -102,12 +142,9 @@
   document.addEventListener("click", function (e) {
     pops.forEach(function (p) { if (!p[1].contains(e.target)) toggle(p[0], p[1], false); });
   });
-  var sheet = $("an-sheet"), more = $("an-more");
-  more.addEventListener("click", function () { sheet.hidden = false; more.setAttribute("aria-expanded", "true"); });
-  sheet.addEventListener("click", function (e) { if (e.target === sheet) { sheet.hidden = true; more.setAttribute("aria-expanded", "false"); } });
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
-    sheet.hidden = true;
+    setSide(false);
     pops.forEach(function (p) { toggle(p[0], p[1], false); });
   });
 
@@ -115,7 +152,7 @@
     fetch("/api/logout", { method: "POST", credentials: "same-origin" }).finally(function () { location.href = "/"; });
   }
   $("an-logout").addEventListener("click", logout);
-  sheet.querySelector(".an-sheet-logout").addEventListener("click", logout);
+  $("an-side-logout").addEventListener("click", logout);
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function ago(iso) {
