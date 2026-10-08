@@ -36,7 +36,7 @@ RETRY_ERRORS_SEC = 600
 MAX_EMAILS_PER_DAY = 12
 PRICE_TTL_SEC = 20
 
-_hooks = {"engine_signal": None, "coins": [], "prices": None, "send_email": None}
+_hooks = {"engine_signal": None, "coins": [], "prices": None, "send_email": None, "secret": None}
 _board = {"bar": None, "rows": {}, "updated_at": None, "attempt_at": 0.0, "running": False}
 _board_lock = threading.Lock()
 _price_cache = {"ts": 0.0, "data": {}}
@@ -210,7 +210,7 @@ def notify(events):
             if sub.get("email") and sub.get("user_email"):
                 sent = int(sub.get("emails_sent") or 0) if sub.get("emails_day") == today else 0
                 if sent < MAX_EMAILS_PER_DAY:
-                    outbox.append((sub["user_email"], mine))
+                    outbox.append((sub["user_email"], sub["user_id"], mine))
                     cur.execute("UPDATE signal_alert_subs SET emails_day=%s, emails_sent=%s WHERE user_id=%s",
                                 (today, sent + 1, sub["user_id"]))
     send = _hooks.get("send_email")
@@ -219,7 +219,20 @@ def notify(events):
     return len(subs)
 
 
-def _email_html(events):
+def _unsub_token(user_id):
+    from itsdangerous import URLSafeSerializer
+    return URLSafeSerializer(_hooks.get("secret") or "signalsfm", salt="signal-alerts-unsub").dumps({"u": int(user_id)})
+
+
+def _unsub_user(token):
+    from itsdangerous import BadSignature, URLSafeSerializer
+    try:
+        return int(URLSafeSerializer(_hooks.get("secret") or "signalsfm", salt="signal-alerts-unsub").loads(token)["u"])
+    except (BadSignature, KeyError, TypeError, ValueError):
+        return None
+
+
+def _email_html(events, user_id=None):
     base = (os.environ.get("SITE_URL") or "").rstrip("/")
     rows = "".join(
         f"<tr><td style='padding:6px 10px'><b>{e['symbol']}</b></td>"
@@ -229,6 +242,11 @@ def _email_html(events):
         f"<td style='padding:6px 10px'>{(e.get('confidence') or 0):.0f}%</td></tr>"
         for e in events)
     link = f"{base}/signals" if base else "/signals"
+    if user_id is not None:
+        u = f"{base}/signals/unsubscribe?t={_unsub_token(user_id)}"
+        unsub = f'<a href="{u}" style="color:#6f8279">Stop these emails</a> (one click, no login).'
+    else:
+        unsub = f"Turn them off any time on the signals page ({link})."
     return f"""
     <div style="font-family:Segoe UI,Arial,sans-serif;color:#0d1c15;max-width:620px">
       <h2 style="margin:0 0 6px">New signal{'s' if len(events) > 1 else ''} from Signals FM</h2>
@@ -240,16 +258,17 @@ def _email_html(events):
       </table>
       <p style="margin:16px 0"><a href="{link}" style="background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open the signals board</a></p>
       <p style="color:#6f8279;font-size:12px;line-height:1.6">Not financial advice. Signals can and do lose; past results do not guarantee future results.
-      You get this email because you turned on signal alerts. Turn them off any time on the signals page ({link}).</p>
+      You get this email because you turned on signal alerts. {unsub}</p>
     </div>"""
 
 
 def _send_all(send, outbox):
-    for to, events in outbox:
+    for item in outbox:
+        to, uid, events = item if len(item) == 3 else (item[0], None, item[1])
         subject = (f"New {events[0]['side']} signal: {events[0]['symbol']}" if len(events) == 1
                    else f"{len(events)} new signals on Signals FM")
         try:
-            send(to, subject, _email_html(events))
+            send(to, subject, _email_html(events, uid))
         except Exception as e:
             print(f"[signalboard] email failed: {e}")
         time.sleep(1.0)
@@ -292,6 +311,8 @@ _start_lock = threading.Lock()
 
 def init_signalboard(app=None, *, engine_signal=None, coins=None, prices=None, send_email=None, start=True):
     global _started
+    if app is not None and getattr(app, "secret_key", None):
+        _hooks["secret"] = app.secret_key
     if engine_signal:
         _hooks["engine_signal"] = engine_signal
     if coins is not None:
@@ -355,6 +376,7 @@ def board_rows():
             "confidence": r.get("confidence"), "bias": r.get("bias"), "p_long": r.get("p_long"), "p_short": r.get("p_short"),
             "strength": r.get("strength"), "last_closed": r.get("last_closed"), "next_update": r.get("next_update"),
             "limited_history": (r.get("history_bars") or 0) < 300,
+            "setup_forming": bool(r.get("setup_forming")),
         }
         if a:
             live = prices.get(sym)
@@ -395,11 +417,19 @@ def api_board():
         threading.Thread(target=_build, daemon=True).start()
     rows, bar, updated = board_rows()
     nxt = (bar + timedelta(seconds=2 * se.TF_SEC)) if bar else None
+    sides = [r["active"]["side"] for r in rows if r.get("state") == "ACTIVE"]
+    warning = None
+    if len(sides) >= 3:
+        top = max(set(sides), key=sides.count)
+        if sides.count(top) / len(sides) >= 0.75:
+            warning = {"side": top, "count": sides.count(top), "total": len(sides)}
     return jsonify({
         "ok": True, "rows": rows, "bar_time": _iso(bar), "next_update": _iso(nxt), "updated_at": _iso(updated),
         "loading": bar is None, "test": se.test_stats(), "timeframe": se.TIMEFRAME,
         "counts": {"active": sum(1 for r in rows if r["state"] == "ACTIVE"),
-                   "new": sum(1 for r in rows if r.get("fresh")), "coins": len(rows)},
+                   "new": sum(1 for r in rows if r.get("fresh")), "coins": len(rows),
+                   "forming": sum(1 for r in rows if r.get("setup_forming"))},
+        "same_side_warning": warning,
     })
 
 
@@ -457,3 +487,15 @@ def api_alerts():
             cur.execute("""INSERT INTO signal_alert_subs (user_id, enabled, email, coins, emails_sent, updated_at)
                            VALUES (%s,%s,%s,%s,0,%s)""", (uid, int(enabled), int(email), coins_val, _utcnow()))
     return jsonify({"ok": True, "enabled": enabled, "email": email, "coins": coins_val if coins_val == "ALL" else json.loads(coins_val)})
+
+
+@signalboard_bp.route("/signals/unsubscribe", methods=["GET"])
+def unsubscribe():
+    uid = _unsub_user(request.args.get("t") or "")
+    if uid is None:
+        return render_template("message.html", title="Link not valid",
+                               text="This unsubscribe link is not valid. You can turn email alerts off on the signals page."), 400
+    with _Cursor() as cur:
+        cur.execute("UPDATE signal_alert_subs SET email=0, updated_at=%s WHERE user_id=%s", (_utcnow(), uid))
+    return render_template("message.html", title="Email alerts are off",
+                           text="You will not get signal emails any more. In-app alerts (the bell) stay as you set them on the signals page.")
