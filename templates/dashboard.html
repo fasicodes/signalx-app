@@ -50,12 +50,12 @@
     <section class="d-card" id="pro-tools">
       <div class="d-head"><h2 class="d-h2">Pro tools</h2><a class="d-more-link" href="/advanced" id="pt-open">Open Pro terminal</a></div>
       <div class="d-tools">
-        <a class="d-tool" data-pro="livechart" href="/advanced#livechart">
+        <a class="d-tool" data-page="/chart" href="/chart">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/></svg>
-          <span><b>Advanced chart</b><small>20 indicators, drawing tools, full screen</small></span></a>
-        <a class="d-tool" data-pro="liquidity" href="/advanced#liquidity">
+          <span><b>Live chart</b><small>25 indicators, 37 drawing tools, signal history, price alerts</small></span></a>
+        <a class="d-tool" data-page="/liquidity-scanner" href="/liquidity-scanner">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 12l5-3"/><circle cx="12" cy="12" r="2"/></svg>
-          <span><b>Liquidity scanner</b><small>Order-book walls, magnets, sweeps, funding</small></span></a>
+          <span><b>Liquidity scanner</b><small>Depth chart, walls, stop pools, liquidation zones, big trades</small></span></a>
         <a class="d-tool" data-pro="microstructure" href="/advanced#microstructure">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
           <span><b>27-channel analysis</b><small>Order flow, toxicity, regime, entropy and more</small></span></a>
@@ -81,7 +81,7 @@
       </div>
       <div class="d-chart" id="chart"><div class="d-chart-msg" id="chart-msg">Loading chart…</div></div>
       <p class="d-credit">Signals are made on 4-hour candles; dashed lines show the active signal's levels.
-        <a href="/advanced#livechart" id="adv-chart-link">Open the advanced chart</a> for indicators and drawing tools. Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>.</p>
+        <a href="/chart" id="adv-chart-link">Open the live chart</a> for indicators, drawing tools and signal history. Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>.</p>
     </section>
 
     <section class="d-card" id="internals" hidden>
@@ -125,6 +125,6 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}?v=20261009a" defer></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=20261010a" defer></script>
 </body>
 </html>
