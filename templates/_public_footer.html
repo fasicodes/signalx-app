@@ -1,4 +1,4 @@
-{# Shared footer for public pages. #}
+{# Shared footer for public pages (and the info pages inside the app). #}
 <footer class="pfoot">
   <div class="wrap">
     <div class="cols">
@@ -7,6 +7,10 @@
         {% if track_record_public or session.get('user_id') %}<a href="/track-record">Track record</a>{% endif %}
         {% if session.get('user_id') %}<a href="/signals">Signals</a>{% endif %}
         <a href="/tools">Trading tools</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/faq">FAQ</a>
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
         <a href="/risk-disclosure">Risk disclosure</a>
         <a href="/terms">Terms</a>
         <a href="/privacy">Privacy</a>
