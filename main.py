@@ -814,8 +814,9 @@ def order_flow_imbalance(symbol="BTC/USDT", snapshot_gap_sec=1.0):
 # ============================================================
 # 7. VPIN - TOXIC FLOW DETECTION  (v4 - UNCHANGED)
 # ============================================================
-def vpin_toxicity(symbol="BTC/USDT", trade_limit=500, n_buckets=20):
-    trades = exchange.fetch_trades(symbol, limit=trade_limit)
+def vpin_toxicity(symbol="BTC/USDT", trade_limit=500, n_buckets=20, trades=None):
+    if trades is None:
+        trades = exchange.fetch_trades(symbol, limit=trade_limit)
     if not trades:
         return {"vpin_score": None, "toxicity": "NO_DATA"}
 
@@ -1293,8 +1294,8 @@ def liquidity_sweep_detector(df, lookback=50):
             sweep_direction = "SWEPT_LOW_REVERSED_UP"
 
     return {
-        "swing_high": round(swing_high, 2),
-        "swing_low": round(swing_low, 2),
+        "swing_high": float(f"{swing_high:.10g}"),
+        "swing_low": float(f"{swing_low:.10g}"),
         "distance_to_high_pct": dist_to_high_pct,
         "distance_to_low_pct": dist_to_low_pct,
         "liquidity_sweep_detected": sweep_detected,
@@ -2382,15 +2383,28 @@ def candles_endpoint():
 def liquidity_endpoint():
     coin = request.args.get("coin", "BTC/USDT")
     timeframe = request.args.get("timeframe", "1h")
-    is_forex = _is_forex_pair(coin)
 
     try:
         df = get_candles(symbol=coin, timeframe=timeframe, limit=120)
-        current_price = float(df["close"].iloc[-1])
+        float(df["close"].iloc[-1])
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"candle fetch failed: {e}"}), 400
+
+    return jsonify(build_liquidity_payload(coin, timeframe, df=df))
+
+
+def build_liquidity_payload(coin, timeframe="1h", df=None, order_book=None, trades=None):
+    """Everything the liquidity cards show (Ch.19-27) for one coin, as a dict.
+    Used by /liquidity (Pro terminal tab) and by the Liquidity scanner page
+    (market_tools.py), which passes the candles, a deeper order book and the
+    latest trades it already fetched, so nothing is fetched twice. Each part
+    fails on its own (None/error shape); only missing candles raise."""
+    is_forex = _is_forex_pair(coin)
+    if df is None:
+        df = get_candles(symbol=coin, timeframe=timeframe, limit=120)
+    current_price = float(df["close"].iloc[-1])
 
     # Forex: no free order book source, so `ob` stays empty and every
     # order-book-dependent block below (each already in its own
@@ -2400,6 +2414,8 @@ def liquidity_endpoint():
     # a few of the extra cards keep working for forex too.
     if is_forex:
         ob = {"bids": [], "asks": [], "error": "order book not available for forex"}
+    elif order_book is not None:
+        ob = _clean_order_book(order_book)
     else:
         try:
             ob = _clean_order_book(exchange.fetch_order_book(coin, limit=50))
@@ -2429,7 +2445,7 @@ def liquidity_endpoint():
         depth_data = {"depth_slope": None, "wall_bias": None, "error": str(e)}
 
     try:
-        vpin_data = vpin_toxicity(coin)
+        vpin_data = vpin_toxicity(coin, trades=trades)
     except Exception as e:
         vpin_data = {"vpin_score": None, "error": str(e)}
 
@@ -2486,7 +2502,7 @@ def liquidity_endpoint():
     except Exception as e:
         crash_data = {"score": None, "label": None, "factors": [], "error": str(e)}
 
-    return jsonify({
+    return {
         "coin": coin,
         "last_price": round(current_price, 6),
         "liquidity_sweep": sweep_data,
@@ -2500,7 +2516,7 @@ def liquidity_endpoint():
         "cvd": cvd_data,
         "crash_risk": crash_data,
         "server_time": int(time.time()),
-    })
+    }
 
 
 # ============================================================
@@ -2647,6 +2663,14 @@ from mailer import send_email as _pages_send_email
 app.register_blueprint(pages_bp)
 limiter.limit("5 per hour", methods=["POST"])(pages_bp)     # the contact form
 init_pages(app, send_email=_pages_send_email)
+
+# Live chart + Liquidity scanner as their own pages (coin switcher on each page; they no longer open
+# the Pro terminal and run its full analysis first), plus the data behind them - market_tools.py
+from market_tools import market_bp, init_market_tools
+app.register_blueprint(market_bp)
+limiter.limit("90 per minute")(market_bp)
+init_market_tools(app, exchange=exchange, get_candles=get_candles, liquidity_payload=build_liquidity_payload,
+                  coins=AVAILABLE_COINS, forex_pairs=FOREX_PAIRS, is_forex=_is_forex_pair)
 
 
 def _site_base():
