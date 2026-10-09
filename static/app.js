@@ -9,6 +9,8 @@
 
   // ---------------------------------------------------------------- helpers
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // "?" button that opens a plain-language explanation (glossary.py, shown by shell.js)
+  const tip = (key, label) => `<button type="button" class="tip" data-tip="${key}" aria-label="What does ${esc(label)} mean?">?</button>`;
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
@@ -135,6 +137,8 @@
     const num = (v) => v != null && !isNaN(v);
     const tox = { HIGH_TOXICITY: "High: informed traders are active", MODERATE_TOXICITY: "Moderate", LOW_TOXICITY: "Low: calm, mixed flow" };
     const verdict = String(d.final_verdict || "WAIT").toLowerCase();
+    const KEYS = { "Order flow": "order_flow", "Toxic flow (VPIN)": "vpin", "Market regime": "regime", "Market strength": "market_strength",
+                   "Funding rate": "funding", "Liquidity magnet": "liquidity_magnet", "Crash risk": "crash_risk", "Channels agreeing": "channels" };
     const tiles = [
       ["Order flow", num(ofi.ofi_score) ? signed(ofi.ofi_score, 2) : "--", num(ofi.ofi_score) ? (ofi.ofi_score >= 0 ? "Buyers more aggressive" : "Sellers more aggressive") : "No order-book data",
        num(ofi.ofi_score) ? (ofi.ofi_score >= 0 ? "c-long" : "c-short") : ""],
@@ -153,13 +157,13 @@
     ];
     $("internals").hidden = false;
     $("internals-tiles").innerHTML = tiles.map(([k, v, sub, cls]) =>
-      `<dl class="d-tile"><dt>${esc(k)}</dt><dd class="tnum ${cls}">${esc(v)}<small>${esc(sub)}</small></dd></dl>`).join("");
+      `<dl class="d-tile"><dt>${esc(k)}${tip(KEYS[k], k)}</dt><dd class="tnum ${cls}">${esc(v)}<small>${esc(sub)}</small></dd></dl>`).join("");
   }
 
   // ---------------------------------------------------------------- signal panel
-  function setState(state, verdict, status) {
+  function setState(state, verdict, status, tipKey) {
     $("sig").dataset.state = state;
-    $("sig-verdict").textContent = verdict;
+    $("sig-verdict").innerHTML = esc(verdict) + (tipKey ? tip(tipKey, verdict) : "");
     $("sig-status").textContent = status;
   }
   function renderLoading() {
@@ -182,6 +186,11 @@
     else if (!d.engine || d.engine.error || d.error) renderError((d.engine && d.engine.error) || d.error || "The signal engine did not answer.");
     else if (d.engine.active) renderActive(d);
     else renderWait(d);
+    const old = document.querySelector("#sig-body .d-untested");
+    if (old) old.remove();
+    if (d.asset === "crypto" && d.tested === false && d.engine && !d.engine.error && !d.error) {
+      $("sig-body").insertAdjacentHTML("beforeend", `<p class="d-note d-untested">${esc(base(sym))} was not one of the 16 coins in the engine's test, so its results may differ from the tested numbers below.</p>`);
+    }
     renderBrief(d.brief);
     renderProof(d.test);
     drawLevels();
@@ -216,11 +225,11 @@
     const close = Math.max(0, Math.min(100, e.strength || 0));
     const lean = e.bias === "LONG" ? "long" : "short";
     const leanPct = e.bias === "LONG" ? e.p_long : e.p_short;
-    setState("WAIT", "Wait", `No strong setup on ${base(S.coin)} right now. Next check at ${clock(e.next_update)}.`);
+    setState("WAIT", "Wait", `No strong setup on ${base(S.coin)} right now. Next check at ${clock(e.next_update)}.`, "wait");
     const pill = $("sig-pill");
     pill.hidden = !e.setup_forming;
     pill.className = "d-pill";
-    pill.textContent = "Setup forming";
+    pill.innerHTML = "Setup forming" + tip("setup_forming", "setup forming");
     $("sig-prob").hidden = true;
     const last = e.last_closed;
     const lastTxt = last
@@ -229,9 +238,9 @@
     $("sig-body").innerHTML = `
       <div class="d-meter" aria-label="How close the model is to a signal">
         <div class="d-meter-bar"><span class="d-meter-fill" style="width:${close}%"></span><span class="d-meter-goal"></span></div>
-        <div class="d-meter-lbl"><span>${Math.round(close)}% of the way to a signal</span><span>signal</span></div>
+        <div class="d-meter-lbl"><span>${Math.round(close)}% of the way to a signal${tip("closeness", "closeness to a signal")}</span><span>signal</span></div>
       </div>
-      <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b> (${leanPct}% estimated win chance), below the level it needs before it calls a trade.
+      <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b>${tip("leaning", "leaning")} (${leanPct}% estimated win chance), below the level it needs before it calls a trade.
         ${e.setup_forming ? "It is close, so keep an eye on the next 4-hour close. This is not a trade yet." : ""}</p>
       ${lastTxt ? `<p class="d-copy">${esc(lastTxt)}</p>` : ""}
       <div class="d-actions"><a class="d-btn primary" href="#others" id="go-others">See coins with signals</a></div>`;
@@ -241,14 +250,14 @@
     const e = d.engine, a = e.active, p = e.progress || {};
     const long = a.side === "LONG";
     setState(a.side, long ? "Long" : "Short",
-      `Started ${ago(a.signal_at)} at the ${clock(a.signal_at)} close. Ends in ${left(a.expires_at)} if neither level is hit.`);
+      `Started ${ago(a.signal_at)} at the ${clock(a.signal_at)} close. Ends in ${left(a.expires_at)} if neither level is hit.`, long ? "long" : "short");
     const pill = $("sig-pill");
     pill.hidden = false;
     pill.className = e.fresh ? "d-pill new" : "d-pill";
     pill.textContent = e.fresh ? "New signal" : "Active signal";
     $("sig-prob").hidden = false;
     $("sig-prob-v").textContent = `${Math.round(a.confidence)}%`;
-    $("sig-prob-l").textContent = "win chance";
+    $("sig-prob-l").innerHTML = "win chance" + tip("win_chance", "win chance");
 
     const now = p.price != null ? p.price : e.last_close;
     const hi = Math.max(a.stop_loss, a.take_profit), lo = Math.min(a.stop_loss, a.take_profit);
@@ -281,12 +290,12 @@
       </div>
       ${state ? `<p class="d-copy">${state}</p>` : ""}
       <dl class="d-facts">
-        <div><dt>Since entry</dt><dd class="tnum ${p.move_pct >= 0 ? "c-long" : "c-short"}">${p.move_pct == null ? "--" : signed(p.move_pct) + "%"}</dd></div>
-        <div><dt>Progress</dt><dd>${p.pct == null ? "--" : `${Math.abs(p.pct)}% to ${p.pct >= 0 ? "target" : "stop"}`}</dd></div>
-        <div><dt>If the target is hit</dt><dd class="c-long">+0.5R</dd></div>
-        <div><dt>If the stop is hit</dt><dd class="c-short">−1R</dd></div>
+        <div><dt>Since entry${tip("entry", "entry")}</dt><dd class="tnum ${p.move_pct >= 0 ? "c-long" : "c-short"}">${p.move_pct == null ? "--" : signed(p.move_pct) + "%"}</dd></div>
+        <div><dt>Progress${tip("progress", "progress")}</dt><dd>${p.pct == null ? "--" : `${Math.abs(p.pct)}% to ${p.pct >= 0 ? "target" : "stop"}`}</dd></div>
+        <div><dt>If the target is hit${tip("target", "target")}</dt><dd class="c-long">+0.5R</dd></div>
+        <div><dt>If the stop is hit${tip("stop_loss", "stop loss")}</dt><dd class="c-short">−1R</dd></div>
       </dl>
-      <p class="d-copy">1R is what you risk. Keep it small, for example 1% of your account per signal.</p>
+      <p class="d-copy">1R${tip("r", "R")} is what you risk. Keep it small, for example 1% of your account per signal.</p>
       <div class="d-actions">
         <button class="d-btn" type="button" id="copy-levels">Copy levels</button>
         <a class="d-btn primary" href="/demo-trading">Practice in demo</a>
@@ -306,11 +315,11 @@
     const mom = b.rsi == null ? "--" : `RSI ${b.rsi}, ${{ overbought: "overbought", oversold: "oversold", strong: "buyers in control", weak: "sellers in control", neutral: "neutral" }[b.momentum]}`;
     const vol = b.volatility ? `${b.volatility[0].toUpperCase() + b.volatility.slice(1)}, about ${b.atr_pct}% per 4-hour candle` : (b.atr_pct ? `About ${b.atr_pct}% per 4-hour candle` : "--");
     const rows = [
-      ["Trend", `<b class="${b.trend === "up" ? "c-long" : b.trend === "down" ? "c-short" : ""}">${esc(trendTxt)}</b>`],
-      ["Daily trend", b.daily_trend ? `<b class="${b.daily_trend === "up" ? "c-long" : "c-short"}">${b.daily_trend === "up" ? "Up" : "Down"}</b>` : "--"],
-      ["Momentum", esc(mom)],
-      ["Volatility", esc(vol)],
-      ["Recent range", `High <b class="tnum">${price(b.range_high)}</b> (${signed(b.to_high_pct)}%), low <b class="tnum">${price(b.range_low)}</b> (${signed(b.to_low_pct)}%)`],
+      ["Trend" + tip("trend", "trend"), `<b class="${b.trend === "up" ? "c-long" : b.trend === "down" ? "c-short" : ""}">${esc(trendTxt)}</b>`],
+      ["Daily trend" + tip("daily_trend", "daily trend"), b.daily_trend ? `<b class="${b.daily_trend === "up" ? "c-long" : "c-short"}">${b.daily_trend === "up" ? "Up" : "Down"}</b>` : "--"],
+      ["Momentum" + tip("momentum", "momentum"), esc(mom)],
+      ["Volatility" + tip("volatility", "volatility"), esc(vol)],
+      ["Recent range" + tip("range", "recent range"), `High <b class="tnum">${price(b.range_high)}</b> (${signed(b.to_high_pct)}%), low <b class="tnum">${price(b.range_low)}</b> (${signed(b.to_low_pct)}%)`],
     ];
     $("brief").innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
   }
@@ -323,9 +332,9 @@
     const span = per.length === 2 ? `${mon(per[0])} to ${mon(per[1])}` : "Jul 2025 onward";
     $("proof-text").textContent = `The model was trained on Jan 2022 to Jun 2025, then tested once on ${span}, data it had never seen: one signal at a time per coin, ${t.coins} coins, fees included.`;
     $("proof-stats").innerHTML = `
-      <div><b class="tnum">${t.win_rate}%</b><span>signals won</span></div>
-      <div><b class="tnum">${signed(t.avg_net_r, 3)}R</b><span>average per signal</span></div>
-      <div><b class="tnum">${t.signals}</b><span>signals tested</span></div>`;
+      <div><b class="tnum">${t.win_rate}%</b><span>signals won${tip("win_rate", "win rate")}</span></div>
+      <div><b class="tnum">${signed(t.avg_net_r, 3)}R</b><span>average per signal${tip("avg_r", "average result")}</span></div>
+      <div><b class="tnum">${t.signals}</b><span>signals tested${tip("backtest", "tested signals")}</span></div>`;
   }
 
   // ---------------------------------------------------------------- chart
