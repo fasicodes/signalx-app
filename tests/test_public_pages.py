@@ -41,9 +41,12 @@ ns = {"app": app, "limiter": _Limiter(), "os": os, "request": request, "render_t
 exec(compile(block, "main.py (track record block)", "exec"), ns)
 
 
+LANDING = {}
+
+
 @app.route("/")
 def home():
-    return render_template("landing.html")
+    return render_template("landing.html", **LANDING)
 
 
 @app.route("/login")
@@ -59,6 +62,19 @@ def terms_page():
 @app.route("/privacy")
 def privacy_page():
     return render_template("privacy.html")
+
+
+@app.route("/boom")
+def _boom():
+    raise RuntimeError("test crash")
+
+
+@app.route("/api/boom")
+def _api_boom():
+    raise RuntimeError("test crash")
+
+
+app.config["PROPAGATE_EXCEPTIONS"] = False
 
 
 c = app.test_client()
@@ -124,9 +140,57 @@ check(st == 200 and "Auto-Trade and exchange accounts" in html and "Demo Trading
 check(get("/track-record")[0] == 302, "track record needs login while private")
 with c.session_transaction() as s:
     s["user_id"] = 1
+    s["email"] = "user@example.com"
 r = c.get("/track-record")  # same host as the session cookie
 st, html = r.status_code, r.get_data(as_text=True)
-check(st == 200 and "TRACK_RECORD_PUBLIC=on" in html and "Every signal, recorded" in html, "logged-in user sees it with the publish hint")
+check(st == 200 and "Every signal, recorded" in html and "TRACK_RECORD_PUBLIC" not in html,
+      "logged-in user sees the page, without the owner's server note")
+os.environ["ADMIN_EMAILS"] = "Owner@Example.com, other@example.com"
+with c.session_transaction() as s:
+    s["email"] = "owner@example.com"
+html = c.get("/track-record").get_data(as_text=True)
+check("TRACK_RECORD_PUBLIC=on" in html, "the owner (ADMIN_EMAILS) sees the publish hint")
+os.environ.pop("ADMIN_EMAILS")
 os.environ.pop("SITE_URL", None)
+
+print("\n[landing card]")
+with c.session_transaction() as s_:
+    s_.clear()
+LANDING.update(live={"ok": True, "active": 4, "coins": 30, "recent": [{"coin": "ETH", "side": "LONG", "ago": "2 h ago"},
+                                                                      {"coin": "BTC", "side": "SHORT", "ago": "9 h ago"}]},
+               stats={"win_rate": 69.8, "signals": 437})
+html = c.get("/").get_data(as_text=True)
+card = html[html.index('class="dash-mock"'):html.index('id="features"')]
+check("ETH/USDT" in card and "Long" in card and "2 h ago" in card and ">4<" in card and "69.8%" in card and "Live" in card,
+      "landing card: real active signals, coins and tested win rate")
+check("EUR/USD" not in card and "BUY" not in card and "19" not in card and "24" not in card, "landing card: no invented signals or numbers")
+check("19-channel" not in html.lower() and "Four independent" not in html and "Day Traders" not in html, "landing copy matches the current engine")
+LANDING.update(live={"ok": False}, stats={})
+card = c.get("/").get_data(as_text=True)
+card = card[card.index('class="dash-mock"'):card.index('id="features"')]
+check("Live" not in card and "checked at every 4-hour close" in card, "landing card: no 'Live' badge when there is no data")
+LANDING.clear()
+
+print("\n[error pages]")
+with c.session_transaction() as s_:
+    s_["user_id"] = 1
+    s_["email"] = "user@example.com"
+r = c.get("/no-such-page")
+html = r.get_data(as_text=True)
+check(r.status_code == 404 and "Page not found" in html and 'href="/contact"' in html and "an-side" in html,
+      "404: designed page with the app menu for a logged-in user, home and contact links")
+r = c.get("/api/no-such-thing")
+check(r.status_code == 404 and r.is_json and r.get_json()["ok"] is False, "404 on an API path: JSON, not HTML")
+with c.session_transaction() as s:
+    s.clear()
+r = c.get("/no-such-page")
+html = r.get_data(as_text=True)
+check(r.status_code == 404 and "Page not found" in html and "an-side" not in html and "pnav" in html, "404 for a visitor: public navigation")
+
+r = c.get("/boom")
+html = r.get_data(as_text=True)
+check(r.status_code == 500 and "Something went wrong" in html and "test crash" not in html, "500: friendly page, no error details shown")
+r = c.get("/api/boom")
+check(r.status_code == 500 and r.is_json and "went wrong" in r.get_json()["error"], "500 on an API path: JSON error")
 
 print(f"\nALL {passed} CHECKS PASSED")
