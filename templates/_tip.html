@@ -1,0 +1,5 @@
+{# "?" button that opens a plain-language explanation from glossary.py (needs static/shell.css + static/shell.js).
+   Use: {% from '_tip.html' import tip %} ... {{ tip('r', 'R') }} #}
+{% macro tip(key, label) -%}
+<button type="button" class="tip" data-tip="{{ key }}" aria-label="What does {{ label }} mean?">?</button>
+{%- endmacro %}
