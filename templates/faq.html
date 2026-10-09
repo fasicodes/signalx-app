@@ -1,0 +1,95 @@
+{% extends '_info_base.html' %}
+{% set active = 'faq' %}
+{% set seo_title = "Signals FM FAQ and glossary" %}{% set seo_path = "/faq" %}
+{% set seo_description = "Answers about Signals FM signals, results, alerts, demo trading and the auto-trade bot, plus every trading term in plain language." %}
+{% block title %}FAQ and glossary | Signals FM{% endblock %}
+{% block description %}Answers about Signals FM signals, results, alerts, demo trading and the auto-trade bot, plus every trading term in plain language.{% endblock %}
+{% block content %}
+<div class="phead">
+  <p class="eyebrow">Help</p>
+  <h1>Questions and answers</h1>
+  <p class="lead">How signals work, what the results mean, how to get alerts, and every trading word on the site explained in plain language.</p>
+</div>
+
+<div class="faq-layout">
+  <nav class="faq-toc" aria-label="Topics">
+    {% for gid, gname, items in faq %}<a href="#{{ gid }}">{{ gname }}</a>{% endfor %}
+    <a href="#glossary">Glossary</a>
+  </nav>
+  <div>
+    <input class="pinput faq-search" id="faq-search" type="search" placeholder="Search questions and terms" aria-label="Search questions and terms" autocomplete="off">
+    <p class="faq-empty" id="faq-empty" hidden>Nothing matches that. Try a shorter word, or <a class="link" href="/contact">ask us</a>.</p>
+    {% for gid, gname, items in faq %}
+    <section class="faq-group" id="{{ gid }}" data-group>
+      <h2>{{ gname }}</h2>
+      {% for q, a in items %}
+      <details class="qa" id="q-{{ gid }}-{{ loop.index }}" data-item>
+        <summary>{{ q }}</summary>
+        <div class="a">{{ a | safe }}</div>
+      </details>
+      {% endfor %}
+    </section>
+    {% endfor %}
+
+    <section class="gl-sec" id="glossary" data-group>
+      <h2>Glossary</h2>
+      <p class="sec-sub">The same explanations you see when you tap a <b>?</b> on the site.</p>
+      {% for gname, terms in glossary_groups %}
+      <div class="gl-group">
+        <h3>{{ gname }}</h3>
+        <dl class="gl-list">
+          {% for t in terms %}
+          <div class="gl-item" id="g-{{ t.key }}" data-item><dt>{{ t.term }}</dt><dd>{{ t.text }}</dd></div>
+          {% endfor %}
+        </dl>
+      </div>
+      {% endfor %}
+    </section>
+  </div>
+</div>
+
+<section class="block" style="margin-top:36px">
+  <h2 class="sec">Still have a question?</h2>
+  <p class="sec-sub">We aim to reply within 24 to 48 hours, Monday to Friday.</p>
+  <a class="pbtn primary lg" href="/contact">Contact us</a>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  // open the question a link points to (/faq#q-signals-2)
+  function openFromHash() {
+    var id = decodeURIComponent((location.hash || "").slice(1));
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (el && el.tagName === "DETAILS") { el.open = true; el.scrollIntoView({ block: "start" }); }
+  }
+  window.addEventListener("hashchange", openFromHash);
+  openFromHash();
+
+  var input = document.getElementById("faq-search");
+  var items = Array.prototype.slice.call(document.querySelectorAll("[data-item]"));
+  var groups = Array.prototype.slice.call(document.querySelectorAll("[data-group]"));
+  var texts = items.map(function (el) { return el.textContent.toLowerCase(); });
+  input.addEventListener("input", function () {
+    var q = input.value.trim().toLowerCase();
+    var any = false;
+    items.forEach(function (el, i) {
+      var hit = !q || texts[i].indexOf(q) !== -1;
+      el.hidden = !hit;
+      if (hit) any = true;
+      if (el.tagName === "DETAILS") el.open = !!q && hit;
+    });
+    groups.forEach(function (g) {
+      var visible = g.querySelectorAll("[data-item]:not([hidden])").length;
+      g.hidden = !visible;
+      Array.prototype.forEach.call(g.querySelectorAll(".gl-group"), function (sub) {
+        sub.hidden = !sub.querySelectorAll("[data-item]:not([hidden])").length;
+      });
+    });
+    document.getElementById("faq-empty").hidden = any;
+  });
+})();
+</script>
+{% endblock %}
