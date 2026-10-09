@@ -248,7 +248,7 @@ body::before {
   <!-- ── SIGNUP ── -->
   <form class="auth-form" id="signup-form">
     <h1 class="auth-title">Create account</h1>
-    <p class="auth-sub">Get free access to 19-channel signals.</p>
+    <p class="auth-sub">Free access to tested signals, alerts and demo trading.</p>
 
     <div class="field-group">
       <label class="field-label">Email</label>
@@ -347,16 +347,25 @@ forgotForm.addEventListener('submit', async (e) => {
 });
 
 // URL params se success/error messages dikhana (email verify redirect ke baad)
+let verifyToken = '';
 (function checkUrlParams() {
   const params = new URLSearchParams(window.location.search);
-  if (params.get('verified') === '1') {
+  const vt = params.get('verify') || '';
+  if (/^[A-Za-z0-9_-]{20,100}$/.test(vt)) {
+    verifyToken = vt;
+    msg.textContent = 'Almost done: log in with your email and password to confirm your email address.';
+    msg.classList.add('ok');
+  } else if (params.get('verified') === '1') {
     msg.textContent = 'Email verified! You can now log in.';
     msg.classList.add('ok');
   } else if (params.get('error') === 'verify_token_expired') {
-    msg.textContent = 'That verification link has expired. Please sign up again.';
+    msg.textContent = 'That verification link has expired. Use "Forgot password" to get a new link: setting a new password also verifies your email.';
     msg.classList.add('error');
   } else if (params.get('error') === 'invalid_verify_token') {
-    msg.textContent = 'That verification link is invalid.';
+    msg.textContent = 'That verification link is not valid or was already used. Try logging in; if that fails, use "Forgot password".';
+    msg.classList.add('error');
+  } else if (params.get('error') === 'google_email_unverified') {
+    msg.textContent = 'Your Google email address is not verified yet. Verify it with Google, or sign up with your email and a password.';
     msg.classList.add('error');
   } else if (params.get('error') === 'google_not_configured') {
     msg.textContent = 'Google login is not available right now.';
@@ -380,6 +389,7 @@ loginForm.addEventListener('submit', async (e) => {
       body: JSON.stringify({
         email: document.getElementById('login-email').value.trim(),
         password: document.getElementById('login-password').value,
+        verify_token: verifyToken || undefined,
       }),
     });
     const data = await res.json();
@@ -387,7 +397,7 @@ loginForm.addEventListener('submit', async (e) => {
       msg.textContent = data.error || 'Login failed';
       msg.classList.add('error');
     } else {
-      msg.textContent = 'Login successful — redirecting...';
+      msg.textContent = (verifyToken ? 'Email confirmed. ' : '') + 'Login successful, opening your dashboard…';
       msg.classList.add('ok');
       window.location.href = '/';
     }
