@@ -112,6 +112,20 @@ def _get_cached_signal(symbol):
         return None
 
 
+IMBALANCE_ALERT = 0.4   # |bids - asks| / (bids + asks) near the price: 0.4 = a 70/30 split
+
+
+def book_imbalance(order_book, mid, pct=1.0):
+    """(bid USD - ask USD) / (bid USD + ask USD) for the visible orders within `pct` % of the mid price,
+    from -1 (all asks) to +1 (all bids). None when the book is empty."""
+    if not mid:
+        return None
+    lo, hi = mid * (1 - pct / 100), mid * (1 + pct / 100)
+    b = sum(p * q for p, q in order_book.get("bids", []) if p >= lo)
+    a = sum(p * q for p, q in order_book.get("asks", []) if p <= hi)
+    return (b - a) / (b + a) if b + a > 0 else None
+
+
 def _get_liquidity_snapshot(symbol):
     """Lightweight liquidity read (order book + wall zones only - NOT the
     full expensive /liquidity route) so alert polling stays cheap."""
@@ -121,7 +135,7 @@ def _get_liquidity_snapshot(symbol):
         current_price = (ob["bids"][0][0] + ob["asks"][0][0]) / 2 if ob["bids"] and ob["asks"] else None
         zones = liquidity_target_zones(ob, current_price) if current_price else []
         depth = order_book_depth_profile(symbol, depth=20, order_book=ob)
-        return {"zones": zones, "depth": depth, "price": current_price}
+        return {"zones": zones, "depth": depth, "price": current_price, "imbalance": book_imbalance(ob, current_price)}
     except Exception:
         return None
 
@@ -441,11 +455,17 @@ def check_alerts():
                                        f"~${big['usd_size']:,.0f} near {big['price']:.6g} "
                                        f"({big['distance_pct']:+.2f}% away).")
                     elif t == "LIQUIDITY_IMBALANCE" and liquidity and not on_cooldown:
-                        wall_bias = (liquidity.get("depth") or {}).get("wall_bias")
-                        if wall_bias in ("BUY", "SELL", "BULLISH", "BEARISH"):
+                        # (this used to compare wall_bias with BUY/SELL, which the depth profile never returns,
+                        # so the alert could not fire)
+                        imb = liquidity.get("imbalance")
+                        if imb is not None and abs(imb) >= IMBALANCE_ALERT:
                             fired = True
-                            title = f"{symbol} liquidity imbalance"
-                            message = f"Order-book depth is currently skewed {wall_bias} for {symbol}."
+                            share = round((1 + abs(imb)) / 2 * 100)
+                            side = "buyers (bids)" if imb > 0 else "sellers (asks)"
+                            title = f"{symbol} order-book imbalance"
+                            message = (f"The order book near the price is one-sided: {share}% of the visible orders "
+                                       f"within 1% are {side}.")
+                        new_last_value = imb
                     elif t == "SUPPORT_LIQUIDITY" and liquidity and not on_cooldown:
                         zones = liquidity.get("zones") or []
                         major = next((z for z in zones if z["side"] == "BUY_WALL" and z["score"] >= a["target_value"]), None)
