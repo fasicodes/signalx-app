@@ -123,6 +123,52 @@
   });
   if ($("an-badge")) { badge(); setInterval(badge, 60000); }
 
+  // ------------------------------------------------------------------ your alerts (price, RSI, liquidity...)
+  // They are checked while any Signals FM page is open (they used to be checked only inside the Pro terminal).
+  function alertToast(title, text) {
+    var box = $("an-toasts");
+    if (!box) {
+      if (!$("an-toast-css")) {
+        var css = document.createElement("style");
+        css.id = "an-toast-css";
+        css.textContent =
+          ".an-toasts{position:fixed;z-index:1250;right:16px;bottom:calc(var(--an-tab-h) + 14px + env(safe-area-inset-bottom,0px));" +
+          "display:grid;gap:8px;width:min(340px,calc(100vw - 32px));font-family:var(--an-body);line-height:1.45}" +
+          ".an-toast{background:var(--an-surface);color:var(--an-text);border:1px solid var(--an-line);border-left:3px solid var(--an-amber);" +
+          "border-radius:12px;padding:10px 14px;box-shadow:0 16px 44px rgba(0,0,0,.35);font-size:13.5px}" +
+          ".an-toast b{display:block;font-weight:600;margin-bottom:2px}.an-toast span{color:var(--an-dim)}" +
+          "@media (min-width:1024px){.an-toasts{bottom:20px}}";
+        document.head.appendChild(css);
+      }
+      box = document.createElement("div");
+      box.id = "an-toasts";
+      box.className = "an-toasts";
+      box.setAttribute("role", "status");
+      box.setAttribute("aria-live", "polite");
+      document.body.appendChild(box);
+    }
+    var t = document.createElement("div");
+    t.className = "an-toast";
+    t.innerHTML = "<b>" + esc(title) + "</b><span>" + esc(text) + "</span>";
+    box.appendChild(t);
+    setTimeout(function () { t.remove(); }, 8000);
+  }
+  function checkAlerts() {
+    if (document.visibilityState === "hidden") return;
+    fetch("/api/alerts/check", { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      var list = (d && d.triggered) || [];
+      if (!list.length) return;
+      badge();
+      list.slice(0, 3).forEach(function (t) { alertToast(t.title, t.message); });
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        list.forEach(function (t) { try { new Notification(t.title, { body: t.message }); } catch (e) {} });
+      }
+      document.dispatchEvent(new CustomEvent("alertstriggered", { detail: list }));
+    }).catch(function () {});
+  }
+  window.SFMAlerts = { check: checkAlerts, toast: alertToast };
+  if ($("an-bell")) { setTimeout(checkAlerts, 5000); setInterval(checkAlerts, 60000); }
+
   // ------------------------------------------------------------------ "?" explanations
   var GLOSS = null, glossLoading = null, tipPop = null, tipBtn = null;
   function glossary() {
