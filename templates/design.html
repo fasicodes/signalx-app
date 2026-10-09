@@ -563,8 +563,8 @@
         </svg>
       </div>
 
-      <h2 class="empty-title">Awaiting Analysis</h2>
-      <p class="empty-subtitle">Select a pair above and click <b>Run Analysis</b> to<br>initialize Tier 01–03 telemetry.</p>
+      <h2 class="empty-title">Ready for analysis</h2>
+      <p class="empty-subtitle">Pick a coin above and press <b>Run Analysis</b><br>to see all 27 channels for it.</p>
 
       <div id="empty-ticker" class="empty-ticker">
         <span class="empty-ticker-loading">loading market snapshot…</span>
@@ -2936,7 +2936,7 @@
 
 <script src="{{ url_for('static', filename='premium-ui.js') }}?v=20260814-premium-2"></script>
 <script>
-/* Deep links from the app menu: /advanced?coin=ETH/USDT#livechart opens that coin on that tab.
+/* Opens the analysis on arrival, and deep links from the app menu: /advanced?coin=ETH/USDT#livechart opens that coin on that tab.
    Tabs: microstructure, extended, liquidity, livechart. Side-menu sections: watchlist, alerts, risk-calc,
    active-trades, trade-history, trade-journal, pnl-dashboard, about, contact, privacy, terms, disclaimer. */
 (function () {
@@ -2957,7 +2957,8 @@
       return;
     }
     var wantsPanel = PANELS.indexOf(hash) >= 0;
-    if ((coin || wantsPanel) && !ran && typeof runAnalysis === "function") { ran = true; runAnalysis(true); }
+    // Opening the Pro terminal shows the analysis straight away (no extra "Run Analysis" click needed).
+    if (!ran && typeof runAnalysis === "function") { ran = true; runAnalysis(true); }
     if (wantsPanel) {
       var t = document.querySelector('.panel-tab[data-panel="' + hash + '"]');
       if (t) { t.click(); setTimeout(function () { t.scrollIntoView({ behavior: "smooth", block: "start" }); }, 400); }
