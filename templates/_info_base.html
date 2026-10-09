@@ -1,0 +1,30 @@
+{# Layout for the info and legal pages (about, FAQ, pricing, contact, risk disclosure, privacy, terms).
+   Logged-in users get the app menu (side menu + tabs); visitors get the public top navigation.
+   Child pages set `active` and fill the blocks: title, description, seo, head, content, scripts. #}
+{%- set logged_in = session.get('user_id') -%}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Signals FM{% endblock %}</title>
+<meta name="description" content="{% block description %}Signals FM: tested crypto signals with honest results, demo trading and an auto-trade bot.{% endblock %}">
+{% block seo %}{% include '_seo.html' ignore missing %}{% endblock %}
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
+{% block head %}{% endblock %}
+</head>
+<body class="info{% if logged_in %} an-shell in-app{% endif %}">
+{% if logged_in %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
+<main class="wrap info-main" id="main">
+{% block content %}{% endblock %}
+</main>
+{% include '_public_footer.html' %}
+{% if not logged_in %}<script src="{{ url_for('static', filename='shell.js') }}?v=20261009a" defer></script>{% endif %}
+{% block scripts %}{% endblock %}
+</body>
+</html>
