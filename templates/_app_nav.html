@@ -1,7 +1,16 @@
-{# App navigation for logged-in pages.
-   Top bar on every size; a left side menu that stays open on wide screens and
-   slides in on phones/tablets (hamburger or the "Menu" tab); a bottom tab bar on phones.
-   Set `active` before including: home | signals | pro | demo | bot #}
+{# App navigation for logged-in pages (needs static/shell.css and static/shell.js; this file loads shell.js).
+   Top bar on every size; a left side menu that stays open on wide screens (the menu button hides it) and
+   slides in on phones/tablets (menu button or the "Menu" tab); a bottom tab bar on phones; the welcome guide.
+   Set `active` before including, and give <body> the class "an-shell". #}
+<script>
+  (function () {
+    var r = document.documentElement;
+    try {
+      r.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "dark");
+      if (localStorage.getItem("sfm-side") === "collapsed") document.body.classList.add("an-collapsed");
+    } catch (e) {}
+  })();
+</script>
 {% macro item(href, label, key, icon) -%}
 <a href="{{ href }}" class="an-item"{% if active == key %} aria-current="page"{% endif %}>
   <svg viewBox="0 0 24 24" aria-hidden="true">{{ icon | safe }}</svg><span>{{ label }}</span>
@@ -39,7 +48,8 @@
           <a href="/signals#alerts">Signal alerts</a>
           <a href="/advanced#alerts">Price alerts</a>
           <a href="/advanced#pnl-dashboard">P&amp;L dashboard</a>
-          <button type="button" id="an-logout">Log out</button>
+          <a href="/faq" data-guide-open>Getting started guide</a>
+          <button type="button" class="an-logout" id="an-logout">Log out</button>
         </div>
       </div>
     </div>
@@ -68,7 +78,7 @@
     {{ item("/advanced#trade-history", "Trade history", "trade-history", '<path d="M4 12a8 8 0 102.6-5.9"/><path d="M4 4v4h4M12 8v4l3 2"/>') }}
     {{ item("/advanced#trade-journal", "Trade journal", "journal", '<path d="M6 3h12v18l-6-3-6 3z"/>') }}
     {{ item("/advanced#pnl-dashboard", "P&L dashboard", "pnl", '<path d="M4 19V9M10 19V4M16 19v-7M22 19H2"/>') }}
-    {{ item("/advanced#risk-calc", "Risk calculator", "risk", '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>') }}
+    {{ item("/advanced#risk-calc", "Risk calculator", "riskcalc", '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>') }}
   </nav>
   <nav aria-label="Research">
     <p class="an-group">Research</p>
@@ -77,8 +87,13 @@
   </nav>
   <nav aria-label="Help">
     <p class="an-group">Help</p>
-    {{ item("/advanced#about", "About", "about", '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>') }}
-    {{ item("/advanced#contact", "Contact us", "contact", '<path d="M4 6h16v12H4z"/><path d="M4 7l8 6 8-6"/>') }}
+    <button type="button" class="an-item" data-guide-open>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5z"/><path d="M9 12l2 2 4-4"/></svg><span>Getting started</span>
+    </button>
+    {{ item("/faq", "FAQ and glossary", "faq", '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 014.9.8c0 1.7-2.4 2.2-2.4 3.7M12 17.5v.01"/>') }}
+    {{ item("/about", "About", "about", '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>') }}
+    {{ item("/pricing", "Pricing", "pricing", '<path d="M20 12l-8 8-8-8V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/>') }}
+    {{ item("/contact", "Contact us", "contact", '<path d="M4 6h16v12H4z"/><path d="M4 7l8 6 8-6"/>') }}
     {{ item("/risk-disclosure", "Risk disclosure", "riskd", '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.01"/>') }}
     {{ item("/privacy", "Privacy policy", "privacy", '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>') }}
     {{ item("/terms", "Terms", "terms", '<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h6M9 16h6"/>') }}
@@ -99,88 +114,59 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
 </nav>
 
-<script>
-(function () {
-  "use strict";
-  var root = document.documentElement;
-  try { root.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "dark"); } catch (e) {}
-  var $ = function (id) { return document.getElementById(id); };
-  $("an-theme").addEventListener("click", function () {
-    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    try { localStorage.setItem("signalsfm-theme", next); } catch (e) {}
-    document.dispatchEvent(new CustomEvent("themechange"));
-  });
+<div class="an-guide" id="an-guide" role="dialog" aria-modal="true" aria-labelledby="an-guide-title" hidden{% if active == 'home' %} data-auto{% endif %}>
+  <div class="an-guide-box">
+    <button type="button" class="an-guide-x" id="an-guide-x" aria-label="Close the guide">&times;</button>
+    <p class="an-guide-n" id="an-guide-n">Step 1 of 4</p>
 
-  // side menu (slides in below 1024px)
-  var side = $("an-side"), back = $("an-side-backdrop"), openers = [$("an-burger"), $("an-menu-tab")];
-  function setSide(open) {
-    side.classList.toggle("open", open);
-    back.hidden = !open;
-    openers.forEach(function (b) { b.setAttribute("aria-expanded", open ? "true" : "false"); });
-    document.body.classList.toggle("an-lock", open);
-  }
-  openers.forEach(function (b) { b.addEventListener("click", function () { setSide(!side.classList.contains("open")); }); });
-  back.addEventListener("click", function () { setSide(false); });
-  side.querySelectorAll("a").forEach(function (a) { a.addEventListener("click", function () { setSide(false); }); });
+    <section data-step>
+      <h2 id="an-guide-title">Welcome to Signals FM</h2>
+      <div class="an-guide-art"><div class="an-gpills"><span class="an-gpill l">Long</span><span class="an-gpill s">Short</span><span class="an-gpill w">Wait</span></div></div>
+      <p>Every 4 hours the signal engine checks 30 coins. <b>Most of the time it says Wait.</b> When it finds one of its strongest
+        setups, it gives a <b>Long</b> (price likely to rise) or <b>Short</b> (price likely to fall) signal.</p>
+      <p>Wait is normal. It means the engine is skipping weak setups to protect you.</p>
+    </section>
 
-  // popovers: notifications + account
-  function toggle(btn, pop, open) {
-    var willOpen = open === undefined ? pop.hidden : open;
-    pop.hidden = !willOpen;
-    btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
-    return willOpen;
-  }
-  var pops = [[$("an-bell"), $("an-notes")], [$("an-user"), $("an-menu")]];
-  pops.forEach(function (p) {
-    p[0].addEventListener("click", function (e) {
-      e.stopPropagation();
-      pops.forEach(function (q) { if (q !== p) toggle(q[0], q[1], false); });
-      if (toggle(p[0], p[1]) && p[1].id === "an-notes") loadNotes();
-    });
-  });
-  document.addEventListener("click", function (e) {
-    pops.forEach(function (p) { if (!p[1].contains(e.target)) toggle(p[0], p[1], false); });
-  });
-  document.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape") return;
-    setSide(false);
-    pops.forEach(function (p) { toggle(p[0], p[1], false); });
-  });
+    <section data-step hidden>
+      <h2>How to read a signal</h2>
+      <div class="an-guide-art an-gladder">
+        <div><i style="background:var(--an-long)"></i><b>Target</b><span>where you take the profit</span></div>
+        <div><i style="background:var(--an-text)"></i><b>Entry</b><span>where the signal starts</span></div>
+        <div><i style="background:var(--an-short)"></i><b>Stop loss</b><span>where you exit if it goes wrong</span></div>
+      </div>
+      <p>The bar on the signal card shows where the live price is between the stop and the target.
+        A signal ends when it reaches the target, hits the stop, or after 8 days.</p>
+    </section>
 
-  function logout() {
-    fetch("/api/logout", { method: "POST", credentials: "same-origin" }).finally(function () { location.href = "/"; });
-  }
-  $("an-logout").addEventListener("click", logout);
-  $("an-side-logout").addEventListener("click", logout);
+    <section data-step hidden>
+      <h2>Keep every loss small</h2>
+      <div class="an-guide-art an-gr">
+        <div><span>Win (about 7 in 10)</span><i style="background:var(--an-long);width:50%"></i><b style="color:var(--an-long)">+0.5R</b></div>
+        <div><span>Loss</span><i style="background:var(--an-short);width:100%"></i><b style="color:var(--an-short)">&minus;1R</b></div>
+      </div>
+      <p>In testing about 7 in 10 signals won, but each loss was about <b>twice the size</b> of each win, and some months lost money.</p>
+      <p>So risk a small, fixed amount on every signal, for example <b>1% of your account</b>. That amount is called <b>1R</b>.</p>
+    </section>
 
-  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-  function ago(iso) {
-    if (!iso) return "";
-    var d = new Date(/Z$|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + "Z");
-    var m = Math.max(0, Math.round((Date.now() - d) / 60000));
-    if (m < 60) return m + " min ago";
-    var h = Math.floor(m / 60);
-    return h < 48 ? h + " h ago" : Math.floor(h / 24) + " days ago";
-  }
-  function badge() {
-    fetch("/api/notifications/unread-count", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
-      var n = d.unread_count || 0, b = $("an-badge");
-      b.hidden = !n; b.textContent = n > 9 ? "9+" : n;
-    }).catch(function () {});
-  }
-  function loadNotes() {
-    fetch("/api/notifications?limit=12", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
-      var list = d.notifications || [];
-      $("an-notes-list").innerHTML = list.length ? list.map(function (n) {
-        return '<div class="an-note' + (n.is_read ? "" : " unread") + '"><b>' + esc(n.title) + "</b><span>" + esc(n.message) + "</span><small>" + ago(n.created_at) + "</small></div>";
-      }).join("") : '<p class="an-empty">No notifications yet. Turn on signal alerts to hear about new signals.</p>';
-    }).catch(function () { $("an-notes-list").innerHTML = '<p class="an-empty">Notifications could not load. Try again in a moment.</p>'; });
-  }
-  $("an-readall").addEventListener("click", function () {
-    fetch("/api/notifications/read-all", { method: "POST", credentials: "same-origin" }).then(function () { badge(); loadNotes(); });
-  });
-  badge();
-  setInterval(badge, 60000);
-})();
-</script>
+    <section data-step hidden>
+      <h2>Practice first, then get alerts</h2>
+      <div class="an-guide-art an-gicons">
+        <div><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-3 3 2 4-5"/></svg>Demo trading with virtual money</div>
+        <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/></svg>Alerts by Telegram or email</div>
+        <div><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 014.9.8c0 1.7-2.4 2.2-2.4 3.7M12 17.5v.01"/></svg>Tap any ? to see what a word means</div>
+      </div>
+      <p>Try signals with virtual money in Demo trading before you use real money. Turn on signal alerts so you hear about new
+        signals without checking all day.</p>
+      <div class="an-glinks"><a href="/demo-trading">Open demo trading</a><a href="/signals#alerts">Set up alerts</a><a href="/faq">FAQ and glossary</a></div>
+    </section>
+
+    <div class="an-guide-foot">
+      <div class="an-gdots" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+      <div class="an-gbtns">
+        <button type="button" class="an-gbtn" id="an-guide-back" hidden>Back</button>
+        <button type="button" class="an-gbtn primary" id="an-guide-next">Next</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='shell.js') }}?v=20261009a" defer></script>
