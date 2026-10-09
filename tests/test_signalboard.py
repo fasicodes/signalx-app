@@ -234,4 +234,25 @@ check(r.status_code == 200 and b"Email alerts are off" in r.data and row["email"
       "no login needed: email off, bell alerts kept")
 check(cl.get("/signals/unsubscribe?t=bad").status_code == 400, "bad link -> clear message")
 
+print("\n[landing summary]")
+from datetime import datetime as _D, timedelta as _T
+_now = _D(2026, 10, 9, 12, 0, 0)
+with sb._board_lock:
+    _saved = dict(sb._board["rows"])
+    sb._board["rows"] = {
+        "BTC/USDT": {"active": {"side": "SHORT", "signal_at": "2026-10-09T10:00:00Z", "entry": 1, "stop_loss": 2, "take_profit": 0.5}},
+        "ETH/USDT": {"active": {"side": "LONG", "signal_at": "2026-10-09T11:30:00Z", "entry": 1, "stop_loss": 0.5, "take_profit": 2}},
+        "SOL/USDT": {"verdict": "WAIT"},
+        "XRP/USDT": {"error": "no data"},
+    }
+ps = sb.public_summary(now=_now)
+check(ps["ok"] and ps["active"] == 2 and [r["coin"] for r in ps["recent"]] == ["ETH", "BTC"], "landing summary: active count, newest first")
+check(ps["recent"][0] == {"coin": "ETH", "side": "LONG", "ago": "30 min ago"} and ps["recent"][1]["ago"] == "2 h ago", "landing summary: side and age only")
+check(all("entry" not in r and "stop_loss" not in r for r in ps["recent"]), "landing summary: no entry/stop/target for visitors")
+with sb._board_lock:
+    sb._board["rows"] = {}
+check(sb.public_summary(now=_now) == {"ok": False}, "landing summary: nothing loaded yet -> ok False")
+with sb._board_lock:
+    sb._board["rows"] = _saved
+
 print(f"\nALL {passed} CHECKS PASSED")
