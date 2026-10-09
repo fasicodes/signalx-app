@@ -1,23 +1,16 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ title }} | Signals FM</title>
-<meta name="robots" content="noindex">
-<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
-</head>
-<body>
-{% include '_public_nav.html' %}
-<main class="wrap">
-  <div class="phead">
-    <h1>{{ title }}</h1>
-    <p>{{ text }}</p>
-    <p style="margin-top:22px"><a class="pbtn primary" href="/signals">Open the signals page</a></p>
-  </div>
-</main>
-{% include '_public_footer.html' %}
-</body>
-</html>
+{% extends '_info_base.html' %}
+{# Short message page: error pages (404/429/500) and confirmations such as "Email alerts are off".
+   Pass title and text; optional action_href/action_text and second_href/second_text for the buttons. #}
+{% block title %}{{ title }} | Signals FM{% endblock %}
+{% block description %}{{ text }}{% endblock %}
+{% block seo %}<meta name="robots" content="noindex">{% endblock %}
+{% block content %}
+<div class="phead msg-page">
+  <h1>{{ title }}</h1>
+  <p>{{ text }}</p>
+  <p class="cta-row">
+    <a class="pbtn primary" href="{{ action_href or '/signals' }}">{{ action_text or 'Open the signals page' }}</a>
+    {% if second_href %}<a class="pbtn" href="{{ second_href }}">{{ second_text }}</a>{% endif %}
+  </p>
+</div>
+{% endblock %}
