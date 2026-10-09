@@ -1,0 +1,62 @@
+{% extends '_info_base.html' %}
+{% set active = 'pricing' %}
+{% set seo_title = "Signals FM pricing" %}{% set seo_path = "/pricing" %}
+{% set seo_description = "Every Signals FM feature is free while we're in beta. No card needed." %}
+{% block title %}Pricing | Signals FM{% endblock %}
+{% block description %}Every Signals FM feature is free while we're in beta. No card needed.{% endblock %}
+{% block content %}
+<div class="phead">
+  <p class="eyebrow">Pricing</p>
+  <h1>Free while we're in beta</h1>
+  <p class="lead">Every feature is free during the beta. Paid plans will be announced in advance, and nothing changes without notice.</p>
+</div>
+
+<div class="price-wrap">
+  <section class="plan" aria-labelledby="plan-name">
+    <span class="plan-tag">Beta</span>
+    <h2 id="plan-name">Everything included</h2>
+    <div class="price"><b>$0</b><span>per month</span></div>
+    <p class="sub">No card, no trial that runs out, nothing to cancel.</p>
+    <ul class="checks">
+      {% for name, detail in features %}<li><b>{{ name }}</b><small>{{ detail }}</small></li>{% endfor %}
+    </ul>
+    {% if session.get('user_id') %}
+      <a class="pbtn primary lg" href="/">Open your dashboard</a>
+    {% else %}
+      <a class="pbtn primary lg" href="/login">Create free account</a>
+    {% endif %}
+  </section>
+
+  <div class="side-notes">
+    <div class="icard">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h3"/></svg></div>
+      <h3>No card needed</h3>
+      <p>Sign up with your email or Google and start right away.</p>
+    </div>
+    <div class="icard">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg></div>
+      <h3>Announced in advance</h3>
+      <p>If paid plans come, they are announced here first. Nothing changes on your account without notice.</p>
+    </div>
+    <div class="icard">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-3 3 2 4-5"/></svg></div>
+      <h3>Practise for free, as long as you like</h3>
+      <p>Demo trading uses live prices and virtual money, so you can learn how signals behave before risking anything.</p>
+    </div>
+    <div class="note-box" style="margin:0"><b>Free does not mean risk-free.</b> Signals lose regularly: in testing about 7 in 10 won, but
+      each loss was about twice the size of each win. Read the <a class="link" href="/risk-disclosure">risk disclosure</a>.</div>
+  </div>
+</div>
+
+<section class="block" style="margin-top:40px">
+  <h2 class="sec">Pricing questions</h2>
+  <details class="qa"><summary>Will Signals FM stay free?</summary>
+    <div class="a"><p>Every feature is free during the beta. If paid plans are added later, they will be announced on this page in
+      advance, and nothing changes without notice.</p></div></details>
+  <details class="qa"><summary>Do I need to add a card or crypto wallet?</summary>
+    <div class="a"><p>No. You only need an email address or a Google account.</p></div></details>
+  <details class="qa"><summary>Does the auto-trade bot cost anything?</summary>
+    <div class="a"><p>Signals FM charges nothing for it. Your exchange still charges its normal trading fees on real orders.</p></div></details>
+  <p style="margin-top:18px"><a class="link" href="/faq">More questions in the FAQ</a></p>
+</section>
+{% endblock %}
