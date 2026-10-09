@@ -9,7 +9,8 @@
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <style>
   .src-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 26px; }
   .src-note { color: var(--text-faint); font-size: 13.5px; }
@@ -60,9 +61,10 @@
   .rules li b { color: var(--text); font-weight: 600; }
 </style>
 </head>
-<body>
+<body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
+{% from '_tip.html' import tip %}
 {% set active = 'track' %}
-{% include '_public_nav.html' %}
+{% if session.get('user_id') %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
 
 <main class="wrap">
   <section class="phead">
@@ -76,9 +78,9 @@
       </div>
       <span class="src-note" id="src-note">Loading…</span>
     </div>
-    {% if not public %}
-    <div class="private-note">This page is visible only to logged-in users while you review it. To publish it for everyone,
-      set <b>TRACK_RECORD_PUBLIC=on</b> in the server settings.</div>
+    {% if not public and is_admin %}
+    <div class="private-note">Only you see this note (your email is in ADMIN_EMAILS). This page is visible only to logged-in users
+      while you review it. To publish it for everyone, set <b>TRACK_RECORD_PUBLIC=on</b> in Railway Variables.</div>
     {% endif %}
   </section>
 
@@ -99,13 +101,13 @@
     </section>
 
     <section class="block">
-      <h2 class="sec">10,000 USDT, risking 1% on every signal</h2>
+      <h2 class="sec">10,000 USDT, risking 1% on every signal{{ tip('r', 'R') }}</h2>
       <p class="sec-sub">What the account would look like if every signal had been taken with the same 1% risk, compounding, after estimated fees.</p>
       <svg id="curve" role="img" aria-label="Account balance over time"></svg>
     </section>
 
     <section class="block">
-      <h2 class="sec">Does a higher confidence win more often?</h2>
+      <h2 class="sec">Does a higher confidence win more often?{{ tip('win_chance', 'win chance') }}</h2>
       <p class="sec-sub">Win rate by the confidence the signal showed at the time. The grey mark is the win rate needed to break even with this payoff.</p>
       <div id="conf"></div>
       <p class="conf-key" id="conf-key"></p>
@@ -147,6 +149,7 @@
 </main>
 
 {% include '_public_footer.html' %}
+{% if not session.get('user_id') %}<script src="{{ url_for('static', filename='shell.js') }}?v=20261009a" defer></script>{% endif %}
 
 <script>
 (() => {
@@ -214,12 +217,13 @@
     const end = s.equity_1pct;
     $("lede").innerHTML = `Taking every one of these <b>${s.signals}</b> signals with 1% risk would have turned 10,000 USDT into
       <b class="${cls(end - 10000)}">${money(end)} USDT</b> (${s.return_1pct >= 0 ? "+" : ""}${s.return_1pct.toFixed(1)}%), after estimated fees.`;
-    const fig = (k, v, sub, c) => `<div><dt>${k}</dt><dd class="${c || ""}">${v}<small>${sub}</small></dd></div>`;
+    const tipBtn = (key, label) => `<button type="button" class="tip" data-tip="${key}" aria-label="What does ${label} mean?">?</button>`;
+    const fig = (k, v, sub, c, t) => `<div><dt>${k}${t ? tipBtn(t, k.toLowerCase()) : ""}</dt><dd class="${c || ""}">${v}<small>${sub}</small></dd></div>`;
     $("figs").innerHTML = [
-      fig("Win rate", fmtPct(s.win_rate), `${s.wins} won, ${s.losses} lost`),
-      fig("Average per signal", fmtR(s.avg_r), `${fmtR(s.total_r)} in total`, cls(s.avg_r)),
-      fig("Profit factor", s.profit_factor == null ? "—" : s.profit_factor.toFixed(2), "Gross R won ÷ gross R lost", s.profit_factor >= 1 ? "pos" : "neg"),
-      fig("Largest drop", "−" + s.max_drawdown_pct.toFixed(1) + "%", "Peak to low, at 1% risk"),
+      fig("Win rate", fmtPct(s.win_rate), `${s.wins} won, ${s.losses} lost`, "", "win_rate"),
+      fig("Average per signal", fmtR(s.avg_r), `${fmtR(s.total_r)} in total`, cls(s.avg_r), "avg_r"),
+      fig("Profit factor", s.profit_factor == null ? "—" : s.profit_factor.toFixed(2), "Gross R won ÷ gross R lost", s.profit_factor >= 1 ? "pos" : "neg", "profit_factor"),
+      fig("Largest drop", "−" + s.max_drawdown_pct.toFixed(1) + "%", "Peak to low, at 1% risk", "", "drawdown"),
       fig("Break-even win rate", fmtPct(s.breakeven_win_rate), "Needed with this payoff"),
     ].join("");
 
