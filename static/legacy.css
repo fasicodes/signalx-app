@@ -1,0 +1,21 @@
+/* The older trading pages (demo trading, auto-trade bot) inside the app shell:
+   same colours and heading font as the rest of the app. Loaded after style.css. */
+html:root {
+  --void: #0a100e; --background: #0a100e; --panel: #111a17; --panel-raised: #172320; --panel-hover: #1d2c27;
+  --line: #22322c; --line-soft: #1a2823; --text: #e8f1ec; --text-dim: #93a89e; --text-faint: #66796f;
+  --long: #34d399; --long-bright: #4be3a9; --long-dim: rgba(52, 211, 153, 0.12);
+  --short: #f4566c; --short-bright: #ff6b7e; --short-dim: rgba(244, 86, 108, 0.12);
+  --wait: #f2b84b; --wait-dim: rgba(242, 184, 75, 0.13);
+  --bg-glow: transparent; --bg-grid: transparent;
+  --heading: "Syne", "Segoe UI", sans-serif;
+}
+html:root[data-theme="light"] {
+  --void: #f3f7f5; --background: #f3f7f5; --panel: #ffffff; --panel-raised: #eef4f1; --panel-hover: #e5eee9;
+  --line: #d9e4de; --line-soft: #e6eee9; --text: #0d1b15; --text-dim: #4d6158; --text-faint: #74877e;
+  --long: #0f8a50; --long-bright: #0b7343; --long-dim: rgba(15, 138, 80, 0.1);
+  --short: #d92d47; --short-bright: #b81f36; --short-dim: rgba(217, 45, 71, 0.08);
+  --wait: #9a5f00; --wait-dim: rgba(154, 95, 0, 0.1);
+}
+body.an-shell { background: var(--background); }
+/* the page's own header becomes a toolbar under the app's top bar */
+.page-title { font-family: var(--heading); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; white-space: nowrap; margin: 0; }
