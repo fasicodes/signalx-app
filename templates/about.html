@@ -1,0 +1,103 @@
+{% extends '_info_base.html' %}
+{% set active = 'about' %}
+{% set seo_title = "About Signals FM" %}{% set seo_path = "/about" %}
+{% set seo_description = "Who builds Signals FM, how the signal engine works, and why every result is shown, wins and losses." %}
+{% block title %}About Signals FM{% endblock %}
+{% block description %}Who builds Signals FM, how the signal engine works, and why every result is shown, wins and losses.{% endblock %}
+{% block content %}
+{% from '_tip.html' import tip %}
+<div class="phead">
+  <p class="eyebrow">About us</p>
+  <h1>Crypto signals you can check for yourself</h1>
+  <p class="lead">Signals FM is a web-based trading signal platform. It reads the market with tested statistical models and shows
+    every result, wins and losses, so traders can make better decisions with less guesswork.</p>
+</div>
+
+<section class="block">
+  <div class="prose">
+    <h2>Who we are</h2>
+    <p>Signals FM is built and run by <b>Fasiullah Ayaz</b>, founder and CEO. It started from a simple problem: before a trade,
+      traders often collect calculations from many different platforms and still are not sure what they mean. Signals FM brings
+      those analytical methods together in one place.</p>
+    <p>Whether you are just starting your trading journey or already have experience in the markets, Signals FM is designed to give
+      you helpful insight when you want a second opinion on the market.</p>
+    <h2>Our mission</h2>
+    <p>To make trading analysis easier to reach for beginners and experienced traders alike. Instead of comparing numbers from
+      different platforms, you see the market's picture in one place, in plain language, with the risks spelled out.</p>
+  </div>
+</section>
+
+<section class="block">
+  <h2 class="sec">How the signal engine works</h2>
+  <p class="sec-sub">Three rules decide every signal. They are the same rules that were tested before you ever see a signal.</p>
+  <div class="cards3">
+    <div class="icard">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M17 4v16"/><rect x="4" y="8" width="6" height="7" rx="1"/><rect x="14" y="6" width="6" height="9" rx="1"/></svg></div>
+      <h3>Reads closed 4-hour candles{{ tip('candle_4h', '4-hour candle') }}</h3>
+      <p>The engine only uses candles that have finished. For each of the 30 coins it checks, it reads the coin's own price action,
+        its daily trend, Bitcoin and the market of 16 large coins: 82 measurements in all.</p>
+    </div>
+    <div class="icard">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg></div>
+      <h3>Signals only its strongest setups</h3>
+      <p>A machine-learning model estimates each trade's chance of reaching its target before its stop. Only roughly the top 3% of
+        setups become a Long or Short signal; the rest of the time it says Wait.</p>
+    </div>
+    <div class="icard">
+      <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></div>
+      <h3>Tested on data it never saw{{ tip('unseen_data', 'tested on unseen data') }}</h3>
+      <p>The model learned from January 2022 to June 2025 and was then tested once on July 2025 to October 2026, with every fee
+        included and losses counted the pessimistic way.</p>
+    </div>
+  </div>
+  {% if stats and stats.signals %}
+  <dl class="figs4" style="margin-top:14px">
+    <div><dt>Signals tested</dt><dd>{{ stats.signals }}<small>on {{ stats.coins }} coins</small></dd></div>
+    <div><dt>Signals won{{ tip('win_rate', 'win rate') }}</dt><dd>{{ stats.win_rate }}%<small>reached the target first</small></dd></div>
+    <div><dt>Average per signal{{ tip('avg_r', 'average result') }}</dt><dd>{{ '%+.3f' % stats.avg_net_r }}R<small>after 0.12% fees</small></dd></div>
+    <div><dt>Worst drawdown{{ tip('drawdown', 'drawdown') }}</dt><dd>{{ stats.max_drawdown_r }}R<small>the deepest losing streak</small></dd></div>
+  </dl>
+  <p class="meta-line">Each loss is about twice the size of each win, so a high win rate still means a small edge, and some months lose.
+    Past results do not guarantee future results.</p>
+  {% endif %}
+</section>
+
+<section class="block">
+  <h2 class="sec">What we promise</h2>
+  <div class="cards2">
+    <div class="icard"><h3>Every result, not just the wins</h3><p>The <a class="link" href="/track-record">track record</a> logs every
+      signal automatically with its stop, target and result after fees. Nothing is deleted.</p></div>
+    <div class="icard"><h3>No guaranteed profits</h3><p>No signal service can promise profit, and we never will. We would rather show
+      Wait than a weak trade.</p></div>
+    <div class="icard"><h3>Practice before real money</h3><p><a class="link" href="/demo-trading">Demo trading</a> uses live prices and
+      virtual money, so you can learn how signals behave before risking anything.</p></div>
+    <div class="icard"><h3>Your keys stay protected</h3><p>Exchange keys for the auto-trade bot are encrypted on the server, and keys
+      that allow withdrawals are refused.</p></div>
+  </div>
+</section>
+
+<section class="block">
+  <div class="prose">
+    <h2>Our values</h2>
+    <ul>
+      <li><b>Simplicity.</b> Clear answers in plain language, on any screen.</li>
+      <li><b>Honesty.</b> Timely and transparent market insight, with the risks shown next to the results.</li>
+      <li><b>Continuous improvement.</b> The engine is tested again on new data before any change goes live.</li>
+      <li><b>Tools for every level.</b> From the one-tap signal card to the 27-channel Pro terminal.</li>
+      <li><b>Responsibility.</b> Trust earned through responsible and ethical practice.</li>
+    </ul>
+    <h2>Looking ahead</h2>
+    <p>We keep improving Signals FM. We plan to add more markets, along with new analytical tools and features. Thank you for
+      being part of the Signals FM community.</p>
+  </div>
+  <div class="cta-row">
+    {% if session.get('user_id') %}
+      <a class="pbtn primary lg" href="/signals">Open the signals board</a>
+    {% else %}
+      <a class="pbtn primary lg" href="/login">Create free account</a>
+    {% endif %}
+    <a class="pbtn lg" href="/contact">Contact us</a>
+    <a class="pbtn lg" href="/faq">Read the FAQ</a>
+  </div>
+</section>
+{% endblock %}
