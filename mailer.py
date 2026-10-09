@@ -4,7 +4,7 @@ Email bhejne ka helper - Gmail SMTP use karta hai.
 Zaroori environment variables:
     MAIL_USERNAME       - Gmail address (e.g. you@gmail.com)
     MAIL_PASSWORD       - Gmail App Password (16-digit, spaces ke bina)
-    MAIL_SENDER_NAME    - Kis naam se email aaye (default: "SignalX")
+    MAIL_SENDER_NAME    - Kis naam se email aaye (default: "Signals FM")
 """
 
 import os
@@ -13,12 +13,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 
-def send_email(to_email, subject, html_body):
+def send_email(to_email, subject, html_body, reply_to=None):
     """Email bhejta hai. Agar MAIL_USERNAME/PASSWORD set nahi hain to
-    False return karta hai aur warning print karta hai (crash nahi karta)."""
+    False return karta hai aur warning print karta hai (crash nahi karta).
+    reply_to: optional address that "Reply" goes to (contact form)."""
     username = os.environ.get("MAIL_USERNAME")
     password = os.environ.get("MAIL_PASSWORD")
-    sender_name = os.environ.get("MAIL_SENDER_NAME", "SignalX")
+    sender_name = os.environ.get("MAIL_SENDER_NAME", "Signals FM")
 
     if not username or not password:
         print(f"[mailer] WARNING: MAIL_USERNAME/PASSWORD not set - email to {to_email} not sent")
@@ -28,6 +29,8 @@ def send_email(to_email, subject, html_body):
     msg["Subject"] = subject
     msg["From"] = f"{sender_name} <{username}>"
     msg["To"] = to_email
+    if reply_to and "\n" not in reply_to and "\r" not in reply_to:
+        msg["Reply-To"] = reply_to
     msg.attach(MIMEText(html_body, "html"))
 
     try:
