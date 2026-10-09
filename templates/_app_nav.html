@@ -63,9 +63,9 @@
     <p class="an-group">Trade</p>
     {{ item("/", "Home", "home", '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>') }}
     {{ item("/signals", "Signals board", "signals", '<path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/>') }}
+    {{ item("/chart", "Live chart", "chart", '<path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/>') }}
+    {{ item("/liquidity-scanner", "Liquidity scanner", "liquidity", '<circle cx="12" cy="12" r="8"/><path d="M12 12l5-3"/><circle cx="12" cy="12" r="2"/>') }}
     {{ item("/advanced", "Pro terminal", "pro", '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14l3-3 3 2 4-5M8 21h8"/>') }}
-    {{ item("/advanced#livechart", "Advanced chart", "pro-chart", '<path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/>') }}
-    {{ item("/advanced#liquidity", "Liquidity scanner", "pro-liq", '<circle cx="12" cy="12" r="8"/><path d="M12 12l5-3"/><circle cx="12" cy="12" r="2"/>') }}
     {{ item("/demo-trading", "Demo trading", "demo", '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-3 3 2 4-5"/>') }}
     {{ item("/auto-trading", "Auto-trade bot", "bot", '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/>') }}
   </nav>
@@ -169,4 +169,4 @@
     </div>
   </div>
 </div>
-<script src="{{ url_for('static', filename='shell.js') }}?v=20261009a" defer></script>
+<script src="{{ url_for('static', filename='shell.js') }}?v=20261010a" defer></script>
