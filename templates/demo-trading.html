@@ -7,7 +7,9 @@
 <meta name="description" content="Practice crypto spot and futures trading with live prices and virtual funds.">
 <link rel="stylesheet" href="/static/style.css?v=20260812-fx-1">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='legacy.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   [hidden] { display: none !important; }
@@ -17,6 +19,24 @@
   .mono { font-family: var(--mono); }
   .pos { color: var(--long); } .neg { color: var(--short); } .dim { color: var(--text-dim); } .faint { color: var(--text-faint); }
   .warnc { color: var(--wait); }
+
+  /* ---------- inside the app shell (top bar, side menu, tabs) ---------- */
+  body.an-shell .dt-app { padding: 10px; }
+  body.an-shell .dt-markets { top: calc(var(--an-top-h) + 10px); max-height: calc(100vh - var(--an-top-h) - 92px); }
+  body.an-shell .dt-order { top: calc(var(--an-top-h) + 10px); max-height: calc(100vh - var(--an-top-h) - 20px); }
+  body.an-shell .dt-grid .dt-markets { z-index: 900; }
+  @media (max-width: 1023px) {
+    body.an-shell .dt-order { max-height: calc(100vh - var(--an-top-h) - var(--an-tab-h) - 20px); }
+    body.an-shell .toasts { bottom: calc(var(--an-tab-h) + 14px + env(safe-area-inset-bottom, 0px)); }
+  }
+  /* the side menu takes 248px on wide screens: use the 2-column layout until there is room for 3 */
+  @media (min-width: 1321px) and (max-width: 1568px) {
+    body.an-shell:not(.an-collapsed) .dt-grid { grid-template-columns: minmax(0, 1fr) 330px; }
+    body.an-shell:not(.an-collapsed) .dt-grid .dt-markets { position: fixed; z-index: 900; top: 0; left: 0; bottom: 0; width: 280px; max-height: none; border-radius: 0;
+                  transform: translateX(-102%); transition: transform .2s; box-shadow: 0 0 40px rgba(0,0,0,.5); }
+    body.an-shell:not(.an-collapsed) .dt-grid .dt-markets.open { transform: none; }
+    body.an-shell:not(.an-collapsed) #btn-markets { display: inline-flex !important; }
+  }
 
   /* ---------- buttons / inputs ---------- */
   .dt-btn { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text); padding: 7px 12px; border-radius: 6px;
@@ -73,6 +93,7 @@
   }
   @media (max-width: 900px) {
     body { padding: 6px; }
+    body.an-shell .dt-app { padding: 6px; }
     .dt-grid { grid-template-columns: minmax(0, 1fr); }
     .dt-grid .dt-center { display: contents; }
     .dt-grid .symbar { order: 1; }
@@ -104,7 +125,7 @@
   /* ---------- symbol bar ---------- */
   .symbar { display: flex; align-items: center; gap: 22px; padding: 10px 14px; flex-wrap: wrap; }
   .symbar .sym { display: flex; align-items: center; gap: 8px; }
-  .symbar .sym h1 { font-family: var(--heading); font-size: 18px; margin: 0; white-space: nowrap; }
+  .symbar .sym h1, .symbar .sym h2 { font-family: var(--heading); font-size: 18px; margin: 0; white-space: nowrap; }
   .symbar .mkt { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
   .symbar .last { font-family: var(--mono); font-size: 22px; font-weight: 700; }
   .sb-kv { display: flex; flex-direction: column; font-family: var(--mono); line-height: 1.3; }
@@ -250,14 +271,14 @@
 </style>
 {% include '_analytics.html' ignore missing %}
 </head>
-<body>
+<body class="an-shell">
+{% set active = 'demo' %}
+{% include '_app_nav.html' %}
 <div class="dt-app">
 
   <header class="dt-panel dt-top">
     <div class="dt-brand">
-      <a href="/" class="back-link" title="Back to dashboard">← Dashboard</a>
-      <img src="{{ url_for('static', filename='logo.png') }}" alt="">
-      <span class="name">Signals FM</span><span class="sub">Demo Trading</span>
+      <h1 class="page-title">Demo trading</h1>
       <span class="pill" title="Live market prices, virtual money">PRACTICE<span class="long"> · VIRTUAL USDT</span></span>
     </div>
     <div class="dt-acct" aria-live="polite">
@@ -290,7 +311,7 @@
     <main class="dt-center">
       <section class="dt-panel symbar" aria-label="Selected market">
         <button class="dt-btn sm" id="btn-markets" aria-controls="markets">☰ Markets</button>
-        <div class="sym"><h1 id="sb-symbol">BTC/USDT</h1><span class="mkt" id="sb-market">Futures</span></div>
+        <div class="sym"><h2 id="sb-symbol">BTC/USDT</h2><span class="mkt" id="sb-market">Futures</span></div>
         <div><div class="last" id="sb-last">—</div></div>
         <div class="sb-kv"><span>24h change</span><b id="sb-chg">—</b></div>
         <div class="sb-kv"><span>24h high</span><b id="sb-high">—</b></div>
@@ -813,6 +834,14 @@
       onFormChange();
     });
   }
+  document.addEventListener("themechange", () => {
+    if (!chart || !candle) return;
+    chart.applyOptions({ layout: { background: { type: "solid", color: cssVar("--panel") }, textColor: cssVar("--text-dim") },
+      grid: { vertLines: { color: cssVar("--line-soft") }, horzLines: { color: cssVar("--line-soft") } },
+      rightPriceScale: { borderColor: cssVar("--line") }, timeScale: { borderColor: cssVar("--line") } });
+    const up = cssVar("--long"), down = cssVar("--short");
+    candle.applyOptions({ upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
+  });
   function applyPriceFormat() {
     if (!candle) return;
     const t = S.tickers[S.symbol];
