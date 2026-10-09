@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a100e">
+<title>Liquidity scanner | Signals FM</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='market.css') }}?v=20261010a">
+{% include '_analytics.html' ignore missing %}
+</head>
+<body class="app an-shell mk-page">
+{% from '_tip.html' import tip %}
+{% set active = 'liquidity' %}
+{% include '_app_nav.html' %}
+
+<main class="mk-wrap lq-wrap" id="main">
+  <section class="lq-head" aria-label="Market">
+    <div class="mk-top">
+      <button class="mk-coin" id="coin-btn" type="button" aria-haspopup="dialog" aria-label="Change coin or pair">
+        <img id="coin-icon" src="" alt="" width="30" height="30">
+        <span class="mk-coin-name"><b id="coin-sym">BTC/USDT</b><small id="coin-kind">Crypto</small></span>
+        <svg class="mk-caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="mk-quote" aria-live="polite"><b class="tnum" id="q-price">--</b><span class="tnum mk-chg" id="q-chg">&nbsp;</span></div>
+      <dl class="mk-stats">
+        <div><dt>Spread{{ tip('spread', 'spread') }}</dt><dd class="tnum" id="q-spread">--</dd></div>
+        <div><dt>Book reach</dt><dd class="tnum" id="q-reach">--</dd></div>
+        <div><dt>Visible book</dt><dd class="tnum" id="q-book">--</dd></div>
+      </dl>
+      <div class="mk-top-right">
+        <div class="mk-recent" id="recent" aria-label="Recent coins"></div>
+        <a class="mk-btn" id="chart-link" href="/chart" style="border-color:var(--line)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/></svg><span>Live chart</span></a>
+      </div>
+    </div>
+    <div class="lq-ctrl">
+      <div class="mk-seg" id="tf-seg" role="group" aria-label="Candles used for levels">
+        <button type="button" data-tf="15m">15m</button><button type="button" data-tf="1h">1h</button>
+        <button type="button" data-tf="4h">4h</button><button type="button" data-tf="1d">1D</button>
+      </div>
+      <div class="mk-seg mk-seg-sm" id="every-seg" role="group" aria-label="Refresh every">
+        <button type="button" data-every="5">5s</button><button type="button" data-every="10">10s</button><button type="button" data-every="30">30s</button>
+      </div>
+      <button class="mk-btn" id="pause-btn" type="button" aria-pressed="false" style="border-color:var(--line)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg><span>Pause</span></button>
+      <span class="lq-live" role="status"><span class="mk-live" id="live-dot"></span><span id="live-text">Connecting…</span></span>
+      <p class="mk-note">Order book and trades from OKX, refreshed live. Levels from the timeframe you pick.</p>
+    </div>
+  </section>
+
+  <nav class="lq-nav" aria-label="Sections">
+    <a href="#sec-summary">Summary</a><a href="#sec-depth">Depth</a><a href="#sec-map">Book map</a><a href="#sec-trades">Big trades</a>
+    <a href="#sec-liq">Liquidations</a><a href="#sec-levels">Key levels</a><a href="#sec-sweep">Sweeps</a><a href="#sec-cards">Scanner</a><a href="#sec-alerts">Alerts</a>
+  </nav>
+
+  <section class="mk-card lq-card lq-read" id="sec-summary" aria-live="polite">
+    <div class="mk-head" style="margin:0"><h2 class="mk-h2">What the liquidity says now</h2><span class="mk-sub" id="sum-time"></span></div>
+    <p class="lq-say" id="say">Reading the order book…</p>
+    <dl class="lq-kpis" id="kpis"></dl>
+  </section>
+
+  <div class="lq-grid two">
+    <section class="mk-card lq-card" id="sec-depth">
+      <div class="mk-head">
+        <h2 class="mk-h2">Order book depth{{ tip('depth_chart', 'depth chart') }}</h2>
+        <div class="mk-seg mk-seg-sm" id="win-seg" role="group" aria-label="Price window">
+          <button type="button" data-win="0.25">±0.25%</button><button type="button" data-win="0.5">±0.5%</button>
+          <button type="button" data-win="1">±1%</button><button type="button" data-win="0">All</button>
+        </div>
+      </div>
+      <div class="lq-depth" id="depth"><div class="lq-unavail">Loading…</div></div>
+      <div class="lq-legend"><span><i style="background:var(--long)"></i>Bids (buy orders) added up</span><span><i style="background:var(--short)"></i>Asks (sell orders) added up</span><span><i style="background:var(--amber)"></i>Walls</span></div>
+      <h3 class="mk-h2" style="font-size:14.5px;margin:16px 0 0">Bid / ask balance{{ tip('imbalance', 'book imbalance') }}</h3>
+      <div class="lq-bands" id="bands"></div>
+    </section>
+    <section class="mk-card lq-card" id="sec-map">
+      <div class="mk-head"><h2 class="mk-h2">Book map{{ tip('order_book', 'order book') }}</h2><span class="mk-sub" id="map-step"></span></div>
+      <div class="lq-map" id="ladder"><div class="lq-unavail">Loading…</div></div>
+      <p class="mk-note" style="margin-top:10px">Orders grouped into equal price steps around the price: asks above, bids below. Tags mark walls{{ tip('wall', 'order wall') }}.</p>
+    </section>
+  </div>
+
+  <div class="lq-grid half">
+    <section class="mk-card lq-card" id="sec-trades">
+      <div class="mk-head"><h2 class="mk-h2">Taker flow and big trades{{ tip('taker_flow', 'taker flow') }}</h2><span class="mk-sub" id="trades-span"></span></div>
+      <div id="trades"><div class="lq-unavail">Loading…</div></div>
+    </section>
+    <section class="mk-card lq-card" id="sec-liq">
+      <div class="mk-head"><h2 class="mk-h2">Liquidation zones (estimated){{ tip('liquidation_zone', 'liquidation zones') }}</h2></div>
+      <div id="liq"><div class="lq-unavail">Loading…</div></div>
+    </section>
+  </div>
+
+  <div class="lq-grid half">
+    <section class="mk-card lq-card" id="sec-levels">
+      <div class="mk-head"><h2 class="mk-h2">Key liquidity levels</h2><span class="mk-sub">nearest first above and below</span></div>
+      <div class="lq-levels" id="levels"><div class="lq-unavail">Loading…</div></div>
+    </section>
+    <section class="mk-card lq-card" id="sec-sweep">
+      <div class="mk-head"><h2 class="mk-h2">Liquidity sweeps{{ tip('liquidity_sweep', 'liquidity sweep') }}</h2><span class="mk-sub" id="sweep-tf"></span></div>
+      <div id="sweep"><div class="lq-unavail">Loading…</div></div>
+      <h3 class="mk-h2" style="font-size:14.5px;margin:16px 0 8px">Stop pools{{ tip('stop_pool', 'stop pool') }}</h3>
+      <div id="pools"></div>
+    </section>
+  </div>
+
+  <section class="lq-card" id="sec-cards" aria-label="Scanner readings">
+    <div class="mk-head"><h2 class="mk-h2">Scanner readings</h2><span class="mk-sub">same readings as the Pro terminal's liquidity tab</span></div>
+    <div class="lq-cards" id="cards"></div>
+  </section>
+
+  <section class="mk-card lq-card" id="sec-alerts">
+    <div class="mk-head"><h2 class="mk-h2">Liquidity alerts for <span id="al-sym" style="margin-left:5px">BTC/USDT</span></h2></div>
+    <div class="lq-alerts" id="al-box"></div>
+    <p class="mk-note" style="margin-top:10px">Alerts are checked while Signals FM is open in your browser; you get a notification (the bell) when one fires, at most once every 30 minutes per alert.</p>
+  </section>
+
+  <p class="mk-note" style="max-width:110ch">How to read this page: order books change every second and big orders can be pulled before price reaches them, so walls are not promises.
+    Liquidation zones are estimates from price, volume and common leverage, not exchange data. None of this is a signal or financial advice;
+    signals come only from the signal engine on the dashboard.</p>
+</main>
+
+<script src="{{ url_for('static', filename='market-common.js') }}?v=20261010a" defer></script>
+<script src="{{ url_for('static', filename='liquidity-page.js') }}?v=20261010a" defer></script>
+</body>
+</html>
