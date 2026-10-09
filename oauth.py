@@ -1,5 +1,5 @@
 """
-Google OAuth login SignalX ke liye.
+Google OAuth login Signals FM ke liye.
 
 Zaroori environment variables (Railway mein set karni hain):
     GOOGLE_CLIENT_ID
@@ -21,6 +21,7 @@ from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, redirect, session, url_for
 
 from db import get_db_connection
+from auth import _bump_session_version, _session_version
 
 oauth_bp = Blueprint("oauth", __name__)
 oauth = OAuth()
@@ -49,9 +50,20 @@ def _find_or_create_oauth_user(email, provider, avatar_url=None):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, email FROM users WHERE email = %s", (email,))
+            cursor.execute("SELECT id, email, email_verified FROM users WHERE email = %s", (email,))
             user = cursor.fetchone()
             if user:
+                if not user.get("email_verified"):
+                    # Someone signed up with this email and a password but never proved the inbox is theirs.
+                    # Google has now proved who owns it: mark it verified and drop that unproven password,
+                    # so nobody else can log in to this account with it (and log out any session that used it).
+                    cursor.execute(
+                        """UPDATE users SET email_verified = 1, password_hash = NULL,
+                                  verify_token = NULL, verify_token_expires = NULL WHERE id = %s""",
+                        (user["id"],),
+                    )
+                    _bump_session_version(cursor, user["id"])
+                user["sv"] = _session_version(cursor, user["id"])
                 if avatar_url:
                     cursor.execute(
                         "UPDATE users SET avatar_url = %s WHERE id = %s",
@@ -63,7 +75,7 @@ def _find_or_create_oauth_user(email, provider, avatar_url=None):
                 (email, provider, avatar_url),
             )
             new_id = cursor.lastrowid
-            return {"id": new_id, "email": email}
+            return {"id": new_id, "email": email, "sv": 0}
     finally:
         conn.close()
 
@@ -86,10 +98,14 @@ def google_callback():
     avatar_url = userinfo.get("picture")
     if not email:
         return redirect("/login?error=google_no_email")
+    if userinfo.get("email_verified") is not True:
+        # Only an address Google has verified may open (or create) an account with that email.
+        return redirect("/login?error=google_email_unverified")
 
     user = _find_or_create_oauth_user(email, "google", avatar_url)
     session.permanent = True
     session["user_id"] = user["id"]
     session["email"] = user["email"]
     session["avatar_url"] = avatar_url
+    session["sv"] = user.get("sv", 0)
     return redirect("/")
