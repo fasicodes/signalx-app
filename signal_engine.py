@@ -44,6 +44,8 @@ UNIVERSE = ["ADA/USDT", "ATOM/USDT", "AVAX/USDT", "BCH/USDT", "BNB/USDT", "BTC/U
             "ETH/USDT", "LINK/USDT", "LTC/USDT", "NEAR/USDT", "SOL/USDT", "TRX/USDT", "XLM/USDT", "XRP/USDT"]
 COST_ROUND_TRIP = 0.0012      # 0.05% taker in + 0.05% out + 0.02% slippage
 EPS = 1e-12
+RECENT_KEYS = ("side", "entry", "stop_loss", "take_profit", "confidence", "signal_at", "closed_at", "status", "exit_price", "r")
+RECENT_MAX = 30               # closed signals kept in a result's "recent" list (chart markers)
 _MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "signal_model.json")
 
 
@@ -402,9 +404,11 @@ def follow(side, entry, sl, tp, o, h, l, c, start, max_bars=None):
     return None, None, max_bars
 
 
-def replay(F, pl, ps, cl, cs, lookback=300):
+def replay(F, pl, ps, cl, cs, lookback=300, trades=None):
     """One trade at a time per coin, replayed over the last `lookback`
-    candles. Returns (active trade or None, last closed trade or None)."""
+    candles. Returns (active trade or None, last closed trade or None).
+    `trades`: optional list that receives every closed trade, oldest first
+    (the Live chart shows them as markers)."""
     o, h, l, c = (F[k].to_numpy(float) for k in ("open", "high", "low", "close"))
     atr = F["atr"].to_numpy(float)
     ts = pd.to_datetime(F["timestamp"]).to_list()
@@ -433,6 +437,8 @@ def replay(F, pl, ps, cl, cs, lookback=300):
         trade.update({"status": status, "exit_price": exit_px, "r": round(r - cost_r(trade["entry"], sl), 3),
                       "closed_at": ts[min(i + held, n - 1)].to_pydatetime() + timedelta(seconds=TF_SEC)})
         last = trade
+        if trades is not None:
+            trades.append(trade)
         i += held
     return active, last
 
@@ -533,7 +539,8 @@ class LiveEngine:
             F = self.frame(symbol, bar, now)
             X = assemble(F, btc, mkt, sym=symbol)
             pl, ps, cl, cs = score(X)
-            active, last = replay(F, pl, ps, cl, cs)
+            closed = []
+            active, last = replay(F, pl, ps, cl, cs, trades=closed)
             m = model()
             row = F.iloc[-1]
             bar_time = pd.Timestamp(row["timestamp"]).to_pydatetime()
@@ -563,6 +570,8 @@ class LiveEngine:
                 "max_bars": m.max_bars,
                 "active": active,
                 "last_closed": last,
+                # every signal the same rules gave on this coin in the replay window (~50 days), with its result
+                "recent": [{k: t[k] for k in RECENT_KEYS} for t in closed[-RECENT_MAX:]],
                 "last_close": float(row["close"]),
                 "brief": market_brief(F),
                 "history_bars": int(len(F)),
