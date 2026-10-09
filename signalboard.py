@@ -8,7 +8,8 @@ Signals board + signal alerts - Signals FM
 * Every NEW signal (a trade that started on the candle that just closed) is
   stored once in `signal_events` (UNIQUE symbol + candle, so several app
   instances never notify twice) and sent to subscribed users as an in-app
-  notification (the bell in the dashboard) and, if they chose it, by email.
+  notification (the bell in the dashboard) and, if they chose it, by email
+  and Telegram (telegram_bot.py, linked chats only).
 * Pages / API (login required):
     GET  /signals                 board page
     GET  /api/signals/board       every coin: active trade with live progress, or WAIT with bias
@@ -36,7 +37,7 @@ RETRY_ERRORS_SEC = 600
 MAX_EMAILS_PER_DAY = 12
 PRICE_TTL_SEC = 20
 
-_hooks = {"engine_signal": None, "coins": [], "prices": None, "send_email": None, "secret": None}
+_hooks = {"engine_signal": None, "coins": [], "prices": None, "send_email": None, "secret": None, "telegram": None}
 _board = {"bar": None, "rows": {}, "updated_at": None, "attempt_at": 0.0, "running": False}
 _board_lock = threading.Lock()
 _price_cache = {"ts": 0.0, "data": {}}
@@ -183,21 +184,21 @@ def _sub_coins(raw):
 
 
 def notify(events):
-    """In-app notification for every subscriber; email for those who asked for it."""
+    """In-app notification for every subscriber; email and Telegram for those who asked for them."""
     with _Cursor() as cur:
         cur.execute("""SELECT s.*, u.email AS user_email FROM signal_alert_subs s JOIN users u ON u.id = s.user_id
                        WHERE s.enabled = 1""")
         subs = cur.fetchall() or []
-    if not subs:
-        return 0
     today = _utcnow().strftime("%Y-%m-%d")
     outbox = []
+    per_user = {}
     with _Cursor() as cur:
         for sub in subs:
             wanted = _sub_coins(sub.get("coins"))
             mine = [e for e in events if wanted is None or e["symbol"] in wanted]
             if not mine:
                 continue
+            per_user[sub["user_id"]] = mine
             for e in mine:
                 title = f"New {e['side']} signal: {e['symbol']}"
                 msg = f"Entry {_fmt(e['entry'])} · stop {_fmt(e['stop_loss'])} · target {_fmt(e['take_profit'])}"
@@ -216,6 +217,12 @@ def notify(events):
     send = _hooks.get("send_email")
     if send and outbox:
         threading.Thread(target=_send_all, args=(send, outbox), name="signal-alert-mail", daemon=True).start()
+    tg = _hooks.get("telegram")
+    if tg:
+        try:
+            tg(per_user, events)          # linked chats with alerts on (+ the optional channel)
+        except Exception as e:
+            print(f"[signalboard] telegram alerts failed: {e}")
     return len(subs)
 
 
@@ -309,7 +316,7 @@ _started = False
 _start_lock = threading.Lock()
 
 
-def init_signalboard(app=None, *, engine_signal=None, coins=None, prices=None, send_email=None, start=True):
+def init_signalboard(app=None, *, engine_signal=None, coins=None, prices=None, send_email=None, telegram=None, start=True):
     global _started
     if app is not None and getattr(app, "secret_key", None):
         _hooks["secret"] = app.secret_key
@@ -321,6 +328,8 @@ def init_signalboard(app=None, *, engine_signal=None, coins=None, prices=None, s
         _hooks["prices"] = prices
     if send_email:
         _hooks["send_email"] = send_email
+    if telegram:
+        _hooks["telegram"] = telegram
     try:
         init_tables()
     except Exception as e:
@@ -394,6 +403,33 @@ def board_rows():
 
     out.sort(key=key)
     return out, bar, updated
+
+
+def _ago(dt, now):
+    mins = max(0, int((now - dt).total_seconds() // 60))
+    if mins < 60:
+        return f"{mins} min ago"
+    hours = mins // 60
+    return f"{hours} h ago" if hours < 48 else f"{hours // 24} days ago"
+
+
+def public_summary(limit=3, now=None):
+    """For the landing page (visitors): how many signals are active and the newest few (coin, side, start).
+    Read from the board in memory: no prices, no network. Entry, stop and target stay for members."""
+    now = now or _utcnow()
+    with _board_lock:
+        rows = dict(_board["rows"])
+    if not rows:
+        return {"ok": False}
+    act = []
+    for sym, r in rows.items():
+        a = r.get("active") if isinstance(r, dict) and not r.get("error") else None
+        if a and a.get("side") in ("LONG", "SHORT"):
+            act.append((_parse(a.get("signal_at")) or _parse(a.get("bar_time")) or datetime.min, sym, a["side"]))
+    act.sort(reverse=True)
+    recent = [{"coin": sym.split("/")[0], "side": side, "ago": _ago(t, now) if t != datetime.min else ""}
+              for t, sym, side in act[:limit]]
+    return {"ok": True, "active": len(act), "coins": len(crypto_coins()) or len(rows), "recent": recent}
 
 
 @signalboard_bp.route("/signals", methods=["GET"])
