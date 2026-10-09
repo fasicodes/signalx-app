@@ -6,12 +6,19 @@
 <title>Signals FM — Auto-Trade Bot</title>
 <link rel="stylesheet" href="/static/style.css?v=20260812-fx-1">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='legacy.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   [hidden] { display: none !important; }
   body { align-items: stretch; font-size: 14px; padding: 14px; }
   .at-wrap { max-width: 1600px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  /* inside the app shell (top bar, side menu, tabs) */
+  body.an-shell .at-wrap { padding: 14px; }
+  @media (max-width: 1023px) { body.an-shell .toast { bottom: calc(var(--an-tab-h) + 18px + env(safe-area-inset-bottom, 0px)); } }
+  @media (max-width: 600px) { body.an-shell .at-wrap { padding: 10px; } }
 
   /* Top bar */
   .at-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
@@ -59,6 +66,8 @@
   /* Grid */
   .grid { display: grid; grid-template-columns: 290px minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
   @media (max-width: 1250px) { .grid { grid-template-columns: 1fr; } }
+  /* the side menu takes 248px on wide screens */
+  @media (min-width: 1251px) and (max-width: 1498px) { body.an-shell:not(.an-collapsed) .grid { grid-template-columns: 1fr; } }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   .panel-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text-dim); border-bottom: 1px solid var(--line);
                  padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -180,14 +189,14 @@
 </style>
 {% include '_analytics.html' ignore missing %}
 </head>
-<body>
+<body class="an-shell">
+{% set active = 'bot' %}
+{% include '_app_nav.html' %}
 <div class="at-wrap">
 
   <header class="at-top">
     <div class="at-brand">
-      <a href="/" class="back-link" title="Back to dashboard">← Dashboard</a>
-      <img src="{{ url_for('static', filename='logo.png') }}" alt="">
-      <span>Signals FM</span><span class="sub">Auto-Trade Bot</span>
+      <h1 class="page-title">Auto-trade bot</h1>
     </div>
     <div class="at-nav">
       <div class="acct-switch" role="group" aria-label="Binance account">
@@ -545,6 +554,14 @@
       upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down,
     });
   }
+  document.addEventListener("themechange", () => {
+    if (!chart || !series) return;
+    chart.applyOptions({ layout: { background: { type: "solid", color: cssVar("--void") }, textColor: cssVar("--text-dim") },
+      grid: { vertLines: { color: cssVar("--line-soft") }, horzLines: { color: cssVar("--line-soft") } },
+      rightPriceScale: { borderColor: cssVar("--line") }, timeScale: { borderColor: cssVar("--line") } });
+    const up = cssVar("--long"), down = cssVar("--short");
+    series.applyOptions({ upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
+  });
   async function loadCandles(fit) {
     if (!series) return;
     const tf = (S.status && S.status.settings.timeframe) || "1h";
