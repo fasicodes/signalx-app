@@ -102,6 +102,59 @@ GROUPS = [
          "How many of the analysis channels in the Pro terminal point the same way as the current verdict. "
          "More agreement means a clearer picture, not a guarantee."),
     ]),
+    ("Liquidity scanner", [
+        ("order_book", "Order book",
+         "The buy orders (bids) and sell orders (asks) waiting on the exchange at each price. Large piles of orders can slow "
+         "the price down or pull it toward them. Orders can be cancelled at any moment."),
+        ("spread", "Spread",
+         "The gap between the best buy price and the best sell price. A small spread means the market is liquid and cheap to trade."),
+        ("imbalance", "Book imbalance",
+         "How much more money is waiting to buy than to sell near the price, or the other way round. It can change in seconds."),
+        ("wall", "Order wall",
+         "An unusually large order at one price, many times bigger than a normal level. Price often pauses there, and "
+         "sometimes the wall is pulled before price arrives."),
+        ("depth_chart", "Depth chart",
+         "Adds up the buy orders below the price (green) and the sell orders above it (red). Steep steps are walls; "
+         "flat stretches are thin liquidity where price can move fast."),
+        ("liquidity_sweep", "Liquidity sweep",
+         "Price pokes past a recent high or low, sets off the stop orders resting there, then closes back inside the range. "
+         "It often marks a short-term turn, but not always."),
+        ("stop_pool", "Stop pool (equal highs and lows)",
+         "Two or more highs, or lows, at about the same price that price has not broken yet. Many traders keep stops just "
+         "beyond them, so price is often drawn there."),
+        ("liquidation_zone", "Liquidation zones (estimated)",
+         "Prices where traders who opened leveraged positions recently would be closed by force. Signals FM estimates them "
+         "from price, volume and common leverage (10x to 100x). Exchanges do not publish the real ones."),
+        ("taker_flow", "Taker buy and sell",
+         "Who is crossing the spread right now. Takers buy at the ask or sell at the bid straight away; more taker buying means "
+         "more urgent buyers."),
+        ("large_trades", "Large trades",
+         "The biggest recent trades on the exchange's public tape, larger than about 98% of all trades. Often big players, "
+         "but you cannot see who placed them."),
+        ("open_interest", "Open interest",
+         "How many futures contracts are still open. Rising open interest with a move means new money is joining it."),
+        ("cvd", "Volume delta (CVD)",
+         "Buying volume minus selling volume, added up over time. A rising line means buyers have been the more aggressive side."),
+        ("spoofing", "Possible spoofing",
+         "A large order that vanished between two snapshots without being traded. It may be a fake order meant to push others, "
+         "or a normal cancel; the data cannot tell which."),
+        ("trap", "Trap and squeeze risk",
+         "Rough scores for a false breakout (a trap) or a rush of forced exits from shorts or longs (a squeeze), from sweeps, "
+         "order flow and funding. A hint, not a forecast."),
+        ("likely_target", "Likely target",
+         "The order-book level price seems most drawn to right now, weighing each cluster's size against its distance."),
+    ]),
+    ("Live chart", [
+        ("signal_history", "Signal history",
+         "The signals the engine gave on this coin with its normal rules over about the last 50 days, and how each one ended: "
+         "target, stop or time limit. Replayed results, fees included."),
+        ("heikin_ashi", "Heikin Ashi",
+         "Averaged candles that smooth out the noise so a trend is easier to see. Their open and close are not real traded prices."),
+        ("log_scale", "Log scale",
+         "Each equal step on the price axis is the same percentage move. It makes long histories and big moves easier to compare."),
+        ("volume", "Volume",
+         "How much was traded in each candle. Big moves on high volume are more convincing than moves on low volume."),
+    ]),
 ]
 
 GLOSSARY = {key: {"term": term, "text": text} for _group, items in GROUPS for key, term, text in items}
