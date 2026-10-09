@@ -11,7 +11,8 @@
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <style>
   .layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 40px; align-items: start; }
   .toc { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); }
@@ -63,9 +64,9 @@
   .cta p { margin: 0; color: var(--text-dim); max-width: 60ch; }
 </style>
 </head>
-<body>
+<body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
 {% set active = 'tools' %}
-{% include '_public_nav.html' %}
+{% if session.get('user_id') %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
 
 <main class="wrap">
   <section class="phead">
@@ -196,6 +197,7 @@
 </main>
 
 {% include '_public_footer.html' %}
+{% if not session.get('user_id') %}<script src="{{ url_for('static', filename='shell.js') }}?v=20261009a" defer></script>{% endif %}
 
 <script>
 (() => {
