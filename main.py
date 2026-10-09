@@ -129,7 +129,9 @@ app = Flask(__name__)
 # thi - warna OAuth redirect URIs galti se http:// ban jate hain aur
 # Google/X "redirect_uri_mismatch" error deta hai.
 from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+# x_for=1: the visitor's real IP comes from the proxy's X-Forwarded-For header, so rate limits
+# (login, contact form) count per visitor instead of treating everyone as the proxy's single IP.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 import secrets as _secrets
 
 # SECRET_KEY hamesha environment variable se aani chahiye (Railway Variables
@@ -204,6 +206,19 @@ try:
     init_db()
 except Exception as _db_init_err:
     print(f"[db] WARNING: users table startup par nahi ban saki: {_db_init_err}")
+
+# Login safety (auth.py): session versions, so a password reset logs out other devices, and a one-time
+# clean-up of passwords the old sign-up form could add to Google accounts.
+import auth as _auth
+_auth.init_auth()
+
+
+@app.before_request
+def _end_stale_sessions():
+    """Logs this browser out if the account's password was reset after it logged in (checked once a minute)."""
+    uid = session.get("user_id")
+    if uid and not _auth.session_still_valid(uid, session.get("sv", 0)):
+        session.clear()
 
 exchange = ccxt.okx()
 
@@ -2100,11 +2115,20 @@ def login_page():
     return render_template("login.html")
 
 
+def _landing_live():
+    """Signal engine right now, for the landing page card (counts + newest signals; no levels, no network)."""
+    try:
+        from signalboard import public_summary
+        return public_summary()
+    except Exception:
+        return {"ok": False}
+
+
 @app.route("/", methods=["GET"])
 def home():
     # Logged-in users ko trading interface, baaqi sabko public landing page
     if "user_id" not in session:
-        return render_template("landing.html")
+        return render_template("landing.html", live=_landing_live(), stats=signal_engine.test_stats())
     return render_template(
         "dashboard.html",
         user_email=session.get("email", ""),
@@ -2221,7 +2245,8 @@ def engine_endpoint():
             {k: (float(v) if k in ("entry", "stop_loss", "take_profit") else v) for k, v in eng["active"].items()},
             price if price is not None else eng.get("last_close"))
     return jsonify(_jsonable({"ok": True, "coin": coin, "asset": "crypto", "price": price, "brief": eng.get("brief"),
-                              "engine": eng, "test": signal_engine.test_stats(), "error": eng.get("error")}))
+                              "engine": eng, "test": signal_engine.test_stats(), "error": eng.get("error"),
+                              "tested": coin in signal_engine.UNIVERSE}))
 
 
 @app.route("/coins", methods=["GET"])
@@ -2518,10 +2543,14 @@ init_papertrade(app, available_coins=AVAILABLE_COINS)
 # stores every NEW signal once and notifies subscribed users (bell +
 # optional email). Page: /signals (login required).
 # ============================================================
-from signalboard import signalboard_bp, init_signalboard
+from signalboard import signalboard_bp, init_signalboard, board_rows as _board_rows
 from mailer import send_email as _send_email
+import telegram_bot
 app.register_blueprint(signalboard_bp)
 limiter.limit("60 per minute")(signalboard_bp)
+# Telegram alerts (telegram_bot.py): on only when TELEGRAM_BOT_TOKEN is set in Railway Variables.
+app.register_blueprint(telegram_bot.telegram_bp)
+limiter.limit("120 per minute")(telegram_bot.telegram_bp)
 
 
 def _ticker_prices(symbols):
@@ -2530,7 +2559,8 @@ def _ticker_prices(symbols):
 
 
 init_signalboard(app, engine_signal=engine_signal, coins=[c for c in AVAILABLE_COINS if not _is_forex_pair(c)],
-                 prices=_ticker_prices, send_email=_send_email)
+                 prices=_ticker_prices, send_email=_send_email, telegram=telegram_bot.notify_users)
+telegram_bot.init_telegram(app, board_rows=_board_rows)
 
 
 # ============================================================
@@ -2559,10 +2589,64 @@ def _site_globals():
         "support_email": email if _re.fullmatch(r"[^@\s<>\"']+@[^@\s<>\"']+\.[A-Za-z]{2,}", email) else "",
         "site_url": site if _re.fullmatch(r"https?://[A-Za-z0-9.\-:]+", site) else "",
         "current_year": _dt.utcnow().year,
+        "is_admin": _is_admin(),
     }
 
 
+def _is_admin():
+    """True for the site owner: their login email is listed in ADMIN_EMAILS (comma-separated, Railway Variables)."""
+    from flask import session as _session
+    email = (_session.get("email") or "").strip().lower()
+    admins = {e.strip().lower() for e in (os.environ.get("ADMIN_EMAILS") or "").split(",") if e.strip()}
+    return bool(email) and email in admins
+
+
 app.context_processor(_site_globals)
+
+
+# Friendly error pages (website design + a way back) instead of the plain "Internal Server Error" page.
+# API calls (/api/...) get a short JSON error, so the pages' own scripts can show it.
+_ERRORS = {
+    404: ("Page not found", "This page does not exist or has moved. Check the address, or start again from the home page."),
+    429: ("Too many requests", "You did that a lot of times in a short while. Please wait a minute and try again."),
+    500: ("Something went wrong", "Sorry, this page hit an error on our side. Please try again in a minute. "
+                                  "If it keeps happening, tell us on the contact page."),
+}
+
+
+def _error_page(code):
+    from flask import jsonify as _jsonify
+    title, text = _ERRORS[code]
+    if request.path.startswith("/api/") or request.path.startswith("/telegram/"):
+        return _jsonify({"ok": False, "error": title + ". " + text}), code
+    try:
+        return render_template("message.html", title=title, text=text, action_href="/", action_text="Go to the home page",
+                               second_href="/contact", second_text="Contact us"), code
+    except Exception:
+        return ('<!doctype html><meta charset="utf-8"><title>Signals FM</title><body style="font-family:sans-serif;padding:40px">'
+                f'<h1>{title}</h1><p>{text}</p><p><a href="/">Go to the home page</a></p>'), code
+
+
+@app.errorhandler(404)
+def _not_found(e):
+    return _error_page(404)
+
+
+@app.errorhandler(429)
+def _too_many(e):
+    return _error_page(429)
+
+
+@app.errorhandler(500)
+def _server_error(e):
+    return _error_page(500)
+
+# About, FAQ (+ glossary for the "?" buttons), Pricing and Contact pages - pages.py
+from pages import pages_bp, init_pages
+from mailer import send_email as _pages_send_email
+app.register_blueprint(pages_bp)
+limiter.limit("5 per hour", methods=["POST"])(pages_bp)     # the contact form
+init_pages(app, send_email=_pages_send_email)
 
 
 def _site_base():
@@ -2596,7 +2680,8 @@ def robots_txt():
 @app.route("/sitemap.xml", methods=["GET"])
 def sitemap_xml():
     base = _site_base()
-    pages = [("/", "1.0"), ("/tools", "0.8"), ("/risk-disclosure", "0.4"), ("/terms", "0.3"), ("/privacy", "0.3")]
+    pages = [("/", "1.0"), ("/tools", "0.8"), ("/pricing", "0.7"), ("/faq", "0.7"), ("/about", "0.6"), ("/contact", "0.5"),
+             ("/risk-disclosure", "0.4"), ("/terms", "0.3"), ("/privacy", "0.3")]
     if _track_public():
         pages.insert(1, ("/track-record", "0.9"))
     today = _dt.utcnow().strftime("%Y-%m-%d")
