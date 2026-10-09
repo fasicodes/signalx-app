@@ -1,0 +1,88 @@
+{% extends '_info_base.html' %}
+{% set active = 'contact' %}
+{% set seo_title = "Contact Signals FM" %}{% set seo_path = "/contact" %}
+{% set seo_description = "Questions, feedback or a business proposal? Send Signals FM a message." %}
+{% block title %}Contact us | Signals FM{% endblock %}
+{% block description %}Questions, feedback or a business proposal? Send Signals FM a message.{% endblock %}
+{% block content %}
+<div class="phead">
+  <p class="eyebrow">Contact</p>
+  <h1>Contact us</h1>
+  <p class="lead">Whether you have a question about Signals FM, need help, want to give feedback or have a business proposal, we're
+    happy to hear from you.</p>
+</div>
+
+<div class="contact-grid">
+  <form class="cform" id="cform" novalidate>
+    <div class="row2">
+      <div class="pfield"><label for="c-name">Your name</label>
+        <input class="pinput" id="c-name" name="name" autocomplete="name" maxlength="80" required></div>
+      <div class="pfield"><label for="c-email">Your email</label>
+        <input class="pinput" id="c-email" name="email" type="email" autocomplete="email" maxlength="254" required value="{{ prefill_email }}"></div>
+    </div>
+    <div class="pfield"><label for="c-topic">Topic</label>
+      <select class="pselect" id="c-topic" name="topic">{% for t in topics %}<option>{{ t }}</option>{% endfor %}</select></div>
+    <div class="pfield"><label for="c-msg">Message</label>
+      <textarea class="pinput" id="c-msg" name="message" maxlength="3000" required placeholder="How can we help?"></textarea></div>
+    <p class="count" id="c-count" aria-live="polite">0 / 3000</p>
+    <div class="hp" aria-hidden="true"><label for="c-company">Company</label><input id="c-company" name="company" tabindex="-1" autocomplete="off"></div>
+    <div class="cta-row" style="margin-top:0;align-items:center">
+      <button class="pbtn primary lg" type="submit" id="c-send">Send message</button>
+      <p class="form-msg" id="c-msg-out" role="status"></p>
+    </div>
+    <p class="meta-line" style="margin:0">We use your email only to reply. See the <a class="link" href="/privacy">privacy policy</a>.</p>
+  </form>
+
+  <aside class="reach" aria-label="Other ways to reach us">
+    <a class="rrow" href="mailto:{{ contact_email }}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="M4 7l8 6 8-6"/></svg>
+      <div><span>Email</span><b>{{ contact_email }}</b></div></a>
+    {% for name, handle, url in social %}
+    <a class="rrow" href="{{ url }}" target="_blank" rel="noopener">
+      {% if name == 'TikTok' %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4v10.5a3.5 3.5 0 11-3.5-3.5"/><path d="M14 4c.4 2.6 2.2 4.4 5 4.6"/></svg>
+      {% elif name == 'Instagram' %}<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4.5"/><circle cx="12" cy="12" r="3.6"/><path d="M16.8 7.2v.01"/></svg>
+      {% elif name == 'Facebook' %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 21v-7.5h2.6l.4-3h-3V8.6c0-.9.3-1.5 1.6-1.5h1.5V4.4a20 20 0 00-2.3-.1c-2.3 0-3.8 1.4-3.8 3.9v2.3H9v3h2.5V21"/></svg>
+      {% else %}<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 11v5M8 8v.01M12 16v-5M12 13c0-1.2 1-2 2-2s2 .8 2 2v3"/></svg>{% endif %}
+      <div><span>{{ name }}</span><b>{{ handle }}</b></div></a>
+    {% endfor %}
+    <div class="icard">
+      <h3>Response time</h3>
+      <p>We aim to reply to every message within 24 to 48 hours, Monday to Friday. Many questions are already answered in the
+        <a class="link" href="/faq">FAQ</a>.</p>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $("cform"), out = $("c-msg-out"), btn = $("c-send");
+  function say(t, cls) { out.textContent = t; out.className = "form-msg " + (cls || ""); }
+  $("c-msg").addEventListener("input", function () { $("c-count").textContent = $("c-msg").value.length + " / 3000"; });
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var body = { name: $("c-name").value.trim(), email: $("c-email").value.trim(), topic: $("c-topic").value,
+                 message: $("c-msg").value.trim(), company: $("c-company").value };
+    if (body.name.length < 2) { say("Please enter your name.", "bad"); $("c-name").focus(); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(body.email)) { say("Please enter a valid email address, so we can reply.", "bad"); $("c-email").focus(); return; }
+    if (body.message.length < 10) { say("Please write a little more (at least 10 characters).", "bad"); $("c-msg").focus(); return; }
+    btn.disabled = true; btn.textContent = "Sending…"; say("");
+    fetch("/api/contact", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) {
+        if (r.status === 429) return { status: 429, d: {} };
+        return r.json().then(function (d) { return { status: r.status, d: d }; });
+      })
+      .then(function (res) {
+        if (res.status === 429) { say("Too many messages from this connection. Please try again later.", "bad"); return; }
+        if (!res.d.ok) { say(res.d.error || "Your message could not be sent.", "bad"); return; }
+        say(res.d.message || "Thanks, your message was sent.", "ok");
+        $("c-msg").value = ""; $("c-count").textContent = "0 / 3000";
+      })
+      .catch(function () { say("Your message could not be sent. Check your connection and try again.", "bad"); })
+      .finally(function () { btn.disabled = false; btn.textContent = "Send message"; });
+  });
+})();
+</script>
+{% endblock %}
