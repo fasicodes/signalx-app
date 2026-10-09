@@ -111,13 +111,14 @@
     renderOthers();
   }
 
-  // ---------------------------------------------------------------- pro terminal links (carry the coin)
+  // ---------------------------------------------------------------- tool links (carry the coin)
   function updateProLinks() {
     const q = `?coin=${encodeURIComponent(S.coin)}`;
     document.querySelectorAll(".d-tool[data-pro]").forEach((a) => { a.href = `/advanced${q}#${a.dataset.pro}`; });
+    document.querySelectorAll(".d-tool[data-page]").forEach((a) => { a.href = `${a.dataset.page}${q}`; });
     const link = (id, href) => { const el = $(id); if (el) el.href = href; };
     link("pt-open", `/advanced${q}`);
-    link("adv-chart-link", `/advanced${q}#livechart`);
+    link("adv-chart-link", `/chart${q}&tf=${encodeURIComponent(S.tf)}`);
     link("internals-link", `/advanced${q}#microstructure`);
   }
 
@@ -401,6 +402,7 @@
   document.querySelectorAll(".d-tf button").forEach((b) => b.addEventListener("click", () => {
     S.tf = b.dataset.tf;
     document.querySelectorAll(".d-tf button").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    updateProLinks();
     loadChart();
   }));
 
