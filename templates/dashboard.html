@@ -10,11 +10,13 @@
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261008c">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261009a">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
 {% include '_analytics.html' ignore missing %}
 </head>
-<body class="app">
+<body class="app an-shell">
+{% from '_tip.html' import tip %}
 {% set active = 'home' %}
 {% include '_app_nav.html' %}
 
@@ -95,7 +97,7 @@
     </section>
 
     <section class="d-card" id="proof" hidden>
-      <div class="d-head"><h2 class="d-h2">How the engine is tested</h2></div>
+      <div class="d-head"><h2 class="d-h2">How the engine is tested{{ tip('unseen_data', 'tested on unseen data') }}</h2></div>
       <p class="d-copy" style="margin:0" id="proof-text"></p>
       <div class="d-proof" id="proof-stats"></div>
       <a class="d-more-link" href="/track-record">See the track record</a>
@@ -105,7 +107,7 @@
 
 <footer class="d-foot">
   Signals come from a model and lose regularly; each loss is about twice the size of each win. Results include 0.12% fees.
-  Not financial advice. <a href="/advanced">Pro terminal</a> &nbsp; <a href="/risk-disclosure">Risk disclosure</a>
+  Not financial advice. <a href="/faq">FAQ</a> &nbsp; <a href="/advanced">Pro terminal</a> &nbsp; <a href="/risk-disclosure">Risk disclosure</a>
 </footer>
 
 <div class="d-sheet" id="coin-sheet" hidden>
@@ -123,6 +125,6 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}?v=20261008c" defer></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=20261009a" defer></script>
 </body>
 </html>
