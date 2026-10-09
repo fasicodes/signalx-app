@@ -1,55 +1,17 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signals FM — Risk Disclosure</title>
-<meta name="description" content="The risks of crypto trading, leverage, signals, automated trading and demo trading, in plain language.">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-:root {
-  --bg:#06090c; --surface:#0f151c; --border:#1e2a38; --border2:#263548;
-  --text:#dce8f5; --text2:#7a93aa; --text3:#3d5268;
-  --green:#00e5a0; --green-dim:rgba(0,229,160,.1);
-  --mono:"IBM Plex Mono",monospace; --display:"Syne",sans-serif; --body:"Inter",sans-serif;
-}
-html[data-theme="light"] {
-  --bg:#f0f4f8; --surface:#ffffff; --border:#d1dce8; --border2:#b8c8d8;
-  --text:#0d1f2d; --text2:#4a6070; --text3:#8fa4b4;
-  --green:#00995f; --green-dim:rgba(0,153,95,.08);
-}
-*,*::before,*::after{box-sizing:border-box;}
-body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased;}
-.page{max-width:740px;margin:0 auto;padding:48px 28px 80px;}
-.back{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;letter-spacing:.4px;color:var(--text2);text-decoration:none;margin-bottom:40px;border:1px solid var(--border);padding:7px 14px;border-radius:7px;transition:color .15s,border-color .15s;}
-.back:hover{color:var(--text);border-color:var(--border2);}
-.badge{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--green);background:var(--green-dim);border:1px solid rgba(0,229,160,.18);padding:4px 12px;border-radius:999px;margin-bottom:16px;}
-.badge .dot{width:5px;height:5px;border-radius:50%;background:var(--green);}
-h1{font-family:var(--display);font-size:clamp(28px,5vw,42px);font-weight:800;letter-spacing:-1px;margin:0 0 10px;line-height:1.1;}
-.meta{font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:40px;}
-.divider{border:none;border-top:1px solid var(--border);margin:36px 0;}
-h2{font-family:var(--display);font-size:17px;font-weight:800;letter-spacing:-.3px;margin:32px 0 10px;color:var(--text);display:flex;align-items:center;gap:10px;}
-h2::before{content:"";display:block;width:3px;height:18px;background:var(--green);border-radius:2px;flex-shrink:0;}
-p{color:var(--text2);margin:0 0 14px;}
-a{color:var(--green);text-decoration:none;}
-a:hover{text-decoration:underline;}
-.warning-box{background:rgba(255,187,51,.06);border:1px solid rgba(255,187,51,.2);border-radius:10px;padding:16px 18px;margin:28px 0;font-size:13.5px;color:#c49230;}
-.warning-box strong{color:#e8aa30;}
-ul{color:var(--text2);padding-left:20px;margin:0 0 14px;}
-ul li{margin-bottom:6px;}
-.legal-nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:44px;padding-top:20px;border-top:1px solid var(--border);font-family:var(--mono);font-size:12px;}
-.legal-nav a{color:var(--text2);}
-</style>
-</head>
-<body>
-<div class="page">
-  <a class="back" href="/">&larr; Back to Signals FM</a>
-  <div class="badge"><span class="dot"></span>Legal</div>
+{% extends '_info_base.html' %}
+{% set active = 'riskd' %}
+{% set seo_title = "Signals FM risk disclosure" %}{% set seo_path = "/risk-disclosure" %}
+{% set seo_description = "The risks of crypto trading, leverage, signals, automated trading and demo trading, in plain language." %}
+{% block title %}Risk disclosure | Signals FM{% endblock %}
+{% block description %}The risks of crypto trading, leverage, signals, automated trading and demo trading, in plain language.{% endblock %}
+{% block content %}
+<div class="phead">
+  <p class="eyebrow">Legal</p>
   <h1>Risk disclosure</h1>
-  <p class="meta">Last updated: October 2026</p>
-  <hr class="divider">
-  <div class="warning-box">
-    <strong>&#9888; Please read this first.</strong> Most people who trade leveraged crypto products lose money. Only trade
+  <p class="meta-line">Last updated: October 2026</p>
+</div>
+<div class="prose">
+  <div class="note-box"><b>Please read this first.</b> Most people who trade leveraged crypto products lose money. Only trade
     with money you can afford to lose completely.
   </div>
 
@@ -65,8 +27,8 @@ ul li{margin-bottom:6px;}
   <h2>Signals are estimates, not predictions</h2>
   <p>Signals come from statistical models. The confidence score is the model's own estimate, not a guaranteed probability.
     Signals can be wrong many times in a row. The <a href="/track-record">track record</a>, including the backtest, describes
-    the past and is calculated before fees and slippage; a backtest replays rules on history and can look better than real
-    trading. Neither guarantees future results.</p>
+    the past. Its results take off an estimate of fees and slippage (0.12% per trade), but your real costs can be higher, and
+    a backtest replays rules on history and can look better than real trading. Neither guarantees future results.</p>
 
   <h2>Auto-Trade places real orders</h2>
   <p>When the Auto-Trade bot is on and connected to a live account, it trades your real money without asking you first.
@@ -92,16 +54,9 @@ ul li{margin-bottom:6px;}
   </ul>
 
   <h2>Contact</h2>
-  {% if support_email %}<p>Questions or requests: <a href="mailto:{{ support_email }}">{{ support_email }}</a>.</p>
-  {% else %}<p>For questions or requests, contact us through the email address you receive our account emails from.</p>{% endif %}
-  <nav class="legal-nav" aria-label="Legal">
-    <a href="/terms">Terms of use</a>
-    <a href="/privacy">Privacy policy</a>
-    <a href="/risk-disclosure">Risk disclosure</a>
-  </nav>
+  {% if support_email %}<p>Questions or requests: <a href="mailto:{{ support_email }}">{{ support_email }}</a>, or use our <a href="/contact">contact page</a>.</p>
+  {% else %}<p>For questions or requests, use our <a href="/contact">contact page</a>.</p>{% endif %}
+  
+  <p class="meta-line" style="margin-top:34px"><a class="link" href="/terms">Terms of use</a> &nbsp;&middot;&nbsp; <a class="link" href="/privacy">Privacy policy</a> &nbsp;&middot;&nbsp; <a class="link" href="/risk-disclosure">Risk disclosure</a></p>
 </div>
-<script>
-  document.documentElement.setAttribute('data-theme', localStorage.getItem('signalsfm-theme') || 'dark');
-</script>
-</body>
-</html>
+{% endblock %}
