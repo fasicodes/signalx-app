@@ -187,11 +187,13 @@
 .ch-tb:disabled { opacity: 0.35; cursor: default; }
 .ch-tb.danger:hover { color: var(--short); }
 .ch-tb svg { display: block; }
-.ch-tarrow { position: absolute; right: -3px; bottom: 2px; width: 10px; height: 10px; display: flex; align-items: center; justify-content: center;
-  color: var(--faint); cursor: pointer; border-radius: 3px; }
+.ch-tarrow { position: absolute; right: -4px; bottom: 0; width: 14px; height: 16px; display: flex; align-items: flex-end; justify-content: flex-end;
+  padding: 0 2px 3px 0; color: var(--faint); cursor: pointer; border-radius: 4px; }
 .ch-tarrow:hover { color: var(--text); background: var(--surface-2); }
 .ch-tsep { width: 24px; height: 1px; background: var(--line-soft); margin: 4px 0; flex: none; }
-.ch-fly { position: absolute; z-index: 70; left: calc(100% + 8px); top: -4px; min-width: 230px; max-height: 70vh; overflow: auto; display: none;
+/* fixed, placed next to its button by chart-page.js: the tool column scrolls (overflow), which used to clip an
+   absolutely positioned flyout so "more tools" never showed on PC */
+.ch-fly { position: fixed; z-index: 1200; left: 60px; top: 120px; min-width: 230px; max-height: 70vh; overflow: auto; display: none;
   background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); }
 .ch-tg.open .ch-fly { display: block; }
 .ch-fly-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 9px; border: none; background: none; color: var(--text);
