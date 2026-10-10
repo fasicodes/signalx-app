@@ -51,6 +51,63 @@ class MapError(Exception):
     """A clean, user-facing reason the scanner cannot show this market right now."""
 
 
+# ---------------------------------------------------------------------------------------------- chart history
+HISTORY_MAX_CALLS = 8        # exchange calls per page of older candles
+HISTORY_EMPTY_WINDOWS = 3    # empty windows in a row (weekend, exchange gap, before listing) before "no more"
+
+
+def candles_before(get_candles, symbol, timeframe, limit, before_ts, tf_secs, max_calls=HISTORY_MAX_CALLS):
+    """Up to `limit` candles that close the gap right before `before_ts` (unix seconds, exclusive), oldest first,
+    as a DataFrame shaped like get_candles(). Used by /candles?before= so every chart can scroll back without end.
+
+    Exchanges cap one request (OKX history: 100 candles), so a single `since` call used to return only the
+    oldest slice of the window and leave a hole next to the candles the chart already had. This walks forward
+    from the window start until it reaches `before_ts`, then steps further back over empty windows (forex
+    weekends, exchange outages) a few times before reporting the start of history (an empty frame)."""
+    import pandas as pd
+
+    def secs_of(df):
+        ts = pd.to_datetime(df["timestamp"])
+        return ts.astype("int64") // 10 ** (9 if str(ts.dtype).endswith("[ns]") else 6 if str(ts.dtype).endswith("[us]")
+                                            else 3 if str(ts.dtype).endswith("[ms]") else 0)
+
+    tf_secs = max(1, int(tf_secs))
+    limit = max(1, int(limit))
+    end = int(before_ts)
+    frames, calls, empty = [], 0, 0
+    while calls < max_calls:
+        start = end - limit * tf_secs
+        if start < 0:
+            break
+        cursor, got = start, []
+        while cursor < end and calls < max_calls:
+            df = get_candles(symbol=symbol, timeframe=timeframe, limit=limit, since=cursor * 1000)
+            calls += 1
+            if df is None or df.empty:
+                break
+            secs = secs_of(df)
+            part = df[((secs >= cursor) & (secs < end)).values]
+            if part.empty:
+                break          # a gap from here to `end` (or the exchange ignored `since`): keep what we have
+            got.append(part)
+            last = int(secs_of(part).max())
+            if last + tf_secs >= end:
+                break
+            cursor = last + tf_secs
+        if got:
+            frames = got + frames
+            break
+        empty += 1
+        if empty >= HISTORY_EMPTY_WINDOWS:
+            break
+        end = start
+    if not frames:
+        return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+    out = pd.concat(frames, ignore_index=True)
+    out = out.drop_duplicates(subset="timestamp").sort_values("timestamp").reset_index(drop=True)
+    return out.tail(limit).reset_index(drop=True)
+
+
 # ---------------------------------------------------------------------------------------------- helpers
 def _num(v):
     try:
