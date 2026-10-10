@@ -286,4 +286,59 @@ for k in ("order_book", "spread", "imbalance", "wall", "depth_chart", "liquidity
           "large_trades", "open_interest", "cvd", "spoofing", "trap", "likely_target", "signal_history", "heikin_ashi", "log_scale", "volume"):
     check(k in glossary.GLOSSARY, f"glossary explains {k}")
 
+# --- endless chart history: /candles?before= fills the whole page right up to `before` (update 12)
+H = 3600
+
+
+def hist_fetch(cap=100, listed=1_600_000_000, gap=None):
+    calls = []
+
+    def fetch(symbol, timeframe, limit, since=None):
+        calls.append(since)
+        start = max(listed, (since // 1000 + H - 1) // H * H)
+        rows = []
+        for i in range(min(limit, cap)):       # like OKX history: at most 100 candles per call
+            t = start + i * H
+            if t > 1_700_000_000:
+                break
+            if gap and gap[0] <= t < gap[1]:
+                continue
+            rows.append([t * 1000, 1.0, 2.0, 0.5, 1.5, 10.0])
+        df = pd.DataFrame(rows, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+        return df
+    return fetch, calls
+
+
+before = 1_699_000_000 // H * H
+f, calls = hist_fetch()
+df = mt.candles_before(f, "BTC/USDT", "1h", 300, before, H)
+ts = [int(x.timestamp()) for x in df["timestamp"]]
+check(len(ts) == 300 and ts[-1] == before - H and all(b - a == H for a, b in zip(ts, ts[1:])),
+      "older page is complete and ends right before the oldest loaded candle (no hole)")
+check(len(calls) == 3, "capped exchange answers are stitched together (3 calls of 100)")
+f, calls = hist_fetch(listed=before - 50 * H)
+check(len(mt.candles_before(f, "BTC/USDT", "1h", 300, before, H)) == 50, "start of history: returns what exists")
+f, calls = hist_fetch(listed=before + 10)
+check(mt.candles_before(f, "BTC/USDT", "1h", 300, before, H).empty and len(calls) <= mt.HISTORY_MAX_CALLS, "before listing: empty = no more history")
+f, calls = hist_fetch(gap=(before - 700 * H, before))
+df = mt.candles_before(f, "BTC/USDT", "1h", 300, before, H)
+check(len(df) > 0 and int(df["timestamp"].iloc[-1].timestamp()) < before - 700 * H, "steps back over an empty stretch (weekend / outage)")
+main_src = open(os.path.join(ROOT, "main.py"), encoding="utf-8").read()
+check("candles_before(get_candles, coin, timeframe, limit, before_ts" in main_src, "/candles uses candles_before for older pages")
+for name in ("app.js",):
+    check("SFMHistory.attach" in open(os.path.join(ROOT, "static", name), encoding="utf-8").read(), f"{name} chart loads older candles")
+for name in ("demo-trading.html", "auto-trading.html"):
+    t = open(os.path.join(ROOT, "templates", name), encoding="utf-8").read()
+    check("chart-history.js" in t and "SFMHistory.attach" in t, f"{name} chart loads older candles")
+check("chart-history.js" in open(os.path.join(ROOT, "templates", "dashboard.html"), encoding="utf-8").read(), "dashboard loads chart-history.js")
+cp = open(os.path.join(ROOT, "static", "chart-page.js"), encoding="utf-8").read()
+check("MAX_BARS = 20000" in cp and "function openFlyout" in cp, "Live chart: 20,000-candle history + flyout placed on screen")
+css = open(os.path.join(ROOT, "static", "market.css"), encoding="utf-8").read()
+check(".ch-fly { position: fixed;" in css, "drawing flyout is not clipped by the tool column on PC")
+import chart_drawings  # noqa: E402
+for tool in ("highlighter", "avwap", "arrowup", "arrowdown", "pricelabel", "parallel", "regression", "infoline",
+             "datepricerange", "circle", "cyclic", "abcd", "xabcd", "elliott"):
+    check(tool in chart_drawings.ALLOWED_DRAWING_TYPES and f"{tool}:" in cp, f"new drawing tool {tool} (saved + drawn)")
+
 print(f"\nALL {passed} CHECKS PASSED")
