@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='legacy.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="{{ url_for('static', filename='chart-history.js') }}?v=20261011a"></script>
 <style>
   [hidden] { display: none !important; }
   body { align-items: stretch; font-size: 13px; padding: 10px; }
@@ -199,7 +200,7 @@
   .inp-wrap:focus-within { border-color: var(--text-dim); }
   .inp-wrap .inp { border: none; border-radius: 0; background: transparent; }
   .inp-wrap .suffix { display: flex; align-items: center; padding: 0 8px; font-family: var(--mono); font-size: 11px; color: var(--text-faint); border-left: 1px solid var(--line-soft); }
-  .inp-wrap .sel { border: none; border-left: 1px solid var(--line-soft); border-radius: 0; width: auto; background: transparent; padding: 0 6px; font-size: 11.5px; }
+  .inp-wrap .sel { border: none; border-left: 1px solid var(--line-soft); border-radius: 0; width: auto; min-width: 70px; background: transparent; padding: 0 6px; font-size: 11.5px; }
   .quick { display: flex; gap: 4px; flex-wrap: wrap; }
   .quick button { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text-dim); font-family: var(--mono); font-size: 10.5px; padding: 3px 7px; border-radius: 4px; cursor: pointer; }
   .quick button:hover { color: var(--text); border-color: var(--text-faint); }
@@ -267,6 +268,34 @@
            border-left-width: 3px; box-shadow: 0 10px 28px rgba(0,0,0,.35); }
   .toast.ok { border-left-color: var(--long); } .toast.err { border-left-color: var(--short); } .toast.warn { border-left-color: var(--wait); }
   .foot { font-size: 11px; color: var(--text-faint); line-height: 1.6; padding: 2px 4px 10px; font-family: var(--serif); }
+
+  /* ---------- update 12: simple / pro view, notices, presets, phone trade bar ---------- */
+  body.view-simple .pro-only { display: none !important; }
+  .op-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .op-head .ttl { font-family: var(--mono); font-size: 11px; color: var(--text-dim); font-weight: 700; }
+  .seg.mini { flex: 0 0 auto; }
+  .seg.mini button { padding: 4px 10px; font-size: 11px; flex: 0 0 auto; }
+  .dt-alert { border-radius: 8px; padding: 9px 12px; font-size: 12.5px; line-height: 1.5; border: 1px solid var(--wait); background: var(--wait-dim); }
+  .dt-alert.err { border-color: var(--short); background: var(--short-dim); }
+  .price-note { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); line-height: 1.45; }
+  .price-note b { color: var(--text); }
+  .presets { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+  .presets button { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text-dim); font-family: var(--mono); font-size: 10.5px; padding: 3px 7px; border-radius: 4px; cursor: pointer; }
+  .presets button:hover { color: var(--text); border-color: var(--text-faint); }
+  .presets .sl:hover { border-color: var(--short); } .presets .tp:hover { border-color: var(--long); }
+  .tag-chip.bot { background: var(--long-dim); color: var(--long); }
+  .dt-mbar { display: none; }
+  @media (max-width: 900px) {
+    .dt-mbar { display: flex; gap: 8px; position: fixed; left: 10px; right: 10px; z-index: 850; padding: 8px; border-radius: 12px;
+               bottom: calc(var(--an-tab-h, 0px) + 10px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border: 1px solid var(--line);
+               box-shadow: 0 10px 30px rgba(0,0,0,.4); transition: transform .18s, opacity .18s; }
+    .dt-mbar.away { transform: translateY(140%); opacity: 0; pointer-events: none; }
+    .dt-mbar .dt-btn { flex: 1; padding: 11px 8px; font-size: 13px; }
+    .dt-mbar .px { font-family: var(--mono); font-size: 12px; font-weight: 700; display: flex; flex-direction: column; justify-content: center; min-width: 84px; }
+    .dt-mbar .px span { font-size: 10px; color: var(--text-faint); font-weight: 500; }
+    .dt-app { padding-bottom: 76px !important; }
+    body.an-shell .toasts { bottom: calc(var(--an-tab-h, 0px) + 84px + env(safe-area-inset-bottom, 0px)); }
+  }
   .foot a { color: inherit; }
 </style>
 {% include '_analytics.html' ignore missing %}
@@ -293,6 +322,8 @@
       </div>
     </div>
   </header>
+
+  <div class="dt-alert" id="dt-alert" role="status" hidden></div>
 
   <div class="dt-grid">
     <!-- Markets -->
@@ -371,8 +402,15 @@
     </main>
 
     <!-- Order entry -->
-    <aside class="dt-panel dt-order" aria-label="Place order">
+    <aside class="dt-panel dt-order" id="order-panel" aria-label="Place order">
       <div class="op-sec">
+        <div class="op-head">
+          <span class="ttl">Place order</span>
+          <div class="seg mini" id="seg-view" role="group" aria-label="Order panel view" title="Simple: Market and Limit orders with quick stop-loss and target. Pro: every order type and option.">
+            <button type="button" data-view="simple" aria-pressed="false">Simple</button>
+            <button type="button" data-view="pro" aria-pressed="true">Pro</button>
+          </div>
+        </div>
         <div class="seg" id="seg-market" role="group" aria-label="Market type">
           <button type="button" data-market="spot" aria-pressed="false">Spot</button>
           <button type="button" data-market="futures" aria-pressed="true">Futures</button>
@@ -389,10 +427,10 @@
 
       <div class="op-sec">
         <div class="otabs" role="tablist" aria-label="Order type">
-          <button role="tab" data-otype="LIMIT" aria-selected="true">Limit</button>
-          <button role="tab" data-otype="MARKET" aria-selected="false">Market</button>
-          <button role="tab" data-otype="STOP" aria-selected="false">Stop</button>
-          <button role="tab" data-otype="TRAILING_STOP" aria-selected="false">Trailing</button>
+          <button role="tab" data-otype="MARKET" aria-selected="true">Market</button>
+          <button role="tab" data-otype="LIMIT" aria-selected="false">Limit</button>
+          <button role="tab" data-otype="STOP" aria-selected="false" class="pro-only">Stop</button>
+          <button role="tab" data-otype="TRAILING_STOP" aria-selected="false" class="pro-only">Trailing</button>
           <button class="help" data-term="order_types" aria-label="Order types explained" style="align-self:center;margin-left:auto">?</button>
         </div>
 
@@ -405,10 +443,12 @@
         <div class="fld" id="f-trigger">
           <label for="i-trigger">Trigger price <span class="quick"><button type="button" data-fill="trigger">Last</button></span></label>
           <div class="inp-wrap"><input class="inp" id="i-trigger" inputmode="decimal" autocomplete="off"><span class="suffix">USDT</span></div>
+          <div class="price-note" id="trigger-note"></div>
         </div>
         <div class="fld" id="f-price">
           <label for="i-price">Price <span class="quick"><button type="button" data-fill="last">Last</button><button type="button" data-fill="bid">Bid</button><button type="button" data-fill="ask">Ask</button></span></label>
           <div class="inp-wrap"><input class="inp" id="i-price" inputmode="decimal" autocomplete="off"><span class="suffix">USDT</span></div>
+          <div class="price-note" id="price-note"></div>
         </div>
         <div class="fld" id="f-market-note"><div class="tpsl-note">Executes immediately at the best available price (you pay the spread + taker fee).</div></div>
         <div class="fld" id="f-callback">
@@ -432,6 +472,11 @@
 
         <label class="chk"><input type="checkbox" id="i-tpsl"> Take-profit / Stop-loss<button class="help" data-term="tpsl" aria-label="About take-profit and stop-loss">?</button></label>
         <div id="tpsl-box" hidden>
+          <div class="presets" id="tpsl-presets" style="margin-bottom:6px">
+            <span>Stop</span><button type="button" class="sl" data-slp="1">1%</button><button type="button" class="sl" data-slp="2">2%</button><button type="button" class="sl" data-slp="3">3%</button><button type="button" class="sl" data-slp="5">5%</button>
+            <span style="margin-left:6px">Target</span><button type="button" class="tp" data-tpr="1.5">1.5R</button><button type="button" class="tp" data-tpr="2">2R</button><button type="button" class="tp" data-tpr="3">3R</button>
+            <button class="help" data-term="rr" aria-label="What is R?">?</button>
+          </div>
           <div class="tpsl-grid">
             <div class="fld"><label for="i-tp">Take-profit price</label><input class="inp" id="i-tp" inputmode="decimal" autocomplete="off"></div>
             <div class="fld"><label for="i-tp-pct">Move %</label><input class="inp" id="i-tp-pct" inputmode="decimal" autocomplete="off"></div>
@@ -456,14 +501,14 @@
           </div>
         </details>
 
-        <div class="op-row" id="opt-row" style="flex-wrap:wrap; gap:10px;">
+        <div class="op-row pro-only" id="opt-row" style="flex-wrap:wrap; gap:10px;">
           <label class="chk" id="o-reduce-wrap" style="flex:0 0 auto"><input type="checkbox" id="i-reduce"> Reduce-only<button class="help" data-term="reduce_only" aria-label="What is reduce-only?">?</button></label>
           <label class="chk" id="o-post-wrap" style="flex:0 0 auto"><input type="checkbox" id="i-post"> Post-only<button class="help" data-term="post_only" aria-label="What is post-only?">?</button></label>
           <div id="o-tif-wrap" style="flex:0 0 92px"><select class="sel" id="i-tif" aria-label="Time in force"><option>GTC</option><option>IOC</option><option>FOK</option></select></div>
           <button class="help" data-term="tif" id="o-tif-help" aria-label="Time in force explained" style="flex:0 0 auto">?</button>
         </div>
 
-        <details class="op-more" id="journal-box">
+        <details class="op-more pro-only" id="journal-box">
           <summary>Journal this trade</summary>
           <div class="fld" style="margin-top:8px">
             <label for="i-tag">Setup</label>
@@ -500,6 +545,13 @@
     but real results can differ (order-book depth, latency, exchange-specific rules). Nothing here is financial advice.
     Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a>.
   </p>
+</div>
+
+<!-- phones: quick Buy / Sell bar that jumps to the order panel -->
+<div class="dt-mbar" id="dt-mbar" aria-label="Quick trade">
+  <div class="px"><span id="mb-sym">BTC/USDT</span><b id="mb-last">—</b></div>
+  <button type="button" class="dt-btn long" data-goside="BUY">Buy / Long</button>
+  <button type="button" class="dt-btn short" data-goside="SELL">Sell / Short</button>
 </div>
 
 <datalist id="tag-list">
@@ -634,10 +686,11 @@
   const S = {
     boot: null, meta: {}, coins: [], brackets: {}, tickers: {}, state: null,
     symbol: LS.get("symbol", "BTC/USDT"), market: LS.get("market", "futures"), side: "BUY",
-    otype: LS.get("otype", "LIMIT"), stopKind: "STOP_MARKET", tf: LS.get("tf", "1h"),
-    unit: "base", tab: "positions", fav: new Set(LS.get("fav", ["BTC/USDT", "ETH/USDT"])), filter: "all",
+    otype: LS.get("otype", "MARKET"), stopKind: "STOP_MARKET", tf: LS.get("tf", "1h"),
+    unit: LS.get("unit", "quote") === "base" ? "base" : "quote", tab: "positions",
+    view: LS.get("view", LS.get("seen-guide", false) ? "pro" : "simple"), fav: new Set(LS.get("fav", ["BTC/USDT", "ETH/USDT"])), filter: "all",
     plan: null, previewSeq: 0, signal: null, handledOrders: new Set(), handledPositions: new Set(),
-    chartKey: "", chartReady: false, lastBar: null,
+    chartKey: "", chartReady: false, lastBar: null, bars: [],
   };
 
   function esc(s) {
@@ -807,7 +860,7 @@
   $("btn-guide").addEventListener("click", () => openGuide("welcome"));
 
   // ================================================================ chart
-  let chart = null, candle = null, lines = [];
+  let chart = null, candle = null, lines = [], hist = null;
   function initChart() {
     if (!window.LightweightCharts) { $("chart").innerHTML = '<div class="empty">Chart library failed to load.</div>'; return; }
     const LC = window.LightweightCharts;
@@ -821,6 +874,14 @@
     });
     const up = cssVar("--long") || "#36e0a0", down = cssVar("--short") || "#ff526b";
     candle = chart.addSeries(LC.CandlestickSeries, { upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
+    // endless history: older candles load as the chart is scrolled left (static/chart-history.js)
+    if (window.SFMHistory) {
+      hist = window.SFMHistory.attach(chart, {
+        coin: () => S.symbol, tf: () => S.tf, count: () => S.bars.length,
+        oldest: () => (S.chartReady && S.bars.length ? S.bars[0].time : null),
+        prepend: (older) => { S.bars = older.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })).concat(S.bars); candle.setData(S.bars); },
+      });
+    }
     chart.subscribeClick((param) => {
       if (!param || !param.point) return;
       const p = candle.coordinateToPrice(param.point.y);
@@ -862,11 +923,19 @@
       const bars = d.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
       if (full) {
         applyPriceFormat();
+        S.bars = bars;
+        if (hist) hist.reset();
         candle.setData(bars);
-        chart.timeScale().fitContent();
+        const n = bars.length;
+        chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 120), to: n + 4 });
         S.chartReady = true;
       } else {
-        bars.forEach((b) => { if (!S.lastBar || b.time >= S.lastBar.time) candle.update(b); });
+        bars.forEach((b) => {
+          if (S.lastBar && b.time < S.lastBar.time) return;
+          const last = S.bars[S.bars.length - 1];
+          if (last && b.time === last.time) S.bars[S.bars.length - 1] = b; else S.bars.push(b);
+          candle.update(b);
+        });
       }
       if (bars.length) S.lastBar = Object.assign({}, bars[bars.length - 1]);
     } catch (e) {
@@ -880,6 +949,8 @@
     if (!(p > 0)) return;
     const b = S.lastBar;
     b.close = p; b.high = Math.max(b.high, p); b.low = Math.min(b.low, p);
+    const n = S.bars.length;
+    if (n && S.bars[n - 1].time === b.time) S.bars[n - 1] = Object.assign({}, b);
     candle.update(Object.assign({}, b));
   }
   function drawLines() {
@@ -918,6 +989,77 @@
     renderTfs(); loadCandles(true).then(drawLines);
   });
   function renderTfs() { document.querySelectorAll("#tfs [data-tf]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.tf === S.tf ? "true" : "false")); }
+
+  // ================================================================ simple / pro view
+  // Simple: Market + Limit with quick stop/target presets. Pro: every order type and option (stop, trailing,
+  // reduce-only, post-only, time in force, journal). The engine and the rules are the same in both.
+  function applyView() {
+    const simple = S.view === "simple";
+    document.body.classList.toggle("view-simple", simple);
+    document.querySelectorAll("#seg-view [data-view]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === S.view ? "true" : "false"));
+    if (simple && (S.otype === "STOP" || S.otype === "TRAILING_STOP")) { S.otype = "MARKET"; LS.set("otype", S.otype); }
+    if (simple) { $("i-reduce").checked = false; $("i-post").checked = false; $("i-tif").value = "GTC"; }
+  }
+  $("seg-view").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-view]");
+    if (!b || b.dataset.view === S.view) return;
+    S.view = b.dataset.view; LS.set("view", S.view);
+    applyView(); renderOrderForm(); onFormChange();
+  });
+
+  // where a limit / stop price sits against the market, in plain words
+  function renderPriceNotes() {
+    const t = S.tickers[S.symbol];
+    const pn = $("price-note"), tn = $("trigger-note");
+    pn.innerHTML = ""; tn.innerHTML = "";
+    if (!t) return;
+    const buy = S.side === "BUY", ask = t.ask || t.last, bid = t.bid || t.last;
+    const pr = num($("i-price").value), tr = num($("i-trigger").value);
+    if (S.otype === "LIMIT" && pr) {
+      const cross = buy ? pr >= ask : pr <= bid;
+      const d = Math.abs(pr - t.last) / t.last * 100;
+      pn.innerHTML = cross
+        ? `<b>Fills now</b>: this price crosses the market (${buy ? "ask" : "bid"} ${fp(S.symbol, buy ? ask : bid)}), so it trades straight away as a taker.`
+        : `<b>Waits</b> ${d.toFixed(2)}% ${buy ? "below" : "above"} the market. It fills only if the price ${buy ? "falls" : "rises"} to ${fp(S.symbol, pr)}, and stays under “Open orders” until then.`;
+    }
+    if (S.otype === "STOP" && tr) {
+      const up = tr > t.last, d = Math.abs(tr - t.last) / t.last * 100;
+      tn.innerHTML = `Triggers when the price ${up ? "rises" : "falls"} ${d.toFixed(2)}% to ${fp(S.symbol, tr)}.`;
+    }
+  }
+
+  // quick stop-loss (% from entry) and target (multiple of the stop distance, R)
+  $("tpsl-presets").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-slp], button[data-tpr]");
+    if (!b) return;
+    if (b.dataset.slp) { $("i-sl-pct").value = b.dataset.slp; tpslSync("sl", "pct"); }
+    else {
+      let sl = num($("i-sl-pct").value);
+      if (!sl) { sl = 2; $("i-sl-pct").value = "2"; tpslSync("sl", "pct"); }
+      $("i-tp-pct").value = (sl * Number(b.dataset.tpr)).toFixed(2); tpslSync("tp", "pct");
+    }
+    onFormChange();
+  });
+
+  // phones: the quick Buy / Sell bar jumps to the order panel with that side picked
+  document.querySelectorAll("#dt-mbar [data-goside]").forEach((b) => b.addEventListener("click", () => {
+    setSide(b.dataset.goside);
+    $("order-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => $("i-size").focus({ preventScroll: true }), 450);
+  }));
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver((ents) => { ents.forEach((en) => $("dt-mbar").classList.toggle("away", en.isIntersecting)); }, { threshold: 0.15 })
+      .observe($("order-panel"));
+  }
+
+  // notices: live prices unreachable, or the order engine not running
+  const NOTE = { feed: null, engine: null };
+  function renderNotice() {
+    const el = $("dt-alert");
+    const msg = NOTE.feed || NOTE.engine;
+    el.hidden = !msg;
+    if (msg) { el.textContent = msg; el.className = "dt-alert" + (NOTE.feed ? " err" : ""); }
+  }
 
   // ================================================================ markets
   function renderMarkets() {
@@ -972,9 +1114,13 @@
       d.tickers.forEach((t) => { S.tickers[t.symbol] = t; });
       $("mk-feed").textContent = d.tickers.length ? "● live" : "feed offline";
       $("mk-feed").className = d.tickers.length ? "pos" : "neg";
-      renderMarkets(); renderSymbolBar(); tickLastBar();
+      NOTE.feed = d.tickers.length ? null : "Live prices are not reachable right now, so new orders cannot be placed and open orders wait. It retries every few seconds.";
+      renderNotice();
+      renderMarkets(); renderSymbolBar(); tickLastBar(); renderPriceNotes();
     } catch (e) {
       $("mk-feed").textContent = "feed offline"; $("mk-feed").className = "neg";
+      NOTE.feed = "Could not reach the server for live prices. Check your connection; the page keeps retrying.";
+      renderNotice();
     }
   }
 
@@ -1002,6 +1148,8 @@
     $("sb-funding-wrap").hidden = S.market !== "futures";
     if (!t) return;
     $("sb-last").textContent = fp(sym, t.last);
+    $("mb-sym").textContent = sym; $("mb-last").textContent = fp(sym, t.last);
+    $("mb-last").className = t.change_pct >= 0 ? "pos" : "neg";
     $("sb-last").className = "last " + (t.change_pct >= 0 ? "pos" : "neg");
     $("sb-chg").textContent = fpct(t.change_pct); $("sb-chg").className = cls(t.change_pct);
     $("sb-high").textContent = fp(sym, t.high);
@@ -1026,6 +1174,10 @@
     try { st = await api("/api/paper/state"); } catch (e) { return; }
     const prev = S.state;
     S.state = st;
+    NOTE.engine = st.engine && !st.engine.online && (st.orders.length || st.positions.length)
+      ? "The order engine is restarting. Limit, stop and trailing orders, TP/SL and liquidations are checked again as soon as it is back (usually within a minute)."
+      : null;
+    renderNotice();
     detectEvents(prev, st);
     renderAccount(); renderPositions(); renderOrders(); renderLevBar(); updateMaxSize(); drawLines(); renderFunding();
   }
@@ -1183,6 +1335,7 @@
     else if (!q) $("i-slider").value = 0;
     updateMaxSize();
     drawLines();
+    renderPriceNotes();
     schedulePreview(250);
   }
 
@@ -1228,7 +1381,7 @@
   ["i-reduce", "i-post", "i-tif"].forEach((id) => $(id).addEventListener("change", onFormChange));
   $("i-unit").addEventListener("change", () => {
     const q = qtyFromForm();
-    S.unit = $("i-unit").value;
+    S.unit = $("i-unit").value; LS.set("unit", S.unit);
     const p = refPrice();
     if (q && p) $("i-size").value = S.unit === "base" ? String(Number(floorStep(q, step(S.symbol)).toFixed(qdec(S.symbol)))) : (q * p).toFixed(2);
     onFormChange();
@@ -1430,7 +1583,9 @@
       } else if (o.status === "EXPIRED") {
         toast(`${o.tif} order expired — it could not fill immediately.`, "warn");
       } else {
-        toast(`${TYPE_LABEL[o.type]} order placed. Find it under "Open orders".`, "ok");
+        toast(`${TYPE_LABEL[o.type]} order placed. It waits under "Open orders" until the price reaches it.`, "ok");
+        const tb = document.querySelector('.tabbar [data-tab="orders"]');
+        if (tb && S.tab !== "orders") tb.click();
       }
       $("i-size").value = ""; $("i-slider").value = 0; $("i-notes").value = ""; $("i-tag").value = "";
       $("i-tp").value = ""; $("i-sl").value = ""; $("i-tp-pct").value = ""; $("i-sl-pct").value = "";
@@ -1526,7 +1681,7 @@
       let margin = `${fu(p.margin)}`;
       if (p.market === "futures" && p.margin_mode === "isolated") margin += ` <button class="linkbtn" data-act="margin" data-id="${p.id}" title="Add or remove margin">±</button>`;
       return `<tr class="click" data-sym="${esc(sym)}" data-market="${p.market}">
-        <td><b>${esc(sym)}</b><div class="sub">${mktLabel(p)}${p.tag ? ` · <span class="tag-chip">${esc(p.tag)}</span>` : ""}</div></td>
+        <td><b>${esc(sym)}</b><div class="sub">${mktLabel(p)}${p.tag ? ` · <span class="tag-chip${p.tag === "Auto-trade bot" ? " bot" : ""}" ${p.tag === "Auto-trade bot" ? 'title="Opened by your auto-trade bot (Site demo account). The bot closes it at its stop-loss or target."' : ""}>${esc(p.tag)}</span>` : ""}</div></td>
         <td><span class="side-badge ${p.side === "LONG" ? "pos" : "neg"}">${p.market === "spot" ? "HOLD" : p.side}</span></td>
         <td>${fq(sym, p.qty)} ${esc(base(sym))}<div class="sub">${fu(p.notional)} USDT</div></td>
         <td>${fp(sym, p.entry_price)}</td>
@@ -1539,9 +1694,26 @@
         <td><div class="acts"><button class="dt-btn sm" data-act="close" data-id="${p.id}">Close</button>
           <button class="dt-btn sm ghost" data-act="pjournal" data-id="${p.id}" title="Journal">✎</button></div></td></tr>`;
     });
-    el.innerHTML = table(["Coin", "Side", "Size", "Entry", "Mark", "Liq. price", "Margin", "PnL (ROE)", "TP / SL", ""], rows);
+    el.innerHTML = `<div class="tab-tools"><span>Unrealized PnL: <b class="${cls(S.state.account.upnl)}">${fu(S.state.account.upnl, true)} USDT</b></span>
+      <button class="dt-btn sm" id="btn-close-all">Close all at market</button></div>` +
+      table(["Coin", "Side", "Size", "Entry", "Mark", "Liq. price", "Margin", "PnL (ROE)", "TP / SL", ""], rows);
   }
-  $("tab-positions").addEventListener("click", (e) => {
+  $("tab-positions").addEventListener("click", async (e) => {
+    if (e.target.closest("#btn-close-all")) {
+      const ps = (S.state && S.state.positions) || [];
+      if (!ps.length || !confirm(`Close all ${ps.length} position(s) at market price?`)) return;
+      e.target.disabled = true;
+      let ok = 0, failed = [];
+      for (const p of ps) {
+        S.handledPositions.add(p.id);
+        try { await api(`/api/paper/positions/${p.id}/close`, { method: "POST", body: { type: "MARKET", fraction: 1 } }); ok++; }
+        catch (err) { failed.push(`${p.symbol}: ${err.message}`); }
+      }
+      toast(failed.length ? `Closed ${ok}; not closed: ${failed.join("; ")}` : `Closed ${ok} position(s)`, failed.length ? "err" : "ok", 8000);
+      await refreshState();
+      if (["closed", "perf", "ledger", "fills", "history"].includes(S.tab)) loadTab(S.tab);
+      return;
+    }
     const b = e.target.closest("[data-act]");
     if (b) {
       e.stopPropagation();
@@ -1949,7 +2121,8 @@
     if (!S.coins.length) { $("mk-list").innerHTML = '<div class="empty">No markets available right now.</div>'; return; }
     if (!S.coins.includes(S.symbol)) S.symbol = S.coins[0];
     if (!["spot", "futures"].includes(S.market)) S.market = "futures";
-    if (!["LIMIT", "MARKET", "STOP", "TRAILING_STOP"].includes(S.otype)) S.otype = "LIMIT";
+    if (!["LIMIT", "MARKET", "STOP", "TRAILING_STOP"].includes(S.otype)) S.otype = "MARKET";
+    applyView();
     await Promise.all([refreshTickers(), refreshState()]);
     selectSymbol(S.symbol, true);
     renderPositions();
