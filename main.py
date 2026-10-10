@@ -2312,21 +2312,24 @@ def candles_endpoint():
     # infinite scroll-back: frontend sends the oldest candle time it
     # already has as `before` (unix seconds) and we page further into
     # the past from there instead of always returning the latest window.
+    # market_tools.candles_before() fills the whole window right up to
+    # `before` (exchanges cap one request, OKX history at 100 candles,
+    # which used to leave holes) and steps over empty windows.
     before = request.args.get("before")
-    since_ms = None
+    before_ts = None
     if before:
         try:
             before_ts = int(before)
-            tf_secs = TIMEFRAME_SECONDS.get(timeframe, 3600)
-            since_ms = max(0, (before_ts - limit * tf_secs) * 1000)
         except ValueError:
-            since_ms = None
+            before_ts = None
 
     try:
-        df = get_candles(symbol=coin, timeframe=timeframe, limit=limit, since=since_ms)
-        if before and since_ms is not None:
-            before_cutoff = pd.to_datetime(int(before), unit="s")
-            df = df[df["timestamp"] < before_cutoff]
+        if before_ts is not None:
+            from market_tools import candles_before
+            df = candles_before(get_candles, coin, timeframe, limit, before_ts,
+                                TIMEFRAME_SECONDS.get(timeframe, 3600))
+        else:
+            df = get_candles(symbol=coin, timeframe=timeframe, limit=limit)
 
         if df.empty:
             # no more history available further back — let the frontend
