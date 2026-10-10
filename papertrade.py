@@ -1763,6 +1763,128 @@ def init_papertrade(app=None, *, available_coins=None, exchange=None, start=True
 
 
 # ===========================================================================
+# Auto-trade bot bridge
+# autotrade.py's "Site demo" account (mode "paper") trades THIS demo account
+# through the functions below, with the same rules, fees and engine as a
+# person clicking on the Demo trading page. Bot orders carry BOT_TAG.
+# ===========================================================================
+BOT_TAG = "Auto-trade bot"
+
+
+class BotError(Exception):
+    pass
+
+
+def bot_snapshot(uid):
+    prices = feed.refresh(max_age=2.0)
+    with _Cursor() as cur:
+        acct, positions, orders, _s = _load_user(cur, uid)
+    return snapshot(acct, positions, orders, prices)
+
+
+def bot_price(symbol, max_age=2.0):
+    t = feed.fresh(feed.refresh(max_age=max_age), symbol)
+    return t["last"] if t else None
+
+
+def bot_prices(symbols):
+    prices = feed.refresh(max_age=2.0)
+    out = {}
+    for s in symbols:
+        t = feed.fresh(prices, s)
+        if t:
+            out[s] = t["last"]
+    return out
+
+
+def bot_positions(uid, market):
+    """{symbol: row} of this user's open demo positions in one market."""
+    with _Cursor() as cur:
+        cur.execute("SELECT * FROM paper_positions WHERE user_id=%s AND market=%s", (uid, market))
+        return {r["symbol"]: r for r in (cur.fetchall() or [])}
+
+
+def bot_prepare_futures(uid, symbol, leverage):
+    """Isolated margin + the bot's leverage for this coin, unless a position or open order already fixes them."""
+    lev = max(1, min(int(leverage or 1), symbol_max_leverage(symbol)))
+    with _UserLock(uid) as cur:
+        cur.execute("SELECT id FROM paper_positions WHERE user_id=%s AND market='futures' AND symbol=%s", (uid, symbol))
+        if cur.fetchone():
+            return
+        cur.execute("SELECT id FROM paper_orders WHERE user_id=%s AND market='futures' AND symbol=%s AND status='NEW'",
+                    (uid, symbol))
+        if cur.fetchone():
+            return
+        cur.execute("SELECT * FROM paper_symbol_settings WHERE user_id=%s AND symbol=%s", (uid, symbol))
+        if cur.fetchone():
+            cur.execute("UPDATE paper_symbol_settings SET leverage=%s, margin_mode='isolated' WHERE user_id=%s AND symbol=%s",
+                        (lev, uid, symbol))
+        else:
+            cur.execute("INSERT INTO paper_symbol_settings (user_id, symbol, leverage, margin_mode) VALUES (%s,%s,%s,'isolated')",
+                        (uid, symbol, lev))
+
+
+def bot_market_order(uid, market, symbol, side, qty, reduce_only=False, opening=False):
+    """A market order for the bot. opening=True refuses a coin the user already holds on Demo trading, so a
+    hand trade and a bot trade never merge into one position. Returns the fill and, when the position closed,
+    the closed-trade row (exit price, reason, net PnL)."""
+    if opening:
+        pos = bot_positions(uid, market).get(symbol)
+        if pos is not None:
+            raise BotError(f"You already have a {symbol} {market} position on Demo trading, so the bot leaves this coin alone.")
+    req = parse_order({"market": market, "symbol": symbol, "side": side, "type": "MARKET", "qty": qty,
+                       "reduce_only": bool(reduce_only) and market == "futures", "tag": BOT_TAG,
+                       "notes": "Placed by the auto-trade bot (Site demo account)."})
+    try:
+        order, plan, result = place_order(uid, req)
+    except OrderError as e:
+        raise BotError(str(e))
+    except Busy as e:
+        raise BotError(str(e))
+    out = {"id": str(order["id"]), "average": _f(order.get("avg_price")), "filled": _f(order.get("qty")),
+           "position_id": (result or {}).get("position_id"), "closed": None}
+    if result and result.get("closed_id"):
+        with _Cursor() as cur:
+            cur.execute("SELECT * FROM paper_closed WHERE id=%s", (result["closed_id"],))
+            row = cur.fetchone()
+        if row:
+            out["closed"] = {"exit_price": _f(row["exit_price"]), "close_reason": row["close_reason"],
+                             "net_pnl": _f(row["net_pnl"])}
+    return out
+
+
+def bot_set_tpsl(uid, market, symbol, tp=None, sl=None):
+    """Puts the bot's take-profit / stop-loss on its demo position, so the demo engine closes it right at the
+    level (every 2 s, even with the page closed) and the Demo trading chart shows the lines."""
+    with _UserLock(uid) as cur:
+        cur.execute("SELECT * FROM paper_positions WHERE user_id=%s AND market=%s AND symbol=%s", (uid, market, symbol))
+        pos = cur.fetchone()
+        if not pos:
+            return False
+        tick = feed.meta(symbol)["price_tick"]
+        tp = _round_tick(tp, tick) if tp else None
+        sl = _round_tick(sl, tick) if sl else None
+        cur.execute("UPDATE paper_positions SET tp_price=%s, sl_price=%s, sl_used=%s, tag=%s, updated_at=%s WHERE id=%s",
+                    (tp, sl, 1 if sl else int(pos.get("sl_used") or 0), BOT_TAG, _utcnow(), pos["id"]))
+    return True
+
+
+def bot_last_close(uid, market, symbol, since=None):
+    """The newest closed demo trade on this coin (after `since`): exit price, reason and net PnL."""
+    with _Cursor() as cur:
+        if since is not None:
+            cur.execute("""SELECT * FROM paper_closed WHERE user_id=%s AND market=%s AND symbol=%s AND closed_at >= %s
+                           ORDER BY id DESC LIMIT 1""", (uid, market, symbol, since))
+        else:
+            cur.execute("SELECT * FROM paper_closed WHERE user_id=%s AND market=%s AND symbol=%s ORDER BY id DESC LIMIT 1",
+                        (uid, market, symbol))
+        row = cur.fetchone()
+    if not row:
+        return None
+    return {"exit_price": _f(row["exit_price"]), "close_reason": row["close_reason"], "net_pnl": _f(row["net_pnl"])}
+
+
+# ===========================================================================
 # Serializers
 # ===========================================================================
 def _order_json(o):
