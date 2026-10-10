@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='legacy.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="{{ url_for('static', filename='chart-history.js') }}?v=20261011a"></script>
 <style>
   [hidden] { display: none !important; }
   body { align-items: stretch; font-size: 14px; padding: 14px; }
@@ -51,6 +52,8 @@
   /* Mode strip */
   .mode-strip { border-radius: 8px; padding: 10px 14px; font-size: 13px; line-height: 1.5; border: 1px solid var(--line); background: var(--panel); }
   .mode-strip.demo { border-color: var(--wait); background: var(--wait-dim); }
+  .mode-strip.paper { border-color: var(--long); background: var(--long-dim); }
+  .mode-strip a { color: inherit; font-weight: 700; }
   .mode-strip.live { border-color: var(--short); background: var(--short-dim); }
   .mode-strip strong { font-family: var(--mono); }
   .mode-strip ol { margin: 6px 0 0 18px; }
@@ -140,6 +143,12 @@
   .msg { padding: 6px 10px; border-radius: 6px; max-width: 90%; line-height: 1.45; white-space: pre-wrap; }
   .msg.user { background: var(--panel-raised); align-self: flex-end; }
   .msg.ai { background: var(--long-dim); border: 1px solid rgba(54,224,160,.25); align-self: flex-start; }
+  .msg.ai.thinking { opacity: .7; font-style: italic; }
+  .msg .src { display: block; margin-top: 4px; font-size: 10px; color: var(--text-faint); font-style: normal; }
+  .chat-sugg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chat-sugg button { background: var(--panel-raised); border: 1px solid var(--line); color: var(--text-dim); border-radius: 999px;
+                      padding: 4px 10px; font-size: 11.5px; cursor: pointer; font-family: inherit; }
+  .chat-sugg button:hover { color: var(--text); border-color: var(--long); }
   .chat-row { display: flex; gap: 6px; }
   .chat-row .inp { flex: 1; min-width: 0; }
 
@@ -184,6 +193,7 @@
   .acct-switch button + button { border-left: 1px solid var(--line); }
   .acct-switch button[aria-pressed="true"] { color: var(--text); background: var(--panel-hover); }
   .acct-switch button[aria-pressed="true"][data-mode="demo"] { box-shadow: inset 0 -2px 0 var(--wait); }
+  .acct-switch button[aria-pressed="true"][data-mode="paper"] { box-shadow: inset 0 -2px 0 var(--long); }
   .acct-switch button[aria-pressed="true"][data-mode="live"] { box-shadow: inset 0 -2px 0 var(--short); }
   .acct-switch .mini { font-weight: 500; font-size: 10.5px; color: var(--text-faint); }
 </style>
@@ -199,8 +209,9 @@
       <h1 class="page-title">Auto-trade bot</h1>
     </div>
     <div class="at-nav">
-      <div class="acct-switch" role="group" aria-label="Binance account">
-        <button type="button" data-mode="demo" aria-pressed="true"><span class="at-dot" id="sw-dot-demo"></span>Demo <span class="mini" id="sw-mini-demo"></span></button>
+      <div class="acct-switch" role="group" aria-label="Bot account">
+        <button type="button" data-mode="paper" aria-pressed="true" title="Trades your Demo trading account on this site. No keys needed."><span class="at-dot" id="sw-dot-paper"></span>Site demo <span class="mini" id="sw-mini-paper"></span></button>
+        <button type="button" data-mode="demo" aria-pressed="false" title="Binance Demo Trading (demo.binance.com API key)"><span class="at-dot" id="sw-dot-demo"></span>Binance demo <span class="mini" id="sw-mini-demo"></span></button>
         <button type="button" data-mode="live" aria-pressed="false"><span class="at-dot" id="sw-dot-live"></span>Live <span class="mini" id="sw-mini-live"></span></button>
       </div>
       <div class="conn-badge"><span class="at-dot" id="conn-dot"></span><span id="conn-text">Not connected</span></div>
@@ -314,10 +325,11 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title"><span>Assistant</span><span class="faint">Type "help"</span></div>
+        <div class="panel-title"><span>Assistant</span><span class="faint" id="chat-mode">Ask anything, or type "help"</span></div>
         <div class="chat-box" id="chat-box" aria-live="polite"></div>
+        <div class="chat-sugg" id="chat-sugg"></div>
         <div class="chat-row">
-          <input class="inp" id="chat-input" placeholder="e.g. status, stop bot, signal eth" aria-label="Assistant command">
+          <input class="inp" id="chat-input" placeholder="Ask a question or type a command (e.g. why no trade? / start bot)" aria-label="Ask the assistant" maxlength="600">
           <button class="btn btn-primary" id="btn-send">Send</button>
           <button class="btn" id="btn-mic" title="Speak a command" aria-label="Voice command">🎙️</button>
         </div>
@@ -400,7 +412,7 @@
     <div class="note" id="p-text"></div>
     <div class="modal-foot">
       <button class="btn" data-close>Cancel</button>
-      <button class="btn btn-danger" id="p-both">Stop both accounts</button>
+      <button class="btn btn-danger" id="p-both">Stop all accounts</button>
       <button class="btn btn-danger" id="p-submit">Stop this account</button>
     </div>
   </div>
@@ -418,12 +430,13 @@
   const $ = (id) => document.getElementById(id);
   const savedMode = localStorage.getItem("signalsfm-at-account");
   const S = {
-    mode: savedMode === "live" ? "live" : "demo",
+    mode: ["paper", "demo", "live"].includes(savedMode) ? savedMode : "paper",
     status: null, prices: {}, selected: "BTC/USDT", form: null, formDirty: false,
     lastLogId: null, signal: null, pendingTrade: null, voice: localStorage.getItem("signalsfm-at-voice") !== "off",
     refreshSeq: 0,
   };
-  const LABEL = (m) => (m === "live" ? "Live" : "Demo");
+  const LABEL = (m) => ({ live: "Live", demo: "Binance Demo", paper: "Site demo" }[m] || "Demo");
+  const MODES = ["paper", "demo", "live"];
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -515,7 +528,7 @@
   function renderSwitcher() {
     document.querySelectorAll(".acct-switch button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === S.mode ? "true" : "false"));
     const accts = S.status && S.status.accounts;
-    ["demo", "live"].forEach((m) => {
+    MODES.forEach((m) => {
       const a = accts && accts[m];
       $("sw-dot-" + m).className = "at-dot" + (a && a.bot_enabled ? " on" : a && a.connected ? " warn" : "");
       $("sw-mini-" + m).textContent = !a || !a.connected ? "" : a.bot_enabled ? "bot on" : a.open_positions ? a.open_positions + " open" : "";
@@ -537,7 +550,7 @@
   renderSwitcher();
 
   // ------------------------------------------------------------ chart
-  let chart = null, series = null, priceLines = [];
+  let chart = null, series = null, priceLines = [], hist = null, bars = [], barsKey = "";
   function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
   function initChart() {
     if (!window.LightweightCharts) { $("candle-chart").innerHTML = '<div class="empty">Chart library failed to load.</div>'; return; }
@@ -553,7 +566,16 @@
     series = chart.addSeries(LC.CandlestickSeries, {
       upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down,
     });
+    // endless history: older candles load as the chart is scrolled left (static/chart-history.js)
+    if (window.SFMHistory) {
+      hist = window.SFMHistory.attach(chart, {
+        coin: () => S.selected, tf: () => chartTf(), count: () => bars.length,
+        oldest: () => (bars.length && barsKey === S.selected + "|" + chartTf() ? bars[0].time : null),
+        prepend: (older) => { bars = older.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })).concat(bars); series.setData(bars); },
+      });
+    }
   }
+  const chartTf = () => (S.status && S.status.settings.timeframe) || "1h";
   document.addEventListener("themechange", () => {
     if (!chart || !series) return;
     chart.applyOptions({ layout: { background: { type: "solid", color: cssVar("--void") }, textColor: cssVar("--text-dim") },
@@ -564,13 +586,30 @@
   });
   async function loadCandles(fit) {
     if (!series) return;
-    const tf = (S.status && S.status.settings.timeframe) || "1h";
+    const tf = chartTf(), sym = S.selected, key = sym + "|" + tf;
     try {
-      const r = await fetch(`/candles?coin=${encodeURIComponent(S.selected)}&timeframe=${tf}&limit=200`, { credentials: "same-origin" });
+      // a full load when the coin/timeframe changed (or on request); otherwise only the newest candles,
+      // so history the user scrolled back to stays on the chart
+      const full = fit || key !== barsKey || !bars.length;
+      const r = await fetch(`/candles?coin=${encodeURIComponent(sym)}&timeframe=${tf}&limit=${full ? 300 : 3}`, { credentials: "same-origin" });
       const d = await r.json();
       if (!r.ok || !d.candles) throw new Error(d.error || "candles");
-      series.setData(d.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
-      if (fit) chart.timeScale().fitContent();
+      if (sym !== S.selected || tf !== chartTf()) return;
+      const fresh = d.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+      if (full) {
+        bars = fresh; barsKey = key;
+        if (hist) hist.reset();
+        series.setData(bars);
+        const n = bars.length;
+        chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 120), to: n + 4 });
+      } else {
+        fresh.forEach((b) => {
+          const last = bars[bars.length - 1];
+          if (last && b.time < last.time) return;
+          if (last && b.time === last.time) bars[bars.length - 1] = b; else bars.push(b);
+          series.update(b);
+        });
+      }
       if (d.last_price != null) $("hero-price").textContent = "$" + fmtPrice(d.last_price);
       $("chart-sub").textContent = tf + " candles";
     } catch (e) {
@@ -749,7 +788,13 @@
     $("settings-title").textContent = `${L} bot settings`;
 
     const dot = $("conn-dot");
-    if (st.connected) {
+    const paper = S.mode === "paper";
+    if (paper) {
+      dot.className = "at-dot on";
+      $("conn-text").textContent = "Signals FM Demo trading";
+      $("btn-connect").textContent = "Open Demo trading";
+      $("btn-connect").className = "btn";
+    } else if (st.connected) {
       dot.className = "at-dot " + (acct.balance_error ? "warn" : "on");
       $("conn-text").textContent = `Binance ${L} · ${acct.key_hint || ""}`;
       $("btn-connect").textContent = "Manage account";
@@ -762,7 +807,10 @@
     }
 
     const strip = $("mode-strip");
-    if (!st.ready.encryption || !st.ready.ccxt) {
+    if (paper) {
+      strip.className = "mode-strip paper";
+      strip.innerHTML = `<strong>SITE DEMO account</strong> — the bot trades your <a href="/demo-trading">Demo trading</a> account on this site: virtual USDT, live prices, real fees and stops. No Binance keys needed. Every bot trade shows up there (tagged “Auto-trade bot”) with its stop-loss and target on the chart.`;
+    } else if (!st.ready.encryption || !st.ready.ccxt) {
       strip.className = "mode-strip live";
       strip.innerHTML = `<strong>Setup incomplete.</strong> The server is missing ${!st.ready.encryption ? "the <b>AUTOTRADE_ENCRYPTION_KEY</b> environment variable" : "the <b>ccxt</b> library"}, so Binance cannot be connected. Add it in Railway Variables.`;
     } else if (!st.connected) {
@@ -787,7 +835,8 @@
 
     if (st.connected && acct.balance_usdt != null) {
       $("st-balance").textContent = fmtUsd(acct.balance_usdt);
-      $("st-balance-sub").textContent = `${acct.balance_market || st.settings.market_type} · free USDT · ${ago(acct.balance_at)}`;
+      $("st-balance-sub").textContent = paper ? `available · equity ${fmtUsd(acct.balance_total_usdt)}`
+        : `${acct.balance_market || st.settings.market_type} · free USDT · ${ago(acct.balance_at)}`;
     } else { $("st-balance").textContent = "—"; $("st-balance-sub").innerHTML = "&nbsp;"; }
     const s = st.stats;
     $("st-today").textContent = fmtUsd(s.realized_today, true); $("st-today").className = "v " + cls(s.realized_today);
@@ -903,6 +952,7 @@
   // ------------------------------------------------------------ actions
   // Connect
   $("btn-connect").addEventListener("click", () => {
+    if (S.mode === "paper") { window.location.href = "/demo-trading"; return; }
     const st = S.status;
     const live = S.mode === "live";
     $("c-error").hidden = true;
@@ -968,16 +1018,16 @@
   // Panic
   function openPanic() {
     const a = S.status.accounts;
-    const other = S.mode === "live" ? "demo" : "live";
+    const others = MODES.filter((m) => m !== S.mode);
     $("p-text").innerHTML = `<b>Stop this account</b> turns the ${LABEL(S.mode)} bot off and closes its ${a[S.mode].open_positions} open position(s) at market price.<br>` +
-      `<b>Stop both accounts</b> also stops the ${LABEL(other)} bot and closes its ${a[other].open_positions} position(s).`;
+      `<b>Stop all accounts</b> also stops the ${others.map((m) => `${LABEL(m)} bot (${a[m].open_positions} open)`).join(" and the ")}.`;
     openModal("m-panic");
   }
   async function doPanic(scope) {
     $("p-submit").disabled = true; $("p-both").disabled = true;
     try {
       const d = await api("/api/autotrade/panic", { method: "POST", body: { account: scope } });
-      chat("ai", `Stop all (${scope === "all" ? "both accounts" : LABEL(scope)}): bot off, ${d.closed} position(s) closed.`);
+      chat("ai", `Stop all (${scope === "all" ? "all accounts" : LABEL(scope)}): bot off, ${d.closed} position(s) closed.`);
       speak("Everything stopped");
     } catch (e) {
       const f = (e.data && e.data.failed) || [];
@@ -1067,14 +1117,25 @@
   }));
 
   // ------------------------------------------------------------ assistant
-  function chat(who, text) {
+  // Commands ("start bot", "buy btc", "signal eth", ...) run right here. Anything else, and every question,
+  // goes to the server assistant (assistant.py), which answers from this account's own bot data and the
+  // glossary, or with AI when ANTHROPIC_API_KEY is set on the server.
+  const history = [];
+  function chat(who, text, src) {
     const box = $("chat-box");
     const m = document.createElement("div");
     m.className = "msg " + who;
     m.textContent = text;
+    if (src) { const s = document.createElement("span"); s.className = "src"; s.textContent = src; m.appendChild(s); }
     box.appendChild(m);
     box.scrollTop = box.scrollHeight;
+    if (who === "user" || who === "ai") { history.push({ who, text }); if (history.length > 12) history.shift(); }
+    return m;
   }
+  function suggest(list) {
+    $("chat-sugg").innerHTML = (list || []).map((t) => `<button type="button" data-q="${esc(t)}">${esc(t)}</button>`).join("");
+  }
+  $("chat-sugg").addEventListener("click", (e) => { const b = e.target.closest("[data-q]"); if (b) { $("chat-input").value = b.dataset.q; send(); } });
   function findCoin(words) {
     if (!S.status) return null;
     for (const w of words) {
@@ -1084,20 +1145,42 @@
     return null;
   }
   const HAS = (words, list) => list.some((k) => words.includes(k));
-  const STOP_WORDS = ["stop", "off", "pause", "disable", "halt"];
-  const START_WORDS = ["start", "on", "resume", "enable", "run"];
+  const STOP_WORDS = ["stop", "off", "pause", "disable", "halt", "band"];
+  const START_WORDS = ["start", "on", "resume", "enable", "run", "chalao", "chala"];
+  // a question is never treated as a command (so "what does the bot do when it is on?" cannot switch it on)
+  const QUESTION = /\?|^(what|why|how|when|where|which|who|whom|is|are|was|were|can|could|should|would|does|do|did|will|explain|tell|define|meaning|kya|kia|kyun|kyon|kiun|kaise|kese|kaisay|kab|kitna|kitni|kitne|konsa|kaunsa|kis|batao|bataen|samjhao)\b|\b(kya|kyun|kyon|kaise|kese|matlab|means?)\b/i;
+
+  async function askAssistant(text) {
+    const wait = chat("ai", "Thinking…");
+    wait.classList.add("thinking");
+    history.pop();                          // "Thinking…" is not part of the conversation
+    const past = history.slice(0, -1);      // everything before this question
+    try {
+      const d = await api("/api/autotrade/assistant", { method: "POST", body: { account: S.mode, message: text, history: past } });
+      wait.remove();
+      chat("ai", d.reply, d.source === "ai" ? "AI answer · it can only explain, it never trades" : "");
+      suggest(d.suggest);
+      speak(String(d.reply).split("\n")[0]);
+    } catch (e) {
+      wait.remove();
+      chat("ai", "I could not answer right now (" + e.message + "). Try again in a moment, or type \"help\" for the commands.");
+    }
+  }
 
   async function handleCommand(text) {
     const st = S.status;
     const L = LABEL(S.mode);
     const words = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
     const coin = findCoin(words);
-    let reply;
+    let reply = null;
+    suggest([]);
+    if (QUESTION.test(text.trim()) || words.length > 7) return askAssistant(text);
 
     if (HAS(words, ["help", "commands"])) {
-      reply = "Commands:\n• status / balance\n• start bot / stop bot\n• switch to live / switch to demo\n• signal btc\n• buy btc / short eth (opens a confirmation)\n• positions\n• stop all";
-    } else if (HAS(words, ["switch", "use", "go"]) && HAS(words, ["live", "demo"])) {
-      const target = words.includes("live") ? "live" : "demo";
+      reply = "Ask me anything about your bot, for example \"why did the bot not trade?\" or \"what is leverage?\".\n\nCommands:\n• status / balance\n• start bot / stop bot\n• switch to site demo / binance demo / live\n• signal btc\n• buy btc / short eth (opens a confirmation)\n• positions\n• stop all";
+      suggest(["Why did the bot not trade?", "How does the bot work?", "What settings should I use?"]);
+    } else if (HAS(words, ["switch", "use", "go", "open"]) && HAS(words, ["live", "demo", "site", "paper", "binance"])) {
+      const target = words.includes("live") ? "live" : (words.includes("site") || words.includes("paper")) ? "paper" : words.includes("binance") ? "demo" : "paper";
       if (target === S.mode) reply = `You are already on the ${LABEL(target)} account.`;
       else { switchAccount(target); return; }
     } else if (HAS(words, ["all", "everything", "panic", "emergency"]) && HAS(words, STOP_WORDS.concat(["close", "exit", "panic", "emergency"]))) {
@@ -1124,17 +1207,17 @@
       chat("ai", `Checking the ${c} signal…`);
       const sg = await analyze(c);
       reply = sg ? `${c} (${sg.timeframe}): ${sg.verdict} — ${Math.round(sg.confidence)}% confidence. ${sg.verdict === "WAIT" ? "No trade setup right now." : sg.confidence >= st.settings.min_confidence ? "Above the bot's minimum confidence." : "Below the bot's minimum confidence, so the bot will not take it."}` : "Could not get the signal.";
-    } else if (HAS(words, ["position", "positions", "trades", "open"])) {
+    } else if (words.length <= 2 && HAS(words, ["position", "positions", "trades", "open"])) {
       reply = st.positions.length ? st.positions.map((p) => `${p.side} ${p.symbol}: ${fmtUsd(p.unrealized_pnl, true)} (SL ${fmtPrice(p.stop_loss)}, TP ${fmtPrice(p.take_profit)})`).join("\n") : `No open positions on ${L}.`;
-    } else if (HAS(words, ["status", "balance", "pnl", "profit", "summary"])) {
-      const other = S.mode === "live" ? "demo" : "live";
-      const o = st.accounts[other];
+    } else if (words.length <= 3 && HAS(words, ["status", "balance", "pnl", "summary"])) {
       if (!st.connected) reply = `The ${L} account is not connected.`;
       else reply = `${L}: balance ${fmtUsd(st.account.balance_usdt)} USDT · bot ${st.bot.enabled ? "ON" : "OFF"}${st.bot.paused_until ? " (paused)" : ""} · engine ${st.engine.online ? "online" : "offline"}\nToday: ${fmtUsd(st.stats.realized_today, true)} · open: ${st.positions.length} (${fmtUsd(st.stats.unrealized, true)})`;
-      reply += `\n${LABEL(other)}: ${o.connected ? (o.bot_enabled ? "bot ON" : "bot OFF") + ", " + o.open_positions + " open" : "not connected"}`;
-    } else {
-      reply = "Sorry, I didn't understand that. Type \"help\" to see the commands.";
+      MODES.filter((m) => m !== S.mode).forEach((m) => {
+        const o = st.accounts[m];
+        reply += `\n${LABEL(m)}: ${o.connected ? (o.bot_enabled ? "bot ON" : "bot OFF") + ", " + o.open_positions + " open" : "not connected"}`;
+      });
     }
+    if (reply == null) return askAssistant(text);   // not a command: answer it as a question
     chat("ai", reply);
     speak(reply.split("\n")[0]);
   }
@@ -1159,7 +1242,8 @@
   });
 
   // ------------------------------------------------------------ boot
-  chat("ai", "Hi! I'm your auto-trade assistant. Type \"help\" to see what I can do. Trades are always placed through a confirmation window.");
+  chat("ai", "Hi! I'm your auto-trade assistant. Ask me anything about your bot, its trades or trading terms, or give a command like \"start bot\". Trades are always placed through a confirmation window.");
+  suggest(["Why did the bot not trade?", "How does the bot work?", "What is leverage?", "help"]);
   initChart();
   refresh().then(() => selectCoin(S.selected));
   setInterval(refresh, 5000);
