@@ -15,6 +15,7 @@
   const RANGES = { "1D": ["5m", 288], "5D": ["30m", 240], "1M": ["4h", 186], "3M": ["1d", 92], "6M": ["1d", 183], "1Y": ["1d", 366], "5Y": ["1w", 262] };
   const TYPE_LABEL = { candles: "Candles", hollow: "Hollow", heikin: "Heikin Ashi", bars: "Bars", line: "Line", area: "Area" };
   const SETTINGS_KEY = "sfm-chart-set-v1", IND_KEY = "sfm-chart-ind-v1";
+  const OLDER_PAGE = 500, MAX_BARS = 20000;   // endless history: 500 older candles per page, up to 20,000 in memory
   const phone = () => window.matchMedia("(max-width: 760px)").matches;
 
   const S = {
@@ -253,12 +254,13 @@
     const r = S.chart.timeScale().getVisibleLogicalRange();
     if (!r || r.from > 15) return;
     const key = `${S.coin}|${S.tf}`;
-    if (S.noMore === key || S.bars.length > 5000) return;
+    if (S.noMore === key || S.bars.length >= MAX_BARS) return;
     S.loadingOlder = true;
     const seq = S.seq;
     try {
-      const d = await F.getJSON(`/candles?coin=${enc(S.coin)}&timeframe=${S.tf}&limit=300&before=${S.oldest}`);
+      const d = await F.getJSON(`/candles?coin=${enc(S.coin)}&timeframe=${S.tf}&limit=${OLDER_PAGE}&before=${S.oldest}`);
       if (seq !== S.seq) return;
+      if (d.error || !Array.isArray(d.candles)) return;   // exchange hiccup: the next scroll tries again
       const older = (d.candles || []).map(norm).filter((b) => b.time < S.oldest);
       if (!older.length) { S.noMore = key; return; }
       const saved = S.chart.timeScale().getVisibleLogicalRange();
@@ -1057,7 +1059,12 @@
     trendline: 2, ray: 2, extended: 2, trendangle: 2, rectangle: 2, ellipse: 2, arrow: 2, measure: 2, fib: 2, fibtimezone: 2, fibfan: 2,
     fibcircles: 2, fibspiral: 2, fibarcs: 2, gannbox: 2, longpos: 2, shortpos: 2, pricerange: 2, daterange: 2, callout: 2,
     support_zone: 2, resistance_zone: 2, fibext: 3, fibchannel: 3, fibwedge: 3, pitchfork: 3, triangle: 3,
+    // added in update 12
+    highlighter: 0, avwap: 1, arrowup: 1, arrowdown: 1, pricelabel: 1, parallel: 3, regression: 2, infoline: 2,
+    datepricerange: 2, circle: 2, cyclic: 2, abcd: 4, xabcd: 5, elliott: 6,
   };
+  const FREEHAND = new Set(["brush", "highlighter"]);           // drag to draw
+  const MULTI = new Set(["path", "abcd", "xabcd", "elliott"]);   // stored as a list of points
   const ic = (inner) => `<svg width="17" height="17" viewBox="0 0 24 24" fill="none">${inner}</svg>`;
   const ICON = {
     cursor: ic('<path d="M5 3l14 7-6 2-2 6-6-15z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>'),
@@ -1097,6 +1104,20 @@
     note: ic('<path d="M5 4h14v13l-4 3H5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 9h10M7 13h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>'),
     callout: ic('<path d="M4 5h16v9H10l-4 4v-4H4z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>'),
     icon: ic('<circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="10" r="1.1" fill="currentColor"/><circle cx="15" cy="10" r="1.1" fill="currentColor"/><path d="M8.5 14.5c1 1.4 5.9 1.4 7 0" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>'),
+    parallel: ic('<line x1="3" y1="15" x2="17" y2="5" stroke="currentColor" stroke-width="1.6"/><line x1="7" y1="20" x2="21" y2="10" stroke="currentColor" stroke-width="1.6"/><circle cx="3" cy="15" r="1.4" fill="currentColor"/><circle cx="17" cy="5" r="1.4" fill="currentColor"/>'),
+    regression: ic('<path d="M3 17L21 7" stroke="currentColor" stroke-width="1.7"/><path d="M3 12L21 2M3 22L21 12" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/>'),
+    infoline: ic('<line x1="4" y1="19" x2="16" y2="7" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="13" width="8" height="6" rx="1.2" stroke="currentColor" stroke-width="1.2"/><circle cx="4" cy="19" r="1.5" fill="currentColor"/><circle cx="16" cy="7" r="1.5" fill="currentColor"/>'),
+    avwap: ic('<path d="M3 16c3-1 4-6 7-6s4 4 7 3 3-5 4-6" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M3 21V9" stroke="currentColor" stroke-width="1.4"/><path d="M1.5 9h3" stroke="currentColor" stroke-width="1.4"/>'),
+    datepricerange: ic('<rect x="4" y="5" width="16" height="14" rx="1.5" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.4"/>'),
+    circle: ic('<circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/>'),
+    cyclic: ic('<path d="M4 3v18M9 3v18M14 3v18M19 3v18" stroke="currentColor" stroke-width="1.4"/><path d="M4 7h5" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 1.5"/>'),
+    highlighter: ic('<path d="M5 19l3-1 9-9-2-2-9 9-1 3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M3 21h9" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.45"/>'),
+    arrowup: ic('<path d="M12 4l6 7h-4v8h-4v-8H6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>'),
+    arrowdown: ic('<path d="M12 20l6-7h-4V5h-4v8H6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>'),
+    pricelabel: ic('<path d="M3 12l5-6h13v12H8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="8" cy="12" r="1.3" fill="currentColor"/>'),
+    abcd: ic('<path d="M3 18L9 7l5 7 7-10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><path d="M3 18L14 14M9 7L21 4" stroke="currentColor" stroke-width="0.9" stroke-dasharray="2 2"/>'),
+    xabcd: ic('<path d="M2 14L7 5l4 10 5-7 6 11" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/><path d="M2 14L11 15L7 5M11 15L22 19" stroke="currentColor" stroke-width="0.9" stroke-dasharray="2 2" fill="none"/>'),
+    elliott: ic('<path d="M2 19l4-8 3 4 5-11 3 6 5-7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>'),
     clear: ic('<path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'),
     undo: ic('<path d="M7 8H4V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 8c2-3 5.5-4.5 9-3.5A8 8 0 1 1 5 18" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>'),
     redo: ic('<path d="M17 8h3V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 8c-2-3-5.5-4.5-9-3.5A8 8 0 1 0 19 18" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>'),
@@ -1104,16 +1125,19 @@
   const TOOL_GROUPS = [
     { id: "cursor", tools: [["cursor", "Cursor (select and move)"]] },
     { id: "lines", tools: [["trendline", "Trend line"], ["ray", "Ray"], ["hray", "Horizontal ray"], ["extended", "Extended line"], ["trendangle", "Trend angle"],
-                           ["horizontal", "Horizontal line"], ["vertical", "Vertical line"], ["crossline", "Cross line"]] },
+                           ["infoline", "Info line"], ["horizontal", "Horizontal line"], ["vertical", "Vertical line"], ["crossline", "Cross line"],
+                           ["parallel", "Parallel channel", "CHANNELS"], ["regression", "Regression trend"], ["avwap", "Anchored VWAP", "VOLUME"]] },
     { id: "fib", tools: [["fib", "Fib retracement"], ["fibext", "Trend-based fib extension"], ["fibchannel", "Fib channel"], ["fibtimezone", "Fib time zone"],
                          ["fibfan", "Fib speed resistance fan"], ["fibcircles", "Fib circles"], ["fibspiral", "Fib spiral"], ["fibarcs", "Fib speed resistance arcs"],
-                         ["fibwedge", "Fib wedge"], ["pitchfork", "Pitchfan"], ["gannbox", "Gann box", "GANN"]] },
-    { id: "shapes", tools: [["rectangle", "Rectangle"], ["ellipse", "Ellipse"], ["triangle", "Triangle"], ["arrow", "Arrow"], ["path", "Path (double-click to finish)"],
+                         ["fibwedge", "Fib wedge"], ["pitchfork", "Pitchfan"], ["gannbox", "Gann box", "GANN"], ["cyclic", "Cyclic lines"]] },
+    { id: "patterns", tools: [["xabcd", "XABCD pattern"], ["abcd", "ABCD pattern"], ["elliott", "Elliott impulse wave (12345)"]] },
+    { id: "shapes", tools: [["rectangle", "Rectangle"], ["ellipse", "Ellipse"], ["circle", "Circle"], ["triangle", "Triangle"], ["arrow", "Arrow"], ["path", "Path (double-click to finish)"],
                             ["support_zone", "Support zone"], ["resistance_zone", "Resistance zone"]] },
-    { id: "measure", tools: [["measure", "Measure"], ["longpos", "Long position"], ["shortpos", "Short position"], ["pricerange", "Price range"], ["daterange", "Date range"]] },
-    { id: "brush", tools: [["brush", "Brush (freehand)"]] },
-    { id: "text", tools: [["text", "Text"], ["note", "Note"], ["callout", "Callout"]] },
-    { id: "icons", tools: [["icon", "Icon (emoji)"]] },
+    { id: "measure", tools: [["measure", "Measure"], ["longpos", "Long position"], ["shortpos", "Short position"], ["pricerange", "Price range"], ["daterange", "Date range"],
+                             ["datepricerange", "Date and price range"]] },
+    { id: "brush", tools: [["brush", "Brush (freehand)"], ["highlighter", "Highlighter"]] },
+    { id: "text", tools: [["text", "Text"], ["note", "Note"], ["callout", "Callout"], ["pricelabel", "Price label"]] },
+    { id: "icons", tools: [["icon", "Icon (emoji)"], ["arrowup", "Arrow mark up"], ["arrowdown", "Arrow mark down"]] },
   ];
   const groupOf = {}, labelOf = {}, groupCurrent = {};
   TOOL_GROUPS.forEach((g) => { g.tools.forEach(([id, label]) => { groupOf[id] = g.id; labelOf[id] = label; }); groupCurrent[g.id] = g.tools[0][0]; });
@@ -1127,13 +1151,19 @@
       const cur = groupCurrent[g.id];
       const btn = document.createElement("button");
       btn.type = "button"; btn.className = "ch-tb"; btn.title = labelOf[cur]; btn.setAttribute("aria-label", labelOf[cur]); btn.innerHTML = ICON[cur];
-      btn.addEventListener("click", () => { closeFlyouts(); selectTool(groupCurrent[g.id]); });
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const again = activeTool === groupCurrent[g.id] && g.tools.length > 1 && !wrap.classList.contains("open");
+        closeFlyouts();
+        selectTool(groupCurrent[g.id]);
+        if (again) openFlyout(wrap);
+      });
       wrap.appendChild(btn);
       if (g.tools.length > 1) {
         const arrow = document.createElement("span");
         arrow.className = "ch-tarrow"; arrow.title = "More tools"; arrow.setAttribute("role", "button"); arrow.setAttribute("aria-label", "More tools");
         arrow.innerHTML = '<svg width="7" height="7" viewBox="0 0 24 24"><path d="M4 4l16 8-16 8z" fill="currentColor"/></svg>';
-        arrow.addEventListener("click", (e) => { e.stopPropagation(); const open = wrap.classList.contains("open"); closeFlyouts(); if (!open) wrap.classList.add("open"); });
+        arrow.addEventListener("click", (e) => { e.stopPropagation(); const open = wrap.classList.contains("open"); closeFlyouts(); if (!open) openFlyout(wrap); });
         wrap.appendChild(arrow);
         const fly = document.createElement("div");
         fly.className = "ch-fly";
@@ -1146,7 +1176,11 @@
           fly.appendChild(row);
         });
         wrap.appendChild(fly);
-        btn.addEventListener("contextmenu", (e) => { e.preventDefault(); closeFlyouts(); wrap.classList.add("open"); });
+        btn.addEventListener("contextmenu", (e) => { e.preventDefault(); closeFlyouts(); openFlyout(wrap); });
+        // long press (touch) or a second click on the tool that is already active also opens the list
+        let pressT = null;
+        btn.addEventListener("touchstart", () => { pressT = setTimeout(() => { pressT = null; closeFlyouts(); openFlyout(wrap); }, 450); }, { passive: true });
+        ["touchend", "touchmove", "touchcancel"].forEach((ev) => btn.addEventListener(ev, () => { clearTimeout(pressT); pressT = null; }, { passive: true }));
       }
       toolsEl.appendChild(wrap);
     });
@@ -1165,7 +1199,21 @@
     highlightTool();
   }
   function closeFlyouts() { toolsEl.querySelectorAll(".ch-tg.open").forEach((g) => g.classList.remove("open")); }
+  // The flyout is position:fixed (the tool column scrolls and would clip it). On wide screens it sits to the right
+  // of its button, kept inside the window; on phones the CSS turns it into a sheet above the bottom tabs.
+  function openFlyout(wrap) {
+    const fly = wrap.querySelector(".ch-fly");
+    if (!fly) return;
+    wrap.classList.add("open");
+    if (phone()) { fly.style.left = fly.style.top = ""; return; }
+    const r = wrap.getBoundingClientRect(), h = fly.offsetHeight, w = fly.offsetWidth;
+    const left = Math.min(r.right + 8, window.innerWidth - w - 8);
+    const top = Math.max(8, Math.min(r.top - 4, window.innerHeight - h - 8));
+    fly.style.left = `${Math.max(8, left)}px`; fly.style.top = `${top}px`;
+  }
   document.addEventListener("click", (e) => { if (!toolsEl.contains(e.target)) closeFlyouts(); });
+  toolsEl.addEventListener("scroll", closeFlyouts, { passive: true });
+  window.addEventListener("resize", closeFlyouts);
   function highlightTool() {
     toolsEl.querySelectorAll(".ch-tb").forEach((b) => b.classList.remove("active"));
     const g = groupOf[activeTool];
@@ -1175,7 +1223,7 @@
   function selectTool(tool) {
     activeTool = tool; pendingPoints = []; selectedId = null; dragging = false;
     chartEl.style.cursor = tool === "cursor" ? "default" : "crosshair";
-    setInteractions(tool !== "brush");
+    setInteractions(!FREEHAND.has(tool));
     highlightTool(); renderDrawings();
   }
   function setInteractions(on) { if (S.chart) S.chart.applyOptions({ handleScroll: on, handleScale: on }); }
@@ -1290,6 +1338,39 @@
     for (let i = 0; i <= 80; i++) { const th = (i / 80) * Math.PI * 4, r = r0 * Math.exp(-b * th); out.push({ x: c.x + r * Math.cos(th + base), y: c.y + r * Math.sin(th + base) }); }
     return out;
   }
+  // anchored VWAP from the anchor candle to the newest one (typical price x volume)
+  function avwapLine(d) {
+    const i0 = barAtOrBefore(d.time);
+    if (i0 < 0) return [];
+    const out = [];
+    let pv = 0, vv = 0;
+    for (let i = i0; i < S.bars.length; i++) {
+      const b = S.bars[i], v = b.volume || 1, tp = (b.high + b.low + b.close) / 3;
+      pv += tp * v; vv += v;
+      const xx = tX(b.time), yy = pY(pv / vv);
+      if (xx != null && yy != null) out.push({ x: xx, y: yy, v: pv / vv });
+    }
+    return out;
+  }
+  // linear regression of closes between the two anchors, with +/- 2 standard deviation lines
+  function regressionGeom(d) {
+    if (!d.p1 || !d.p2) return null;
+    let i0 = barAtOrBefore(Math.min(d.p1.time, d.p2.time)), i1 = barAtOrBefore(Math.max(d.p1.time, d.p2.time));
+    if (i0 < 0) i0 = 0;
+    if (i1 - i0 < 2) return null;
+    const n = i1 - i0 + 1;
+    let sx = 0, sy = 0, sxy = 0, sxx = 0;
+    for (let k = 0; k < n; k++) { const yv = S.bars[i0 + k].close; sx += k; sy += yv; sxy += k * yv; sxx += k * k; }
+    const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1), icpt = (sy - slope * sx) / n;
+    let ss = 0;
+    for (let k = 0; k < n; k++) { const e = S.bars[i0 + k].close - (icpt + slope * k); ss += e * e; }
+    const sd = Math.sqrt(ss / n), y0 = icpt, y1 = icpt + slope * (n - 1);
+    const xa = tX(S.bars[i0].time), xb = tX(S.bars[i1].time);
+    const P = (xx, v) => ({ x: xx, y: pY(v), v });
+    if (xa == null || xb == null) return null;
+    const g = { a: P(xa, y0), b: P(xb, y1), au: P(xa, y0 + 2 * sd), bu: P(xb, y1 + 2 * sd), al: P(xa, y0 - 2 * sd), bl: P(xb, y1 - 2 * sd), sd, slope, n };
+    return [g.a, g.b, g.au, g.bu, g.al, g.bl].every((p) => p.y != null) ? g : null;
+  }
   function hitTest(x, y) {
     if (!S.chart || !S.main) return null;
     const { w: width } = paneSize();
@@ -1303,8 +1384,24 @@
       else if (t === "vertical") { const x0 = tX(d.time); if (x0 != null && Math.abs(x - x0) <= HIT) return d; }
       else if (t === "hray") { const x0 = tX(d.time), y0 = pY(d.price); if (x0 != null && y0 != null && x >= x0 - HIT && Math.abs(y - y0) <= HIT) return d; }
       else if (t === "crossline") { const x0 = tX(d.time), y0 = pY(d.price); if ((x0 != null && Math.abs(x - x0) <= HIT) || (y0 != null && Math.abs(y - y0) <= HIT)) return d; }
-      else if (t === "text" || t === "note" || t === "icon") { const a = tX(d.time), b = pY(d.price); if (a != null && b != null && Math.hypot(x - a, y - b) <= HIT + 10) return d; }
-      else if (t === "brush" || t === "path") {
+      else if (["text", "note", "icon", "arrowup", "arrowdown", "pricelabel"].includes(t)) { const a = tX(d.time), b = pY(d.price); if (a != null && b != null && Math.hypot(x - a, y - b) <= HIT + 14) return d; }
+      else if (t === "avwap") { const line = avwapLine(d); for (let j = 0; j < line.length - 1; j++) { const a = line[j], b = line[j + 1]; if (segDist(x, y, a.x, a.y, b.x, b.y) <= HIT) return d; } }
+      else if (t === "regression") { const r = regressionGeom(d); if (r && [[r.a, r.b], [r.au, r.bu], [r.al, r.bl]].some(([a, b]) => segDist(x, y, a.x, a.y, b.x, b.y) <= HIT)) return d; }
+      else if (t === "parallel") {
+        if (!P1 || !P2 || !P3 || ![P1.x, P1.y, P2.x, P2.y, P3.x, P3.y].every(okv)) continue;
+        const off = P3.y - lerpY(P1, P2, P3.x);
+        if (segDist(x, y, P1.x, P1.y, P2.x, P2.y) <= HIT || segDist(x, y, P1.x, P1.y + off, P2.x, P2.y + off) <= HIT || bboxHit(x, y, [P1, P2, { x: P1.x, y: P1.y + off }, { x: P2.x, y: P2.y + off }], 0)) return d;
+      } else if (t === "circle") { if (ok2) { const r = Math.hypot(P2.x - P1.x, P2.y - P1.y); if (Math.abs(Math.hypot(x - P1.x, y - P1.y) - r) <= HIT || Math.hypot(x - P1.x, y - P1.y) < r) return d; } }
+      else if (t === "datepricerange") { if (ok2 && x >= Math.min(P1.x, P2.x) - HIT && x <= Math.max(P1.x, P2.x) + HIT && y >= Math.min(P1.y, P2.y) - HIT && y <= Math.max(P1.y, P2.y) + HIT) return d; }
+      else if (t === "infoline") { if (ok2 && segDist(x, y, P1.x, P1.y, P2.x, P2.y) <= HIT) return d; }
+      else if (t === "cyclic") {
+        if (!ok2) continue;
+        const unit = typeof d.p2.time === "number" && typeof d.p1.time === "number" ? Math.abs(d.p2.time - d.p1.time) : 0;
+        if (!unit) continue;
+        const t0 = Math.min(d.p1.time, d.p2.time);
+        for (let k = 0; k < 400; k++) { const x0 = tX(t0 + k * unit); if (x0 == null) break; if (Math.abs(x - x0) <= HIT) return d; }
+      }
+      else if (Array.isArray(d.points)) {
         for (let j = 0; j < d.points.length - 1; j++) {
           const a = { x: tX(d.points[j].time), y: pY(d.points[j].price) }, b = { x: tX(d.points[j + 1].time), y: pY(d.points[j + 1].price) };
           if ([a.x, a.y, b.x, b.y].every((v) => v != null) && segDist(x, y, a.x, a.y, b.x, b.y) <= HIT) return d;
@@ -1359,8 +1456,8 @@
   function moveBy(d, dt, dp) {
     if (d.type === "horizontal") d.price += dp;
     else if (d.type === "vertical") d.time = shiftT(d.time, dt);
-    else if (["hray", "crossline", "text", "note", "icon"].includes(d.type)) { d.time = shiftT(d.time, dt); d.price += dp; }
-    else if (d.type === "brush" || d.type === "path") d.points.forEach((p) => { p.time = shiftT(p.time, dt); p.price += dp; });
+    else if (["hray", "crossline", "text", "note", "icon", "avwap", "arrowup", "arrowdown", "pricelabel"].includes(d.type)) { d.time = shiftT(d.time, dt); d.price += dp; }
+    else if (Array.isArray(d.points)) d.points.forEach((p) => { p.time = shiftT(p.time, dt); p.price += dp; });
     else ["p1", "p2", "p3"].forEach((k) => { if (d[k]) { d[k].time = shiftT(d[k].time, dt); d[k].price += dp; } });
   }
 
@@ -1371,7 +1468,7 @@
       if (price != null) { $("alert-price").value = Number(price.toFixed(F.decimals(price, S.coin))); updateAlertHint(); }
       return;
     }
-    if (!S.main || activeTool === "cursor" || activeTool === "brush" || activeTool === "path") return;
+    if (!S.main || activeTool === "cursor" || FREEHAND.has(activeTool) || activeTool === "path") return;
     if (!p || !p.point || p.time === undefined) return;
     const price = S.main.coordinateToPrice(p.point.y);
     if (price == null) return;
@@ -1381,6 +1478,7 @@
       let made = null;
       if (tool === "text" || tool === "note") { const txt = await askText(tool === "note" ? "Note" : "Text", ""); if (txt) made = { type: tool, ...pt, text: txt.slice(0, 120) }; }
       else if (tool === "icon") { const em = await askText("Icon (an emoji, for example ⭐ 🚀 🔥 ⚠️ ✅)", "⭐"); if (em) made = { type: "icon", ...pt, emoji: em.slice(0, 4) }; }
+      else if (tool === "pricelabel") made = { type: "pricelabel", ...pt };
       else if (tool === "horizontal") made = { type: "horizontal", price };
       else if (tool === "vertical") made = { type: "vertical", time: p.time };
       else made = { type: tool, ...pt };
@@ -1390,7 +1488,8 @@
     }
     pendingPoints.push(pt);
     if (pendingPoints.length < arity) { renderDrawings(); return; }
-    const d = { type: tool, id: ++drawingIdSeq, p1: pendingPoints[0], p2: pendingPoints[1] };
+    const d = MULTI.has(tool) ? { type: tool, id: ++drawingIdSeq, points: pendingPoints.slice() }
+      : { type: tool, id: ++drawingIdSeq, p1: pendingPoints[0], p2: pendingPoints[1] };
     if (arity === 3) d.p3 = pendingPoints[2];
     if (tool === "callout") { const txt = await askText("Callout text", ""); d.text = (txt || "").slice(0, 120); }
     pendingPoints = [];
@@ -1413,7 +1512,7 @@
       renderDrawings();
       return;
     }
-    if (activeTool !== "brush") return;
+    if (!FREEHAND.has(activeTool)) return;
     brushing = true; brushPts = [];
     const pt = pixToTP(cx, cy);
     if (pt.time != null && pt.price != null) brushPts.push(pt);
@@ -1436,7 +1535,7 @@
   }
   function up() {
     if (dragging) {
-      dragging = false; dragLast = null; setInteractions(activeTool !== "brush");
+      dragging = false; dragLast = null; setInteractions(!FREEHAND.has(activeTool));
       const d = drawings.find((x) => x.id === selectedId);
       if (d && dragBefore && JSON.stringify(coordsOnly(d)) !== JSON.stringify(coordsOnly(dragBefore))) {
         const { id, serverId, ...before } = dragBefore;
@@ -1449,12 +1548,12 @@
     }
     if (!brushing) return;
     brushing = false;
-    if (brushPts.length > 1) { const d = { type: "brush", points: brushPts.slice(), id: ++drawingIdSeq }; drawings.push(d); saveCreate(d); pushUndo({ action: "create", id: d.id }); }
+    if (brushPts.length > 1) { const d = { type: FREEHAND.has(activeTool) ? activeTool : "brush", points: brushPts.slice(), id: ++drawingIdSeq }; drawings.push(d); saveCreate(d); pushUndo({ action: "create", id: d.id }); }
     brushPts = []; renderDrawings();
   }
-  chartEl.addEventListener("mousedown", (e) => { if (activeTool === "cursor" || activeTool === "brush") down(e.clientX, e.clientY); });
+  chartEl.addEventListener("mousedown", (e) => { if (activeTool === "cursor" || FREEHAND.has(activeTool)) down(e.clientX, e.clientY); });
   chartEl.addEventListener("touchstart", (e) => {
-    if (activeTool !== "cursor" && activeTool !== "brush") return;
+    if (activeTool !== "cursor" && !FREEHAND.has(activeTool)) return;
     const t = e.touches[0]; if (!t) return;
     down(t.clientX, t.clientY);
     if (dragging || brushing) e.preventDefault();
@@ -1717,6 +1816,126 @@
         }
         el("line", { x1: x, y1: y, x2: x + w, y2: y + h, stroke: c, "stroke-width": 0.9, opacity: 0.8 });
         if (sel) anchor = { x: x + w / 2, y }; return;
+      }
+      if (t === "highlighter") {
+        const ps = d.points.map((p) => ({ x: tX(p.time), y: pY(p.price) })).filter((p) => okXY(p.x, p.y));
+        if (ps.length < 2) return;
+        el("polyline", { points: ps.map((p) => `${p.x},${p.y}`).join(" "), fill: "none", stroke: col("#f5d90a"), "stroke-width": sw(12), "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.32 });
+        if (sel) anchor = ps[0]; return;
+      }
+      if (t === "abcd" || t === "xabcd" || t === "elliott") {
+        const raw = d.points || [], ps = raw.map((p) => ({ x: tX(p.time), y: pY(p.price) }));
+        if (ps.some((p) => !okXY(p.x, p.y)) || ps.length < 2) return;
+        const c = col(t === "elliott" ? "#4dabf7" : t === "abcd" ? "#36e0a0" : "#c084fc");
+        if (t === "xabcd" && ps.length === 5) {
+          el("polygon", { points: [ps[0], ps[1], ps[2]].map((p) => `${p.x},${p.y}`).join(" "), fill: alpha(c, 0.12), stroke: "none" });
+          el("polygon", { points: [ps[2], ps[3], ps[4]].map((p) => `${p.x},${p.y}`).join(" "), fill: alpha(c, 0.12), stroke: "none" });
+        }
+        el("polyline", { points: ps.map((p) => `${p.x},${p.y}`).join(" "), fill: "none", stroke: c, "stroke-width": sw(1.8), "stroke-linejoin": "round" });
+        const names = t === "elliott" ? ["0", "1", "2", "3", "4", "5"] : t === "abcd" ? ["A", "B", "C", "D"] : ["X", "A", "B", "C", "D"];
+        ps.forEach((p, i) => {
+          const up = i === 0 ? raw[1] && raw[1].price < raw[0].price : raw[i].price >= raw[i - 1].price;
+          el("circle", { cx: p.x, cy: p.y, r: 3, fill: c });
+          el("text", { x: p.x, y: p.y + (up ? -9 : 17), "text-anchor": "middle", fill: c, "font-size": 11.5, "font-weight": 700, ...font }).textContent = t === "elliott" ? `(${names[i]})` : names[i];
+        });
+        // Fibonacci ratios between the legs (how harmonic traders read the pattern)
+        const leg = (i) => Math.abs(raw[i + 1].price - raw[i].price);
+        const ratio = (a, b, i, j) => {
+          const r = leg(b) / (leg(a) || 1), m = { x: (ps[i].x + ps[j].x) / 2, y: (ps[i].y + ps[j].y) / 2 };
+          el("line", { x1: ps[i].x, y1: ps[i].y, x2: ps[j].x, y2: ps[j].y, stroke: c, "stroke-width": 0.9, "stroke-dasharray": "3 3", opacity: 0.8 });
+          el("text", { x: m.x, y: m.y - 4, "text-anchor": "middle", fill: c, "font-size": 9.5, ...font }).textContent = r.toFixed(3);
+        };
+        if (t === "xabcd" && ps.length === 5) { ratio(0, 1, 0, 2); ratio(1, 2, 1, 3); ratio(2, 3, 2, 4); const xd = Math.abs(raw[4].price - raw[1].price) / (leg(0) || 1);
+          el("line", { x1: ps[0].x, y1: ps[0].y, x2: ps[4].x, y2: ps[4].y, stroke: c, "stroke-width": 0.9, "stroke-dasharray": "3 3", opacity: 0.8 });
+          el("text", { x: (ps[0].x + ps[4].x) / 2, y: (ps[0].y + ps[4].y) / 2 - 4, "text-anchor": "middle", fill: c, "font-size": 9.5, ...font }).textContent = xd.toFixed(3); }
+        if (t === "abcd" && ps.length === 4) { ratio(0, 1, 0, 2); ratio(1, 2, 1, 3); }
+        if (sel) anchor = ps[0]; return;
+      }
+      if (t === "avwap") {
+        const line = avwapLine(d); if (line.length < 1) return;
+        const c = col("#f5a623");
+        el("polyline", { points: line.map((p) => `${p.x},${p.y}`).join(" "), fill: "none", stroke: c, "stroke-width": sw(1.8) });
+        el("circle", { cx: line[0].x, cy: line[0].y, r: 3.5, fill: c });
+        const last = line[line.length - 1];
+        el("text", { x: Math.min(last.x + 4, width - 4), y: last.y - 6, "text-anchor": last.x + 90 > width ? "end" : "start", fill: c, "font-size": 10, "font-weight": 700, ...font }).textContent = `AVWAP ${fmt(last.v)}`;
+        if (sel) anchor = line[0]; return;
+      }
+      if (t === "regression") {
+        const r = regressionGeom(d); if (!r) return;
+        const c = col("#4dabf7");
+        el("polygon", { points: [r.au, r.bu, r.bl, r.al].map((p) => `${p.x},${p.y}`).join(" "), fill: alpha(c, 0.08), stroke: "none" });
+        el("line", { x1: r.a.x, y1: r.a.y, x2: r.b.x, y2: r.b.y, stroke: c, "stroke-width": sw(1.8) });
+        [[r.au, r.bu], [r.al, r.bl]].forEach(([a, b]) => el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: c, "stroke-width": sw(1), "stroke-dasharray": "5 3" }));
+        el("text", { x: r.b.x + 4, y: r.b.y + 3, fill: c, "font-size": 9.5, ...font }).textContent = `${r.n} bars · σ ${fmt(r.sd)}`;
+        if (sel) anchor = r.a; return;
+      }
+      if (t === "parallel") {
+        if (!ok3) return;
+        const off = P3.y - lerpY(P1, P2, P3.x), c = col("#4dabf7");
+        el("polygon", { points: `${P1.x},${P1.y} ${P2.x},${P2.y} ${P2.x},${P2.y + off} ${P1.x},${P1.y + off}`, fill: alpha(c, 0.1), stroke: "none" });
+        el("line", { x1: P1.x, y1: P1.y, x2: P2.x, y2: P2.y, stroke: c, "stroke-width": sw(1.6) });
+        el("line", { x1: P1.x, y1: P1.y + off, x2: P2.x, y2: P2.y + off, stroke: c, "stroke-width": sw(1.6) });
+        el("line", { x1: P1.x, y1: P1.y + off / 2, x2: P2.x, y2: P2.y + off / 2, stroke: c, "stroke-width": sw(1), "stroke-dasharray": "4 3", opacity: 0.8 });
+        if (sel) anchor = P1; return;
+      }
+      if (t === "circle") {
+        if (!ok2) return;
+        const c = col("#4dabf7"), r = Math.hypot(P2.x - P1.x, P2.y - P1.y);
+        el("circle", { cx: P1.x, cy: P1.y, r, fill: alpha(c, 0.1), stroke: c, "stroke-width": sw(1.4) });
+        if (sel) anchor = { x: P1.x, y: P1.y - r }; return;
+      }
+      if (t === "infoline") {
+        if (!ok2) return;
+        const c = col("#4dabf7"), dp = d.p2.price - d.p1.price, pc = (dp / d.p1.price) * 100;
+        const bars = typeof d.p1.time === "number" ? Math.round(Math.abs(d.p2.time - d.p1.time) / TF_SEC[S.tf]) : 0;
+        const ang = (Math.atan2(-(P2.y - P1.y), P2.x - P1.x) * 180) / Math.PI;
+        el("line", { x1: P1.x, y1: P1.y, x2: P2.x, y2: P2.y, stroke: c, "stroke-width": sw(1.8) });
+        el("circle", { cx: P1.x, cy: P1.y, r: 2.6, fill: c }); el("circle", { cx: P2.x, cy: P2.y, r: 2.6, fill: c });
+        const lines = [`${dp >= 0 ? "+" : ""}${fmt(dp)} (${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%)`, `${bars} bars · ${ang.toFixed(1)}°`];
+        const w = Math.max(...lines.map((l) => l.length)) * 6.2 + 14, bx = Math.min(P2.x + 8, width - w - 4), by = P2.y - 18;
+        el("rect", { x: bx, y: by, width: w, height: 34, rx: 5, fill: "rgba(17,26,23,0.92)", stroke: c, "stroke-width": 1 });
+        lines.forEach((l, i) => { el("text", { x: bx + 7, y: by + 14 + i * 14, fill: i ? "#9fb3a8" : (dp >= 0 ? "#36e0a0" : "#ff526b"), "font-size": 10.5, "font-weight": i ? 500 : 700, ...font }).textContent = l; });
+        if (sel) anchor = { x: (P1.x + P2.x) / 2, y: Math.min(P1.y, P2.y) }; return;
+      }
+      if (t === "datepricerange") {
+        if (!ok2) return;
+        const up = d.p2.price >= d.p1.price, c = col(up ? "#36e0a0" : "#ff526b");
+        const x = Math.min(P1.x, P2.x), y = Math.min(P1.y, P2.y), w = Math.abs(P2.x - P1.x), h = Math.abs(P2.y - P1.y);
+        el("rect", { x, y, width: w, height: h, fill: alpha(c, 0.12), stroke: c, "stroke-width": sw(1), "stroke-dasharray": "4 3" });
+        el("line", { x1: x + w / 2, x2: x + w / 2, y1: y, y2: y + h, stroke: c, "stroke-width": 1 });
+        el("line", { x1: x, x2: x + w, y1: y + h / 2, y2: y + h / 2, stroke: c, "stroke-width": 1 });
+        const dp = d.p2.price - d.p1.price, pc = (dp / d.p1.price) * 100;
+        const i0 = barAtOrBefore(Math.min(d.p1.time, d.p2.time)), i1 = barAtOrBefore(Math.max(d.p1.time, d.p2.time));
+        let vol = 0; if (i0 >= 0) for (let i = i0; i <= i1; i++) vol += S.bars[i].volume || 0;
+        const secs = Math.abs(d.p2.time - d.p1.time), bars = Math.round(secs / TF_SEC[S.tf]);
+        const span = secs >= 86400 ? `${(secs / 86400).toFixed(1)}d` : `${(secs / 3600).toFixed(1)}h`;
+        const label = [`${dp >= 0 ? "+" : ""}${fmt(dp)} (${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%)`, `${bars} bars, ${span}`, `Vol ${compact(vol)}`];
+        const lw = Math.max(...label.map((l) => l.length)) * 6.1 + 14, lx = x + w / 2 - lw / 2, ly = up ? y - 50 : y + h + 6;
+        el("rect", { x: lx, y: ly, width: lw, height: 46, rx: 5, fill: c, opacity: 0.92 });
+        label.forEach((l, i) => { el("text", { x: lx + lw / 2, y: ly + 14 + i * 13, "text-anchor": "middle", fill: "#06110c", "font-size": 10.5, "font-weight": i ? 600 : 700, ...font }).textContent = l; });
+        if (sel) anchor = { x: x + w / 2, y }; return;
+      }
+      if (t === "cyclic") {
+        if (!ok2) return;
+        const unit = typeof d.p2.time === "number" && typeof d.p1.time === "number" ? Math.abs(d.p2.time - d.p1.time) : 0;
+        if (!unit) return;
+        const c = col("#4dabf7"), t0 = Math.min(d.p1.time, d.p2.time);
+        for (let k = 0; k < 400; k++) { const x0 = tX(t0 + k * unit); if (x0 == null) break; el("line", { x1: x0, x2: x0, y1: 0, y2: height, stroke: c, "stroke-width": sw(k ? 1 : 1.4), opacity: k ? 0.6 : 0.9 }); }
+        if (sel) anchor = P1; return;
+      }
+      if (t === "arrowup" || t === "arrowdown") {
+        const x = tX(d.time), y = pY(d.price); if (!okXY(x, y)) return;
+        const upA = t === "arrowup", c = col(upA ? "#36e0a0" : "#ff526b"), k = 1 + 0.25 * ((st.width || 1) - 1);
+        const pts = upA ? [[0, 0], [9, 10], [3.5, 10], [3.5, 22], [-3.5, 22], [-3.5, 10], [-9, 10]] : [[0, 0], [9, -10], [3.5, -10], [3.5, -22], [-3.5, -22], [-3.5, -10], [-9, -10]];
+        el("polygon", { points: pts.map(([a, b]) => `${x + a * k},${y + b * k}`).join(" "), fill: c, stroke: sel ? "#fff" : "none", "stroke-width": 1 });
+        if (sel) anchor = { x, y: y - 26 }; return;
+      }
+      if (t === "pricelabel") {
+        const x = tX(d.time), y = pY(d.price); if (!okXY(x, y)) return;
+        const c = col("#4dabf7"), txt = fmt(d.price), w = txt.length * 6.8 + 16;
+        el("path", { d: `M ${x} ${y} L ${x + 8} ${y - 10} H ${x + 8 + w} V ${y + 10} H ${x + 8} Z`, fill: c, stroke: sel ? "#fff" : "none" });
+        el("text", { x: x + 14, y: y + 4, fill: "#06110c", "font-size": 11, "font-weight": 700, ...font }).textContent = txt;
+        if (sel) anchor = { x: x + w / 2, y: y - 12 }; return;
       }
       if (t === "longpos" || t === "shortpos") {
         if (!ok2) return;
