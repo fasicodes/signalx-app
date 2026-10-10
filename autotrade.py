@@ -4,10 +4,11 @@ Auto-Trade Bot (Binance) - SignalX / Signals FM
 
 Turns the old HTML auto-trade mockup into a real, risk-controlled bot.
 
-  1. Each user can connect TWO Binance accounts: "demo" (Binance Demo
-     Trading, no real money) and "live" (real funds). Each account has its
-     own bot switch, settings, positions, history and log, so both bots can
-     run at the same time, independently.
+  1. Each user has THREE bot accounts: "paper" (the site's own Demo trading
+     account, papertrade.py: no keys, no Binance, works right away), "demo"
+     (Binance Demo Trading, no real money) and "live" (real funds). Each
+     account has its own bot switch, settings, positions, history and log,
+     so all bots can run at the same time, independently.
   2. API keys are stored ENCRYPTED on the server (never in the browser).
   3. Real balances, prices and market orders via ccxt.
   4. Trade decisions come from SignalX's own signal engine
@@ -35,6 +36,7 @@ LIMITATIONS
 
 import json
 import math
+import re
 import os
 import socket
 import threading
@@ -63,7 +65,7 @@ autotrade_bp = Blueprint("autotrade", __name__)
 # ---------------------------------------------------------------------------
 # Hard safety limits (enforced server-side)
 # ---------------------------------------------------------------------------
-MODES = ("demo", "live")
+MODES = ("paper", "demo", "live")
 ALLOWED_LEVERAGE = (1, 2, 3, 5, 10, 20)
 TIMEFRAME_SCAN_SEC = {"15m": 180, "1h": 300, "4h": 600}
 TIMEFRAME_MINUTES = {"15m": 15, "1h": 60, "4h": 240}
@@ -160,7 +162,7 @@ def _err(message, status=400, **extra):
 
 
 def _label(mode):
-    return "Live" if mode == "live" else "Demo"
+    return {"live": "Live", "demo": "Binance Demo", "paper": "Site demo"}.get(mode, "Demo")
 
 
 class _Cursor:
@@ -784,6 +786,92 @@ class BinanceClient:
             pass
 
 
+class PaperClient:
+    """The "Site demo" account: trades the user's own Signals FM Demo trading account (papertrade.py) with the
+    same methods as BinanceClient, so the engine, sizing, SL/TP and logs work unchanged. No API keys, no
+    network beyond the public prices the site already reads. The demo engine itself closes the position at the
+    bot's stop-loss / take-profit (it checks every 2 seconds); the bot notices and records the result."""
+
+    is_paper = True
+
+    def __init__(self, user_id, market_type):
+        import papertrade
+        self.pt = papertrade
+        self.user_id = int(user_id)
+        self.market_type = market_type
+        self.mode = "paper"
+
+    def sym(self, symbol):
+        return symbol
+
+    def _meta(self, symbol):
+        return self.pt.feed.meta(symbol)
+
+    def has_symbol(self, symbol):
+        return symbol in self.pt.feed.coins()
+
+    def market_rules(self, symbol):
+        return {"min_amount": _f(self._meta(symbol).get("min_qty"), 0.0), "min_cost": float(self.pt.MIN_NOTIONAL),
+                "taker": float(self.pt.FEES[self.market_type]["taker"])}
+
+    def amount_to_precision(self, symbol, amount):
+        return float(self.pt._floor_step(float(amount), self._meta(symbol)["qty_step"]))
+
+    def price_to_precision(self, symbol, price):
+        return float(self.pt._round_tick(float(price), self._meta(symbol)["price_tick"]))
+
+    def balance_usdt(self):
+        snap = self.pt.bot_snapshot(self.user_id)
+        return max(0.0, float(snap["available"])), float(snap["equity"])
+
+    def base_free(self, symbol):
+        pos = self.pt.bot_positions(self.user_id, "spot").get(symbol)
+        return float(pos["qty"]) if pos else 0.0
+
+    def api_restrictions(self):
+        return None
+
+    def price(self, symbol):
+        p = self.pt.bot_price(symbol)
+        if p is None:
+            raise RuntimeError(f"Live price for {symbol} is not available right now.")
+        return p
+
+    def prices(self, symbols):
+        return self.pt.bot_prices(symbols)
+
+    def prepare_futures(self, symbol, leverage):
+        self.pt.bot_prepare_futures(self.user_id, symbol, leverage)
+
+    def futures_positions(self, symbols):
+        """{symbol: qty} of open demo positions in this market (spot too: the demo engine can close either)."""
+        rows = self.pt.bot_positions(self.user_id, self.market_type)
+        return {s: float(rows[s]["qty"]) for s in symbols if s in rows and float(rows[s]["qty"]) > 0}
+
+    def market_order(self, symbol, side, amount, reduce_only=False):
+        opening = not reduce_only and (self.market_type == "futures" or side == "buy")
+        try:
+            return self.pt.bot_market_order(self.user_id, self.market_type, symbol, side.upper(), float(amount),
+                                            reduce_only=reduce_only, opening=opening)
+        except self.pt.BotError as e:
+            raise RuntimeError(str(e))
+
+    def attach_tpsl(self, symbol, stop_loss, take_profit):
+        self.pt.bot_set_tpsl(self.user_id, self.market_type, symbol, tp=take_profit, sl=stop_loss)
+
+    def backup_stop(self, symbol, close_side, amount, stop_price):
+        return None  # the demo position already carries the exact stop-loss (attach_tpsl)
+
+    def order_average(self, order_id, symbol):
+        return None
+
+    def last_close(self, symbol, since=None):
+        return self.pt.bot_last_close(self.user_id, self.market_type, symbol, since=since)
+
+    def cancel_all(self, symbol):
+        pass
+
+
 _client_cache = {}
 _client_cache_lock = threading.Lock()
 CLIENT_TTL_SEC = 1800
@@ -794,6 +882,8 @@ def _client_factory(api_key, secret, mode, market_type):
 
 
 def get_client(account, market_type):
+    if account.get("mode") == "paper":
+        return PaperClient(account["user_id"], market_type)
     key = (account["user_id"], account["mode"], market_type, account.get("key_hint"),
            hash(account["api_key_enc"]))
     now = time.time()
@@ -814,8 +904,24 @@ def _drop_clients(user_id, mode):
             _client_cache.pop(k, None)
 
 
+PAPER_KEY_HINT = "Signals FM"
+
+
+def _ensure_paper_account(user_id, cur):
+    """The Site demo account needs no keys: one placeholder row, so the engine's queries see it like the others."""
+    cur.execute("SELECT user_id FROM autotrade_exchange_accounts WHERE user_id=%s AND mode='paper'", (user_id,))
+    if cur.fetchone() is None:
+        cur.execute(
+            """INSERT INTO autotrade_exchange_accounts (user_id, mode, exchange, api_key_enc, api_secret_enc, key_hint,
+               connected_at) VALUES (%s,'paper','signalsfm','-','-',%s,%s)""",
+            (user_id, PAPER_KEY_HINT, _utcnow()),
+        )
+
+
 def load_account(user_id, mode, cur=None):
     def _q(c):
+        if mode == "paper":
+            _ensure_paper_account(user_id, c)
         c.execute("SELECT * FROM autotrade_exchange_accounts WHERE user_id=%s AND mode=%s", (user_id, mode))
         return c.fetchone()
 
@@ -953,7 +1059,8 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
     client = get_client(account, market_type)
     try:
         if not client.has_symbol(symbol):
-            raise TradeError(f"{symbol} is not available on Binance {market_type}.")
+            where = "Demo trading" if getattr(client, "is_paper", False) else f"Binance {market_type}"
+            raise TradeError(f"{symbol} is not available on {where}.")
         free, total = client.balance_usdt()
         price = client.price(symbol)
         rules = client.market_rules(symbol)
@@ -973,7 +1080,7 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
     min_cost = max(rules["min_cost"], 5.0)
     if amount <= 0 or amount < rules["min_amount"] or amount * price < min_cost:
         raise TradeError(
-            f"Trade size is too small ({amount * price:.2f} USDT). Binance minimum is about {min_cost:.2f} USDT - "
+            f"Trade size is too small ({amount * price:.2f} USDT). The minimum is about {min_cost:.2f} USDT - "
             f"add balance or raise Risk % / Max position."
         )
 
@@ -1027,7 +1134,13 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
             pass
         raise TradeError(f"Position could not be saved, so the order was closed again: {db_err}")
 
-    if market_type == "futures":
+    if getattr(client, "is_paper", False):
+        try:
+            client.attach_tpsl(symbol, sl, tp)
+        except Exception as e:
+            log_event(user_id, "WARN", f"{symbol}: SL/TP could not be set on the demo position ({type(e).__name__}). "
+                                       f"The bot will monitor them itself.", mode=mode)
+    elif market_type == "futures":
         dist = abs(fill - sl)
         backup_price = sl - dist * BACKUP_STOP_EXTRA if side == "LONG" else sl + dist * BACKUP_STOP_EXTRA
         try:
@@ -1066,8 +1179,10 @@ def _release(position_id):
                     (_utcnow(), position_id))
 
 
-def _finalize(pos, exit_price, reason, client=None):
-    pnl = calc_pnl(pos["side"], pos["entry_price"], exit_price, pos["amount"], pos["fee_rate"])
+def _finalize(pos, exit_price, reason, client=None, pnl=None):
+    if pnl is None:
+        pnl = calc_pnl(pos["side"], pos["entry_price"], exit_price, pos["amount"], pos["fee_rate"])
+    pnl = round(float(pnl), 4)
     with _Cursor() as cur:
         cur.execute(
             """UPDATE autotrade_positions SET status='CLOSED', exit_price=%s, pnl_usdt=%s, close_reason=%s,
@@ -1087,6 +1202,20 @@ def _finalize(pos, exit_price, reason, client=None):
     return pnl
 
 
+PAPER_REASON = {"TP": "TP", "SL": "SL", "LIQUIDATION": "LIQUIDATION", "TRAILING": "SL"}
+
+
+def _gone_exit(client, pos, price_hint=None):
+    """The position is no longer on the exchange: (exit price, reason, pnl or None) from what closed it."""
+    if getattr(client, "is_paper", False):
+        info = client.last_close(pos["symbol"], since=_to_dt(pos.get("opened_at")))
+        if info and info.get("exit_price"):
+            return info["exit_price"], PAPER_REASON.get(info.get("close_reason"), "EXTERNAL"), info.get("net_pnl")
+        return price_hint or pos.get("last_price") or client.price(pos["symbol"]), "EXTERNAL", None
+    exit_price = client.order_average(pos["backup_stop_id"], pos["symbol"]) if pos.get("backup_stop_id") else None
+    return exit_price or price_hint or pos.get("last_price") or client.price(pos["symbol"]), "EXCHANGE", None
+
+
 def close_position(pos, account, reason, price_hint=None, already_claimed=False):
     """Closes a position with a market order. Returns pnl (float)."""
     if not already_claimed and not _claim(pos["id"]):
@@ -1095,14 +1224,25 @@ def close_position(pos, account, reason, price_hint=None, already_claimed=False)
         client = get_client(account, pos["market_type"])
         symbol = pos["symbol"]
         close_side = "sell" if pos["side"] == "LONG" else "buy"
+        if getattr(client, "is_paper", False):
+            qty = client.futures_positions([symbol]).get(symbol, 0.0)
+            if qty <= 0:
+                exit_price, why, pnl = _gone_exit(client, pos, price_hint)
+                return _finalize(pos, exit_price, why, client, pnl=pnl)
+            amount = client.amount_to_precision(symbol, min(qty, float(pos["amount"])))
+            if float(pos["amount"]) >= qty * 0.999:
+                amount = qty  # all of it, never leave dust behind
+            order = client.market_order(symbol, close_side, amount, reduce_only=True)
+            closed = order.get("closed") or {}
+            exit_price = closed.get("exit_price") or order["average"] or price_hint or client.price(symbol)
+            return _finalize(pos, exit_price, reason, client, pnl=closed.get("net_pnl"))
         if pos["market_type"] == "futures":
             client.cancel_all(symbol)  # remove the backup stop
             qty = client.futures_positions([symbol]).get(symbol, 0.0)
             if qty <= 0:
                 # Already closed on Binance (backup stop fired, or closed by hand)
-                exit_price = (client.order_average(pos["backup_stop_id"], symbol) if pos.get("backup_stop_id") else None)
-                exit_price = exit_price or price_hint or client.price(symbol)
-                return _finalize(pos, exit_price, "EXCHANGE", client)
+                exit_price, why, pnl = _gone_exit(client, pos, price_hint)
+                return _finalize(pos, exit_price, why, client, pnl=pnl)
             amount = client.amount_to_precision(symbol, min(qty, float(pos["amount"])))
             order = client.market_order(symbol, close_side, amount, reduce_only=True)
         else:
@@ -1178,7 +1318,8 @@ def monitor_positions():
                 client = get_client(account, market_type)
                 symbols = sorted({p["symbol"] for p in group})
                 prices = client.prices(symbols)
-                live_futures = client.futures_positions(symbols) if market_type == "futures" else None
+                paper = getattr(client, "is_paper", False)
+                live_futures = client.futures_positions(symbols) if (market_type == "futures" or paper) else None
                 for pos in group:
                     _check_position(pos, account, client, prices.get(pos["symbol"]), live_futures)
         except Exception as e:
@@ -1188,14 +1329,14 @@ def monitor_positions():
 
 def _check_position(pos, account, client, price, live_futures):
     age = (_utcnow() - (_to_dt(pos["opened_at"]) or _utcnow())).total_seconds()
-    if live_futures is not None and age > 60 and live_futures.get(pos["symbol"], 0.0) <= 0:
-        # Position no longer exists on Binance -> backup stop fired or closed by hand
+    settle = 5 if getattr(client, "is_paper", False) else 60   # the demo account updates at once
+    if live_futures is not None and age > settle and live_futures.get(pos["symbol"], 0.0) <= 0:
+        # Position no longer exists on the exchange -> its stop / target fired, or it was closed by hand
         if _claim(pos["id"]):
             try:
-                exit_price = (client.order_average(pos["backup_stop_id"], pos["symbol"])
-                              if pos.get("backup_stop_id") else None) or price or pos["last_price"]
+                exit_price, why, pnl = _gone_exit(client, pos, price)
                 client.cancel_all(pos["symbol"])
-                _finalize(pos, exit_price, "EXCHANGE", client)
+                _finalize(pos, exit_price, why, client, pnl=pnl)
             except Exception:
                 _release(pos["id"])
                 raise
@@ -1476,7 +1617,7 @@ def _require_json_post():
 
 
 def _req_mode(data=None):
-    """Account ('demo' / 'live') from the JSON body or the query string."""
+    """Account ('paper' = Site demo, 'demo' = Binance Demo, 'live') from the JSON body or the query string."""
     mode = None
     if data is not None:
         mode = data.get("account")
@@ -1503,7 +1644,7 @@ def status():
         return _err("Login required.", 401)
     mode = _req_mode()
     if not mode:
-        return _err("Account must be 'demo' or 'live'.")
+        return _err("Account must be 'paper', 'demo' or 'live'.")
     with _Cursor() as cur:
         _ensure_settings_row(uid, mode, cur)
         settings = load_settings(uid, mode, cur)
@@ -1538,9 +1679,9 @@ def status():
 
     # Refresh the balance from Binance if older than 90s. After a failure,
     # wait 60s before retrying (do not hammer Binance on every 5s poll).
-    if account and encryption_ready():
+    if account and (mode == "paper" or encryption_ready()):
         bal_at = _to_dt(account.get("balance_at"))
-        stale = bal_at is None or (_utcnow() - bal_at).total_seconds() > 90 or \
+        stale = mode == "paper" or bal_at is None or (_utcnow() - bal_at).total_seconds() > 90 or \
             account.get("balance_market") != settings["market_type"]
         fail_key = (uid, mode)
         recent_fail = _balance_failures.get(fail_key)
@@ -1568,7 +1709,7 @@ def status():
         "ok": True,
         "mode": mode,
         "ready": {"encryption": encryption_ready(), "ccxt": ccxt is not None},
-        "accounts": {m: {"connected": m in connected,
+        "accounts": {m: {"connected": m in connected or m == "paper",
                          "key_hint": (connected.get(m) or {}).get("key_hint"),
                          "bot_enabled": bool(enabled.get(m)),
                          "open_positions": open_counts.get(m, 0)} for m in MODES},
@@ -1618,13 +1759,15 @@ def connect():
     bad = _require_json_post()
     if bad:
         return bad
-    if not encryption_ready():
-        return _err("AUTOTRADE_ENCRYPTION_KEY is not set on the server, so keys cannot be stored. "
-                    "Add it in Railway Variables.", 503)
     data = request.get_json(silent=True) or {}
     mode = _req_mode(data)
     if not mode:
-        return _err("Account must be 'demo' or 'live'.")
+        return _err("Account must be 'paper', 'demo' or 'live'.")
+    if mode == "paper":
+        return _err("The Site demo account needs no API keys: it trades your Demo trading account on this site.")
+    if not encryption_ready():
+        return _err("AUTOTRADE_ENCRYPTION_KEY is not set on the server, so keys cannot be stored. "
+                    "Add it in Railway Variables.", 503)
     api_key = str(data.get("api_key") or "").strip()
     secret = str(data.get("api_secret") or "").strip()
     if len(api_key) < 16 or len(secret) < 16:
@@ -1662,7 +1805,7 @@ def connect():
              settings["market_type"], now, now),
         )
         cur.execute("UPDATE autotrade_bot_settings SET enabled=0 WHERE user_id=%s AND mode=%s", (uid, mode))
-        log_event(uid, "INFO", f"Binance {_label(mode)} connected. {settings['market_type']} balance: {free:.2f} USDT",
+        log_event(uid, "INFO", f"{_label(mode)} connected. {settings['market_type']} balance: {free:.2f} USDT",
                   cur, mode=mode)
     _drop_clients(uid, mode)
     return jsonify({"ok": True, "mode": mode, "balance_usdt": free, "balance_total_usdt": total, "note": note})
@@ -1675,13 +1818,15 @@ def disconnect():
         return _err("Login required.", 401)
     mode = _req_mode(request.get_json(silent=True) or {})
     if not mode:
-        return _err("Account must be 'demo' or 'live'.")
+        return _err("Account must be 'paper', 'demo' or 'live'.")
+    if mode == "paper":
+        return _err("The Site demo account has nothing to disconnect. Turn its bot off instead.")
     with _Cursor() as cur:
         if _open_positions(uid, mode, cur):
             return _err("Close all open positions on this account first, then disconnect.", 409)
         cur.execute("DELETE FROM autotrade_exchange_accounts WHERE user_id=%s AND mode=%s", (uid, mode))
         cur.execute("UPDATE autotrade_bot_settings SET enabled=0 WHERE user_id=%s AND mode=%s", (uid, mode))
-        log_event(uid, "INFO", f"Binance {_label(mode)} disconnected. API keys deleted.", cur, mode=mode)
+        log_event(uid, "INFO", f"{_label(mode)} disconnected. API keys deleted.", cur, mode=mode)
     _drop_clients(uid, mode)
     return jsonify({"ok": True})
 
@@ -1697,7 +1842,7 @@ def update_settings():
     data = request.get_json(silent=True) or {}
     mode = _req_mode(data)
     if not mode:
-        return _err("Account must be 'demo' or 'live'.")
+        return _err("Account must be 'paper', 'demo' or 'live'.")
     with _Cursor() as cur:
         _ensure_settings_row(uid, mode, cur)
         current = load_settings(uid, mode, cur)
@@ -1723,14 +1868,14 @@ def toggle_bot():
     data = request.get_json(silent=True) or {}
     mode = _req_mode(data)
     if not mode:
-        return _err("Account must be 'demo' or 'live'.")
+        return _err("Account must be 'paper', 'demo' or 'live'.")
     enable = bool(data.get("enabled"))
     with _Cursor() as cur:
         _ensure_settings_row(uid, mode, cur)
         account = load_account(uid, mode, cur)
         if enable:
             if not account:
-                return _err(f"Connect your Binance {_label(mode)} account first.")
+                return _err(f"Connect your {_label(mode)} account first.")
             if mode == "live" and not data.get("ack_live"):
                 return _err("Please confirm the risk warning to run the bot on your live account.", 428, need_ack=True)
             cur.execute("""UPDATE autotrade_bot_settings SET enabled=1, last_scan_at=NULL, paused_until=NULL,
@@ -1755,7 +1900,7 @@ def close_one(position_id):
     if not pos or pos["status"] != "OPEN":
         return _err("Position not found or already closing.", 404)
     if not account:
-        return _err(f"Binance {_label(pos['mode'])} account is not connected.")
+        return _err(f"The {_label(pos['mode'])} account is not connected.")
     try:
         pnl = close_position(pos, account, "MANUAL")
     except TradeError as e:
@@ -1808,7 +1953,7 @@ def manual_trade():
     data = request.get_json(silent=True) or {}
     mode = _req_mode(data)
     if not mode:
-        return _err("Account must be 'demo' or 'live'.")
+        return _err("Account must be 'paper', 'demo' or 'live'.")
     symbol = str(data.get("symbol") or "").upper()
     side = str(data.get("side") or "").upper()
     if symbol not in coin_choices():
@@ -1818,7 +1963,7 @@ def manual_trade():
         settings = load_settings(uid, mode, cur)
         account = load_account(uid, mode, cur)
     if not account:
-        return _err(f"Connect your Binance {_label(mode)} account first.")
+        return _err(f"Connect your {_label(mode)} account first.")
     if mode == "live" and data.get("confirm") and not data.get("ack_live"):
         return _err("Live trades need an explicit confirmation.", 428, need_ack=True)
     try:
@@ -1847,6 +1992,116 @@ def signal_summary():
         return jsonify({"ok": True, **get_signal(symbol, timeframe, max_age_sec=300)})
     except Exception as e:
         return _err(f"Signal not available: {str(e)[:150]}")
+
+
+# ---------------------------------------------------------------------------
+# Assistant: free questions about the bot (assistant.py). The page runs its own
+# commands first ("start bot", "buy btc", ...) and sends everything else here.
+# ---------------------------------------------------------------------------
+AI_PER_HOUR = int(os.environ.get("ASSISTANT_AI_PER_HOUR", "40") or 40)   # AI answers per user per hour (cost guard)
+_ai_usage = {}
+_ai_usage_lock = threading.Lock()
+
+
+def _ai_allowed(uid):
+    now = time.time()
+    with _ai_usage_lock:
+        stamps = [t for t in _ai_usage.get(uid, []) if now - t < 3600]
+        ok = len(stamps) < AI_PER_HOUR
+        if ok:
+            stamps.append(now)
+        _ai_usage[uid] = stamps
+        return ok
+
+
+def _mentioned_coin(text):
+    words = set(re.findall(r"[a-z0-9]+", str(text or "").lower()))
+    for c in coin_choices():
+        if c.split("/")[0].lower() in words:
+            return c
+    return None
+
+
+def _assistant_ctx(uid, mode, question):
+    with _Cursor() as cur:
+        _ensure_settings_row(uid, mode, cur)
+        settings = load_settings(uid, mode, cur)
+        account = load_account(uid, mode, cur)
+        open_rows = _open_positions(uid, mode, cur)
+        cur.execute(
+            """SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN pnl_usdt > 0 THEN 1 ELSE 0 END),0) AS wins,
+               COALESCE(SUM(pnl_usdt),0) AS total FROM autotrade_positions WHERE user_id=%s AND mode=%s AND status='CLOSED'""",
+            (uid, mode))
+        agg = cur.fetchone() or {}
+        today = _realized_today(uid, mode, cur)
+        cur.execute("""SELECT level, message, created_at FROM autotrade_logs WHERE user_id=%s AND (mode=%s OR mode IS NULL)
+                       ORDER BY id DESC LIMIT 30""", (uid, mode))
+        logs = cur.fetchall() or []
+        cur.execute("SELECT heartbeat_at FROM autotrade_engine WHERE id=1")
+        hb = _to_dt((cur.fetchone() or {}).get("heartbeat_at"))
+    n, wins = int(_f(agg.get("n"), 0)), int(_f(agg.get("wins"), 0))
+    balance = _f(account.get("balance_usdt")) if account else None
+    if account and mode == "paper":
+        try:
+            balance = get_client(account, settings["market_type"]).balance_usdt()[0]
+        except Exception:
+            pass
+    paused_until = _to_dt(settings.get("paused_until"))
+    scan = next((l["message"] for l in logs if l["level"] == "SCAN"), None)
+    ctx = {
+        "account_label": _label(mode), "mode": mode, "connected": bool(account), "balance": balance,
+        "engine_online": bool(hb and (_utcnow() - hb).total_seconds() < 90),
+        "settings": _settings_json(settings),
+        "bot": {"enabled": bool(settings["enabled"]), "last_scan_at": _iso(_to_dt(settings.get("last_scan_at"))),
+                "paused_until": _iso(paused_until) if paused_until and paused_until > _utcnow() else None,
+                "pause_reason": settings.get("pause_reason")},
+        "positions": [_pos_json(p) for p in open_rows],
+        "stats": {"closed_count": n, "wins": wins, "win_rate": round(wins / n * 100, 1) if n else None,
+                  "total_pnl": round(_f(agg.get("total"), 0.0), 2), "realized_today": round(today, 2)},
+        "last_scan": scan,
+        "recent_logs": [f"{l['level']}: {l['message']}" for l in logs if l["level"] in ("WARN", "ERROR", "TRADE")][:6],
+    }
+    sym = _mentioned_coin(question)
+    if sym:
+        coin = {"symbol": sym, "price": None, "change_pct": None, "signal": None}
+        ex = _hooks.get("data_exchange")
+        try:
+            if ex is not None:
+                t = ex.fetch_ticker(sym)
+                coin["price"], coin["change_pct"] = _f(t.get("last")), _f(t.get("percentage"))
+        except Exception:
+            pass
+        try:
+            coin["signal"] = get_signal(sym, settings["timeframe"], max_age_sec=600)
+            if coin["price"] is None:
+                coin["price"] = coin["signal"].get("last_price")
+        except Exception:
+            pass
+        ctx["coin"] = coin
+    return ctx
+
+
+@autotrade_bp.route("/api/autotrade/assistant", methods=["POST"])
+def assistant_route():
+    uid = _user_id()
+    if not uid:
+        return _err("Login required.", 401)
+    bad = _require_json_post()
+    if bad:
+        return bad
+    data = request.get_json(silent=True) or {}
+    mode = _req_mode(data) or "paper"
+    question = str(data.get("message") or "").strip()[:600]
+    history = data.get("history") if isinstance(data.get("history"), list) else []
+    import assistant
+    try:
+        ctx = _assistant_ctx(uid, mode, question)
+    except Exception as e:
+        print(f"[autotrade] assistant context failed: {e}")
+        ctx = {"account_label": _label(mode), "mode": mode}
+    use_ai = assistant.ai_enabled() and _ai_allowed(uid)   # over the hourly AI quota: built-in answers only
+    out = assistant.answer(question, ctx, history, use_ai=use_ai)
+    return jsonify({"ok": True, **out, "ai_available": assistant.ai_enabled()})
 
 
 _price_cache = {"ts": 0.0, "key": None, "data": None}
