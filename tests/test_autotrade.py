@@ -289,7 +289,7 @@ with client.session_transaction() as s:
     s["user_id"] = 1
 r = client.get("/auto-trading")
 check(r.status_code == 200 and b"Auto-Trade Bot" in r.data and b'data-mode="live"' in r.data, "page renders with Demo/Live switcher")
-r = client.get("/api/autotrade/status?account=paper")
+r = client.get("/api/autotrade/status?account=xyz")
 check(r.status_code == 400, "unknown account rejected")
 d = status("demo")
 check(d["connected"] is False and d["accounts"]["live"]["connected"] is False, "not connected on either account")
