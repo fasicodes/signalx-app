@@ -29,7 +29,7 @@ from db import get_db_connection
 
 chart_drawings_bp = Blueprint("chart_drawings", __name__)
 
-# Keep in sync with the tool ids in static/script.js (TOOL_ARITY / TOOL_ICONS).
+# Keep in sync with the tool ids in static/script.js (TOOL_ARITY / TOOL_ICONS) and static/chart-page.js (ARITY).
 # Anything not in this set is rejected rather than trusted blindly.
 ALLOWED_DRAWING_TYPES = {
     "horizontal", "vertical", "hray", "crossline", "text", "note", "icon",
@@ -39,6 +39,9 @@ ALLOWED_DRAWING_TYPES = {
     "pricerange", "daterange", "callout", "fibext", "fibchannel",
     "fibwedge", "pitchfork", "triangle", "brush", "path",
     "support_zone", "resistance_zone",
+    # Live chart (static/chart-page.js) tools added in update 12; the Pro terminal skips types it does not draw
+    "highlighter", "avwap", "arrowup", "arrowdown", "pricelabel", "parallel", "regression", "infoline",
+    "datepricerange", "circle", "cyclic", "abcd", "xabcd", "elliott",
 }
 
 MAX_DRAWING_DATA_BYTES = 20_000  # generous ceiling for a single drawing's coords
