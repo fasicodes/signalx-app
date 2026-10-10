@@ -5,7 +5,7 @@
 
   const $ = (id) => document.getElementById(id);
   const S = { coins: { crypto: [], forex: [] }, coin: null, kind: "crypto", tf: "4h", board: null, eng: null,
-              chart: null, series: null, lines: [], sheetKind: "crypto", loadingCoin: null };
+              chart: null, series: null, lines: [], sheetKind: "crypto", loadingCoin: null, bars: [], hist: null };
 
   // ---------------------------------------------------------------- helpers
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -354,6 +354,13 @@
     S.series = S.chart.addSeries(LightweightCharts.CandlestickSeries, {
       upColor: css("--long"), downColor: css("--short"), borderVisible: false, wickUpColor: css("--long"), wickDownColor: css("--short"),
     });
+    // endless history: older candles load as the chart is scrolled left (static/chart-history.js)
+    if (window.SFMHistory) {
+      S.hist = window.SFMHistory.attach(S.chart, {
+        coin: () => S.coin, tf: () => S.tf, oldest: () => (S.bars.length ? S.bars[0].time : null), count: () => S.bars.length,
+        prepend: (older) => { S.bars = older.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })).concat(S.bars); S.series.setData(S.bars); },
+      });
+    }
     document.addEventListener("themechange", () => {
       S.chart.applyOptions(chartColors());
       S.series.applyOptions({ upColor: css("--long"), downColor: css("--short"), wickUpColor: css("--long"), wickDownColor: css("--short") });
@@ -373,7 +380,9 @@
     if (d.error || !d.candles || !d.candles.length) { msg.textContent = d.error ? `Chart data is not available: ${d.error}` : "No candles for this market yet."; S.series.setData([]); return; }
     const dec = decimals(d.candles[d.candles.length - 1].close, sym);
     S.series.applyOptions({ priceFormat: { type: "price", precision: dec, minMove: Math.pow(10, -dec) } });
-    S.series.setData(d.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
+    S.bars = d.candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+    if (S.hist) S.hist.reset();
+    S.series.setData(S.bars);
     S.chart.timeScale().fitContent();
     msg.hidden = true;
     drawLevels();
@@ -384,7 +393,12 @@
     try {
       const d = await getJSON(`/candles?coin=${encodeURIComponent(sym)}&timeframe=${tf}&limit=2`);
       if (sym !== S.coin || tf !== S.tf || !d.candles) return;
-      d.candles.forEach((c) => { try { S.series.update({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }); } catch (e) {} });
+      d.candles.forEach((c) => {
+        const b = { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close };
+        const last = S.bars[S.bars.length - 1];
+        if (last && b.time === last.time) S.bars[S.bars.length - 1] = b; else if (!last || b.time > last.time) S.bars.push(b);
+        try { S.series.update(b); } catch (e) {}
+      });
       if (d.last_price != null && !(S.eng && S.eng.price != null)) $("coin-price").textContent = price(d.last_price);
     } catch (e) {}
   }
