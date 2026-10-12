@@ -274,9 +274,17 @@ AVAILABLE_COINS = [
     # TOP 21-30
     "AVAX/USDT", "CRO/USDT", "NEAR/USDT", "SHIB/USDT", "UNI/USDT",
     "TAO/USDT", "ONDO/USDT", "OKB/USDT", "ASTER/USDT", "ATOM/USDT",
+    # 31-62 (all on OKX spot; signal engine v3 was tested on them, see signal_model.json "test")
+    "ETC/USDT", "AAVE/USDT", "ICP/USDT", "APT/USDT", "ARB/USDT",
+    "OP/USDT", "FET/USDT", "TIA/USDT", "INJ/USDT", "SEI/USDT",
+    "STX/USDT", "IMX/USDT", "GRT/USDT", "ALGO/USDT", "LDO/USDT",
+    "CRV/USDT", "THETA/USDT", "SAND/USDT", "MANA/USDT", "AXS/USDT",
+    "GALA/USDT", "CHZ/USDT", "APE/USDT", "EGLD/USDT", "XTZ/USDT",
+    "SNX/USDT", "DYDX/USDT", "FLOW/USDT", "NEO/USDT", "IOTA/USDT",
+    "CFX/USDT", "MINA/USDT",
 ]
 
-# Top 30 forex pairs (majors + minors/crosses + a couple of common
+# Forex pairs and metals (gold, silver, majors, crosses and common
 # exotics), used by the new Forex tab in the coin/pair picker
 # (templates/design.html + static/script.js). NOTE: this list only
 # powers *selection* right now - the actual signal engine below
@@ -287,7 +295,7 @@ AVAILABLE_COINS = [
 # hitting the crypto-only exchange and blowing up with a raw ccxt error.
 FOREX_PAIRS = [
     # Metals
-    "XAU/USD",
+    "XAU/USD", "XAG/USD",
     # Majors
     "EUR/USD", "USD/JPY", "GBP/USD", "USD/CHF", "AUD/USD",
     "USD/CAD", "NZD/USD",
@@ -298,7 +306,9 @@ FOREX_PAIRS = [
     "GBP/AUD", "GBP/NZD", "AUD/CHF", "NZD/CAD", "NZD/CHF",
     "CAD/CHF",
     # Exotics
-    "USD/TRY", "USD/ZAR",
+    "USD/TRY", "USD/ZAR", "USD/MXN", "USD/SGD", "USD/HKD", "USD/SEK",
+    "USD/NOK", "USD/DKK", "USD/PLN", "USD/CNH", "EUR/SEK", "EUR/NOK",
+    "EUR/PLN", "EUR/TRY",
 ]
 
 
@@ -2149,6 +2159,8 @@ def advanced_dashboard():
         "design.html",
         user_email=session.get("email", ""),
         user_avatar=session.get("avatar_url"),
+        coins=AVAILABLE_COINS,
+        forex_pairs=FOREX_PAIRS,
     )
 
 
