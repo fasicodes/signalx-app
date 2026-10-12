@@ -1983,9 +1983,11 @@
     const a = e && e.active;
     if (a && S.set.levels) {
       const add = (p, color, title, style) => S.engLines.push(S.main.createPriceLine({ price: p, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
-      add(a.take_profit, css("--long"), "Target", 2);
+      const tps = a.targets && a.targets.length ? a.targets : [a.take_profit];
+      tps.forEach((v, k) => add(v, css("--long"), `TP${k + 1}${k < (a.hits || 0) ? " ✓" : ""}`, 2));
       add(a.entry, css("--dim"), a.side === "LONG" ? "Long entry" : "Short entry", 2);
-      add(a.stop_loss, css("--short"), "Stop", 2);
+      const moved = (a.hits || 0) > 0 && a.stop_now != null;
+      add(moved ? a.stop_now : a.stop_loss, css("--short"), moved ? "Stop (moved)" : "Stop", 2);
     }
     const marks = [];
     if (e && S.set.history && S.bars.length) {
@@ -1996,7 +1998,7 @@
         if (tin != null) marks.push({ time: tin, position: long ? "belowBar" : "aboveBar", shape: long ? "arrowUp" : "arrowDown", color: long ? css("--long") : css("--short"), text: long ? "Long" : "Short" });
         if (tout != null) {
           const r = Number(t.r);
-          const lab = t.status === "TP" ? "Target" : t.status === "SL" ? "Stop" : "Time";
+          const lab = { TP3: "TP3", TP2: "TP2", TP1: "TP1", TP: "Target", SL: "Stop" }[t.status] || "Time";
           marks.push({ time: tout, position: long ? "aboveBar" : "belowBar", shape: "circle", color: r >= 0 ? css("--long") : css("--short"), text: `${lab} ${r >= 0 ? "+" : "−"}${Math.abs(r).toFixed(2)}R` });
         }
       });
@@ -2033,18 +2035,18 @@
       ? `<div class="eng-hist" aria-label="Recent signals">${rec.slice(-20).map((t) => `<i title="${F.esc(t.side)} ${F.esc(t.status)} ${Number(t.r).toFixed(2)}R" style="background:${Number(t.r) > 0 ? "var(--long)" : "var(--short)"}"></i>`).join("")}</div>
          <p class="eng-copy">Last ${rec.length} signal${rec.length === 1 ? "" : "s"} on ${F.esc(F.base(S.coin))} (about 50 days, replayed, fees included): <b>${wins} won</b>, ${rec.length - wins} lost, net <b class="${net >= 0 ? "c-long" : "c-short"}">${net >= 0 ? "+" : "−"}${Math.abs(net).toFixed(2)}R</b>.</p>`
       : `<p class="eng-copy">No signals on ${F.esc(F.base(S.coin))} in the last ~50 days. The engine skips weak setups.</p>`;
-    const untested = d.tested === false ? `<p class="mk-note" style="margin-top:8px">${F.esc(F.base(S.coin))} was not one of the 16 coins in the engine's test, so its results may differ.</p>` : "";
+    const untested = d.tested === false ? `<p class="mk-note" style="margin-top:8px">${F.esc(F.base(S.coin))} is not one of the 21 coins the model was tested on, so it gets no trade signals: you see the lean only.</p>` : "";
     if (a) {
       const long = a.side === "LONG", p = e.progress || {};
       box.innerHTML = `<div class="eng-state"><span class="eng-verdict ${long ? "c-long" : "c-short"}">${long ? "Long" : "Short"}</span>
-          <span class="mk-sig ${long ? "long" : "short"}"><i></i>${e.fresh ? "New signal" : "Active signal"} · ${Math.round(a.confidence)}% win chance</span></div>
-        <div class="eng-lv"><div><span>Entry</span><b class="tnum">${fmt(a.entry)}</b></div><div><span>Target</span><b class="tnum c-long">${fmt(a.take_profit)}</b></div><div><span>Stop</span><b class="tnum c-short">${fmt(a.stop_loss)}</b></div></div>
-        ${p.move_pct != null ? `<p class="eng-copy">Price is ${p.move_pct >= 0 ? "+" : "−"}${Math.abs(p.move_pct).toFixed(2)}% since entry, ${Math.abs(p.pct)}% of the way to the ${p.pct >= 0 ? "target" : "stop"}.</p>` : ""}${hist}${untested}`;
+          <span class="mk-sig ${long ? "long" : "short"}"><i></i>${e.fresh ? "New signal" : "Active signal"}${a.tier === "standard" ? " (standard)" : ""} · ${Math.round(a.confidence)}% chance of TP1</span></div>
+        <div class="eng-lv"><div><span>Entry</span><b class="tnum">${fmt(a.entry)}</b></div><div><span>${a.hits ? "Stop (moved)" : "Stop"}</span><b class="tnum c-short">${fmt(a.hits && a.stop_now != null ? a.stop_now : a.stop_loss)}</b></div>${(a.targets || [a.take_profit]).map((v, k) => `<div><span>TP${k + 1}${k < (a.hits || 0) ? " ✓" : ""}</span><b class="tnum c-long">${fmt(v)}</b></div>`).join("")}</div>
+        ${p.move_pct != null ? `<p class="eng-copy">Price is ${p.move_pct >= 0 ? "+" : "−"}${Math.abs(p.move_pct).toFixed(2)}% since entry, ${Math.abs(p.pct)}% of the way to ${p.pct >= 0 ? "TP" + (p.next || 1) : "the stop"}. Close a third at each target; after TP1 the stop moves to the entry.</p>` : ""}${hist}${untested}`;
       chip.hidden = false; chip.className = `mk-sig ${long ? "long" : "short"}`; chip.innerHTML = `<i></i>${long ? "Long" : "Short"} signal`;
     } else {
       const close = Math.max(0, Math.min(100, e.strength || 0));
-      box.innerHTML = `<div class="eng-state"><span class="eng-verdict c-amber">Wait</span><span class="mk-sig wait"><i></i>${Math.round(close)}% of the way to a signal${e.setup_forming ? " · setup forming" : ""}</span></div>
-        <p class="eng-copy">The model leans ${String(e.bias || "").toLowerCase()} (${e.bias === "LONG" ? e.p_long : e.p_short}% estimated win chance), below the level it needs for a signal. It checks again at each 4-hour close.</p>${hist}${untested}`;
+      box.innerHTML = `<div class="eng-state"><span class="eng-verdict c-amber">Wait</span><span class="mk-sig wait"><i></i>${Math.round(close)}% of the way to a strong signal${e.setup_forming ? " · setup forming" : ""}</span></div>
+        <p class="eng-copy">The model leans ${String(e.bias || "").toLowerCase()} (${e.bias === "LONG" ? e.p_long : e.p_short}% estimated chance of TP1)${e.covered === false ? "" : ", below the level it needs for a signal on this coin. It checks again at each 4-hour close"}.</p>${hist}${untested}`;
       chip.hidden = false; chip.className = "mk-sig wait"; chip.innerHTML = `<i></i>Wait · ${Math.round(close)}%`;
     }
   }
