@@ -39,26 +39,27 @@
     </div>
     <div class="icard">
       <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg></div>
-      <h3>Signals only its strongest setups</h3>
-      <p>A machine-learning model estimates each trade's chance of reaching its target before its stop. Only roughly the top 3% of
-        setups become a Long or Short signal; the rest of the time it says Wait.</p>
+      <h3>Strong setups first, and no long waits</h3>
+      <p>A machine-learning model estimates each trade's chance of reaching its first target before its stop. Setups in its top 3%
+        become strong signals; if no coin has had a signal for 24 hours, the best setup gets a standard one. Every signal has a stop
+        and three targets.</p>
     </div>
     <div class="icard">
       <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></div>
       <h3>Tested on data it never saw{{ tip('unseen_data', 'tested on unseen data') }}</h3>
-      <p>The model learned from January 2022 to June 2025 and was then tested once on July 2025 to October 2026, with every fee
-        included and losses counted the pessimistic way.</p>
+      <p>The model learned from July 2020 to September 2025 and was then tested once on October 2025 to October 2026, with every
+        fee included and losses counted the pessimistic way.</p>
     </div>
   </div>
   {% if stats and stats.signals %}
   <dl class="figs4" style="margin-top:14px">
     <div><dt>Signals tested</dt><dd>{{ stats.signals }}<small>on {{ stats.coins }} coins</small></dd></div>
-    <div><dt>Signals won{{ tip('win_rate', 'win rate') }}</dt><dd>{{ stats.win_rate }}%<small>reached the target first</small></dd></div>
+    <div><dt>Signals won{{ tip('win_rate', 'win rate') }}</dt><dd>{{ stats.win_rate }}%<small>closed in profit after fees</small></dd></div>
     <div><dt>Average per signal{{ tip('avg_r', 'average result') }}</dt><dd>{{ '%+.3f' % stats.avg_net_r }}R<small>after 0.12% fees</small></dd></div>
     <div><dt>Worst drawdown{{ tip('drawdown', 'drawdown') }}</dt><dd>{{ stats.max_drawdown_r }}R<small>the deepest losing streak</small></dd></div>
   </dl>
-  <p class="meta-line">Each loss is about twice the size of each win, so a high win rate still means a small edge, and some months lose.
-    Past results do not guarantee future results.</p>
+  <p class="meta-line">A full loss (&minus;1R) is bigger than a TP1 win (+0.5R), so the profit depends on the signals that reach TP2 and
+    TP3, and some months lose. Past results do not guarantee future results.</p>
   {% endif %}
 </section>
 
