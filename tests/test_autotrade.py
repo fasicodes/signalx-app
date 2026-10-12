@@ -295,6 +295,8 @@ d = status("demo")
 check(d["connected"] is False and d["accounts"]["live"]["connected"] is False, "not connected on either account")
 check(d["settings"]["market_type"] == "spot" and d["settings"]["leverage"] == 1, "safe defaults (spot, 1x)")
 check("EUR/USD" not in d["options"]["coins"], "forex excluded from coin choices")
+cl = d["options"]["confidence"]
+check(cl and 50 < cl["standard"] <= cl["strong"] <= cl["max"] < 100, "status shows the confidence range of the signals")
 
 print("\n[2] connect both accounts")
 saved_key = os.environ.pop("AUTOTRADE_ENCRYPTION_KEY")
@@ -439,6 +441,69 @@ check(r.status_code == 200 and r.get_json()["closed"] >= 1, "stop both accounts"
 check(not status("live")["positions"] and not status("live")["bot"]["enabled"], "live stopped too")
 r = post("/api/autotrade/panic", {"account": "nope"})
 check(r.status_code == 400, "invalid panic scope rejected")
+
+print("\n[10b] three targets on Binance (signal engine v3)")
+LADDER_SIG = {"volatility_pct": 2.0, "reward_risk": 2.0, "targets_r": [0.5, 1.0, 2.0], "confidence": 81.0, "tier": "strong"}
+calls = FakeBinance.state["calls"]
+FakeBinance.state["usdt"] = 1000.0
+acc_live, st_live = at.load_account(1, "live"), at.load_settings(1, "live")
+res = at.open_position(1, acc_live, st_live, "BNB/USDT", "LONG", signal=LADDER_SIG, source="BOT")
+p0 = q("SELECT * FROM autotrade_positions WHERE id=?", (res["id"],))[0]
+e0, r0 = p0["entry_price"], p0["entry_price"] - p0["stop_loss"]
+check(abs(r0 - e0 * 0.02) < 0.01 and abs(p0["tp1"] - (e0 + r0 / 2)) < 0.01 and abs(p0["tp2"] - (e0 + r0)) < 0.01
+      and abs(p0["take_profit"] - (e0 + 2 * r0)) < 0.01 and res["targets"] == [p0["tp1"], p0["tp2"], p0["take_profit"]],
+      "futures: stop 2%, TP1 +1%, TP2 +2%, TP3 +4%")
+n0 = len(calls)
+FakeBinance.state["prices"]["BNB/USDT"] = p0["tp1"] + 0.1
+at.monitor_positions()
+p1 = q("SELECT * FROM autotrade_positions WHERE id=?", (p0["id"],))[0]
+new = calls[n0:]
+part = [x for x in new if x[0] == "order"]
+check(p1["hits"] == 1 and abs(p1["stop_loss"] - e0) < 1e-6 and part and part[0][2] == "sell" and part[0][4] is True
+      and abs(part[0][3] - p0["initial_amount"] / 3) < 1e-4, "TP1: a third sold reduce-only, stop to entry")
+st_moves = [x for x in new if x[0] == "stop"]
+check(("cancel_all", "BNB/USDT") in new and st_moves and abs(st_moves[-1][3] - p1["amount"]) < 1e-9
+      and abs(st_moves[-1][4] - (e0 - 0.25 * r0)) < 0.01, "backup stop moved with the stop, for the size left")
+n1 = len(calls)
+FakeBinance.state["prices"]["BNB/USDT"] = p0["tp2"] + 0.1
+at.monitor_positions()
+p2 = q("SELECT * FROM autotrade_positions WHERE id=?", (p0["id"],))[0]
+check(p2["hits"] == 2 and abs(p2["stop_loss"] - p0["tp1"]) < 1e-6 and p2["realized_usdt"] > p1["realized_usdt"] > 0,
+      "TP2: another third, stop to TP1")
+FakeBinance.state["prices"]["BNB/USDT"] = p0["take_profit"] + 0.5
+at.monitor_positions()
+p3 = q("SELECT * FROM autotrade_positions WHERE id=?", (p0["id"],))[0]
+check(p3["status"] == "CLOSED" and p3["close_reason"] == "TP" and p3["pnl_usdt"] > p2["realized_usdt"], "TP3: rest closed, whole-trade PnL")
+FakeBinance.state["prices"]["BNB/USDT"] = 600.0
+acc_demo, st_demo = at.load_account(1, "demo"), at.load_settings(1, "demo")
+c = Conn(); cu = c.cursor()
+cu.execute("UPDATE autotrade_positions SET closed_at=? WHERE status='CLOSED'", (datetime.utcnow() - timedelta(hours=3),)); c.close()
+res = at.open_position(1, acc_demo, st_demo, "ETH/USDT", "LONG", signal=LADDER_SIG, source="BOT")
+s0 = q("SELECT * FROM autotrade_positions WHERE id=?", (res["id"],))[0]
+n2 = len(calls)
+FakeBinance.state["prices"]["ETH/USDT"] = s0["tp1"] + 0.1
+at.monitor_positions()
+s1 = q("SELECT * FROM autotrade_positions WHERE id=?", (s0["id"],))[0]
+sold = [x for x in calls[n2:] if x[0] == "order"]
+check(s1["hits"] == 1 and sold and sold[0][2] == "sell" and sold[0][4] is False, "spot: a third sold at TP1 (plain sell)")
+FakeBinance.state["prices"]["ETH/USDT"] = s0["entry_price"] - 1
+at.monitor_positions()
+s2 = q("SELECT * FROM autotrade_positions WHERE id=?", (s0["id"],))[0]
+check(s2["status"] == "CLOSED" and s2["close_reason"] == "SL_ENTRY", "spot: rest closed at the entry stop after TP1")
+check(s2["pnl_usdt"] > -1.0, f"spot: TP1 profit about covers the fees of the rest ({s2['pnl_usdt']:.2f} USDT)")
+FakeBinance.state["prices"]["ETH/USDT"] = 3000.0
+small = dict(st_demo, max_position_usdt=12)
+c = Conn(); cu = c.cursor()
+cu.execute("UPDATE autotrade_positions SET closed_at=? WHERE status='CLOSED'", (datetime.utcnow() - timedelta(hours=3),)); c.close()
+res = at.open_position(1, acc_demo, small, "ETH/USDT", "LONG", signal=LADDER_SIG, source="BOT")
+t0 = q("SELECT * FROM autotrade_positions WHERE id=?", (res["id"],))[0]
+FakeBinance.state["prices"]["ETH/USDT"] = t0["tp1"] + 0.1
+at.monitor_positions()
+t1 = q("SELECT * FROM autotrade_positions WHERE id=?", (t0["id"],))[0]
+check(t1["hits"] == 1 and abs(t1["amount"] - t0["amount"]) < 1e-12 and abs(t1["stop_loss"] - t0["entry_price"]) < 1e-6,
+      "too small to split: size kept, stop still moved to entry")
+at.close_position(t1, acc_demo, "MANUAL")
+FakeBinance.state["prices"]["ETH/USDT"] = 3000.0
 
 print("\n[11] daily loss limit (per account)")
 c = Conn(); cu = c.cursor()
