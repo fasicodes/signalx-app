@@ -51,9 +51,10 @@ BOT_TERMS = {
     "daily_loss": ("Daily loss limit", "If closed trades lose this % of the balance in one UTC day, the bot pauses until "
                                        "00:00 UTC. It stops a bad day from turning into a disaster."),
     "min_confidence": ("Min signal confidence", "The bot only trades signals whose confidence is at least this high. "
-                                                 "Higher means fewer but more selective trades."),
+                                                 "Higher means fewer but more selective trades. Set it above every "
+                                                 "signal's confidence and the bot never trades; the settings form shows the range."),
     "reward_risk": ("Reward : Risk", "How far the take-profit is compared with the stop. 1.5 means the target is 1.5 times "
-                                     "the stop distance. Signal engine v2 sets its own levels when it has them."),
+                                     "the stop distance. Signal engine v3 sets its own levels (a stop and three targets) when it has them."),
     "max_positions": ("Max open positions", "The most trades the bot keeps open at the same time on this account."),
     "max_position": ("Max position size", "The biggest single trade (in USDT) the bot may open, whatever the risk % says."),
     "site_demo": ("Site demo account", "The bot trades your Demo trading account on this site: virtual USDT, live prices, "
@@ -133,7 +134,7 @@ def _why_no_trade(ctx):
         return f"The {acct} account is not connected yet, so the bot cannot trade. Connect it with the button at the top."
     if not bot.get("enabled"):
         return (f"The {acct} bot is OFF, so it does not open trades. Save your settings, then switch the bot on. "
-                "Open positions are still watched for their stop-loss and target.")
+                "Open positions are still watched for their stop-loss and targets.")
     if bot.get("paused_until"):
         return f"The bot is paused ({bot.get('pause_reason') or 'daily loss limit'}) until {bot['paused_until']} UTC. It starts again by itself."
     if not ctx.get("engine_online"):
@@ -149,8 +150,8 @@ def _why_no_trade(ctx):
         skipped = [n for n in notes if "skipped" in n]
         lines.append(f"Last scan: {scan.split(':', 1)[-1].strip()}")
         if waits and len(waits) == len(notes):
-            lines.append("Every coin was WAIT: signal engine v2 only signals its strongest setups on closed 4-hour candles, "
-                         "so most scans end with no trade. That is normal, not a fault.")
+            lines.append("Every coin was WAIT: signal engine v3 gives a coin a signal only when its setup is good enough (on closed "
+                         "4-hour candles), so many scans end with no trade. That is normal, not a fault.")
         elif waits:
             lines.append(f"{len(waits)} coin(s) were WAIT (no setup).")
         if low:
@@ -172,15 +173,16 @@ def _why_no_trade(ctx):
 def _how_bot(ctx):
     st = ctx.get("settings") or {}
     return ("Here is what the bot does on every scan:\n"
-            f"1. It checks each coin you ticked ({len(st.get('coins') or [])} now) with signal engine v2 (closed 4-hour candles).\n"
+            f"1. It checks each coin you ticked ({len(st.get('coins') or [])} now) with signal engine v3 (closed 4-hour candles).\n"
             f"2. It trades only a fresh LONG or SHORT with at least {st.get('min_confidence', 65)}% confidence"
             f"{' (no shorts on spot)' if st.get('market_type') == 'spot' else ''}.\n"
             f"3. The size is set so that hitting the stop-loss loses about {st.get('risk_pct', 1)}% of the balance, "
             f"capped at {st.get('max_position_usdt', 100)} USDT.\n"
-            "4. Every trade gets a stop-loss and a take-profit. The bot watches them all the time and closes the trade when one is hit.\n"
+            "4. Every trade gets a stop-loss and three targets. The bot closes a third at each target, moves the stop to the entry "
+            "after TP1 and to TP1 after TP2, and watches the levels all the time.\n"
             f"5. It pauses for the day after a {st.get('daily_loss_limit_pct', 5)}% daily loss, and keeps at most "
             f"{st.get('max_open_positions', 2)} trades open.\n"
-            "Results are never guaranteed: signals lose regularly, and a loss is usually bigger than a win.")
+            "Results are never guaranteed: signals lose regularly, and a full loss is bigger than most wins.")
 
 
 def _settings(ctx):
@@ -205,9 +207,13 @@ def _positions(ctx):
         return f"There are no open positions on the {ctx.get('account_label', 'this')} account right now." + done
     out = []
     for p in ps:
+        tps = p.get("targets") or [p.get("take_profit")]
+        tp_txt = " / ".join(_price(v) for v in tps if v is not None)
+        hits = f" ({p['hits']} target{'s' if p['hits'] != 1 else ''} reached)" if p.get("hits") else ""
         out.append(f"{p['side']} {p['symbol']}: entry {_price(p.get('entry_price'))}, now {_price(p.get('last_price'))}, "
-                   f"stop {_price(p.get('stop_loss'))}, target {_price(p.get('take_profit'))}, open PnL {_money(p.get('unrealized_pnl'), True)}.")
-    return "\n".join(out) + "\nThe bot closes each one at its stop-loss or target. You can also close it by hand with its Close button."
+                   f"stop {_price(p.get('stop_loss'))}, targets {tp_txt}{hits}, open PnL {_money(p.get('unrealized_pnl'), True)}.")
+    return "\n".join(out) + ("\nThe bot closes a third at each target and the rest at the stop or the last target. "
+                             "You can also close a position by hand with its Close button.")
 
 
 def _performance(ctx):
@@ -217,9 +223,9 @@ def _performance(ctx):
     else:
         mine = (f"This account: {s['closed_count']} closed trades, {s.get('wins', 0)} won, win rate {s.get('win_rate')}%, "
                 f"total {_money(s.get('total_pnl'), True)}.")
-    return (mine + "\nIn testing on data the model never saw, about 7 in 10 engine signals reached the target, with a small "
-            "profit after fees. But each loss was about twice the size of each win, and there were losing months. "
-            "Past results do not guarantee future results.")
+    return (mine + "\nIn testing on data the model never saw (Oct 2025 to Oct 2026), about 3 in 4 engine signals closed in "
+            "profit, +0.13R per signal on average after fees. A full loss (-1R) is bigger than most wins, and there were "
+            "losing months. Past results do not guarantee future results.")
 
 
 def _connect(ctx):
@@ -254,7 +260,7 @@ def _coin_answer(ctx):
     sg = c.get("signal")
     if sg:
         verdict = sg.get("verdict")
-        txt = f"Signal engine v2: {verdict}"
+        txt = f"Signal engine v3: {verdict}"
         if sg.get("confidence") is not None:
             txt += f", {round(sg['confidence'])}% confidence"
         if verdict == "WAIT" and sg.get("active_side"):
@@ -345,15 +351,18 @@ Answer the user's question clearly and briefly (usually 2 to 6 short sentences o
 user's language: if they write Roman Urdu or Urdu, answer in simple Roman Urdu; otherwise English.
 
 What you know about the product:
-- The bot trades the coins the user ticks, using signal engine v2 (machine-learning model on closed 4-hour candles).
+- The bot trades the coins the user ticks, using signal engine v3 (machine-learning model on closed 4-hour candles,
+  21 tested coins; strong signals plus a standard signal when no coin has had one for 24 hours).
   It only enters a fresh LONG/SHORT at or above the user's minimum confidence, sizes the trade so hitting the stop
-  loses about "risk per trade" % of the balance (capped by max position size), and always sets a stop-loss and take-profit.
+  loses about "risk per trade" % of the balance (capped by max position size). Every trade has a stop (2x ATR) and three
+  targets (0.5R, 1R, 2R): the bot closes a third at each, moves the stop to the entry after TP1 and to TP1 after TP2.
 - Accounts: "Site demo" trades the user's Demo trading account on this site (virtual USDT, no keys); "Binance Demo"
   uses a demo.binance.com API key; "Live" is real money on Binance. Each has its own bot, settings and history.
 - Safety: daily loss limit pauses the bot until 00:00 UTC; spot cannot short; leverage on futures is capped at 20x;
   live keys with withdrawal permission are refused.
-- Test results on unseen data: about 70% of engine signals won with a small profit after fees, but each loss was about
-  twice a win and there were losing months. Never promise profit; never give personalised financial advice.
+- Test results on unseen data (Oct 2025 - Oct 2026): about 74% of engine signals closed in profit, +0.13R average after
+  fees, but a full loss (-1R) is bigger than most wins and there were losing months. Never promise profit; never give
+  personalised financial advice.
 
 Rules:
 - You can only explain. You cannot place, change or close trades or settings. If the user wants an action, tell them the
