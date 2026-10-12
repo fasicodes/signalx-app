@@ -2035,7 +2035,7 @@
       ? `<div class="eng-hist" aria-label="Recent signals">${rec.slice(-20).map((t) => `<i title="${F.esc(t.side)} ${F.esc(t.status)} ${Number(t.r).toFixed(2)}R" style="background:${Number(t.r) > 0 ? "var(--long)" : "var(--short)"}"></i>`).join("")}</div>
          <p class="eng-copy">Last ${rec.length} signal${rec.length === 1 ? "" : "s"} on ${F.esc(F.base(S.coin))} (about 50 days, replayed, fees included): <b>${wins} won</b>, ${rec.length - wins} lost, net <b class="${net >= 0 ? "c-long" : "c-short"}">${net >= 0 ? "+" : "−"}${Math.abs(net).toFixed(2)}R</b>.</p>`
       : `<p class="eng-copy">No signals on ${F.esc(F.base(S.coin))} in the last ~50 days. The engine skips weak setups.</p>`;
-    const untested = d.tested === false ? `<p class="mk-note" style="margin-top:8px">${F.esc(F.base(S.coin))} is not one of the 21 coins the model was tested on, so it gets no trade signals: you see the lean only.</p>` : "";
+    const untested = d.tested === false ? `<p class="mk-note" style="margin-top:8px">${F.esc(F.base(S.coin))} is not in the signal list, so it gets no trade signals: you see the lean only.</p>` : "";
     if (a) {
       const long = a.side === "LONG", p = e.progress || {};
       box.innerHTML = `<div class="eng-state"><span class="eng-verdict ${long ? "c-long" : "c-short"}">${long ? "Long" : "Short"}</span>
