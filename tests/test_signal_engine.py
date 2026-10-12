@@ -44,7 +44,7 @@ def synth(seed, drift=0.0003):
 
 COINS = sorted(set(se.UNIVERSE) | set(se.signal_coins()))
 DATA = {sym: synth(k) for k, sym in enumerate(COINS)}
-DATA["TAO/USDT"] = synth(99, drift=0.001)   # a coin the model gives no trades for
+DATA["PEPE/USDT"] = synth(99, drift=0.001)  # a coin outside the signal list
 
 print("\n[1] model file")
 m = se.model()
@@ -54,7 +54,8 @@ check(m.sl_atr == 2.0 and m.targets_r == [0.5, 1.0, 2.0] and m.max_bars == 54 an
 check(abs(sum(m.fractions) - 1) < 1e-9 and len(set(round(x, 9) for x in m.fractions)) == 1, "a third closes at each target")
 check(0.5 < m.floor < m.watch_threshold < m.threshold < 0.95 and m.gap_hours == 24,
       f"levels: standard {m.floor:.3f} < forming {m.watch_threshold:.3f} < strong {m.threshold:.3f}, 24h rule")
-check(len(se.signal_coins()) == 21 and set(se.UNIVERSE) <= set(se.signal_coins()), "21 signal coins incl. the 16-coin universe")
+check(len(se.signal_coins()) == 62 and set(se.UNIVERSE) <= set(se.signal_coins()), "62 signal coins incl. the 16-coin universe")
+check(m.max_per_bar == 5, "at most 5 new signals per candle")
 t = se.test_stats()
 check(t["signals"] > 300 and 60 < t["win_rate"] < 90 and t["avg_net_r"] > 0 and t["period"].startswith("2025-10"),
       "out-of-sample test stats bundled (Oct 2025 onward, data the model never saw)")
@@ -184,6 +185,18 @@ t_spike = base["SOL/USDT"]["timestamp"].iloc[n - 120]
 at_spike = {s for s, L in list(closed.items()) + [(k, [v]) for k, v in act.items()] for t in L if t["bar_time"] == t_spike}
 check({"ETH/USDT"} <= at_spike and all(t["tier"] == "strong" for L in closed.values() for t in L if t["bar_time"] == t_spike),
       "every coin above the strong level gets a signal on the same candle")
+# cap: 7 coins strong on the same candle -> only the 5 best start
+F0 = base["BTC/USDT"]
+S = {}
+for k in range(7):
+    sc = np.full(n, 0.2)
+    sc[n - 100] = m.threshold + 0.01 * (k + 1)
+    S[f"C{k}/USDT"] = {"F": F0, **scored(sc)}
+closed = {}
+act, last = se.replay_all(S, lookback=300, closed=closed)
+t_cap = F0["timestamp"].iloc[n - 100]
+started = {s for s, L in list(closed.items()) + [(k, [v]) for k, v in act.items()] for t in L if t["bar_time"] == t_cap}
+check(started == {f"C{k}/USDT" for k in range(2, 7)}, "at most 5 new signals on one candle, highest scores first")
 t0_ = pd.Timestamp(base["BTC/USDT"]["timestamp"].iloc[n - 150]).to_pydatetime()
 closed = {}
 se.replay_all({"BTC/USDT": {"F": base["BTC/USDT"], **scored(mid)}}, start_time=t0_, closed=closed)
@@ -215,9 +228,9 @@ res2 = eng.signal("ETH/USDT", CLOCK["now"] + timedelta(minutes=50))
 check(len(calls) == n_calls and res2 is res, "cached until the next candle closes")
 res_sol = eng.signal("SOL/USDT", CLOCK["now"])
 check(len(calls) == n_calls and res_sol["covered"], "other signal coins come from the same pass")
-res_tao = eng.signal("TAO/USDT", CLOCK["now"])
+res_tao = eng.signal("PEPE/USDT", CLOCK["now"])
 check(len(calls) > n_calls and res_tao["verdict"] == "WAIT" and not res_tao["covered"] and res_tao["brief"],
-      "coin outside the tested list: brief and lean, never a trade")
+      "coin outside the signal list: brief and lean, never a trade")
 frames = {s: se.coin_features(DATA[s].iloc[:900]) for s in COINS}
 mkt = se.market_block({s: frames[s] for s in se.UNIVERSE})
 Xf = se.assemble(frames["ETH/USDT"], se.btc_block(frames["BTC/USDT"]), mkt, "ETH/USDT")
