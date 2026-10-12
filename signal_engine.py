@@ -11,21 +11,24 @@ What it does
   * A gradient-boosted model (trained on Jul 2020 - Sep 2025, 21 coins,
     exported to signal_model.json) estimates, for LONG and for SHORT, the
     probability that target 1 is reached before the stop. A calibration
-    curve turns that into an honest win probability.
-  * Which candles become signals (all 21 coins are read together):
+    curve turns that into an honest win probability. The features are
+    scale-free, so the same model reads every coin in the list (tested on
+    32 coins it never saw as well).
+  * Which candles become signals (every signal coin is read together):
       - "strong": the model's score is in its top 3%;
       - "standard": if no coin has had a signal for 24 hours, the best free
         coin gets one when its score is at least the model's median.
-    One trade at a time per coin; everything else is WAIT.
+    At most `max_per_bar` new signals per candle (the highest scores), one
+    trade at a time per coin; everything else is WAIT.
   * Trade plan: stop = 2 x ATR(14) from entry (1R). Three targets:
     TP1 = 0.5R, TP2 = 1R (as far as the stop), TP3 = 2R. A third of the
     position closes at each target; after TP1 the stop moves to the entry,
     after TP2 to TP1. Time limit 54 candles (9 days). Fees are counted as
     0.12% round trip.
 
-Measured on data the model never saw (Oct 2025 - Oct 2026, 21 coins) and in
-a walk-forward test (Jan 2023 - Oct 2026): see MODEL["test"] and
-MODEL["walk_forward"] / signal_model.json.
+Measured on data the model never saw (Oct 2025 - Oct 2026, 53 coins, 32 of
+them never used in training) and in a walk-forward test (Jan 2023 - Oct 2026,
+21 coins): see MODEL["test"] and MODEL["walk_forward"] / signal_model.json.
 
 This module is pure numpy/pandas (no sklearn at runtime). main.py, the
 auto-trade bot and the track record all call it, so every surface shows the
@@ -43,7 +46,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-ENGINE_VERSION = "3.0"
+ENGINE_VERSION = "3.1"
 TIMEFRAME = "4h"
 TF_SEC = 4 * 3600
 HISTORY_BARS = 600            # 4h candles fetched per coin (100 days; features need ~230)
@@ -78,6 +81,7 @@ class _Model:
         self.watch_threshold = float(m.get("watch_threshold", m["threshold"]))
         self.floor = float(m.get("floor", m["threshold"]))              # "standard" signal level
         self.gap_hours = float(m.get("gap_hours", 0) or 0)               # 0 = no standard signals
+        self.max_per_bar = int(m.get("max_per_bar", 0) or 0)            # 0 = no cap on new signals per candle
         lv = m["levels"]
         self.sl_atr = float(lv["sl_atr"])
         self.targets_r = [float(x) for x in (lv.get("targets_r") or [float(lv["tp_atr"]) / float(lv["sl_atr"])])]
@@ -502,7 +506,8 @@ def _trade(side, i, c, atr, cl, cs, ts, tier):
 
 def replay_all(S, lookback=REPLAY_BARS, start_time=None, closed=None):
     """Replays every coin together with the signal rules (strong + 24-hour
-    standard signal, one trade at a time per coin).
+    standard signal, at most max_per_bar new signals per candle, one trade at
+    a time per coin).
 
     S: {symbol: dict(F=coin_features, pl, ps, cl, cs)} - closed 4h candles.
     Starts `lookback` candles before each coin's last candle, or at
@@ -547,6 +552,8 @@ def replay_all(S, lookback=REPLAY_BARS, start_time=None, closed=None):
         picks = [(x, "strong") for x in cands if x[0] >= m.threshold]
         if not picks and gap is not None and (last_signal is None or t - last_signal >= gap) and cands[0][0] >= m.floor:
             picks = [(cands[0], "standard")]
+        if m.max_per_bar:
+            picks = picks[:m.max_per_bar]          # many coins at once usually means one market move: keep the best
         for (p, sym, i, side), tier in picks:
             d = data[sym]
             tr = _trade(side, i, d["c"], d["atr"], d["cl"], d["cs"], d["ts"], tier)
