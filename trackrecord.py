@@ -5,7 +5,7 @@ Signal Track Record - Signals FM
 Measures how the Signals FM signal (signal_engine.py, v3) actually performs:
 
   1. LIVE record. At every 4-hour candle close the engine reads the signal
-     for a fixed list of coins - the 21 coins the model was tested on, the
+     for a fixed list of coins - the engine's signal coins (signal_model.json), the
      same coins every time, so nothing is cherry-picked - and records every
      LONG / SHORT. Each record is then followed candle by candle until it
      closes.
@@ -20,6 +20,7 @@ Rules (same for both, shown on the page):
   * Stop    = 2 x ATR(14) from entry (1R). Targets TP1 = 0.5R, TP2 = 1R,
               TP3 = 2R. A third of the position closes at each target;
               after TP1 the stop moves to the entry, after TP2 to TP1.
+  * At most 5 new signals per candle (highest scores first).
   * One open signal per coin; new signals are ignored until it closes.
   * If one candle touches the stop and a target, the stop counts first.
   * If a candle opens beyond the stop, the exit is that (worse) open.
@@ -761,7 +762,7 @@ def build_summary():
         "targets_r": m.targets_r, "fractions": m.fractions, "be_after": m.be_after,
         "backtest_days": BACKTEST_DAYS, "engine_version": se.ENGINE_VERSION,
         "sl_atr": m.sl_atr, "tp_atr": m.tp_atr, "fees_pct": se.COST_ROUND_TRIP * 100,
-        "gap_hours": m.gap_hours, "trained_on": m.meta.get("trained_on"),
+        "gap_hours": m.gap_hours, "max_per_bar": m.max_per_bar, "trained_on": m.meta.get("trained_on"),
         "model_test": se.test_stats(), "walk_forward": se.walk_forward_stats(),
     }
     out["public"] = is_public()
