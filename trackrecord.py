@@ -2,28 +2,32 @@
 Signal Track Record - Signals FM
 ================================
 
-Measures how the Signals FM signal (signal_engine.py, v2) actually performs:
+Measures how the Signals FM signal (signal_engine.py, v3) actually performs:
 
   1. LIVE record. At every 4-hour candle close the engine reads the signal
-     for a fixed list of coins - the same coins every time, so nothing is
-     cherry-picked - and records every LONG / SHORT. Each record is then
-     followed candle by candle until its target, stop or time limit.
+     for a fixed list of coins - the 21 coins the model was tested on, the
+     same coins every time, so nothing is cherry-picked - and records every
+     LONG / SHORT. Each record is then followed candle by candle until it
+     closes.
 
   2. BACKTEST over the last 365 days, re-run every 7 days and whenever the
      engine version changes. Every candle only uses data that had closed
-     by then (no look-ahead).
+     by then (no look-ahead). The model was trained on data up to Sep 2025,
+     so this year is data it never saw.
 
 Rules (same for both, shown on the page):
   * Entry   = close of the signal candle.
-  * Stop    = 3 x ATR(14) from entry, Target = 1.5 x ATR(14) (the levels
-              the dashboard shows).
+  * Stop    = 2 x ATR(14) from entry (1R). Targets TP1 = 0.5R, TP2 = 1R,
+              TP3 = 2R. A third of the position closes at each target;
+              after TP1 the stop moves to the entry, after TP2 to TP1.
   * One open signal per coin; new signals are ignored until it closes.
-  * If one candle touches both stop and target, it counts as a LOSS.
+  * If one candle touches the stop and a target, the stop counts first.
   * If a candle opens beyond the stop, the exit is that (worse) open.
-  * After 48 candles (8 days) without stop/target the signal closes at that
-    candle's close ("expired").
+  * After 54 candles (9 days) whatever is left closes at that candle's
+    close ("expired").
   * Results are in R (1R = distance from entry to stop) AFTER estimated
-    fees and slippage of 0.12% of the position (round trip).
+    fees and slippage of 0.12% of the position (round trip). A signal is a
+    win when its result is above zero.
 
 ENVIRONMENT
   TRACK_RECORD_PUBLIC   "on" -> /track-record is visible to everyone.
@@ -47,10 +51,8 @@ import signal_engine as se
 
 track_bp = Blueprint("trackrecord", __name__)
 
-TRACKED_COINS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "BNB/USDT", "DOGE/USDT", "ADA/USDT", "LINK/USDT"]
-TIMEFRAMES = {"4h": 14400}  # the v2 engine works on 4-hour candles
-MAX_BARS = 48                # time limit per signal, in candles
-REWARD_RISK = 0.5            # target 1.5 x ATR / stop 3 x ATR
+TIMEFRAMES = {"4h": 14400}  # the engine works on 4-hour candles
+MAX_BARS = 54                # time limit per signal, in candles (signal_model.json levels.max_bars)
 BACKTEST_DAYS = {"4h": 365}
 BACKTEST_REFRESH_DAYS = 7
 MIN_RISK = 1e-9
@@ -111,8 +113,9 @@ class _Cursor:
 
 
 def tracked_coins():
+    """The coins the engine gives signals for (fixed by the model), that the site offers."""
     avail = _hooks.get("available_coins")
-    return [c for c in TRACKED_COINS if not avail or c in avail]
+    return [c for c in se.signal_coins() if not avail or c in avail]
 
 
 # ===========================================================================
@@ -144,6 +147,8 @@ def init_tables():
                 bars_held INT NULL,
                 mfe_r DOUBLE NULL,
                 mae_r DOUBLE NULL,
+                hits INT NULL,
+                tier VARCHAR(10) NULL,
                 created_at DATETIME NOT NULL,
                 UNIQUE (source, symbol, timeframe, bar_time),
                 INDEX idx_ts_src_status (source, status)
@@ -158,6 +163,15 @@ def init_tables():
             )
             """
         )
+    # engine v3: targets reached (0-3) and signal tier per record
+    for col, ddl in (("hits", "INT NULL"), ("tier", "VARCHAR(10) NULL")):
+        with _Cursor() as cur:
+            try:
+                cur.execute(f"SELECT {col} FROM track_signals LIMIT 1")
+                cur.fetchall()
+            except Exception:
+                cur.execute(f"ALTER TABLE track_signals ADD COLUMN {col} {ddl}")
+                print(f"[trackrecord] migrated: track_signals.{col} added")
     print("[trackrecord] tables ready")
 
 
@@ -215,48 +229,38 @@ def net_r(r, entry, sl):
     return float(r) - se.cost_r(float(entry), float(sl))
 
 
-def evaluate(side, entry, sl, tp, bars, max_bars=MAX_BARS):
-    """Follows a signal through the candles after it.
+def evaluate(side, entry, sl, tp, bars, max_bars=None):
+    """Follows a signal through the candles after it with the engine's trade
+    plan (signal_engine.follow: three targets, stop to entry after TP1, to TP1
+    after TP2). `tp` (the last target) is kept for the record; the targets
+    come from entry and stop.
 
     bars: list of dicts {time, open, high, low, close}, oldest first, only
     candles AFTER the signal candle and already closed.
     Returns dict(resolved, status, exit_price, exit_time, bars_held, r, pnl_pct,
-    mfe_r, mae_r)."""
+    mfe_r, mae_r, hits); r is the gross result of the whole position in R."""
+    max_bars = max_bars or se.model().max_bars
     risk = abs(entry - sl)
     if risk < MIN_RISK * max(1.0, entry):
         risk = max(entry * 1e-6, MIN_RISK)
-    long_ = side == "LONG"
-    mfe = mae = 0.0
-
-    def r_of(price):
-        return ((price - entry) if long_ else (entry - price)) / risk
-
-    def done(status, price, i, t):
-        r = r_of(price)
-        return {"resolved": True, "status": status, "exit_price": price, "exit_time": t, "bars_held": i,
-                "r": r, "pnl_pct": r * risk / entry * 100, "mfe_r": max(mfe, r if r > 0 else 0),
-                "mae_r": min(mae, r if r < 0 else 0)}
-
-    for i, b in enumerate(bars[:max_bars], start=1):
-        o, h, l, c = float(b["open"]), float(b["high"]), float(b["low"]), float(b["close"])
-        if long_:
-            if o <= sl:
-                return done("SL", o, i, b["time"])
-            hit_sl, hit_tp = l <= sl, h >= tp
-        else:
-            if o >= sl:
-                return done("SL", o, i, b["time"])
-            hit_sl, hit_tp = h >= sl, l <= tp
-        if hit_sl:  # both touched in one candle -> counted as a loss
-            return done("SL", sl, i, b["time"])
-        if hit_tp:
-            return done("TP", tp, i, b["time"])
-        best = r_of(h if long_ else l)
-        worst = r_of(l if long_ else h)
-        mfe, mae = max(mfe, best), min(mae, worst)
-        if i == max_bars:
-            return done("EXPIRED", c, i, b["time"])
-    return {"resolved": False, "bars_held": min(len(bars), max_bars), "mfe_r": mfe, "mae_r": mae}
+        sl = entry - risk if side == "LONG" else entry + risk
+    seen = bars[:max_bars]
+    o = [float(b["open"]) for b in seen]
+    h = [float(b["high"]) for b in seen]
+    lo = [float(b["low"]) for b in seen]
+    c = [float(b["close"]) for b in seen]
+    res = se.follow(side, entry, sl, o, h, lo, c, 0, max_bars)
+    k = res["bars"] if res["status"] else len(seen)
+    sgn = 1 if side == "LONG" else -1
+    best = [sgn * ((h[i] if sgn > 0 else lo[i]) - entry) / risk for i in range(k)]
+    worst = [sgn * ((lo[i] if sgn > 0 else h[i]) - entry) / risk for i in range(k)]
+    mfe = max([0.0] + best)
+    mae = min([0.0] + worst)
+    if res["status"] is None:
+        return {"resolved": False, "bars_held": k, "mfe_r": mfe, "mae_r": mae, "hits": res["hits"]}
+    r = float(res["r_gross"])
+    return {"resolved": True, "status": res["status"], "exit_price": res["exit_price"], "exit_time": seen[k - 1]["time"],
+            "bars_held": k, "r": r, "pnl_pct": r * risk / entry * 100, "mfe_r": mfe, "mae_r": mae, "hits": res["hits"]}
 
 
 def conf_bucket(conf):
@@ -318,9 +322,15 @@ def compute_stats(rows):
     avg_win = gp / len(wins) if wins else None
     avg_loss = -gl / len(losses) if losses else None
     bucket_order = [conf_bucket(lo) for lo, _hi in CONF_BUCKETS]
+    with_hits = [int(r["hits"]) for r in rows if r.get("hits") is not None]
+
+    def hit_rate(k):
+        return sum(1 for x in with_hits if x >= k) / len(with_hits) * 100 if with_hits else None
     return {
         "signals": n, "wins": len(wins), "losses": len(losses),
         "win_rate": len(wins) / n * 100 if n else None,
+        "tp1_rate": hit_rate(1), "tp2_rate": hit_rate(2), "tp3_rate": hit_rate(3),
+        "by_tier": group(lambda r: r.get("tier") or "strong", ["strong", "standard"]),
         "total_r": sum(rs), "avg_r": sum(rs) / n if n else None,
         "profit_factor": gp / gl if gl > 0 else None,
         "avg_win_r": avg_win, "avg_loss_r": avg_loss,
@@ -391,27 +401,30 @@ def fetch_history(symbol, timeframe, start):
 
 
 def _insert_signal(cur, source, symbol, timeframe, sig, bar_time, tf_sec, outcome=None):
-    """sig: {verdict, confidence, p_long, entry, stop_loss, take_profit}."""
+    """sig: {verdict, confidence, p_long, entry, stop_loss, take_profit, tier}."""
     side = sig["verdict"]
     entry, sl, tp = float(sig["entry"]), float(sig["stop_loss"]), float(sig["take_profit"])
     risk_pct = abs(entry - sl) / entry * 100
     signal_at = bar_time + timedelta(seconds=tf_sec)
-    vals = {"status": "OPEN", "exit_price": None, "exit_at": None, "r": None, "pnl": None, "bars": 0, "mfe": None, "mae": None}
+    vals = {"status": "OPEN", "exit_price": None, "exit_at": None, "r": None, "pnl": None, "bars": 0, "mfe": None,
+            "mae": None, "hits": 0}
     if outcome and outcome.get("resolved"):
         r = net_r(outcome["r"], entry, sl)
         vals.update({
             "status": outcome["status"], "exit_price": outcome["exit_price"],
             "exit_at": outcome["exit_time"] + timedelta(seconds=tf_sec), "r": r, "pnl": r * risk_pct,
             "bars": outcome["bars_held"], "mfe": outcome["mfe_r"], "mae": outcome["mae_r"],
+            "hits": outcome.get("hits"),
         })
     try:
         cur.execute(
             """INSERT INTO track_signals (source, symbol, timeframe, side, confidence, bullish_pct, entry_price,
                stop_loss, take_profit, risk_pct, bar_time, signal_at, status, exit_price, exit_at, r_multiple, pnl_pct,
-               bars_held, mfe_r, mae_r, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+               bars_held, mfe_r, mae_r, hits, tier, created_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (source, symbol, timeframe, side, sig["confidence"], sig.get("p_long"), entry, sl, tp, risk_pct,
              bar_time, signal_at, vals["status"], vals["exit_price"], vals["exit_at"], vals["r"], vals["pnl"],
-             vals["bars"], vals["mfe"], vals["mae"], _utcnow()),
+             vals["bars"], vals["mfe"], vals["mae"], vals["hits"], sig.get("tier") or "strong", _utcnow()),
         )
         return True
     except Exception:
@@ -423,41 +436,45 @@ def _insert_signal(cur, source, symbol, timeframe, sig, bar_time, tf_sec, outcom
 # ===========================================================================
 def backtest_frames(frames, symbols, start_time, counts=None):
     """frames: {symbol: 4h candle DataFrame (closed only)} incl. the 16-coin
-    universe. Returns {symbol: [(sig, bar_time, outcome), ...]} for trades
-    whose signal candle is at/after start_time. Pure (no DB)."""
+    universe and the coins to test. All `symbols` are replayed together from
+    start_time with the engine's own rules (signal_engine.replay_all: strong +
+    24-hour standard signal, one trade at a time per coin).
+    Returns {symbol: [(sig, bar_time, outcome), ...]} for trades whose signal
+    candle is at/after start_time and that have closed. Pure (no DB)."""
     feats = {sym: se.coin_features(df) for sym, df in frames.items() if df is not None and len(df) >= 60}
     if "BTC/USDT" not in feats:
         raise RuntimeError("no Bitcoin history")
     mkt = se.market_block({s: feats.get(s) for s in se.UNIVERSE})
     btc = se.btc_block(feats["BTC/USDT"])
+    Xs = {sym: se.assemble(feats[sym], btc, mkt, sym=sym) for sym in symbols if sym in feats}
+    scores = se.score_many(Xs)
+    S = {sym: {"F": feats[sym], "pl": v[0], "ps": v[1], "cl": v[2], "cs": v[3]} for sym, v in scores.items()}
+    closed = {}
+    se.replay_all(S, start_time=start_time, closed=closed)
     out = {}
-    for sym in symbols:
-        F = feats.get(sym)
-        if F is None:
-            continue
-        X = se.assemble(F, btc, mkt, sym=sym)
-        pl, ps, cl, cs = se.score(X)
+    for sym in S:
         bars = _df_to_bars(frames[sym])
-        times = [b["time"] for b in bars]
-        i = next((k for k, t in enumerate(times) if t >= start_time), len(times))
-        trades = []
-        while i < len(bars) - 1:
-            side, _best = se.decide(pl[i], ps[i])
-            if counts is not None:
-                _count_verdict(counts, "BACKTEST", se.TIMEFRAME, side)
-            if side == "WAIT":
-                i += 1
+        index = {b["time"]: k for k, b in enumerate(bars)}
+        cl = S[sym]["cl"]
+        trades, busy_bars = [], 0
+        for t in closed.get(sym, []):
+            i = index.get(t["bar_time"])
+            if i is None or t["bar_time"] < start_time:
                 continue
-            entry, atr = float(F["close"].iloc[i]), float(F["atr"].iloc[i])
-            sl, tp = se.levels(side, entry, atr)
-            outcome = evaluate(side, entry, sl, tp, bars[i + 1:])
+            outcome = evaluate(t["side"], t["entry"], t["stop_loss"], t["take_profit"], bars[i + 1:])
             if not outcome["resolved"]:
-                break  # still running at the end of history - the live record takes over
-            sig = {"verdict": side, "confidence": round(float(max(cl[i], cs[i])) * 100, 1),
-                   "p_long": round(float(cl[i]) * 100, 1), "entry": entry, "stop_loss": sl, "take_profit": tp}
+                continue
+            sig = {"verdict": t["side"], "confidence": t["confidence"], "p_long": round(float(cl[i]) * 100, 1),
+                   "entry": t["entry"], "stop_loss": t["stop_loss"], "take_profit": t["take_profit"], "tier": t["tier"]}
             trades.append((sig, bars[i]["time"], outcome))
-            i += outcome["bars_held"]  # next signal can come at the close of the exit candle
+            busy_bars += outcome["bars_held"]
         out[sym] = trades
+        if counts is not None:
+            window = sum(1 for b in bars[se.WARMUP_BARS:] if b["time"] >= start_time)
+            for sig, _bt, _o in trades:
+                _count_verdict(counts, "BACKTEST", se.TIMEFRAME, sig["verdict"])
+            for _ in range(max(0, window - busy_bars - len(trades))):
+                _count_verdict(counts, "BACKTEST", se.TIMEFRAME, "WAIT")
     return out
 
 
@@ -579,15 +596,15 @@ def live_evaluate(now=None):
                 if out["resolved"]:
                     cur.execute(
                         """UPDATE track_signals SET status=%s, exit_price=%s, exit_at=%s, r_multiple=%s, pnl_pct=%s,
-                           bars_held=%s, mfe_r=%s, mae_r=%s WHERE id=%s AND status='OPEN'""",
+                           bars_held=%s, mfe_r=%s, mae_r=%s, hits=%s WHERE id=%s AND status='OPEN'""",
                         (out["status"], out["exit_price"], out["exit_time"] + timedelta(seconds=tf_sec),
                          net_r(out["r"], r["entry_price"], r["stop_loss"]),
                          net_r(out["r"], r["entry_price"], r["stop_loss"]) * float(r["risk_pct"]),
-                         out["bars_held"], out["mfe_r"], out["mae_r"], r["id"]),
+                         out["bars_held"], out["mfe_r"], out["mae_r"], out["hits"], r["id"]),
                     )
                 else:
-                    cur.execute("UPDATE track_signals SET bars_held=%s, mfe_r=%s, mae_r=%s WHERE id=%s AND status='OPEN'",
-                                (out["bars_held"], out["mfe_r"], out["mae_r"], r["id"]))
+                    cur.execute("UPDATE track_signals SET bars_held=%s, mfe_r=%s, mae_r=%s, hits=%s WHERE id=%s AND status='OPEN'",
+                                (out["bars_held"], out["mfe_r"], out["mae_r"], out["hits"], r["id"]))
         except Exception as e:
             print(f"[trackrecord] evaluate {r['id']} failed: {e}")
         time.sleep(0.1)
@@ -702,13 +719,15 @@ _cache = {}
 
 
 def _signal_json(r):
+    entry, sl = _f(r["entry_price"]), _f(r["stop_loss"])
+    tps = se.targets(r["side"], entry, sl) if entry and sl else None
     return {
         "id": r["id"], "source": r["source"], "symbol": r["symbol"], "timeframe": r["timeframe"], "side": r["side"],
-        "confidence": _f(r["confidence"]), "entry_price": _f(r["entry_price"]), "stop_loss": _f(r["stop_loss"]),
-        "take_profit": _f(r["take_profit"]), "risk_pct": _f(r["risk_pct"]), "signal_at": _iso(r["signal_at"]),
+        "confidence": _f(r["confidence"]), "entry_price": entry, "stop_loss": sl,
+        "take_profit": _f(r["take_profit"]), "targets": tps, "risk_pct": _f(r["risk_pct"]), "signal_at": _iso(r["signal_at"]),
         "status": r["status"], "exit_price": _f(r["exit_price"]), "exit_at": _iso(r["exit_at"]),
         "r_multiple": _f(r["r_multiple"]), "pnl_pct": _f(r["pnl_pct"]), "bars_held": r.get("bars_held"),
-        "mfe_r": _f(r.get("mfe_r")), "mae_r": _f(r.get("mae_r")),
+        "mfe_r": _f(r.get("mfe_r")), "mae_r": _f(r.get("mae_r")), "hits": r.get("hits"), "tier": r.get("tier") or "strong",
     }
 
 
@@ -728,18 +747,22 @@ def build_summary():
             open_rows = [_signal_json(r) for r in cur.fetchall() or []]
             ordered = sorted(closed, key=lambda r: (_to_dt(r["exit_at"]) or datetime.min, r["id"]))[-800:]
             tape = [{"symbol": r["symbol"], "timeframe": r["timeframe"], "side": r["side"], "status": r["status"],
-                     "r_multiple": round(float(r["r_multiple"]), 3), "signal_at": _iso(r["signal_at"])} for r in ordered]
+                     "r_multiple": round(float(r["r_multiple"]), 3), "signal_at": _iso(r["signal_at"]),
+                     "hits": r.get("hits"), "tier": r.get("tier") or "strong"} for r in ordered]
             out["sources"][src] = {"stats": stats, "recent": recent, "open": open_rows, "tape": tape}
         verdicts = meta_get("verdicts", {}, cur) or {}
         out["verdicts"] = verdicts
         out["backtest_status"] = meta_get("bt_status", {}, cur) or {}
         out["live_since"] = meta_get("live_since", None, cur)
         out["heartbeat"] = meta_get("heartbeat", None, cur)
+    m = se.model()
     out["rules"] = {
-        "coins": tracked_coins(), "timeframes": list(TIMEFRAMES), "max_bars": MAX_BARS,
-        "reward_risk": REWARD_RISK, "backtest_days": BACKTEST_DAYS, "engine_version": se.ENGINE_VERSION,
-        "sl_atr": se.model().sl_atr, "tp_atr": se.model().tp_atr, "fees_pct": se.COST_ROUND_TRIP * 100,
-        "model_test": se.test_stats(),
+        "coins": tracked_coins(), "timeframes": list(TIMEFRAMES), "max_bars": m.max_bars,
+        "targets_r": m.targets_r, "fractions": m.fractions, "be_after": m.be_after,
+        "backtest_days": BACKTEST_DAYS, "engine_version": se.ENGINE_VERSION,
+        "sl_atr": m.sl_atr, "tp_atr": m.tp_atr, "fees_pct": se.COST_ROUND_TRIP * 100,
+        "gap_hours": m.gap_hours, "trained_on": m.meta.get("trained_on"),
+        "model_test": se.test_stats(), "walk_forward": se.walk_forward_stats(),
     }
     out["public"] = is_public()
     out["generated_at"] = _iso(_utcnow())
