@@ -11,32 +11,38 @@ Keep each text short (one or two sentences) and free of jargon.
 GROUPS = [
     ("Signals", [
         ("signal", "Signal",
-         "A trade idea from the signal engine: Long or Short, with an entry, a stop loss and a target. "
+         "A trade idea from the signal engine: Long or Short, with an entry, a stop loss and three targets. "
          "It is an estimate, not a promise, and signals lose regularly."),
         ("long", "Long",
          "A trade that profits if the price goes up. You buy now and aim to sell higher, at the target."),
         ("short", "Short",
          "A trade that profits if the price goes down. You sell now (usually with futures) and aim to buy back lower, at the target."),
         ("wait", "Wait",
-         "No trade right now. The engine only gives a signal for its strongest setups, so most of the time the answer is Wait. "
-         "That is the engine skipping weak setups, not a fault."),
+         "No trade on this coin right now. The engine gives strong signals only for its best setups; if no coin has had a "
+         "signal for 24 hours, the best setup gets a standard signal, so there is rarely a long wait across all coins."),
         ("setup_forming", "Setup forming",
-         "The engine is close to a signal but not there yet. It is not a trade: when this band was tested as signals, "
-         "it lost money after fees."),
+         "The engine is close to a strong signal but not there yet. It is not a trade; keep an eye on the next 4-hour close."),
         ("entry", "Entry",
          "The price where a signal starts: the close of the 4-hour candle that gave the signal."),
         ("stop_loss", "Stop loss",
          "The price where you accept the trade was wrong and exit, so the loss stays small. Every signal has one. Always use it."),
-        ("target", "Target",
-         "The price where you take the profit. Also called take profit."),
+        ("target", "Targets",
+         "The prices where you take profit (take profit). Every signal has three: TP1 at half the stop distance, TP2 as far "
+         "as the stop, TP3 at twice the stop distance. A third of the position closes at each one."),
+        ("targets", "Targets reached",
+         "How many signals reached TP1, TP2 and TP3. After TP1 the stop moves to the entry and after TP2 to TP1, so a signal "
+         "that reached TP1 can no longer lose (apart from a price gap)."),
+        ("tier", "Strong and standard signals",
+         "Strong: the model's score is in its top 3%. Standard: when no coin has had a signal for 24 hours, the best coin gets "
+         "one if its score is at least average. Strong signals did better in testing; standard ones keep signals coming."),
         ("win_chance", "Win chance",
-         "The model's estimate of how often signals like this one reach the target before the stop. "
-         "In testing about 7 in 10 signals won, but each loss was about twice the size of each win."),
+         "The model's estimate of how often signals like this one reach target 1 before the stop. "
+         "In testing about 3 in 4 signals reached TP1; a full loss (-1R) is bigger than one TP1 (+0.5R), which is why TP2 and TP3 matter."),
         ("progress", "Progress",
-         "Where the live price is between the stop and the target. 100% to target means the target is reached; "
+         "Where the live price is between the current stop and the next target. 100% to a target means it is reached; "
          "100% to stop means the stop is hit."),
         ("time_limit", "Time limit",
-         "If neither the stop nor the target is hit within 48 four-hour candles (8 days), the signal closes at that candle's close."),
+         "If a signal has not closed within 54 four-hour candles (9 days), whatever is left closes at that candle's close."),
         ("candle_4h", "4-hour candle",
          "One bar on the chart that covers 4 hours. The engine only reads closed candles, so new signals appear right after "
          "each 4-hour close (six times a day)."),
@@ -44,14 +50,15 @@ GROUPS = [
          "The side the model favours right now, Long or Short, with its probability. It shows the direction even when it is "
          "not strong enough for a signal."),
         ("closeness", "Closeness to a signal",
-         "How close the model's conviction came to the signal line at the last candle close. 100% means a signal."),
+         "How close the model's conviction came to the strong-signal line at the last candle close. 100% means a strong signal."),
     ]),
     ("Risk and results", [
         ("r", "R (risk unit)",
          "1R is the amount you lose if the stop is hit. If you risk $10 on a signal, +0.5R is a $5 gain and −1R is a $10 loss. "
          "Keep 1R small, for example 1% of your account."),
         ("win_rate", "Win rate",
-         "The share of closed signals that reached the target. A high win rate alone does not mean profit when losses are bigger than wins."),
+         "The share of closed signals that ended above zero after fees. A signal that reached TP1 and then came back to the "
+         "entry still counts as a small win. A high win rate alone does not mean profit; look at the average R too."),
         ("avg_r", "Average result (R)",
          "The average result per signal in R, after fees. Above 0 means the signals made money overall in that period."),
         ("profit_factor", "Profit factor",
@@ -61,8 +68,8 @@ GROUPS = [
         ("backtest", "Backtest",
          "Running the same rules over past data to see how they would have done. Useful, but real trading can do worse."),
         ("unseen_data", "Tested on unseen data",
-         "The model learned from January 2022 to June 2025 and was then tested once on July 2025 to October 2026, "
-         "data it had never seen. That keeps the test honest."),
+         "The model learned from July 2020 to September 2025 and was then tested once on October 2025 to October 2026, "
+         "data it had never seen. A walk-forward test on 2023 to 2026 (re-trained every 6 months) was positive every year."),
         ("fees", "Fees",
          "What the exchange charges to open and close a trade. Every tested result already takes off 0.12% per trade for fees and slippage."),
         ("leverage", "Leverage",
@@ -147,7 +154,7 @@ GROUPS = [
     ("Live chart", [
         ("signal_history", "Signal history",
          "The signals the engine gave on this coin with its normal rules over about the last 50 days, and how each one ended: "
-         "target, stop or time limit. Replayed results, fees included."),
+         "all three targets, a target and then the moved stop, the stop, or the time limit. Replayed results, fees included."),
         ("heikin_ashi", "Heikin Ashi",
          "Averaged candles that smooth out the noise so a trend is easier to see. Their open and close are not real traded prices."),
         ("log_scale", "Log scale",
