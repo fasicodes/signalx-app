@@ -90,7 +90,7 @@
 <main class="wrap">
   <div class="phead">
     <h1>Live signals board</h1>
-    <p>Signal engine v3 reads all 21 tested coins together when a 4-hour candle closes. Strong signals come from the model's best
+    <p>Signal engine v3 reads all 62 crypto coins together when a 4-hour candle closes. Strong signals come from the model's best
       setups; if no coin has had a signal for 24 hours, the best setup gets a standard one, so there is rarely a long wait.
       Every signal has three targets: close a third at each, and after TP1 the stop moves to the entry.</p>
   </div>
@@ -271,7 +271,7 @@
     $("sec-all").hidden = d.loading;
     $("all").innerHTML = rows.map((r) => {
       if (r.state === "ACTIVE") return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status"><span class="side ${r.active.side}">${r.active.side === "LONG" ? "Long" : "Short"}</span>${r.fresh ? ' <span class="tag-new">New</span>' : ""}</td><td>${lean(r)}</td><td>active since ${dayTime(r.active.signal_at)}</td><td>${lastSig(r)}</td></tr>`;
-      if (r.state === "WAIT" && r.covered === false) return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status faint">No signals</td><td>${lean(r)}</td><td colspan="2" class="faint">Not one of the 21 tested coins: lean and brief only</td></tr>`;
+      if (r.state === "WAIT" && r.covered === false) return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status faint">No signals</td><td>${lean(r)}</td><td colspan="2" class="faint">Not in the signal list: lean and brief only</td></tr>`;
       if (r.state === "WAIT") return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status" style="color:var(--wait)">WAIT${r.setup_forming ? '<span class="tag-forming">forming</span>' : ""}</td><td>${lean(r)}</td><td>${meter(r.strength)}<span class="num">${Math.round(r.strength || 0)}%</span></td><td>${lastSig(r)}</td></tr>`;
       return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status faint">${r.state === "LOADING" ? "loading" : "unavailable"}</td><td colspan="3" class="faint">${esc(r.error || "")}</td></tr>`;
     }).join("");
