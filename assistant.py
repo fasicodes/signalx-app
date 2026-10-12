@@ -352,7 +352,8 @@ user's language: if they write Roman Urdu or Urdu, answer in simple Roman Urdu; 
 
 What you know about the product:
 - The bot trades the coins the user ticks, using signal engine v3 (machine-learning model on closed 4-hour candles,
-  21 tested coins; strong signals plus a standard signal when no coin has had one for 24 hours).
+  all 62 crypto coins in the list; strong signals plus a standard signal when no coin has had one for 24 hours,
+  at most 5 new signals per candle). Forex and gold get the chart and a market brief only, no signals.
   It only enters a fresh LONG/SHORT at or above the user's minimum confidence, sizes the trade so hitting the stop
   loses about "risk per trade" % of the balance (capped by max position size). Every trade has a stop (2x ATR) and three
   targets (0.5R, 1R, 2R): the bot closes a third at each, moves the stop to the entry after TP1 and to TP1 after TP2.
