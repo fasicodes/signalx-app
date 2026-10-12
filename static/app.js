@@ -224,10 +224,10 @@
     const pill = $("sig-pill");
     $("sig-prob").hidden = true;
     if (e.covered === false) {
-      setState("WAIT", "No signals for this coin", `Signals cover the 21 coins the model was tested on. For ${base(S.coin)} you get the chart and the market brief.`, "");
+      setState("WAIT", "No signals for this coin", `${base(S.coin)} is not in the signal list. You get the chart and the market brief.`, "");
       pill.hidden = true;
       $("sig-body").innerHTML = `
-        <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b>${tip("leaning", "leaning")} on ${esc(base(S.coin))}, but it was not trained or tested on this coin, so it never gives a trade here.</p>
+        <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b>${tip("leaning", "leaning")} on ${esc(base(S.coin))}, but this coin is not in the signal list, so it gets no trades here.</p>
         <div class="d-actions"><a class="d-btn primary" href="#others" id="go-others">See coins with signals</a></div>`;
       return;
     }
@@ -245,7 +245,7 @@
         <div class="d-meter-lbl"><span>${Math.round(close)}% of the way to a strong signal${tip("closeness", "closeness to a signal")}</span><span>signal</span></div>
       </div>
       <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b>${tip("leaning", "leaning")} (${leanPct}% estimated chance of reaching target 1).
-        ${e.setup_forming ? "It is close, so keep an eye on the next 4-hour close. This is not a trade yet." : "The engine reads all 21 coins together and rarely goes a day without a signal on one of them."}</p>
+        ${e.setup_forming ? "It is close, so keep an eye on the next 4-hour close. This is not a trade yet." : "The engine reads every coin in the list together and rarely goes a day without a signal on one of them."}</p>
       ${lastTxt ? `<p class="d-copy">${esc(lastTxt)}</p>` : ""}
       <div class="d-actions"><a class="d-btn primary" href="#others" id="go-others">See coins with signals</a></div>`;
   }
@@ -479,7 +479,7 @@
     if (w) $("others-warn").textContent = `${w.count} of ${w.total} active signals are ${w.side.toLowerCase()}. Coins tend to move together, so these can win or lose at the same time. Don't put full risk on all of them.`;
     let html = act.map(mini).join("");
     if (!act.length) {
-      html = `<p class="d-empty">No active signals right now. The engine checks all 21 coins at each 4-hour close; if none has had a signal for 24 hours, the best setup gets one.${forming.length ? " Closest to a strong signal:" : ""}</p>`;
+      html = `<p class="d-empty">No active signals right now. The engine checks every coin at each 4-hour close; if none has had a signal for 24 hours, the best setup gets one.${forming.length ? " Closest to a strong signal:" : ""}</p>`;
     }
     if (forming.length) {
       html += forming.slice(0, 4).map((r) => `<button type="button" class="d-mini" data-sym="${esc(r.symbol)}" aria-current="${r.symbol === S.coin}">
