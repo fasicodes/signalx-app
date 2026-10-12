@@ -225,69 +225,12 @@
 
     <select id="coin-select" class="coin-select coin-select-native">
       <optgroup label="CRYPTO">
-        <option value="BTC/USDT">BTC / USDT</option>
-        <option value="ETH/USDT">ETH / USDT</option>
-        <option value="BNB/USDT">BNB / USDT</option>
-        <option value="XRP/USDT">XRP / USDT</option>
-        <option value="SOL/USDT">SOL / USDT</option>
-        <option value="TRX/USDT">TRX / USDT</option>
-        <option value="HYPE/USDT">HYPE / USDT</option>
-        <option value="DOGE/USDT">DOGE / USDT</option>
-        <option value="ZEC/USDT">ZEC / USDT</option>
-        <option value="DOT/USDT">DOT / USDT</option>
-        <option value="XLM/USDT">XLM / USDT</option>
-        <option value="XMR/USDT">XMR / USDT</option>
-        <option value="LINK/USDT">LINK / USDT</option>
-        <option value="ADA/USDT">ADA / USDT</option>
-        <option value="BCH/USDT">BCH / USDT</option>
-        <option value="GRAM/USDT">GRAM / USDT</option>
-        <option value="LTC/USDT">LTC / USDT</option>
-        <option value="SUI/USDT">SUI / USDT</option>
-        <option value="HBAR/USDT">HBAR / USDT</option>
-        <option value="FIL/USDT">FIL / USDT</option>
-        <option value="AVAX/USDT">AVAX / USDT</option>
-        <option value="CRO/USDT">CRO / USDT</option>
-        <option value="NEAR/USDT">NEAR / USDT</option>
-        <option value="SHIB/USDT">SHIB / USDT</option>
-        <option value="UNI/USDT">UNI / USDT</option>
-        <option value="TAO/USDT">TAO / USDT</option>
-        <option value="ONDO/USDT">ONDO / USDT</option>
-        <option value="OKB/USDT">OKB / USDT</option>
-        <option value="ASTER/USDT">ASTER / USDT</option>
-        <option value="ATOM/USDT">ATOM / USDT</option>
+        {% for c in coins %}<option value="{{ c }}">{{ c.replace("/", " / ") }}</option>
+        {% endfor %}
       </optgroup>
       <optgroup label="FOREX">
-        <option value="XAU/USD">XAU / USD</option>
-        <option value="EUR/USD">EUR / USD</option>
-        <option value="USD/JPY">USD / JPY</option>
-        <option value="GBP/USD">GBP / USD</option>
-        <option value="USD/CHF">USD / CHF</option>
-        <option value="AUD/USD">AUD / USD</option>
-        <option value="USD/CAD">USD / CAD</option>
-        <option value="NZD/USD">NZD / USD</option>
-        <option value="EUR/JPY">EUR / JPY</option>
-        <option value="GBP/JPY">GBP / JPY</option>
-        <option value="EUR/GBP">EUR / GBP</option>
-        <option value="EUR/CHF">EUR / CHF</option>
-        <option value="AUD/JPY">AUD / JPY</option>
-        <option value="EUR/AUD">EUR / AUD</option>
-        <option value="GBP/CHF">GBP / CHF</option>
-        <option value="AUD/NZD">AUD / NZD</option>
-        <option value="NZD/JPY">NZD / JPY</option>
-        <option value="CAD/JPY">CAD / JPY</option>
-        <option value="CHF/JPY">CHF / JPY</option>
-        <option value="EUR/CAD">EUR / CAD</option>
-        <option value="GBP/CAD">GBP / CAD</option>
-        <option value="EUR/NZD">EUR / NZD</option>
-        <option value="AUD/CAD">AUD / CAD</option>
-        <option value="GBP/AUD">GBP / AUD</option>
-        <option value="GBP/NZD">GBP / NZD</option>
-        <option value="AUD/CHF">AUD / CHF</option>
-        <option value="NZD/CAD">NZD / CAD</option>
-        <option value="NZD/CHF">NZD / CHF</option>
-        <option value="CAD/CHF">CAD / CHF</option>
-        <option value="USD/TRY">USD / TRY</option>
-        <option value="USD/ZAR">USD / ZAR</option>
+        {% for c in forex_pairs %}<option value="{{ c }}">{{ c.replace("/", " / ") }}</option>
+        {% endfor %}
       </optgroup>
     </select>
 
@@ -381,7 +324,7 @@
       <span class="tier-num">TIER&nbsp;01</span>
       <span class="tier-label">Core Verdict Engine</span>
     </div>
-    <p class="tier-note">Signal engine v3: a model trained on mid 2020&ndash;Sep 2025 and tested on data it never saw. It reads closed 4-hour candles, the daily trend, Bitcoin and 16-coin market breadth for 21 coins together: its strongest ~3% of setups become strong signals, and if no coin has had a signal for 24 hours the best setup gets a standard one. Every signal has a 2&times; ATR stop and three targets. This is the only tier that sets the verdict and confidence; the other tiers are display-only.</p>
+    <p class="tier-note">Signal engine v3: a model trained on mid 2020&ndash;Sep 2025 and tested on data it never saw. It reads closed 4-hour candles, the daily trend, Bitcoin and 16-coin market breadth for all 62 crypto coins together: its strongest ~3% of setups become strong signals, and if no coin has had a signal for 24 hours the best setup gets a standard one. Every signal has a 2&times; ATR stop and three targets. This is the only tier that sets the verdict and confidence; the other tiers are display-only.</p>
     <div id="tier-1" class="channel-grid"></div>
 
     <div class="tier-divider">
