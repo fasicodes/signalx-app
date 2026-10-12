@@ -138,7 +138,7 @@ for path in INFO:
     check(all(f'href="{p}"' in html for p in ("/about", "/faq", "/pricing", "/contact")), f"{path}: footer links to the new pages")
 st, html = get("/about")
 check('id="pmenu"' in html and 'class="pmenu-panel"' in html, "phone menu in the public navigation")
-check("Fasiullah Ayaz" in html and "437" in html and "+0.052R" in html, "about: founder + tested figures from the model")
+check("Fasiullah Ayaz" in html and "648" in html and "+0.127R" in html, "about: founder + tested figures from the model")
 st, html = get("/pricing")
 check("$0" in html and "Free while we" in html and "No card" in html, "pricing: free during the beta")
 st, html = get("/contact")
