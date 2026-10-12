@@ -129,10 +129,18 @@ def set_prices(**kw):
 SIGNALS = {}
 
 
+LADDER = {"on": False}
+
+
 def engine_signal(sym):
     side, conf = SIGNALS.get(sym, ("WAIT", 50.0))
-    return {"verdict": side, "fresh": True, "confidence": conf, "sl_pct": 2.0, "tp_pct": 3.0, "entry": EX.prices.get(sym),
-            "timeframe": "4h", "p_long": 0.7, "p_short": 0.3, "active": {}}
+    out = {"verdict": side, "fresh": True, "confidence": conf, "sl_pct": 2.0, "tp_pct": 3.0, "entry": EX.prices.get(sym),
+           "timeframe": "4h", "p_long": 0.7, "p_short": 0.3, "active": {}}
+    if LADDER["on"]:   # signal engine v3: stop 1R, targets 0.5R / 1R / 2R
+        e = EX.prices.get(sym)
+        out.update({"tp_pct": 4.0, "targets_r": [0.5, 1.0, 2.0], "fractions": [1 / 3] * 3, "tier": "strong",
+                    "targets": [e * 1.01, e * 1.02, e * 1.04]})
+    return out
 
 
 at._hooks.update({"engine_signal": engine_signal, "available_coins": ["BTC/USDT", "ETH/USDT", "SOL/USDT"],
@@ -283,6 +291,78 @@ at.monitor_positions()
 row = q("SELECT * FROM autotrade_positions WHERE mode='paper' AND symbol='SOL/USDT'")[0]
 check(row["status"] == "CLOSED" and row["close_reason"] == "TP" and row["pnl_usdt"] > 0, "spot target hit -> TP with profit")
 
+print("\n[5b] three targets: a third at TP1 and TP2, stop to entry then TP1")
+r = client.post("/api/autotrade/settings", json={"account": "paper", "market_type": "futures", "leverage": 2, "risk_pct": 1,
+                                                  "max_position_usdt": 5000, "max_open_positions": 2, "daily_loss_limit_pct": 20,
+                                                  "min_confidence": 60, "timeframe": "1h", "reward_risk": 1.5,
+                                                  "coins": ["BTC/USDT"]})
+check(r.status_code == 200, "futures settings for the ladder test")
+r = client.post("/api/autotrade/bot", json={"account": "paper", "enabled": True})
+LADDER["on"] = True
+set_prices(BTC_USDT=60000)
+for sym in ("BTC/USDT", "ETH/USDT", "SOL/USDT"):
+    SIGNALS[sym] = ("WAIT", 40.0)   # (ETH is still held by hand from step 4, so this test trades BTC)
+SIGNALS["BTC/USDT"] = ("LONG", 78.0)
+cc = Conn(); cc.cursor().execute("UPDATE autotrade_bot_settings SET last_scan_at=NULL")
+cc.cursor().execute("UPDATE autotrade_positions SET closed_at=? WHERE mode='paper'", (datetime.utcnow() - timedelta(hours=3),)); cc.close()
+at._signal_cache.clear()
+at.scan_user(1, "paper")
+rows = q("SELECT * FROM autotrade_positions WHERE mode='paper' AND status='OPEN' AND symbol='BTC/USDT'")
+check(len(rows) == 1, "ladder position opened")
+P0 = rows[0]
+e0, s0 = P0["entry_price"], P0["stop_loss"]
+risk_px = e0 - s0
+check(abs(P0["tp1"] - (e0 + 0.5 * risk_px)) < 0.02 and abs(P0["tp2"] - (e0 + risk_px)) < 0.02
+      and abs(P0["take_profit"] - (e0 + 2 * risk_px)) < 0.02, "TP1 0.5R, TP2 1R, TP3 2R from the fill")
+check(P0["hits"] == 0 and abs(P0["initial_amount"] - P0["amount"]) < 1e-12 and P0["initial_stop"] == s0, "start: no target, full size")
+pp = q("SELECT * FROM paper_positions WHERE user_id=1 AND symbol='BTC/USDT'")[0]
+check(abs(pp["tp_price"] - P0["take_profit"]) < 0.02 and abs(pp["sl_price"] - s0) < 0.02, "demo position carries the stop and TP3")
+d = status("paper")
+jp = [x for x in d["positions"] if x["symbol"] == "BTC/USDT"][0]
+check(jp["targets"] and len(jp["targets"]) == 3 and jp["hits"] == 0, "status lists the three targets")
+set_prices(BTC_USDT=P0["tp1"] + 0.5)
+at.monitor_positions()
+P1 = q("SELECT * FROM autotrade_positions WHERE id=?", (P0["id"],))[0]
+check(P1["hits"] == 1 and P1["status"] == "OPEN" and abs(P1["stop_loss"] - e0) < 0.02, "TP1: stop moved to the entry")
+check(abs(P1["amount"] - P0["initial_amount"] * 2 / 3) <= 0.0002 and P1["realized_usdt"] > 0, "TP1: a third closed with a profit")
+pp = q("SELECT * FROM paper_positions WHERE user_id=1 AND symbol='BTC/USDT'")[0]
+check(abs(pp["qty"] - P1["amount"]) < 1e-9 and abs(pp["sl_price"] - e0) < 0.02, "demo position: smaller, stop at entry")
+at.monitor_positions()
+check(q("SELECT hits FROM autotrade_positions WHERE id=?", (P0["id"],))[0]["hits"] == 1, "TP1 is taken only once")
+set_prices(BTC_USDT=P0["tp2"] + 0.5)
+at.monitor_positions()
+P2 = q("SELECT * FROM autotrade_positions WHERE id=?", (P0["id"],))[0]
+check(P2["hits"] == 2 and abs(P2["stop_loss"] - P0["tp1"]) < 0.02 and abs(P2["amount"] - P0["initial_amount"] / 3) <= 0.0002,
+      "TP2: another third closed, stop moved to TP1")
+logs = [l["message"] for l in q("SELECT message FROM autotrade_logs WHERE mode='paper' AND level='TRADE' ORDER BY id")]
+check(any(m.startswith("TP1 LONG BTC/USDT") for m in logs) and any(m.startswith("TP2 LONG BTC/USDT") for m in logs), "both steps logged")
+set_prices(BTC_USDT=P0["tp1"] - 0.5)
+at.monitor_positions()
+P3 = q("SELECT * FROM autotrade_positions WHERE id=?", (P0["id"],))[0]
+check(P3["status"] == "CLOSED" and P3["close_reason"] == "SL_TP1", "rest closed at the moved stop (TP1)")
+check(P3["pnl_usdt"] > P2["realized_usdt"] > P1["realized_usdt"] > 0, "trade PnL = both partial profits + the last third")
+check(not q("SELECT * FROM paper_positions WHERE user_id=1 AND symbol='BTC/USDT'"), "demo position fully closed")
+# second trade: TP1, then the demo engine itself closes the rest at the entry
+set_prices(BTC_USDT=60000)
+SIGNALS["BTC/USDT"] = ("LONG", 78.0)
+cc = Conn(); cc.cursor().execute("UPDATE autotrade_bot_settings SET last_scan_at=NULL"); cc.cursor().execute(
+    "UPDATE autotrade_positions SET closed_at=? WHERE id=?", (datetime.utcnow() - timedelta(hours=3), P0["id"])); cc.close()
+at._signal_cache.clear()
+at.scan_user(1, "paper")
+Q0 = q("SELECT * FROM autotrade_positions WHERE mode='paper' AND status='OPEN' AND symbol='BTC/USDT'")[0]
+set_prices(BTC_USDT=Q0["tp1"] + 0.5)
+at.monitor_positions()
+set_prices(BTC_USDT=Q0["entry_price"] - 1)
+pt.engine_tick(pt.feed.refresh(max_age=0))
+check(not q("SELECT * FROM paper_positions WHERE user_id=1 AND symbol='BTC/USDT'"), "demo engine closed the rest at the entry stop")
+cc = Conn(); cc.cursor().execute("UPDATE autotrade_positions SET opened_at=? WHERE id=?", (datetime.utcnow() - timedelta(minutes=5), Q0["id"])); cc.close()
+at.monitor_positions()
+Q1 = q("SELECT * FROM autotrade_positions WHERE id=?", (Q0["id"],))[0]
+check(Q1["status"] == "CLOSED" and Q1["close_reason"] == "SL_ENTRY" and Q1["hits"] == 1, "recorded as stopped at the entry after TP1")
+check(Q1["pnl_usdt"] > -1.0, f"TP1 profit covers the rest closed at the entry ({Q1['pnl_usdt']:.2f} USDT)")
+LADDER["on"] = False
+set_prices(BTC_USDT=60000, ETH_USDT=3000, SOL_USDT=150)
+
 print("\n[6] panic covers all accounts")
 r = client.post("/api/autotrade/panic", json={"account": "all"})
 check(r.status_code == 200 and r.get_json()["ok"], "stop all accounts")
@@ -308,7 +388,7 @@ check(a["reply"].startswith("Leverage:"), "glossary term explained")
 a = ask("what does funding rate mean")
 check("Funding" in a["reply"], "another glossary term")
 a = ask("How does the bot work?")
-check("signal engine v2" in a["reply"], "how the bot works")
+check("signal engine v3" in a["reply"] and "three targets" in a["reply"], "how the bot works")
 a = ask("which settings should I use for safe trading")
 check("Risk per trade" in a["reply"] and "0.5%" in a["reply"], "settings advice")
 a = ask("what is the price of BTC")
