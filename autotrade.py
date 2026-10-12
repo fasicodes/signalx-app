@@ -71,7 +71,7 @@ TIMEFRAME_SCAN_SEC = {"15m": 180, "1h": 300, "4h": 600}
 TIMEFRAME_MINUTES = {"15m": 15, "1h": 60, "4h": 240}
 MAX_COINS = 8
 SL_MIN_PCT = 0.4           # stop-loss at least 0.4% away
-SL_MAX_PCT = 15.0          # and at most 15% (engine v2 stops are 3 x ATR on 4h candles)
+SL_MAX_PCT = 15.0          # and at most 15% (engine v3 stops are 2 x ATR on 4h candles)
 SL_FALLBACK_PCT = 1.5      # used when the signal has no volatility figure
 LIQ_SAFETY_FRACTION = 0.6  # SL must sit within 60% of the liquidation distance
 BACKUP_STOP_EXTRA = 0.25   # futures backup stop sits 25% beyond the bot SL
@@ -298,6 +298,12 @@ def init_tables():
                 exit_price DOUBLE NULL,
                 pnl_usdt DOUBLE NULL,
                 close_reason VARCHAR(20) NULL,
+                tp1 DOUBLE NULL,
+                tp2 DOUBLE NULL,
+                hits INT NOT NULL DEFAULT 0,
+                initial_amount DOUBLE NULL,
+                initial_stop DOUBLE NULL,
+                realized_usdt DOUBLE NOT NULL DEFAULT 0,
                 opened_at DATETIME NOT NULL,
                 closed_at DATETIME NULL,
                 status_changed_at DATETIME NULL,
@@ -330,7 +336,26 @@ def init_tables():
             """
         )
     _migrate_v1()
+    _migrate_targets()
     print("[autotrade] tables ready")
+
+
+TARGET_COLUMNS = (("tp1", "DOUBLE NULL"), ("tp2", "DOUBLE NULL"), ("hits", "INT NOT NULL DEFAULT 0"),
+                  ("initial_amount", "DOUBLE NULL"), ("initial_stop", "DOUBLE NULL"),
+                  ("realized_usdt", "DOUBLE NOT NULL DEFAULT 0"))
+
+
+def _migrate_targets():
+    """Signal engine v3: positions keep three targets (TP1, TP2 + take_profit = TP3), how many were
+    reached, the size at the start and the profit already taken by partial closes."""
+    for col, ddl in TARGET_COLUMNS:
+        with _Cursor() as cur:
+            try:
+                cur.execute(f"SELECT {col} FROM autotrade_positions LIMIT 1")
+                cur.fetchall()
+            except Exception:
+                cur.execute(f"ALTER TABLE autotrade_positions ADD COLUMN {col} {ddl}")
+                print(f"[autotrade] migrated: autotrade_positions.{col} added")
 
 
 def _migrate_v1():
@@ -570,6 +595,16 @@ def plan_levels(side, entry_price, volatility_pct, reward_risk, leverage):
         sl = entry_price * (1 + sl_pct / 100)
         tp = entry_price * (1 - tp_pct / 100)
     return {"sl_pct": round(sl_pct, 3), "tp_pct": round(tp_pct, 3), "stop_loss": sl, "take_profit": tp}, None
+
+
+def ladder_levels(side, entry, stop, targets_r):
+    """Target prices from the entry, the stop (1R) and the engine's targets in R, e.g. [0.5, 1, 2]."""
+    risk = abs(float(entry) - float(stop))
+    sgn = 1 if side == "LONG" else -1
+    return [float(entry) + sgn * float(k) * risk for k in targets_r]
+
+
+PARTIAL_SHARE = 1.0 / 3.0   # a third of the starting size closes at TP1 and at TP2 (the rest at TP3 or the stop)
 
 
 def size_position(free_usdt, risk_pct, sl_pct, max_position_usdt, leverage, market_type):
@@ -969,7 +1004,7 @@ def get_signal(symbol, timeframe, max_age_sec=300):
             return hit[1]
     engine_signal = _hooks.get("engine_signal")
     if engine_signal:
-        # Signal engine v2 (4h candles): same signal as the dashboard and the track record.
+        # Signal engine v3 (4h candles): same signal as the dashboard and the track record.
         res = engine_signal(symbol)
         if res.get("error"):
             raise RuntimeError(res["error"])
@@ -985,6 +1020,9 @@ def get_signal(symbol, timeframe, max_age_sec=300):
             "confidence": _f(res.get("confidence"), 0.0),
             "volatility_pct": sl_pct,
             "reward_risk": round(tp_pct / sl_pct, 4) if sl_pct and tp_pct else None,
+            # three targets in R (0.5 / 1 / 2): a third closes at each, the stop moves after TP1 and TP2
+            "targets_r": res.get("targets_r") if res.get("targets") else None,
+            "tier": res.get("tier"),
             "last_price": _f(res.get("entry")),
             "trend": "Bullish" if (_f(res.get("p_long"), 0) >= _f(res.get("p_short"), 0)) else "Bearish",
             "engine_version": res.get("engine_version"),
@@ -1084,12 +1122,21 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
             f"add balance or raise Risk % / Max position."
         )
 
+    targets_r = (signal or {}).get("targets_r")
+    ladder = bool(targets_r and len(targets_r) >= 3)
+
+    def plan_targets(entry_px, stop_px):
+        if not ladder:
+            return None
+        return [client.price_to_precision(symbol, v) for v in ladder_levels(side, entry_px, stop_px, targets_r)]
+
     preview = {
         "symbol": symbol, "side": side, "market_type": market_type, "leverage": leverage,
         "price": price, "amount": amount, "notional_usdt": round(amount * price, 2),
         "margin_usdt": round(amount * price / leverage, 2), "risk_usdt": round(risk_usdt, 2),
         "stop_loss": client.price_to_precision(symbol, plan["stop_loss"]),
         "take_profit": client.price_to_precision(symbol, plan["take_profit"]),
+        "targets": plan_targets(price, plan["stop_loss"]),
         "sl_pct": plan["sl_pct"], "tp_pct": plan["tp_pct"], "free_usdt": round(free, 2),
         "mode": mode,
     }
@@ -1108,17 +1155,22 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
     plan, _ = plan_levels(side, fill, vol, rr, 1)  # levels from the actual fill
     sl = client.price_to_precision(symbol, plan["stop_loss"])
     tp = client.price_to_precision(symbol, plan["take_profit"])
+    tps = plan_targets(fill, plan["stop_loss"])
+    if tps:
+        tp = tps[-1]
+    tp1, tp2 = (tps[0], tps[1]) if tps else (None, None)
     now = _utcnow()
     try:
         with _Cursor() as cur:
             cur.execute(
                 """INSERT INTO autotrade_positions (user_id, mode, market_type, symbol, side, source, amount,
                    entry_price, stop_loss, take_profit, leverage, notional_usdt, fee_rate, confidence, status,
-                   entry_order_id, last_price, unrealized_pnl, opened_at, status_changed_at)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'OPEN',%s,%s,0,%s,%s)""",
+                   entry_order_id, last_price, unrealized_pnl, opened_at, status_changed_at,
+                   tp1, tp2, hits, initial_amount, initial_stop, realized_usdt)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'OPEN',%s,%s,0,%s,%s,%s,%s,0,%s,%s,0)""",
                 (user_id, mode, market_type, symbol, side, source, filled, fill, sl, tp, leverage,
                  round(filled * fill, 4), rules["taker"], (signal or {}).get("confidence"), order["id"],
-                 fill, now, now),
+                 fill, now, now, tp1, tp2, filled, sl),
             )
             position_id = cur.lastrowid
             try:
@@ -1154,10 +1206,12 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
 
     conf = (signal or {}).get("confidence")
     conf_txt = f", signal {conf:.0f}%" if conf else ""
+    tp_txt = f"TP1 {tp1:g} | TP2 {tp2:g} | TP3 {tp:g}" if tps else f"TP {tp:g}"
     log_event(user_id, "TRADE",
-              f"OPEN {side} {symbol} {filled:g} @ {fill:g} ({leverage}x{conf_txt}) | SL {sl:g} | TP {tp:g} [{source}]",
+              f"OPEN {side} {symbol} {filled:g} @ {fill:g} ({leverage}x{conf_txt}) | SL {sl:g} | {tp_txt} [{source}]",
               mode=mode)
-    preview.update({"id": position_id, "entry_price": fill, "amount": filled, "stop_loss": sl, "take_profit": tp})
+    preview.update({"id": position_id, "entry_price": fill, "amount": filled, "stop_loss": sl, "take_profit": tp,
+                    "targets": tps})
     return preview
 
 
@@ -1180,9 +1234,11 @@ def _release(position_id):
 
 
 def _finalize(pos, exit_price, reason, client=None, pnl=None):
+    """Closes the record. pnl = result of the part still open (computed when None); the profit already taken
+    at TP1 / TP2 (realized_usdt) is added, so pnl_usdt is the whole trade."""
     if pnl is None:
         pnl = calc_pnl(pos["side"], pos["entry_price"], exit_price, pos["amount"], pos["fee_rate"])
-    pnl = round(float(pnl), 4)
+    pnl = round(float(pnl) + _f(pos.get("realized_usdt"), 0.0), 4)
     with _Cursor() as cur:
         cur.execute(
             """UPDATE autotrade_positions SET status='CLOSED', exit_price=%s, pnl_usdt=%s, close_reason=%s,
@@ -1327,6 +1383,100 @@ def monitor_positions():
             _throttled_log(user_id, mode, "ERROR", f"Position monitor error: {msg}")
 
 
+def _stop_reason(pos):
+    """Close reason when the stop is hit: before TP1 a normal stop, after TP1 the stop sat at the entry,
+    after TP2 at TP1."""
+    return {0: "SL", 1: "SL_ENTRY"}.get(int(pos.get("hits") or 0), "SL_TP1")
+
+
+def _next_target(pos):
+    """The next partial target (TP1, then TP2) not reached yet, or None (then only the stop / TP3 remain)."""
+    hits = int(pos.get("hits") or 0)
+    levels = [pos.get("tp1"), pos.get("tp2")]
+    if hits < len(levels) and levels[hits] is not None:
+        return float(levels[hits])
+    return None
+
+
+def _beyond(side, price, level):
+    return price >= level if side == "LONG" else price <= level
+
+
+def _replace_backup_stop(pos, client, stop, amount):
+    """Binance futures: move the safety stop with the bot's stop (it sits 25% of the starting risk beyond it)."""
+    side, symbol = pos["side"], pos["symbol"]
+    dist = abs(float(pos["entry_price"]) - float(pos.get("initial_stop") or pos["stop_loss"]))
+    level = stop - dist * BACKUP_STOP_EXTRA if side == "LONG" else stop + dist * BACKUP_STOP_EXTRA
+    try:
+        client.cancel_all(symbol)
+        sid = client.backup_stop(symbol, "sell" if side == "LONG" else "buy", amount, client.price_to_precision(symbol, level))
+        with _Cursor() as cur:
+            cur.execute("UPDATE autotrade_positions SET backup_stop_id=%s WHERE id=%s", (sid, pos["id"]))
+    except Exception as e:
+        log_event(pos["user_id"], "WARN", f"{symbol}: backup stop could not be moved on Binance ({type(e).__name__}). "
+                                          f"The bot keeps watching the stop itself.", mode=pos["mode"])
+
+
+def take_partial(pos, account, client, price):
+    """Price reached the next target (TP1 or TP2): close a third of the starting size and move the stop
+    (to the entry after TP1, to TP1 after TP2). A position too small to split keeps its size and only the
+    stop moves. Returns True when the step was done."""
+    if not _claim(pos["id"]):
+        return False
+    k = int(pos.get("hits") or 0)
+    symbol, side = pos["symbol"], pos["side"]
+    paper = getattr(client, "is_paper", False)
+    entry = float(pos["entry_price"])
+    remaining = float(pos["amount"])
+    initial = _f(pos.get("initial_amount"), remaining) or remaining
+    new_stop = client.price_to_precision(symbol, entry if k == 0 else float(pos["tp1"]))
+    label = f"TP{k + 1}"
+    try:
+        rules = client.market_rules(symbol)
+        min_cost = max(rules["min_cost"], 5.0)
+        part = client.amount_to_precision(symbol, min(remaining, initial * PARTIAL_SHARE))
+        left = remaining - part
+        can_split = (part > 0 and part >= rules["min_amount"] and part * price >= min_cost
+                     and left >= rules["min_amount"] and left * price >= min_cost)
+        realized = _f(pos.get("realized_usdt"), 0.0)
+        if can_split:
+            close_side = "sell" if side == "LONG" else "buy"
+            if pos["market_type"] == "spot" and not paper:
+                order = client.market_order(symbol, "sell", part)
+            else:
+                order = client.market_order(symbol, close_side, part, reduce_only=True)
+            fill = order.get("average") or price
+            done = order.get("filled") or part
+            pnl_part = calc_pnl(side, entry, fill, done, pos["fee_rate"])
+            remaining = max(0.0, remaining - done)
+            realized += pnl_part
+            what = f"closed {done:g} @ {fill:g} ({'+' if pnl_part >= 0 else ''}{pnl_part:.2f} USDT)"
+        else:
+            what = "too small to split, so the whole size stays open"
+        with _Cursor() as cur:
+            cur.execute(
+                """UPDATE autotrade_positions SET amount=%s, realized_usdt=%s, hits=%s, stop_loss=%s, status='OPEN',
+                   status_changed_at=%s WHERE id=%s""",
+                (remaining, round(realized, 4), k + 1, new_stop, _utcnow(), pos["id"]),
+            )
+        if paper:
+            try:
+                client.attach_tpsl(symbol, new_stop, float(pos["take_profit"]))
+            except Exception:
+                pass  # the bot watches the stop itself as well
+        elif pos["market_type"] == "futures":
+            _replace_backup_stop(pos, client, new_stop, remaining)
+        log_event(pos["user_id"], "TRADE",
+                  f"{label} {side} {symbol}: {what}; stop moved to {'the entry' if k == 0 else 'TP1'} ({new_stop:g})",
+                  mode=pos["mode"])
+        return True
+    except Exception as e:
+        _release(pos["id"])
+        msg = str(e) if isinstance(e, TradeError) else _error_text(e)
+        log_event(pos["user_id"], "ERROR", f"Could not take {label} on {symbol}: {msg}", mode=pos["mode"])
+        return False
+
+
 def _check_position(pos, account, client, price, live_futures):
     age = (_utcnow() - (_to_dt(pos["opened_at"]) or _utcnow())).total_seconds()
     settle = 5 if getattr(client, "is_paper", False) else 60   # the demo account updates at once
@@ -1335,6 +1485,8 @@ def _check_position(pos, account, client, price, live_futures):
         if _claim(pos["id"]):
             try:
                 exit_price, why, pnl = _gone_exit(client, pos, price)
+                if why == "SL":
+                    why = _stop_reason(pos)
                 client.cancel_all(pos["symbol"])
                 _finalize(pos, exit_price, why, client, pnl=pnl)
             except Exception:
@@ -1347,10 +1499,16 @@ def _check_position(pos, account, client, price, live_futures):
     with _Cursor() as cur:
         cur.execute("UPDATE autotrade_positions SET last_price=%s, unrealized_pnl=%s WHERE id=%s AND status='OPEN'",
                     (price, unreal, pos["id"]))
-    hit = level_hit(pos["side"], price, float(pos["stop_loss"]), float(pos["take_profit"]))
+    stop, final = float(pos["stop_loss"]), float(pos["take_profit"])
+    nxt = _next_target(pos)
+    if nxt is not None and _beyond(pos["side"], price, nxt) and not _beyond(pos["side"], stop, price) \
+            and not _beyond(pos["side"], price, final):
+        take_partial(pos, account, client, price)
+        return
+    hit = level_hit(pos["side"], price, stop, final)
     if hit:
         try:
-            close_position(pos, account, hit, price_hint=price)
+            close_position(pos, account, hit if hit == "TP" else _stop_reason(pos), price_hint=price)
         except TradeError:
             pass  # already logged
 
@@ -1600,11 +1758,28 @@ def _pos_json(p):
         "unrealized_pnl": _f(p.get("unrealized_pnl"), 0.0), "exit_price": _f(p.get("exit_price")),
         "pnl_usdt": _f(p.get("pnl_usdt")), "close_reason": p.get("close_reason"),
         "opened_at": _iso(_to_dt(p.get("opened_at"))), "closed_at": _iso(_to_dt(p.get("closed_at"))),
+        "targets": ([_f(p.get("tp1")), _f(p.get("tp2")), _f(p["take_profit"])] if p.get("tp1") is not None else None),
+        "hits": int(p.get("hits") or 0), "realized_usdt": _f(p.get("realized_usdt"), 0.0),
+        "initial_amount": _f(p.get("initial_amount")), "initial_stop": _f(p.get("initial_stop")),
     }
 
 
 def _settings_json(s):
     return {k: s[k] for k in DEFAULT_SETTINGS}
+
+
+def _confidence_levels():
+    """Confidence (%) the signal engine shows at its 'standard' and 'strong' signal levels, and the highest it can
+    show, so the settings form can say which minimum takes which signals. None if the engine model is missing."""
+    try:
+        import signal_engine as se
+        m = se.model()
+
+        def pct(raw):
+            return round(float(m.calibrate(raw)) * 100, 1)
+        return {"standard": pct(m.floor), "strong": pct(m.threshold), "max": round(float(m.cal_y[-1]) * 100, 1)}
+    except Exception:
+        return None
 
 
 # ===========================================================================
@@ -1746,7 +1921,7 @@ def status():
         "logs": [{"id": l["id"], "level": l["level"], "message": l["message"],
                   "created_at": _iso(_to_dt(l["created_at"]))} for l in logs],
         "options": {"leverage": list(ALLOWED_LEVERAGE), "timeframes": list(TIMEFRAME_SCAN_SEC),
-                    "coins": coin_choices(), "max_coins": MAX_COINS},
+                    "coins": coin_choices(), "max_coins": MAX_COINS, "confidence": _confidence_levels()},
         "server_time": _iso(_utcnow()),
     })
 
