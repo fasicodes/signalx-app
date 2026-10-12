@@ -122,29 +122,30 @@
     <section data-step>
       <h2 id="an-guide-title">Welcome to Signals FM</h2>
       <div class="an-guide-art"><div class="an-gpills"><span class="an-gpill l">Long</span><span class="an-gpill s">Short</span><span class="an-gpill w">Wait</span></div></div>
-      <p>Every 4 hours the signal engine checks 30 coins. <b>Most of the time it says Wait.</b> When it finds one of its strongest
-        setups, it gives a <b>Long</b> (price likely to rise) or <b>Short</b> (price likely to fall) signal.</p>
-      <p>Wait is normal. It means the engine is skipping weak setups to protect you.</p>
+      <p>Every 4 hours the signal engine checks 21 coins together. When a coin has a good setup it gives a <b>Long</b> (price likely
+        to rise) or <b>Short</b> (price likely to fall) signal; otherwise that coin says <b>Wait</b>.</p>
+      <p>Across all coins there is rarely a day without a new signal. The <b>Signals board</b> shows every coin that has one right now.</p>
     </section>
 
     <section data-step hidden>
       <h2>How to read a signal</h2>
       <div class="an-guide-art an-gladder">
-        <div><i style="background:var(--an-long)"></i><b>Target</b><span>where you take the profit</span></div>
+        <div><i style="background:var(--an-long)"></i><b>TP1, TP2, TP3</b><span>where you take profit, a third at each</span></div>
         <div><i style="background:var(--an-text)"></i><b>Entry</b><span>where the signal starts</span></div>
         <div><i style="background:var(--an-short)"></i><b>Stop loss</b><span>where you exit if it goes wrong</span></div>
       </div>
-      <p>The bar on the signal card shows where the live price is between the stop and the target.
-        A signal ends when it reaches the target, hits the stop, or after 8 days.</p>
+      <p>The bar on the signal card shows where the live price is between the stop and the targets. After TP1 the stop moves to
+        the entry, so the rest of the trade can no longer lose. A signal ends at TP3, at the (moved) stop, or after 9 days.</p>
     </section>
 
     <section data-step hidden>
       <h2>Keep every loss small</h2>
       <div class="an-guide-art an-gr">
-        <div><span>Win (about 7 in 10)</span><i style="background:var(--an-long);width:50%"></i><b style="color:var(--an-long)">+0.5R</b></div>
-        <div><span>Loss</span><i style="background:var(--an-short);width:100%"></i><b style="color:var(--an-short)">&minus;1R</b></div>
+        <div><span>All 3 targets</span><i style="background:var(--an-long);width:100%"></i><b style="color:var(--an-long)">+1.17R</b></div>
+        <div><span>TP1, then stop at entry</span><i style="background:var(--an-long);width:15%"></i><b style="color:var(--an-long)">+0.17R</b></div>
+        <div><span>Stop before TP1</span><i style="background:var(--an-short);width:86%"></i><b style="color:var(--an-short)">&minus;1R</b></div>
       </div>
-      <p>In testing about 7 in 10 signals won, but each loss was about <b>twice the size</b> of each win, and some months lost money.</p>
+      <p>In testing about 3 in 4 signals closed in profit, but many wins are small and a full loss is <b>&minus;1R</b>, and some months lost money.</p>
       <p>So risk a small, fixed amount on every signal, for example <b>1% of your account</b>. That amount is called <b>1R</b>.</p>
     </section>
 
