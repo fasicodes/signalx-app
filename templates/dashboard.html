@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
 {% include '_analytics.html' ignore missing %}
 </head>
@@ -106,7 +106,7 @@
 </main>
 
 <footer class="d-foot">
-  Signals come from a model and lose regularly; each loss is about twice the size of each win. Results include 0.12% fees.
+  Signals come from a model and lose regularly; a full loss (−1R) is bigger than the first target (+0.5R). Results include 0.12% fees.
   Not financial advice. <a href="/faq">FAQ</a> &nbsp; <a href="/advanced">Pro terminal</a> &nbsp; <a href="/risk-disclosure">Risk disclosure</a>
 </footer>
 
@@ -126,6 +126,6 @@
 </div>
 
 <script src="{{ url_for('static', filename='chart-history.js') }}?v=20261011a" defer></script>
-<script src="{{ url_for('static', filename='app.js') }}?v=20261011a" defer></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=20261012a" defer></script>
 </body>
 </html>
