@@ -272,7 +272,7 @@ check(r["swing_high"] == 0.12399 and r["swing_low"] == 0.12301, "Pro terminal sw
 import signal_engine as se  # noqa: E402
 check(se.RECENT_KEYS[:4] == ("side", "entry", "stop_loss", "take_profit") and se.RECENT_MAX == 30, "engine result lists recent signals")
 eng_src = open(os.path.join(ROOT, "signal_engine.py"), encoding="utf-8").read()
-check("active, last = replay(F, pl, ps, cl, cs, trades=closed)" in eng_src and '"recent": [{k: t[k] for k in RECENT_KEYS}' in eng_src, "live engine fills recent from the same replay")
+check("active, last = replay_all(S, closed=closed)" in eng_src and '"recent": [{k: t.get(k) for k in RECENT_KEYS}' in eng_src, "live engine fills recent from the same replay")
 import alerts  # noqa: E402
 ob = {"bids": [[99.5, 7.0], [90.0, 100.0]], "asks": [[100.5, 3.0]]}
 check(abs(alerts.book_imbalance(ob, 100.0) - (7 * 99.5 - 3 * 100.5) / (7 * 99.5 + 3 * 100.5)) < 1e-9, "imbalance uses orders within 1% only")
