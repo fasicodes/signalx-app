@@ -254,7 +254,7 @@ BOARD["rows"] = [{"symbol": "BTC/USDT", "state": "ACTIVE", "fresh": True,
                   "progress": {"pct": -12.0}}]
 hook(update(555, "/signals"))
 txt = sent_to(555)[-1]
-check("Active signals (2)" in txt and "BTC</b> Long" in txt and "42.5% to target" in txt and "12% to stop" in txt and "<b>new</b>" in txt,
+check("Active signals (2)" in txt and "BTC</b> Long" in txt and "42.5% to TP1" in txt and "12% to stop" in txt and "<b>new</b>" in txt,
       "/signals lists active signals with progress")
 check("https://signals.example/signals" in txt, "with a link to the board")
 hook(update(555, "/stop"))
@@ -278,8 +278,9 @@ msgs = {p["chat_id"]: p["text"] for m, p in CALLS[n:] if m == "sendMessage"}
 check(set(msgs) == {555, 777}, "both linked users get a message")
 check("2 new signals" in msgs[555] and "BTC/USDT" in msgs[555] and "ETH/USDT" in msgs[555], "user 1 (all coins): one message with both")
 check("BTC/USDT" not in msgs[777] and "New Short signal: ETH/USDT" in msgs[777], "user 2 gets only the coin they chose")
-check("Entry: <b>63,120.50</b>" in msgs[555] and "(-4.94%)" in msgs[555] and "(+2.50%)" in msgs[555] and "Win chance: 73%" in msgs[555],
-      "message shows entry, stop/target distance and win chance")
+check("Entry: <b>63,120.50</b>" in msgs[555] and "(-4.94%)" in msgs[555] and "TP1: 64,680.75 (+2.47%)" in msgs[555]
+      and "TP3: 69,361.50 (+9.89%)" in msgs[555] and "Chance of TP1: 73%" in msgs[555] and "a third at each target" in msgs[555],
+      "message shows entry, stop, three targets and the chance of TP1")
 check('href="https://signals.example/?coin=BTC%2FUSDT"' in msgs[555] and "Not financial advice" in msgs[555], "link to the coin + risk note")
 cur = Conn().cursor(); cur.execute("SELECT user_id FROM notifications WHERE category='SIGNAL'"); bell = cur.fetchall()
 check(len(bell) == 5, "bell notifications still created for everyone with alerts on (2 + 1 + 2)")
