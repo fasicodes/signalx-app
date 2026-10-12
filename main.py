@@ -1824,7 +1824,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
     buying_pressure, selling_pressure = hawkes_pressure(df)
     bullish_pct, bearish_pct = bayesian_bullish_bearish(df)
 
-    # --- VERDICT: signal engine v2 (signal_engine.py) on closed 4h candles ---
+    # --- VERDICT: signal engine v3 (signal_engine.py) on closed 4h candles ---
     engine = engine_signal(symbol)
     if engine.get("verdict"):
         final_verdict = engine["verdict"]
@@ -2055,8 +2055,8 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
 
         "engine": engine,
         "engine_test": signal_engine.test_stats(),
-        "disclaimer": ("Not financial advice. The verdict comes from signal engine v2 (4-hour candles); "
-                        "confidence is the historical win probability of similar setups, measured on data "
+        "disclaimer": ("Not financial advice. The verdict comes from signal engine v3 (4-hour candles); "
+                        "confidence is how often similar setups reached target 1 before the stop, measured on data "
                         "the model never saw, after fees. All other panels are display-only."),
     }
     result.update(volatility_data)
@@ -2077,7 +2077,7 @@ def get_signal_engine():
 
 
 def engine_signal(symbol):
-    """Signal engine v2 result for one coin, JSON-ready. Never raises."""
+    """Signal engine v3 result for one coin, JSON-ready. Never raises."""
     if _is_forex_pair(symbol):
         return {"error": "Signals cover crypto pairs only."}
     try:
@@ -2093,8 +2093,10 @@ def _jsonable(obj):
     if isinstance(obj, dict):
         out = {}
         for k, v in obj.items():
-            if k in ("entry", "stop_loss", "take_profit", "atr", "exit_price", "last_close", "price") and isinstance(v, float):
+            if k in ("entry", "stop_loss", "stop_now", "take_profit", "atr", "exit_price", "last_close", "price") and isinstance(v, float):
                 out[k] = signal_engine.price_round(v)
+            elif k == "targets" and isinstance(v, list):
+                out[k] = [signal_engine.price_round(x) if isinstance(x, float) else x for x in v]
             else:
                 out[k] = _jsonable(v)
         return out
@@ -2225,7 +2227,7 @@ def _live_price_cached(symbol, ttl=10):
 
 @app.route("/api/engine", methods=["GET"])
 def engine_endpoint():
-    """Light endpoint for the dashboard: the v2 engine's state for one symbol
+    """Light endpoint for the dashboard: the v3 engine's state for one symbol
     (active trade with live progress, or WAIT with lean/closeness), plus a
     plain-language market brief. Forex gets the brief and chart only."""
     coin = (request.args.get("coin") or "BTC/USDT").upper()
@@ -2247,7 +2249,7 @@ def engine_endpoint():
             price if price is not None else eng.get("last_close"))
     return jsonify(_jsonable({"ok": True, "coin": coin, "asset": "crypto", "price": price, "brief": eng.get("brief"),
                               "engine": eng, "test": signal_engine.test_stats(), "error": eng.get("error"),
-                              "tested": coin in signal_engine.UNIVERSE}))
+                              "tested": coin in signal_engine.signal_coins()}))
 
 
 @app.route("/coins", methods=["GET"])
@@ -2558,7 +2560,7 @@ init_papertrade(app, available_coins=AVAILABLE_COINS)
 
 # ============================================================
 # SIGNALS BOARD + SIGNAL ALERTS - signalboard.py
-# Reads signal engine v2 for every crypto coin after each 4h close,
+# Reads signal engine v3 for every crypto coin after each 4h close,
 # stores every NEW signal once and notifies subscribed users (bell +
 # optional email). Page: /signals (login required).
 # ============================================================
