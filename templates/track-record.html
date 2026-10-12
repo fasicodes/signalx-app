@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Track record: every Signals FM signal and its result</title>
-<meta name="description" content="Every long and short Signals FM gives on BTC, ETH, SOL and five more coins, recorded automatically with its stop-loss, target and result. Live record plus a 365-day backtest, after fees.">
-{% set seo_title = "Signals FM track record" %}{% set seo_path = "/track-record" %}{% set seo_description = "Every long and short Signals FM gives, logged automatically with its stop, target and result in R." %}
+<meta name="description" content="Every long and short Signals FM gives on 21 coins, recorded automatically with its stop-loss, three targets and result. Live record plus a 365-day backtest, after fees.">
+{% set seo_title = "Signals FM track record" %}{% set seo_path = "/track-record" %}{% set seo_description = "Every long and short Signals FM gives, logged automatically with its stop, targets and result in R." %}
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -18,7 +18,8 @@
                   font-size: 14px; max-width: 760px; }
   .lede { font-family: var(--display); font-size: clamp(20px, 2.6vw, 27px); line-height: 1.35; font-weight: 600; max-width: 34ch; margin: 0 0 28px; }
   .lede b { font-weight: 700; }
-  .figs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .figs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  @media (max-width: 1180px) { .figs { grid-template-columns: repeat(3, minmax(0, 1fr)); } .figs div:nth-child(3n + 1) { padding-left: 0; border-left: none; } }
   .figs div { padding: 14px 16px 16px 0; }
   .figs div + div { padding-left: 16px; border-left: 1px solid var(--line); }
   .figs dt { font-size: 13px; color: var(--text-dim); }
@@ -69,8 +70,8 @@
 <main class="wrap">
   <section class="phead">
     <h1>Every signal, recorded. Wins and losses.</h1>
-    <p>At every 4-hour candle close, Signals FM reads the same eight coins and logs every long or short it gives, with the
-      stop-loss and target shown on the dashboard. Nothing is picked afterwards. Results are in R after fees: 1R is the distance from entry to stop.</p>
+    <p>At every 4-hour candle close, Signals FM reads the same 21 coins and logs every long or short it gives, with the
+      stop-loss and the three targets shown on the dashboard. Nothing is picked afterwards. Results are in R after fees: 1R is the distance from entry to stop.</p>
     <div class="src-row">
       <div class="pseg" role="group" aria-label="Which results">
         <button type="button" data-src="LIVE" aria-pressed="true">Live record</button>
@@ -108,19 +109,19 @@
 
     <section class="block">
       <h2 class="sec">Does a higher confidence win more often?{{ tip('win_chance', 'win chance') }}</h2>
-      <p class="sec-sub">Win rate by the confidence the signal showed at the time. The grey mark is the win rate needed to break even with this payoff.</p>
+      <p class="sec-sub">Win rate by the confidence the signal showed at the time. The grey mark is the win rate needed to break even with the payoff these signals had.</p>
       <div id="conf"></div>
       <p class="conf-key" id="conf-key"></p>
     </section>
 
     <section class="block grid2">
       <div><h2 class="sec">By coin</h2><div class="ptable-wrap" id="by-coin"></div></div>
-      <div><h2 class="sec">By timeframe and direction</h2><div class="ptable-wrap" id="by-tf"></div></div>
+      <div><h2 class="sec">By strength and direction</h2><div class="ptable-wrap" id="by-tf"></div></div>
     </section>
 
     <section class="block" id="open-sec">
       <h2 class="sec">Open right now</h2>
-      <p class="sec-sub">Signals that have not reached their stop, target or time limit yet.</p>
+      <p class="sec-sub">Signals that have not closed yet (stop, last target or time limit).</p>
       <div class="ptable-wrap" id="open"></div>
     </section>
 
@@ -135,15 +136,17 @@
   <section class="block rules" id="rules">
     <h2 class="sec">How this is measured</h2>
     <ul id="rules-list">
-      <li><b>Same coins, every candle.</b> BTC, ETH, SOL, XRP, BNB, DOGE, ADA and LINK are read at every 4-hour candle close by signal engine v2. Every long or short is logged.</li>
+      <li><b>Same coins, every candle.</b> The 21 coins the model was tested on (BTC, ETH, SOL, XRP, BNB, DOGE, ADA, LINK, AVAX, DOT, LTC, BCH, TRX, XLM, ATOM, NEAR, ZEC, SHIB, UNI, SUI and FIL) are read together at every 4-hour candle close by signal engine v3. Every long or short is logged.</li>
+      <li><b>Which candles become signals.</b> A coin gets a <b>strong</b> signal when the model's score is in its top 3%. If no coin has had a signal for 24 hours, the best coin gets a <b>standard</b> signal when its score is at least the model's median, so there is rarely a long wait.</li>
       <li><b>Entry</b> is the close of the candle that gave the signal.</li>
-      <li><b>Stop-loss</b> is 3 &times; ATR(14) away from entry and the <b>target</b> is 1.5 &times; ATR(14), exactly as the dashboard shows them. The target is closer than the stop, so a high win rate is needed to break even (about 67% plus fees). Judge the engine by the average R and the equity curve, not by the win rate alone.</li>
+      <li><b>Stop-loss</b> is 2 &times; ATR(14) away from entry (that distance is 1R). <b>Targets:</b> TP1 at 0.5R, TP2 at 1R (as far as the stop), TP3 at 2R. A third of the position closes at each target. After TP1 the stop moves to the entry, after TP2 to TP1, so a signal that reached TP1 can no longer lose (apart from a gap at a candle's open).</li>
+      <li><b>Win</b> means the whole signal closed above zero after fees. Judge the engine by the average R and the equity curve as well, not by the win rate alone.</li>
       <li><b>One signal per coin at a time.</b> New signals are ignored until the open one closes.</li>
-      <li><b>Pessimistic fills.</b> If one candle touches both the stop and the target, it counts as a loss. If a candle opens past the stop, the exit is that worse price.</li>
-      <li><b>Time limit.</b> After 48 candles (8 days) without hitting either level, the signal closes at that candle's close.</li>
+      <li><b>Pessimistic fills.</b> If one candle touches the stop and a target, the stop counts first. If a candle opens past the stop, the exit is that worse price. A moved stop only works from the next candle.</li>
+      <li><b>Time limit.</b> After 54 candles (9 days), whatever is left closes at that candle's close.</li>
       <li><b>After costs.</b> Every result already has 0.12% of the position taken off for fees and slippage (round trip). Funding payments on futures are not included.</li>
-      <li><b>Backtest</b> replays the same engine over the last 365 days and is refreshed every week. At each candle the engine only uses data that had closed by then, and the outcome comes only from the candles after it.</li>
-      <li><b>How the model was checked.</b> The engine was trained on Jan 2022 &ndash; Jun 2025 and then tested once on Jul 2025 &ndash; Oct 2026, data it had never seen: <span id="model-test">see below</span>.</li>
+      <li><b>Backtest</b> replays the same engine over the last 365 days and is refreshed every week. At each candle the engine only uses data that had closed by then, and the outcome comes only from the candles after it. The model was trained on data up to September 2025, so this year is data it never saw.</li>
+      <li><b>How the model was checked.</b> <span id="model-test">see below</span></li>
     </ul>
   </section>
 </main>
@@ -171,7 +174,9 @@
     const d = a >= 1000 ? 2 : a >= 10 ? 3 : a >= 1 ? 4 : 6;
     return Number(p).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
   }
-  const STATUS = { TP: ["Target hit", "pos"], SL: ["Stopped out", "neg"], EXPIRED: ["Time limit", "dim"], OPEN: ["Open", "dim"] };
+  const STATUS = { TP3: ["All 3 targets", "pos"], TP2: ["TP2, then stop at TP1", "pos"], TP1: ["TP1, then stop at entry", "pos"],
+    TP: ["Target hit", "pos"], SL: ["Stopped out", "neg"], EXPIRED: ["Time limit", "dim"], OPEN: ["Open", "dim"] };
+  const tps = (r) => (r.targets || [r.take_profit]).map(price).join(" / ");
 
   function table(head, rows, numCols) {
     return `<table class="ptable"><thead><tr>${head.map((h, i) => `<th class="${numCols.includes(i) ? "num" : ""}">${h}</th>`).join("")}</tr></thead>
@@ -194,7 +199,12 @@
     const t = (DATA.rules || {}).model_test || {};
     const el = document.getElementById("model-test");
     if (!el || !t.signals) return;
-    el.textContent = `${t.signals} signals on ${t.coins} coins, ${t.win_rate}% won, average ${t.avg_net_r >= 0 ? "+" : ""}${t.avg_net_r}R per signal after fees, profit factor ${t.profit_factor}, largest drawdown ${t.max_drawdown_r}R`;
+    const w = (DATA.rules || {}).walk_forward || {};
+    const per = (x) => (x.period || "").replace(" to ", " – ");
+    el.textContent = `The model was trained on ${DATA.rules.trained_on || "older data"}, then tested once on ${per(t)}, data it had never seen: ` +
+      `${t.signals} signals on ${t.coins} coins, ${t.win_rate}% won, TP1 reached ${t.tp1_rate}%, average ${t.avg_net_r >= 0 ? "+" : ""}${t.avg_net_r}R per signal after fees, ` +
+      `profit factor ${t.profit_factor}, largest drawdown ${t.max_drawdown_r}R, about ${t.signals_per_day} signals a day.` +
+      (w.signals ? ` A walk-forward test over ${per(w)} (re-trained every 6 months, always tested on the next 6) gave ${w.signals} signals, ${w.win_rate}% won, average +${w.avg_net_r}R, every year above zero.` : "");
   }
 
   function render() {
@@ -224,6 +234,7 @@
       fig("Average per signal", fmtR(s.avg_r), `${fmtR(s.total_r)} in total`, cls(s.avg_r), "avg_r"),
       fig("Profit factor", s.profit_factor == null ? "—" : s.profit_factor.toFixed(2), "Gross R won ÷ gross R lost", s.profit_factor >= 1 ? "pos" : "neg", "profit_factor"),
       fig("Largest drop", "−" + s.max_drawdown_pct.toFixed(1) + "%", "Peak to low, at 1% risk", "", "drawdown"),
+      fig("Targets reached", s.tp1_rate == null ? "—" : fmtPct(s.tp1_rate, 0), s.tp1_rate == null ? "TP1" : `reached TP1; TP2 ${fmtPct(s.tp2_rate, 0)}, TP3 ${fmtPct(s.tp3_rate, 0)}`, "", "targets"),
       fig("Break-even win rate", fmtPct(s.breakeven_win_rate), "Needed with this payoff"),
     ].join("");
 
@@ -232,22 +243,22 @@
     drawConf(s);
     $("by-coin").innerHTML = table(["Coin", "Signals", "Win rate", "Total"], s.by_coin.map((d) =>
       `<tr><td>${esc(d.key)}</td><td class="num">${d.count}</td><td class="num">${fmtPct(d.win_rate)}</td><td class="num ${cls(d.total_r)}">${fmtR(d.total_r)}</td></tr>`), [1, 2, 3]);
-    const tf = s.by_timeframe.map((d) => `<tr><td>${esc(d.key)} candles</td><td class="num">${d.count}</td><td class="num">${fmtPct(d.win_rate)}</td><td class="num ${cls(d.total_r)}">${fmtR(d.total_r)}</td></tr>`)
+    const tf = (s.by_tier || []).map((d) => `<tr><td>${d.key === "strong" ? "Strong signals" : "Standard signals"}</td><td class="num">${d.count}</td><td class="num">${fmtPct(d.win_rate)}</td><td class="num ${cls(d.total_r)}">${fmtR(d.total_r)}</td></tr>`)
       .concat(s.by_side.map((d) => `<tr><td class="${d.key === "LONG" ? "side-l" : "side-s"}">${d.key === "LONG" ? "Longs" : "Shorts"}</td><td class="num">${d.count}</td><td class="num">${fmtPct(d.win_rate)}</td><td class="num ${cls(d.total_r)}">${fmtR(d.total_r)}</td></tr>`));
     $("by-tf").innerHTML = table(["Group", "Signals", "Win rate", "Total"], tf, [1, 2, 3]);
 
     $("open-sec").hidden = SRC !== "LIVE";
-    $("open").innerHTML = src.open.length ? table(["Since", "Coin", "Direction", "Confidence", "Entry", "Stop", "Target", "Best so far"], src.open.map((r) =>
+    $("open").innerHTML = src.open.length ? table(["Since", "Coin", "Direction", "Confidence", "Entry", "Stop", "Targets", "Best so far"], src.open.map((r) =>
       `<tr><td>${when(r.signal_at)}</td><td>${esc(r.symbol)} <span class="faint">${r.timeframe}</span></td><td class="${r.side === "LONG" ? "side-l" : "side-s"}">${r.side === "LONG" ? "Long" : "Short"}</td>
-       <td class="num">${r.confidence.toFixed(1)}%</td><td class="num">${price(r.entry_price)}</td><td class="num">${price(r.stop_loss)}</td><td class="num">${price(r.take_profit)}</td>
+       <td class="num">${r.confidence.toFixed(1)}%</td><td class="num">${price(r.entry_price)}</td><td class="num">${price(r.stop_loss)}</td><td class="num">${tps(r)}</td>
        <td class="num ${cls(r.mfe_r)}">${fmtR(r.mfe_r)}</td></tr>`), [3, 4, 5, 6, 7]) : `<p class="dim">Nothing open at the moment.</p>`;
 
     const recent = src.recent.filter((r) => r.status !== "OPEN").slice(0, 40);
-    $("recent").innerHTML = table(["Signal time", "Coin", "Direction", "Confidence", "Entry", "Stop", "Target", "Outcome", "Result"], recent.map((r) => {
+    $("recent").innerHTML = table(["Signal time", "Coin", "Direction", "Confidence", "Entry", "Stop", "Targets", "Outcome", "Result"], recent.map((r) => {
       const st = STATUS[r.status] || [r.status, "dim"];
       return `<tr><td>${when(r.signal_at)}</td><td>${esc(r.symbol)} <span class="faint">${r.timeframe}</span></td>
         <td class="${r.side === "LONG" ? "side-l" : "side-s"}">${r.side === "LONG" ? "Long" : "Short"}</td><td class="num">${r.confidence.toFixed(1)}%</td>
-        <td class="num">${price(r.entry_price)}</td><td class="num">${price(r.stop_loss)}</td><td class="num">${price(r.take_profit)}</td>
+        <td class="num">${price(r.entry_price)}</td><td class="num">${price(r.stop_loss)}</td><td class="num">${tps(r)}</td>
         <td><span class="st ${st[1]}">${st[0]}</span> <span class="faint">after ${r.bars_held} candle${r.bars_held === 1 ? "" : "s"}</span></td>
         <td class="num ${cls(r.r_multiple)}">${fmtR(r.r_multiple)}</td></tr>`;
     }), [3, 4, 5, 6, 8]);
