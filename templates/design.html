@@ -381,7 +381,7 @@
       <span class="tier-num">TIER&nbsp;01</span>
       <span class="tier-label">Core Verdict Engine</span>
     </div>
-    <p class="tier-note">Signal engine v2: a model trained on 2022&ndash;mid 2025 and tested on data it never saw. It reads closed 4-hour candles, the daily trend, Bitcoin and 16-coin market breadth, and only gives LONG or SHORT for its strongest ~3% of setups. This is the only tier that sets the verdict and confidence; the other tiers are display-only.</p>
+    <p class="tier-note">Signal engine v3: a model trained on mid 2020&ndash;Sep 2025 and tested on data it never saw. It reads closed 4-hour candles, the daily trend, Bitcoin and 16-coin market breadth for 21 coins together: its strongest ~3% of setups become strong signals, and if no coin has had a signal for 24 hours the best setup gets a standard one. Every signal has a 2&times; ATR stop and three targets. This is the only tier that sets the verdict and confidence; the other tiers are display-only.</p>
     <div id="tier-1" class="channel-grid"></div>
 
     <div class="tier-divider">
@@ -1243,12 +1243,12 @@
   </div><!-- /.home-info-overlay -->
 
   <footer class="disclaimer">
-    <span id="disclaimer-text">⚠ Not financial advice. The verdict comes from signal engine v2 (4-hour candles); confidence is the historical win probability of similar setups on unseen data, after fees. Other tiers are display-only.</span>
+    <span id="disclaimer-text">⚠ Not financial advice. The verdict comes from signal engine v3 (4-hour candles); confidence is how often similar setups reached target 1 before the stop on unseen data, after fees. Other tiers are display-only.</span>
   </footer>
 
 </div>
 
-<script src="/static/script.js?v=20261008-pro"></script>
+<script src="/static/script.js?v=20261012-pro"></script>
 <script>
 // Standalone controller for the homepage info sidebar (Contact/About/
 // Privacy/Terms/Disclaimer). Fully independent of script.js and the
