@@ -187,11 +187,6 @@
     else if (!d.engine || d.engine.error || d.error) renderError((d.engine && d.engine.error) || d.error || "The signal engine did not answer.");
     else if (d.engine.active) renderActive(d);
     else renderWait(d);
-    const old = document.querySelector("#sig-body .d-untested");
-    if (old) old.remove();
-    if (d.asset === "crypto" && d.tested === false && d.engine && !d.engine.error && !d.error) {
-      $("sig-body").insertAdjacentHTML("beforeend", `<p class="d-note d-untested">${esc(base(sym))} was not one of the 16 coins in the engine's test, so its results may differ from the tested numbers below.</p>`);
-    }
     renderBrief(d.brief);
     renderProof(d.test);
     drawLevels();
@@ -226,83 +221,113 @@
     const close = Math.max(0, Math.min(100, e.strength || 0));
     const lean = e.bias === "LONG" ? "long" : "short";
     const leanPct = e.bias === "LONG" ? e.p_long : e.p_short;
-    setState("WAIT", "Wait", `No strong setup on ${base(S.coin)} right now. Next check at ${clock(e.next_update)}.`, "wait");
     const pill = $("sig-pill");
+    $("sig-prob").hidden = true;
+    if (e.covered === false) {
+      setState("WAIT", "No signals for this coin", `Signals cover the 21 coins the model was tested on. For ${base(S.coin)} you get the chart and the market brief.`, "");
+      pill.hidden = true;
+      $("sig-body").innerHTML = `
+        <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b>${tip("leaning", "leaning")} on ${esc(base(S.coin))}, but it was not trained or tested on this coin, so it never gives a trade here.</p>
+        <div class="d-actions"><a class="d-btn primary" href="#others" id="go-others">See coins with signals</a></div>`;
+      return;
+    }
+    setState("WAIT", "Wait", `No signal on ${base(S.coin)} right now. Next check at ${clock(e.next_update)}.`, "wait");
     pill.hidden = !e.setup_forming;
     pill.className = "d-pill";
     pill.innerHTML = "Setup forming" + tip("setup_forming", "setup forming");
-    $("sig-prob").hidden = true;
     const last = e.last_closed;
-    const lastTxt = last
-      ? `Last signal: ${last.side.toLowerCase()} from ${when(last.signal_at)}, ${last.status === "TP" ? "hit its target" : last.status === "SL" ? "hit its stop" : "closed at the time limit"} (${signed(last.r, 2)}R after fees).`
-      : "";
+    const how = (t) => ({ TP3: "reached all three targets", TP2: "reached TP2, then closed at TP1", TP1: "reached TP1, then closed at the entry",
+                          SL: "hit its stop", EXPIRED: "closed at the time limit" }[t.status] || "closed");
+    const lastTxt = last ? `Last signal: ${last.side.toLowerCase()} from ${when(last.signal_at)}, ${how(last)} (${signed(last.r, 2)}R after fees).` : "";
     $("sig-body").innerHTML = `
-      <div class="d-meter" aria-label="How close the model is to a signal">
+      <div class="d-meter" aria-label="How close the model is to a strong signal">
         <div class="d-meter-bar"><span class="d-meter-fill" style="width:${close}%"></span><span class="d-meter-goal"></span></div>
-        <div class="d-meter-lbl"><span>${Math.round(close)}% of the way to a signal${tip("closeness", "closeness to a signal")}</span><span>signal</span></div>
+        <div class="d-meter-lbl"><span>${Math.round(close)}% of the way to a strong signal${tip("closeness", "closeness to a signal")}</span><span>signal</span></div>
       </div>
-      <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b>${tip("leaning", "leaning")} (${leanPct}% estimated win chance), below the level it needs before it calls a trade.
-        ${e.setup_forming ? "It is close, so keep an eye on the next 4-hour close. This is not a trade yet." : ""}</p>
+      <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b>${tip("leaning", "leaning")} (${leanPct}% estimated chance of reaching target 1).
+        ${e.setup_forming ? "It is close, so keep an eye on the next 4-hour close. This is not a trade yet." : "The engine reads all 21 coins together and rarely goes a day without a signal on one of them."}</p>
       ${lastTxt ? `<p class="d-copy">${esc(lastTxt)}</p>` : ""}
       <div class="d-actions"><a class="d-btn primary" href="#others" id="go-others">See coins with signals</a></div>`;
+  }
+
+  function levelsOf(a) {
+    const tps = a.targets && a.targets.length ? a.targets : [a.take_profit];
+    const hits = a.hits || 0;
+    const stopNow = a.stop_now != null ? a.stop_now : a.stop_loss;
+    return { tps, hits, stopNow, moved: hits > 0 && Math.abs(stopNow - a.stop_loss) > 1e-12 };
   }
 
   function renderActive(d) {
     const e = d.engine, a = e.active, p = e.progress || {};
     const long = a.side === "LONG";
+    const L = levelsOf(a);
     setState(a.side, long ? "Long" : "Short",
-      `Started ${ago(a.signal_at)} at the ${clock(a.signal_at)} close. Ends in ${left(a.expires_at)} if neither level is hit.`, long ? "long" : "short");
+      `Started ${ago(a.signal_at)} at the ${clock(a.signal_at)} close. Closes in ${left(a.expires_at)} at the latest.`, long ? "long" : "short");
     const pill = $("sig-pill");
     pill.hidden = false;
     pill.className = e.fresh ? "d-pill new" : "d-pill";
-    pill.textContent = e.fresh ? "New signal" : "Active signal";
+    pill.innerHTML = (e.fresh ? "New signal" : "Active signal") + ` · ${a.tier === "standard" ? "Standard" : "Strong"}` + tip("tier", "strong and standard signals");
     $("sig-prob").hidden = false;
     $("sig-prob-v").textContent = `${Math.round(a.confidence)}%`;
-    $("sig-prob-l").innerHTML = "win chance" + tip("win_chance", "win chance");
+    $("sig-prob-l").innerHTML = "chance of TP1" + tip("win_chance", "win chance");
 
     const now = p.price != null ? p.price : e.last_close;
-    const hi = Math.max(a.stop_loss, a.take_profit), lo = Math.min(a.stop_loss, a.take_profit);
-    const pad = (hi - lo) * 0.09;
+    const all = L.tps.concat([a.stop_loss, a.entry]);
+    const hi = Math.max(...all), lo = Math.min(...all);
+    const pad = (hi - lo) * 0.07;
     const top = Math.max(hi + pad, now), bot = Math.min(lo - pad, now);
     const y = (v) => ((top - v) / (top - bot)) * 100;
-    const yT = y(a.take_profit), yE = y(a.entry), yS = y(a.stop_loss), yN = y(now);
+    const yE = y(a.entry), yS = y(L.stopNow), yN = y(now), yLast = y(L.tps[L.tps.length - 1]);
     const toward = (now - a.entry) * (long ? 1 : -1) >= 0;
     const pctFrom = (v) => signed(((v / now) - 1) * 100, 2) + "%";
+    const rOf = (k) => (a.targets_r || [0.5, 1, 2])[k];
     let state = "";
-    if (p.state === "target_touched") state = `<b class="c-long">Target touched</b>, confirms at the 4-hour close`;
+    if (p.state === "target_touched") state = `<b class="c-long">TP${p.next} touched</b>, confirms at the 4-hour close`;
     else if (p.state === "stop_touched") state = `<b class="c-short">Stop touched</b>, confirms at the 4-hour close`;
+    const tpRows = L.tps.map((v, k) => {
+      const done = k < L.hits;
+      return `<div class="d-lv${done ? " done" : ""}" style="top:${y(v)}%"><span>TP${k + 1}${done ? " ✓" : ""}</span><b class="tnum c-long">${price(v)}</b><small class="c-dim tnum">${pctFrom(v)} · +${rOf(k)}R</small></div>`;
+    }).join("");
+    const stopLbl = L.moved ? (L.hits === 1 ? "Stop (at entry)" : "Stop (at TP1)") : "Stop";
+    const fr = (a.fractions || [1 / 3]).map((x) => Math.round(x * 100));
+    const plan = L.tps.length > 1 ? `Close ${fr[0]}% at each target. After TP1 the stop moves to the entry, after TP2 to TP1.` : "";
+    const ifStop = L.hits === 0 ? "−1R" : L.hits === 1 ? `+${(rOf(0) * (fr[0] / 100)).toFixed(2)}R` : `+${((rOf(0) + rOf(1) + rOf(0)) / 3).toFixed(2)}R`;
+    const allR = L.tps.reduce((acc, _v, k) => acc + rOf(k) * ((a.fractions || [])[k] || 1 / L.tps.length), 0);
     $("sig-body").innerHTML = `
-      <div class="d-ladder" role="img" aria-label="${esc(`Price ${price(now)}, entry ${price(a.entry)}, target ${price(a.take_profit)}, stop ${price(a.stop_loss)}`)}">
+      <div class="d-ladder d-ladder-3" role="img" aria-label="${esc(`Price ${price(now)}, entry ${price(a.entry)}, targets ${L.tps.map((v) => price(v)).join(", ")}, stop ${price(L.stopNow)}`)}">
         <div style="position:relative">
           <div class="d-lv left now" style="top:${yN}%"><span>Now</span><b class="tnum">${price(now)}</b></div>
         </div>
         <div class="d-track">
-          <span class="d-zone win" style="top:${Math.min(yT, yE)}%;height:${Math.abs(yE - yT)}%"></span>
+          <span class="d-zone win" style="top:${Math.min(yLast, yE)}%;height:${Math.abs(yE - yLast)}%"></span>
           <span class="d-zone loss" style="top:${Math.min(yS, yE)}%;height:${Math.abs(yE - yS)}%"></span>
           <span class="d-fill" style="top:${Math.min(yE, yN)}%;height:${Math.abs(yN - yE)}%;--fill:${toward ? "var(--long)" : "var(--short)"}"></span>
-          <span class="d-tick" style="top:${yT}%"></span><span class="d-tick" style="top:${yE}%"></span><span class="d-tick" style="top:${yS}%"></span>
+          ${L.tps.map((v) => `<span class="d-tick" style="top:${y(v)}%"></span>`).join("")}<span class="d-tick" style="top:${yE}%"></span><span class="d-tick" style="top:${yS}%"></span>
           <span class="d-now" style="top:${yN}%"></span>
         </div>
         <div style="position:relative">
-          <div class="d-lv" style="top:${yT}%"><span>Target</span><b class="tnum c-long">${price(a.take_profit)}</b><small class="c-dim tnum">${pctFrom(a.take_profit)}</small></div>
+          ${tpRows}
           <div class="d-lv" style="top:${yE}%"><span>Entry</span><b class="tnum">${price(a.entry)}</b></div>
-          <div class="d-lv" style="top:${yS}%"><span>Stop</span><b class="tnum c-short">${price(a.stop_loss)}</b><small class="c-dim tnum">${pctFrom(a.stop_loss)}</small></div>
+          <div class="d-lv" style="top:${yS}%"><span>${stopLbl}</span><b class="tnum c-short">${price(L.stopNow)}</b><small class="c-dim tnum">${pctFrom(L.stopNow)}</small></div>
         </div>
       </div>
       ${state ? `<p class="d-copy">${state}</p>` : ""}
       <dl class="d-facts">
         <div><dt>Since entry${tip("entry", "entry")}</dt><dd class="tnum ${p.move_pct >= 0 ? "c-long" : "c-short"}">${p.move_pct == null ? "--" : signed(p.move_pct) + "%"}</dd></div>
-        <div><dt>Progress${tip("progress", "progress")}</dt><dd>${p.pct == null ? "--" : `${Math.abs(p.pct)}% to ${p.pct >= 0 ? "target" : "stop"}`}</dd></div>
-        <div><dt>If the target is hit${tip("target", "target")}</dt><dd class="c-long">+0.5R</dd></div>
-        <div><dt>If the stop is hit${tip("stop_loss", "stop loss")}</dt><dd class="c-short">−1R</dd></div>
+        <div><dt>Progress${tip("progress", "progress")}</dt><dd>${p.pct == null ? "--" : `${Math.abs(p.pct)}% to ${p.pct >= 0 ? "TP" + p.next : "stop"}`}</dd></div>
+        <div><dt>Targets reached${tip("targets", "targets reached")}</dt><dd class="${L.hits ? "c-long" : ""}">${L.hits} of ${L.tps.length}</dd></div>
+        <div><dt>If the stop is hit now${tip("stop_loss", "stop loss")}</dt><dd class="${L.hits ? "c-long" : "c-short"}">${ifStop}</dd></div>
+        <div><dt>If every target is hit${tip("target", "targets")}</dt><dd class="c-long">+${allR.toFixed(2)}R</dd></div>
+        <div><dt>Stop distance</dt><dd class="tnum">${e.sl_pct != null ? e.sl_pct.toFixed(2) + "%" : "--"}</dd></div>
       </dl>
-      <p class="d-copy">1R${tip("r", "R")} is what you risk. Keep it small, for example 1% of your account per signal.</p>
+      <p class="d-copy">${plan} 1R${tip("r", "R")} is what you risk. Keep it small, for example 1% of your account per signal.</p>
       <div class="d-actions">
         <button class="d-btn" type="button" id="copy-levels">Copy levels</button>
         <a class="d-btn primary" href="/demo-trading">Practice in demo</a>
       </div>`;
     $("copy-levels").addEventListener("click", () => {
-      const txt = `${S.coin} ${a.side} (Signals FM, 4h)\nEntry ${price(a.entry)}\nStop ${price(a.stop_loss)}\nTarget ${price(a.take_profit)}`;
+      const txt = `${S.coin} ${a.side} (Signals FM, 4h)\nEntry ${price(a.entry)}\nStop ${price(a.stop_loss)}\n` +
+        L.tps.map((v, k) => `TP${k + 1} ${price(v)}`).join("\n") + (plan ? `\n${plan}` : "");
       (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast("Levels copied")).catch(() => toast("Copy is not available in this browser"));
     });
   }
@@ -330,10 +355,11 @@
     $("proof").hidden = false;
     const mon = (x) => { const d = new Date(x + "T00:00:00Z"); return isNaN(d) ? x : d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }); };
     const per = (t.period || "").split(" to ");
-    const span = per.length === 2 ? `${mon(per[0])} to ${mon(per[1])}` : "Jul 2025 onward";
-    $("proof-text").textContent = `The model was trained on Jan 2022 to Jun 2025, then tested once on ${span}, data it had never seen: one signal at a time per coin, ${t.coins} coins, fees included.`;
+    const span = per.length === 2 ? `${mon(per[0])} to ${mon(per[1])}` : "Oct 2025 onward";
+    $("proof-text").textContent = `The model was trained on Jul 2020 to Sep 2025, then tested once on ${span}, data it had never seen: ${t.coins} coins, one signal at a time per coin, fees included. About ${t.signals_per_day} signals a day; the longest wait for a new one was ${t.max_gap_days} days.`;
     $("proof-stats").innerHTML = `
       <div><b class="tnum">${t.win_rate}%</b><span>signals won${tip("win_rate", "win rate")}</span></div>
+      <div><b class="tnum">${t.tp1_rate}%</b><span>reached TP1${tip("targets", "targets reached")}</span></div>
       <div><b class="tnum">${signed(t.avg_net_r, 3)}R</b><span>average per signal${tip("avg_r", "average result")}</span></div>
       <div><b class="tnum">${t.signals}</b><span>signals tested${tip("backtest", "tested signals")}</span></div>`;
   }
@@ -409,9 +435,10 @@
     const a = S.eng && S.eng.engine && S.eng.engine.active;
     if (!a || S.eng.coin !== S.coin) return;
     const add = (p, color, title) => S.lines.push(S.series.createPriceLine({ price: p, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title }));
-    add(a.take_profit, css("--long"), "Target");
+    const L = levelsOf(a);
+    L.tps.forEach((v, k) => add(v, css("--long"), `TP${k + 1}${k < L.hits ? " ✓" : ""}`));
     add(a.entry, css("--dim"), "Entry");
-    add(a.stop_loss, css("--short"), "Stop");
+    add(L.stopNow, css("--short"), L.moved ? "Stop (moved)" : "Stop");
   }
   document.querySelectorAll(".d-tf button").forEach((b) => b.addEventListener("click", () => {
     S.tf = b.dataset.tf;
@@ -436,7 +463,7 @@
     return `<button type="button" class="d-mini" data-sym="${esc(r.symbol)}" aria-current="${r.symbol === S.coin}">
       <span class="d-mini-top"><b>${esc(base(r.symbol))}</b><span class="d-pill ${r.fresh ? "new" : ""}" style="${r.fresh ? "" : `background:var(--${a.side === "LONG" ? "long" : "short"}-bg);color:var(--${a.side === "LONG" ? "long" : "short"})`}">${r.fresh ? "New " + side.toLowerCase() : side}</span></span>
       <span class="d-mini-bar">${bar}</span>
-      <small>${p.move_pct == null ? "started " + ago(a.signal_at) : `${signed(p.move_pct)}% since entry, ${Math.abs(p.pct)}% to ${p.pct >= 0 ? "target" : "stop"}`}</small>
+      <small>${p.move_pct == null ? "started " + ago(a.signal_at) : `${signed(p.move_pct)}% since entry, ${Math.abs(p.pct)}% to ${p.pct >= 0 ? "TP" + (p.next || 1) : "stop"}${a.hits ? ` · TP${a.hits} ✓` : ""}`}</small>
     </button>`;
   }
   function renderOthers() {
@@ -452,7 +479,7 @@
     if (w) $("others-warn").textContent = `${w.count} of ${w.total} active signals are ${w.side.toLowerCase()}. Coins tend to move together, so these can win or lose at the same time. Don't put full risk on all of them.`;
     let html = act.map(mini).join("");
     if (!act.length) {
-      html = `<p class="d-empty">No active signals right now. The engine checks every coin at each 4-hour close and only calls strong setups.${forming.length ? " Closest to a signal:" : ""}</p>`;
+      html = `<p class="d-empty">No active signals right now. The engine checks all 21 coins at each 4-hour close; if none has had a signal for 24 hours, the best setup gets one.${forming.length ? " Closest to a strong signal:" : ""}</p>`;
     }
     if (forming.length) {
       html += forming.slice(0, 4).map((r) => `<button type="button" class="d-mini" data-sym="${esc(r.symbol)}" aria-current="${r.symbol === S.coin}">
