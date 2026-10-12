@@ -3,8 +3,9 @@ Signals board + signal alerts - Signals FM
 ==========================================
 
 * Background refresher: right after every 4-hour candle close it reads
-  signal engine v2 for every crypto coin and keeps the result in memory
-  (the board page then loads instantly).
+  signal engine v3 for every crypto coin and keeps the result in memory
+  (the board page then loads instantly). Trades are given for the 21 coins
+  the model was tested on; other coins show the lean only.
 * Every NEW signal (a trade that started on the candle that just closed) is
   stored once in `signal_events` (UNIQUE symbol + candle, so several app
   instances never notify twice) and sent to subscribed users as an in-app
@@ -159,9 +160,16 @@ def record_event(sym, res):
             )
     except Exception:
         return None  # already recorded (another instance, or a restart)
-    return {"symbol": sym, "side": a["side"], "bar_time": bar_time, "entry": float(a["entry"]),
-            "stop_loss": float(a["stop_loss"]), "take_profit": float(a["take_profit"]), "confidence": a.get("confidence"),
-            "expires_at": a.get("expires_at")}
+    entry, stop = float(a["entry"]), float(a["stop_loss"])
+    return {"symbol": sym, "side": a["side"], "bar_time": bar_time, "entry": entry,
+            "stop_loss": stop, "take_profit": float(a["take_profit"]), "confidence": a.get("confidence"),
+            "targets": [float(x) for x in (a.get("targets") or se.targets(a["side"], entry, stop))],
+            "tier": a.get("tier") or "strong", "expires_at": a.get("expires_at")}
+
+
+def _targets_txt(e):
+    tps = e.get("targets") or se.targets(e["side"], float(e["entry"]), float(e["stop_loss"]))
+    return " · ".join(f"TP{k + 1} {_fmt(v)}" for k, v in enumerate(tps))
 
 
 def _fmt(x):
@@ -200,10 +208,11 @@ def notify(events):
                 continue
             per_user[sub["user_id"]] = mine
             for e in mine:
-                title = f"New {e['side']} signal: {e['symbol']}"
-                msg = f"Entry {_fmt(e['entry'])} · stop {_fmt(e['stop_loss'])} · target {_fmt(e['take_profit'])}"
+                kind = "standard " if e.get("tier") == "standard" else ""
+                title = f"New {kind}{e['side']} signal: {e['symbol']}"
+                msg = f"Entry {_fmt(e['entry'])} · stop {_fmt(e['stop_loss'])} · {_targets_txt(e)}"
                 if e.get("confidence") is not None:
-                    msg += f" · win probability {float(e['confidence']):.0f}%"
+                    msg += f" · chance of TP1 {float(e['confidence']):.0f}%"
                 cur.execute(
                     "INSERT INTO notifications (user_id, category, symbol, title, message) VALUES (%s,%s,%s,%s,%s)",
                     (sub["user_id"], "SIGNAL", e["symbol"], title, msg),
@@ -241,12 +250,16 @@ def _unsub_user(token):
 
 def _email_html(events, user_id=None):
     base = (os.environ.get("SITE_URL") or "").rstrip("/")
+    def tps(e):
+        return e.get("targets") or se.targets(e["side"], float(e["entry"]), float(e["stop_loss"]))
+    std = ' <span style="color:#6f8279;font-size:12px">standard</span>'
     rows = "".join(
-        f"<tr><td style='padding:6px 10px'><b>{e['symbol']}</b></td>"
+        f"<tr><td style='padding:6px 10px'><b>{e['symbol']}</b>"
+        f"{std if e.get('tier') == 'standard' else ''}</td>"
         f"<td style='padding:6px 10px;color:{'#0f8a50' if e['side'] == 'LONG' else '#d92d47'}'><b>{e['side']}</b></td>"
         f"<td style='padding:6px 10px'>{_fmt(e['entry'])}</td><td style='padding:6px 10px'>{_fmt(e['stop_loss'])}</td>"
-        f"<td style='padding:6px 10px'>{_fmt(e['take_profit'])}</td>"
-        f"<td style='padding:6px 10px'>{(e.get('confidence') or 0):.0f}%</td></tr>"
+        + "".join(f"<td style='padding:6px 10px'>{_fmt(v)}</td>" for v in tps(e))
+        + f"<td style='padding:6px 10px'>{(e.get('confidence') or 0):.0f}%</td></tr>"
         for e in events)
     link = f"{base}/signals" if base else "/signals"
     if user_id is not None:
@@ -257,11 +270,13 @@ def _email_html(events, user_id=None):
     return f"""
     <div style="font-family:Segoe UI,Arial,sans-serif;color:#0d1c15;max-width:620px">
       <h2 style="margin:0 0 6px">New signal{'s' if len(events) > 1 else ''} from Signals FM</h2>
-      <p style="color:#4c5f56;margin:0 0 14px">Signal engine v2, 4-hour candles. Time limit 8 days.</p>
+      <p style="color:#4c5f56;margin:0 0 14px">Signal engine v3, 4-hour candles. Close a third at each target; after TP1 move
+      the stop to the entry, after TP2 to TP1. Time limit 9 days.</p>
       <table style="border-collapse:collapse;font-size:14px;border:1px solid #dbe6e0">
         <tr style="background:#eef4f1;text-align:left"><th style="padding:6px 10px">Coin</th><th style="padding:6px 10px">Side</th>
-        <th style="padding:6px 10px">Entry</th><th style="padding:6px 10px">Stop</th><th style="padding:6px 10px">Target</th>
-        <th style="padding:6px 10px">Win prob.</th></tr>{rows}
+        <th style="padding:6px 10px">Entry</th><th style="padding:6px 10px">Stop</th><th style="padding:6px 10px">TP1</th>
+        <th style="padding:6px 10px">TP2</th><th style="padding:6px 10px">TP3</th>
+        <th style="padding:6px 10px">Chance of TP1</th></tr>{rows}
       </table>
       <p style="margin:16px 0"><a href="{link}" style="background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open the signals board</a></p>
       <p style="color:#6f8279;font-size:12px;line-height:1.6">Not financial advice. Signals can and do lose; past results do not guarantee future results.
@@ -386,6 +401,7 @@ def board_rows():
             "strength": r.get("strength"), "last_closed": r.get("last_closed"), "next_update": r.get("next_update"),
             "limited_history": (r.get("history_bars") or 0) < 300,
             "setup_forming": bool(r.get("setup_forming")),
+            "covered": r.get("covered", True) is not False, "tier": r.get("tier"),
         }
         if a:
             live = prices.get(sym)
@@ -398,8 +414,8 @@ def board_rows():
         if it["state"] == "ACTIVE":
             return (0 if it["fresh"] else 1, -(_parse(it["active"].get("signal_at")) or datetime.min).timestamp())
         if it["state"] == "WAIT":
-            return (2, -(it.get("strength") or 0))
-        return (3, 0)
+            return (2 if it.get("covered", True) else 3, -(it.get("strength") or 0))
+        return (4, 0)
 
     out.sort(key=key)
     return out, bar, updated
@@ -482,6 +498,7 @@ def api_events():
         rows = cur.fetchall() or []
     out = [{"symbol": r["symbol"], "side": r["side"], "entry": r["entry"], "stop_loss": r["stop_loss"],
             "take_profit": r["take_profit"], "confidence": r["confidence"],
+            "targets": se.targets(r["side"], float(r["entry"]), float(r["stop_loss"])),
             "signal_at": _iso(_parse(r["bar_time"]) + timedelta(seconds=se.TF_SEC))} for r in rows]
     return jsonify({"ok": True, "events": out})
 
