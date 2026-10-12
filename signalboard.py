@@ -4,8 +4,8 @@ Signals board + signal alerts - Signals FM
 
 * Background refresher: right after every 4-hour candle close it reads
   signal engine v3 for every crypto coin and keeps the result in memory
-  (the board page then loads instantly). Trades are given for the 21 coins
-  the model was tested on; other coins show the lean only.
+  (the board page then loads instantly). Trades are given for every crypto coin
+  in the engine's signal list (signal_model.json); other symbols show the lean only.
 * Every NEW signal (a trade that started on the candle that just closed) is
   stored once in `signal_events` (UNIQUE symbol + candle, so several app
   instances never notify twice) and sent to subscribed users as an in-app
