@@ -1,5 +1,5 @@
 """
-Signals FM - signal engine v2.
+Signals FM - signal engine v3.
 
 What it does
   * Works on CLOSED 4-hour candles (a signal never changes while a candle is
@@ -8,17 +8,24 @@ What it does
     volatility, volume, the daily trend, Bitcoin's trend, and the state of
     the whole market (16 large coins: breadth, average momentum, and how
     strong this coin is relative to the others).
-  * A gradient-boosted model (trained on Jan 2022 - Jun 2025, exported to
-    signal_model.json) estimates, for LONG and for SHORT, the probability
-    that the target is reached before the stop. A calibration curve turns
-    that into an honest win probability.
-  * A signal is shown only when the model is in its top ~3% of conviction;
-    everything else is WAIT.
-  * Levels: stop = 3 x ATR(14), target = 1.5 x ATR(14), time limit 48
-    candles (8 days). Fees are counted as 0.12% round trip.
+  * A gradient-boosted model (trained on Jul 2020 - Sep 2025, 21 coins,
+    exported to signal_model.json) estimates, for LONG and for SHORT, the
+    probability that target 1 is reached before the stop. A calibration
+    curve turns that into an honest win probability.
+  * Which candles become signals (all 21 coins are read together):
+      - "strong": the model's score is in its top 3%;
+      - "standard": if no coin has had a signal for 24 hours, the best free
+        coin gets one when its score is at least the model's median.
+    One trade at a time per coin; everything else is WAIT.
+  * Trade plan: stop = 2 x ATR(14) from entry (1R). Three targets:
+    TP1 = 0.5R, TP2 = 1R (as far as the stop), TP3 = 2R. A third of the
+    position closes at each target; after TP1 the stop moves to the entry,
+    after TP2 to TP1. Time limit 54 candles (9 days). Fees are counted as
+    0.12% round trip.
 
-Measured on data the model never saw (Jul 2025 - Oct 2026, 16 coins, one
-trade at a time per coin): see MODEL["test"] / signal_model.json.
+Measured on data the model never saw (Oct 2025 - Oct 2026, 21 coins) and in
+a walk-forward test (Jan 2023 - Oct 2026): see MODEL["test"] and
+MODEL["walk_forward"] / signal_model.json.
 
 This module is pure numpy/pandas (no sklearn at runtime). main.py, the
 auto-trade bot and the track record all call it, so every surface shows the
@@ -36,37 +43,50 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-ENGINE_VERSION = "2.0"
+ENGINE_VERSION = "3.0"
 TIMEFRAME = "4h"
 TF_SEC = 4 * 3600
 HISTORY_BARS = 600            # 4h candles fetched per coin (100 days; features need ~230)
+REPLAY_BARS = 300             # candles replayed to find each coin's running trade (~50 days)
+WARMUP_BARS = 240             # first candles of a series are only used to warm up the features
 UNIVERSE = ["ADA/USDT", "ATOM/USDT", "AVAX/USDT", "BCH/USDT", "BNB/USDT", "BTC/USDT", "DOGE/USDT", "DOT/USDT",
             "ETH/USDT", "LINK/USDT", "LTC/USDT", "NEAR/USDT", "SOL/USDT", "TRX/USDT", "XLM/USDT", "XRP/USDT"]
 COST_ROUND_TRIP = 0.0012      # 0.05% taker in + 0.05% out + 0.02% slippage
 EPS = 1e-12
-RECENT_KEYS = ("side", "entry", "stop_loss", "take_profit", "confidence", "signal_at", "closed_at", "status", "exit_price", "r")
+RECENT_KEYS = ("side", "entry", "stop_loss", "take_profit", "targets", "confidence", "tier", "signal_at", "closed_at",
+               "status", "exit_price", "r", "hits")
 RECENT_MAX = 30               # closed signals kept in a result's "recent" list (chart markers)
+CLOSED_STATUSES = ("SL", "TP1", "TP2", "TP3", "EXPIRED")
 _MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "signal_model.json")
 
 
 # ===========================================================================
-# model (exported gradient-boosted trees + calibration)
+# model (exported gradient-boosted trees + calibration + trade plan)
 # ===========================================================================
 class _Model:
     def __init__(self, path=_MODEL_PATH):
         with open(path, encoding="utf-8") as f:
             m = json.load(f)
         self.meta = m
+        self.version = str(m.get("version", ENGINE_VERSION))
         self.features = m["features"]
         self.baseline = float(m["baseline"])
         self.trees = [{k: np.asarray(v) for k, v in t.items()} for t in m["trees"]]
         self.cal_x = np.asarray(m["calibration"]["x"], dtype=float)
         self.cal_y = np.asarray(m["calibration"]["y"], dtype=float)
-        self.threshold = float(m["threshold"])
+        self.threshold = float(m["threshold"])                          # "strong" signal level
         self.watch_threshold = float(m.get("watch_threshold", m["threshold"]))
-        self.sl_atr = float(m["levels"]["sl_atr"])
-        self.tp_atr = float(m["levels"]["tp_atr"])
-        self.max_bars = int(m["levels"]["max_bars"])
+        self.floor = float(m.get("floor", m["threshold"]))              # "standard" signal level
+        self.gap_hours = float(m.get("gap_hours", 0) or 0)               # 0 = no standard signals
+        lv = m["levels"]
+        self.sl_atr = float(lv["sl_atr"])
+        self.targets_r = [float(x) for x in (lv.get("targets_r") or [float(lv["tp_atr"]) / float(lv["sl_atr"])])]
+        fr = lv.get("fractions") or [1.0 / len(self.targets_r)] * len(self.targets_r)
+        self.fractions = [float(x) for x in fr]
+        self.be_after = int(lv.get("be_after", 0) or 0)                 # 0 = the stop never moves
+        self.max_bars = int(lv["max_bars"])
+        self.tp_atr = self.sl_atr * self.targets_r[-1]                  # final target distance, in ATR
+        self.signal_coins = list(m.get("signal_coins") or UNIVERSE)
 
     def raw_proba(self, X):
         """X: 2-D float array (rows x features, model order). NaN = missing."""
@@ -100,6 +120,11 @@ def model():
             if _model is None:
                 _model = _Model()
     return _model
+
+
+def signal_coins():
+    """Coins that get trade signals (the coins the model was trained and tested on)."""
+    return model().signal_coins
 
 
 # ===========================================================================
@@ -338,8 +363,30 @@ def score(X):
     return pl, ps, m.calibrate(pl), m.calibrate(ps)
 
 
+def score_many(Xs):
+    """score() for several coins in one pass: {sym: X} -> {sym: (pl, ps, cl, cs)}."""
+    m = model()
+    keys = [k for k, X in Xs.items() if X is not None and len(X)]
+    if not keys:
+        return {}
+    blocks = [Xs[k].to_numpy(dtype=float) for k in keys] + [flip_for_short(Xs[k]).to_numpy(dtype=float) for k in keys]
+    p = m.raw_proba(np.vstack(blocks))
+    out, pos, n = {}, 0, len(keys)
+    sizes = [len(Xs[k]) for k in keys]
+    longs = []
+    for sz in sizes:
+        longs.append(p[pos:pos + sz])
+        pos += sz
+    for k, sz, pl in zip(keys, sizes, longs):
+        ps = p[pos:pos + sz]
+        pos += sz
+        out[k] = (pl, ps, m.calibrate(pl), m.calibrate(ps))
+    return out
+
+
 def decide(pl, ps):
-    """-> ('LONG'|'SHORT'|'WAIT', raw prob of the better side)."""
+    """-> ('LONG'|'SHORT'|'WAIT', raw prob of the better side). Strong level only
+    (the 24-hour 'standard' rule needs every coin, see replay_all)."""
     thr = model().threshold
     best = max(pl, ps)
     if not np.isfinite(best) or best < thr:
@@ -348,13 +395,21 @@ def decide(pl, ps):
 
 
 def levels(side, entry, atr):
+    """(stop, final target) for a signal at `entry`."""
     m = model()
     d = m.sl_atr * atr
     if side == "LONG":
-        return entry - d, entry + m.tp_atr * atr
+        return entry - d, entry + m.targets_r[-1] * d
     if side == "SHORT":
-        return entry + d, entry - m.tp_atr * atr
+        return entry + d, entry - m.targets_r[-1] * d
     return None, None
+
+
+def targets(side, entry, stop):
+    """Target prices (TP1, TP2, TP3) from entry and stop."""
+    risk = abs(entry - stop)
+    sgn = 1 if side == "LONG" else -1
+    return [entry + sgn * k * risk for k in model().targets_r]
 
 
 def cost_r(entry, stop):
@@ -374,72 +429,146 @@ def price_round(x):
 # ===========================================================================
 # following a trade (same rules as the track record) + replay
 # ===========================================================================
-def follow(side, entry, sl, tp, o, h, l, c, start, max_bars=None):
-    """Walks candles start.. (arrays, closed candles only). Same pessimistic
-    rules as trackrecord.evaluate(): gap past the stop -> exit at the open,
-    stop and target in one candle -> stop, time limit -> close.
-    Returns (status or None if still open, exit_price, bars_held)."""
-    max_bars = max_bars or model().max_bars
+def follow(side, entry, sl, o, h, l, c, start, max_bars=None):
+    """Walks candles start.. (arrays, closed candles only) with the trade plan.
+
+    Pessimistic like the track record: a candle that opens beyond the stop
+    exits at that open; a stop touched in a candle is taken before any
+    target in that candle; stop moves (to entry after TP1, to TP1 after TP2)
+    apply from the next candle; after `max_bars` the rest closes at the close.
+
+    Returns dict(status, exit_price, bars, hits, r_gross, stop_now) where
+    status is None while the trade is still running, else one of
+    SL (stopped before TP1), TP1 / TP2 (stopped after that target), TP3
+    (every target reached) or EXPIRED (time limit)."""
+    m = model()
+    max_bars = max_bars or m.max_bars
+    tr, fr = m.targets_r, m.fractions
+    risk = abs(entry - sl)
+    sgn = 1 if side == "LONG" else -1
     n = len(c)
+    stop_r, done, realized, hits = -1.0, 0.0, 0.0, 0
+
+    def out(status, px, k):
+        return {"status": status, "exit_price": float(px) if px is not None else None, "bars": k, "hits": hits,
+                "r_gross": realized, "stop_now": entry + sgn * stop_r * risk}
+
+    if risk <= 0:
+        return out("EXPIRED", entry, 0)
     for k in range(max_bars):
         j = start + k
         if j >= n:
-            return None, None, k
-        if side == "LONG":
-            if o[j] <= sl:
-                return "SL", float(o[j]), k + 1
-            if l[j] <= sl:
-                return "SL", float(sl), k + 1
-            if h[j] >= tp:
-                return "TP", float(tp), k + 1
-        else:
-            if o[j] >= sl:
-                return "SL", float(o[j]), k + 1
-            if h[j] >= sl:
-                return "SL", float(sl), k + 1
-            if l[j] <= tp:
-                return "TP", float(tp), k + 1
+            return out(None, None, k)
+        ro = sgn * (o[j] - entry) / risk
+        rh = sgn * ((h[j] if sgn > 0 else l[j]) - entry) / risk
+        rl = sgn * ((l[j] if sgn > 0 else h[j]) - entry) / risk
+        if ro <= stop_r:                                   # gapped through the stop
+            realized += (1 - done) * ro
+            return out("SL" if hits == 0 else f"TP{hits}", o[j], k + 1)
+        if rl <= stop_r:                                   # stop touched (taken first)
+            realized += (1 - done) * stop_r
+            return out("SL" if hits == 0 else f"TP{hits}", entry + sgn * stop_r * risk, k + 1)
+        new_stop = stop_r
+        while hits < len(tr) and rh >= tr[hits]:
+            realized += fr[hits] * tr[hits]
+            done += fr[hits]
+            hits += 1
+            if m.be_after and hits == m.be_after:
+                new_stop = max(new_stop, 0.0)
+            elif m.be_after and hits > m.be_after:
+                new_stop = max(new_stop, tr[hits - 2])
+        if hits == len(tr) or done >= 1 - 1e-9:
+            return out(f"TP{hits}", entry + sgn * tr[hits - 1] * risk, k + 1)
+        stop_r = new_stop
         if k + 1 == max_bars:
-            return "EXPIRED", float(c[j]), k + 1
-    return None, None, max_bars
+            realized += (1 - done) * sgn * (c[j] - entry) / risk
+            return out("EXPIRED", c[j], k + 1)
+    return out(None, None, max_bars)
 
 
-def replay(F, pl, ps, cl, cs, lookback=300, trades=None):
-    """One trade at a time per coin, replayed over the last `lookback`
-    candles. Returns (active trade or None, last closed trade or None).
-    `trades`: optional list that receives every closed trade, oldest first
-    (the Live chart shows them as markers)."""
-    o, h, l, c = (F[k].to_numpy(float) for k in ("open", "high", "low", "close"))
-    atr = F["atr"].to_numpy(float)
-    ts = pd.to_datetime(F["timestamp"]).to_list()
-    n = len(F)
-    i = max(240, n - lookback)
-    active = last = None
-    while i < n:
-        side, _ = decide(pl[i], ps[i])
-        if side == "WAIT" or not np.isfinite(atr[i]):
-            i += 1
+def _trade(side, i, c, atr, cl, cs, ts, tier):
+    m = model()
+    entry = float(c[i])
+    sl = entry - m.sl_atr * atr[i] if side == "LONG" else entry + m.sl_atr * atr[i]
+    tps = targets(side, entry, sl)
+    bar_time = pd.Timestamp(ts[i]).to_pydatetime()
+    return {
+        "side": side, "entry": entry, "stop_loss": float(sl), "take_profit": float(tps[-1]),
+        "targets": [float(x) for x in tps], "targets_r": list(m.targets_r), "fractions": list(m.fractions),
+        "atr": float(atr[i]), "confidence": round(float(cl[i] if side == "LONG" else cs[i]) * 100, 1), "tier": tier,
+        "bar_time": bar_time, "signal_at": bar_time + timedelta(seconds=TF_SEC),
+    }
+
+
+def replay_all(S, lookback=REPLAY_BARS, start_time=None, closed=None):
+    """Replays every coin together with the signal rules (strong + 24-hour
+    standard signal, one trade at a time per coin).
+
+    S: {symbol: dict(F=coin_features, pl, ps, cl, cs)} - closed 4h candles.
+    Starts `lookback` candles before each coin's last candle, or at
+    `start_time` if given. Returns ({symbol: active trade}, {symbol: last
+    closed trade}); `closed` (optional dict) receives every closed trade per
+    symbol, oldest first."""
+    m = model()
+    gap = np.timedelta64(int(m.gap_hours * 3600), "s") if m.gap_hours > 0 else None
+    data = {}
+    for sym, d in S.items():
+        F = d["F"]
+        ts = pd.to_datetime(F["timestamp"]).to_numpy()
+        n = len(ts)
+        if start_time is not None:
+            i0 = max(WARMUP_BARS, int(np.searchsorted(ts, np.datetime64(pd.Timestamp(start_time)))))
+        else:
+            i0 = max(WARMUP_BARS, n - lookback)
+        if i0 >= n:
             continue
-        sl, tp = levels(side, c[i], atr[i])
-        status, exit_px, held = follow(side, c[i], sl, tp, o, h, l, c, i + 1)
-        trade = {
-            "side": side, "entry": float(c[i]), "stop_loss": float(sl), "take_profit": float(tp),
-            "atr": float(atr[i]), "confidence": round(float(cl[i] if side == "LONG" else cs[i]) * 100, 1),
-            "bar_time": ts[i].to_pydatetime(), "signal_at": ts[i].to_pydatetime() + timedelta(seconds=TF_SEC),
-            "bars_held": int(held),
-        }
-        if status is None:
-            trade["expires_at"] = trade["signal_at"] + timedelta(seconds=TF_SEC * model().max_bars)
-            active = trade
-            break
-        risk = abs(trade["entry"] - sl)
-        r = ((exit_px - trade["entry"]) if side == "LONG" else (trade["entry"] - exit_px)) / risk
-        trade.update({"status": status, "exit_price": exit_px, "r": round(r - cost_r(trade["entry"], sl), 3),
-                      "closed_at": ts[min(i + held, n - 1)].to_pydatetime() + timedelta(seconds=TF_SEC)})
-        last = trade
-        if trades is not None:
-            trades.append(trade)
-        i += held
+        data[sym] = {"ts": ts, "i0": i0, "pos": {t: i for i, t in enumerate(ts[i0:], start=i0)},
+                     "o": F["open"].to_numpy(float), "h": F["high"].to_numpy(float), "l": F["low"].to_numpy(float),
+                     "c": F["close"].to_numpy(float), "atr": F["atr"].to_numpy(float),
+                     "pl": np.asarray(d["pl"], float), "ps": np.asarray(d["ps"], float),
+                     "cl": np.asarray(d["cl"], float), "cs": np.asarray(d["cs"], float)}
+    times = sorted({t for d in data.values() for t in d["ts"][d["i0"]:]})
+    busy = {s: -1 for s in data}
+    active, last = {}, {}
+    last_signal = None
+    for t in times:
+        cands = []
+        for sym, d in data.items():
+            i = d["pos"].get(t)
+            if i is None or i <= busy[sym]:
+                continue
+            a, b = d["pl"][i], d["ps"][i]
+            if not (np.isfinite(a) and np.isfinite(b) and np.isfinite(d["atr"][i]) and d["atr"][i] > 0):
+                continue
+            cands.append((max(a, b), sym, i, "LONG" if a >= b else "SHORT"))
+        if not cands:
+            continue
+        cands.sort(key=lambda x: (-x[0], x[1]))
+        picks = [(x, "strong") for x in cands if x[0] >= m.threshold]
+        if not picks and gap is not None and (last_signal is None or t - last_signal >= gap) and cands[0][0] >= m.floor:
+            picks = [(cands[0], "standard")]
+        for (p, sym, i, side), tier in picks:
+            d = data[sym]
+            tr = _trade(side, i, d["c"], d["atr"], d["cl"], d["cs"], d["ts"], tier)
+            res = follow(side, tr["entry"], tr["stop_loss"], d["o"], d["h"], d["l"], d["c"], i + 1)
+            tr["bars_held"] = int(res["bars"])
+            tr["hits"] = int(res["hits"])
+            last_signal = t
+            if res["status"] is None:
+                tr["stop_now"] = float(res["stop_now"])
+                tr["realized_r"] = round(float(res["r_gross"]), 4)
+                tr["expires_at"] = tr["signal_at"] + timedelta(seconds=TF_SEC * m.max_bars)
+                active[sym] = tr
+                busy[sym] = 10 ** 12
+                continue
+            r = float(res["r_gross"]) - cost_r(tr["entry"], tr["stop_loss"])
+            j = min(i + res["bars"], len(d["ts"]) - 1)
+            tr.update({"status": res["status"], "exit_price": res["exit_price"], "r": round(r, 3),
+                       "closed_at": pd.Timestamp(d["ts"][j]).to_pydatetime() + timedelta(seconds=TF_SEC)})
+            last[sym] = tr
+            if closed is not None:
+                closed.setdefault(sym, []).append(tr)
+            busy[sym] = i + res["bars"]
     return active, last
 
 
@@ -468,7 +597,8 @@ class LiveEngine:
         self._lock = threading.Lock()
         self._frames = {}     # symbol -> (bar_time, frame)
         self._market = None   # (bar_time, mkt, btc)
-        self._signals = {}    # symbol -> (bar_time, result)
+        self._board = None    # (bar_time, {symbol: result}) for the signal coins
+        self._signals = {}    # symbol -> (bar_time, result) for coins without signals
 
     def fetch(self, symbol, bars=HISTORY_BARS, now=None):
         now = now or _utcnow()
@@ -526,7 +656,44 @@ class LiveEngine:
         self._market = (bar, mkt, btc)
         return mkt, btc
 
+    def board(self, now=None):
+        """{symbol: result} for every signal coin at the last closed candle
+        (the signal rules look at all of them together)."""
+        bar = last_closed_bar(now)
+        hit = self._board
+        if hit and hit[0] == bar:
+            return hit[1]
+        with self._lock:
+            hit = self._board
+            if hit and hit[0] == bar:
+                return hit[1]
+            mkt, btc = self.market(bar, now)
+            feats, Xs = {}, {}
+            for sym in signal_coins():
+                try:
+                    F = self.frame(sym, bar, now)
+                except Exception:
+                    continue
+                if len(F) <= WARMUP_BARS:
+                    continue
+                feats[sym] = F
+                Xs[sym] = assemble(F, btc, mkt, sym=sym)
+            scores = score_many(Xs)
+            S = {sym: {"F": feats[sym], "pl": scores[sym][0], "ps": scores[sym][1], "cl": scores[sym][2],
+                       "cs": scores[sym][3]} for sym in scores}
+            closed = {}
+            active, last = replay_all(S, closed=closed)
+            out = {sym: _result(S[sym], active.get(sym), last.get(sym), closed.get(sym, []), covered=True)
+                   for sym in S}
+            self._board = (bar, out)
+            return out
+
     def signal(self, symbol, now=None):
+        if symbol in signal_coins():
+            res = self.board(now).get(symbol)
+            if res is None:
+                raise ValueError(f"Not enough 4h history for {symbol}.")
+            return res
         bar = last_closed_bar(now)
         hit = self._signals.get(symbol)
         if hit and hit[0] == bar:
@@ -537,68 +704,99 @@ class LiveEngine:
                 return hit[1]
             mkt, btc = self.market(bar, now)
             F = self.frame(symbol, bar, now)
-            X = assemble(F, btc, mkt, sym=symbol)
-            pl, ps, cl, cs = score(X)
-            closed = []
-            active, last = replay(F, pl, ps, cl, cs, trades=closed)
-            m = model()
-            row = F.iloc[-1]
-            bar_time = pd.Timestamp(row["timestamp"]).to_pydatetime()
-            p_long, p_short = float(cl[-1]), float(cs[-1])
-            best_raw = float(max(pl[-1], ps[-1]))
-            res = {
-                "engine_version": ENGINE_VERSION,
-                "timeframe": TIMEFRAME,
-                # verdict = the trade the engine is in right now (one at a time per coin), else WAIT
-                "verdict": active["side"] if active else "WAIT",
-                "fresh": bool(active and active["bar_time"] == bar_time),
-                "confidence": active["confidence"] if active else round(max(p_long, p_short) * 100, 1),
-                "p_long": round(p_long * 100, 1),
-                "p_short": round(p_short * 100, 1),
-                "bias": "LONG" if p_long >= p_short else "SHORT",
-                # how close the current candle came to a signal (100 = signal threshold)
-                "strength": round(min(best_raw / m.threshold, 1.5) * 100, 1) if np.isfinite(best_raw) else None,
-                # close to a signal, but in a band that lost money when tested as signals -> watch only, never traded
-                "setup_forming": bool(not active and np.isfinite(best_raw) and best_raw >= m.watch_threshold),
-                "threshold": m.threshold,
-                "entry": active["entry"] if active else None,
-                "stop_loss": active["stop_loss"] if active else None,
-                "take_profit": active["take_profit"] if active else None,
-                "atr": active["atr"] if active else float(row["atr"]),
-                "sl_pct": round(m.sl_atr * active["atr"] / active["entry"] * 100, 3) if active else None,
-                "tp_pct": round(m.tp_atr * active["atr"] / active["entry"] * 100, 3) if active else None,
-                "max_bars": m.max_bars,
-                "active": active,
-                "last_closed": last,
-                # every signal the same rules gave on this coin in the replay window (~50 days), with its result
-                "recent": [{k: t[k] for k in RECENT_KEYS} for t in closed[-RECENT_MAX:]],
-                "last_close": float(row["close"]),
-                "brief": market_brief(F),
-                "history_bars": int(len(F)),
-                "bar_time": bar_time,
-                "next_update": bar_time + timedelta(seconds=2 * TF_SEC),
-            }
+            pl, ps, cl, cs = score(assemble(F, btc, mkt, sym=symbol))
+            res = _result({"F": F, "pl": pl, "ps": ps, "cl": cl, "cs": cs}, None, None, [], covered=False)
             self._signals[symbol] = (bar, res)
             return res
 
 
+def _result(d, active, last, closed, covered=True):
+    """The JSON-ready view of one coin at its last closed candle."""
+    m = model()
+    F = d["F"]
+    row = F.iloc[-1]
+    bar_time = pd.Timestamp(row["timestamp"]).to_pydatetime()
+    p_long, p_short = float(d["cl"][-1]), float(d["cs"][-1])
+    best_raw = float(max(d["pl"][-1], d["ps"][-1]))
+    a = active
+    tps = a["targets"] if a else None
+    return {
+        "engine_version": ENGINE_VERSION,
+        "timeframe": TIMEFRAME,
+        # coins outside the trained/tested list get the market brief and the lean, never a trade
+        "covered": bool(covered),
+        # verdict = the trade the engine is in right now (one at a time per coin), else WAIT
+        "verdict": a["side"] if a else "WAIT",
+        "fresh": bool(a and a["bar_time"] == bar_time),
+        "confidence": a["confidence"] if a else round(max(p_long, p_short) * 100, 1),
+        "tier": a["tier"] if a else None,
+        "p_long": round(p_long * 100, 1),
+        "p_short": round(p_short * 100, 1),
+        "bias": "LONG" if p_long >= p_short else "SHORT",
+        # how close the current candle came to a strong signal (100 = strong level)
+        "strength": round(min(best_raw / m.threshold, 1.5) * 100, 1) if np.isfinite(best_raw) and m.threshold > 0 else None,
+        # close to a strong signal but not in a trade -> watch only
+        "setup_forming": bool(covered and not a and np.isfinite(best_raw) and best_raw >= m.watch_threshold),
+        "threshold": m.threshold,
+        "entry": a["entry"] if a else None,
+        "stop_loss": a["stop_loss"] if a else None,          # the stop when the signal started
+        "stop_now": a["stop_now"] if a else None,            # after TP1 it sits at the entry, after TP2 at TP1
+        "take_profit": a["take_profit"] if a else None,      # the last target (TP3)
+        "targets": tps,
+        "targets_r": list(m.targets_r),
+        "fractions": list(m.fractions),
+        "hits": a["hits"] if a else None,
+        "atr": a["atr"] if a else float(row["atr"]),
+        "sl_pct": round(m.sl_atr * a["atr"] / a["entry"] * 100, 3) if a else None,
+        "tp_pct": round(abs(tps[-1] - a["entry"]) / a["entry"] * 100, 3) if a else None,
+        "tp_pcts": [round(abs(x - a["entry"]) / a["entry"] * 100, 3) for x in tps] if a else None,
+        "max_bars": m.max_bars,
+        "active": a,
+        "last_closed": last,
+        # every signal the same rules gave on this coin in the replay window (~50 days), with its result
+        "recent": [{k: t.get(k) for k in RECENT_KEYS} for t in closed[-RECENT_MAX:]],
+        "last_close": float(row["close"]),
+        "brief": market_brief(F),
+        "history_bars": int(len(F)),
+        "bar_time": bar_time,
+        "next_update": bar_time + timedelta(seconds=2 * TF_SEC),
+    }
+
+
 def progress(active, price):
-    """Where a running trade stands at the live price: R so far and how far
-    along the way to the target (positive) or the stop (negative), in %."""
+    """Where a running trade stands at the live price.
+
+    r_now: result in R so far (unrealised, whole position); pct: share of the
+    way from the last level reached to the next target (positive), or toward
+    the current stop (negative); next: which target is next (1-3)."""
     if not active or price is None or not np.isfinite(price):
         return None
     sgn = 1 if active["side"] == "LONG" else -1
-    risk = abs(active["entry"] - active["stop_loss"])
-    reward = abs(active["take_profit"] - active["entry"])
-    move = sgn * (float(price) - active["entry"])
-    pct = move / reward * 100 if move >= 0 else move / risk * 100
+    entry = float(active["entry"])
+    risk = abs(entry - float(active["stop_loss"]))
+    if risk <= 0:
+        return None
+    tps = active.get("targets") or [float(active["take_profit"])]
+    hits = int(active.get("hits") or 0)
+    stop_now = float(active.get("stop_now") if active.get("stop_now") is not None else active["stop_loss"])
+    move = sgn * (float(price) - entry)
+    nxt = min(hits, len(tps) - 1)
+    lo = 0.0 if hits == 0 else sgn * (tps[hits - 1] - entry)
+    hi = sgn * (tps[nxt] - entry)
+    stop_d = sgn * (entry - stop_now)          # >0 below entry, 0 at entry, <0 above (locked profit)
+    if move >= lo:
+        pct = (move - lo) / (hi - lo) * 100 if hi > lo else 100.0
+    else:
+        room = lo + stop_d                      # distance from the last level down to the stop
+        pct = -(lo - move) / room * 100 if room > 0 else -100.0
     state = "running"
-    if move >= reward:
+    if move >= hi and hits < len(tps):
         state = "target_touched"
-    elif -move >= risk:
+    elif sgn * (float(price) - stop_now) <= 0:
         state = "stop_touched"
     return {"price": float(price), "r_now": round(move / risk, 3), "pct": round(max(-100.0, min(100.0, pct)), 1),
-            "move_pct": round(sgn * (float(price) / active["entry"] - 1) * 100, 2), "state": state}
+            "move_pct": round(sgn * (float(price) / entry - 1) * 100, 2), "state": state, "next": nxt + 1,
+            "hits": hits}
 
 
 def brief_for(engine, symbol, now=None):
@@ -662,3 +860,7 @@ def market_brief(F):
 
 def test_stats():
     return model().meta.get("test", {})
+
+
+def walk_forward_stats():
+    return model().meta.get("walk_forward", {})
