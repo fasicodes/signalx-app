@@ -267,16 +267,29 @@ def _link(path):
     return f"{base}{path}" if base else ""
 
 
+def _targets(e):
+    tps = e.get("targets")
+    if not tps:
+        entry, stop = float(e["entry"]), float(e["stop_loss"])
+        risk = abs(entry - stop)
+        sgn = 1 if e["side"] == "LONG" else -1
+        tps = [entry + sgn * k * risk for k in (0.5, 1.0, 2.0)]
+    return tps
+
+
 def signal_block(e):
     side = e["side"]
     icon = "\U0001F7E2" if side == "LONG" else "\U0001F534"
     sym = html.escape(e["symbol"])
-    lines = [f"{icon} <b>New {'Long' if side == 'LONG' else 'Short'} signal: {sym}</b>",
+    kind = "standard " if e.get("tier") == "standard" else ""
+    lines = [f"{icon} <b>New {kind}{'Long' if side == 'LONG' else 'Short'} signal: {sym}</b>",
              f"Entry: <b>{_fmt(e['entry'])}</b>",
-             f"Stop loss: {_fmt(e['stop_loss'])} ({_pct(e['stop_loss'], e['entry'])})",
-             f"Target: {_fmt(e['take_profit'])} ({_pct(e['take_profit'], e['entry'])})"]
+             f"Stop loss: {_fmt(e['stop_loss'])} ({_pct(e['stop_loss'], e['entry'])})"]
+    for k, v in enumerate(_targets(e)):
+        lines.append(f"TP{k + 1}: {_fmt(v)} ({_pct(v, e['entry'])})")
+    lines.append("Close a third at each target. After TP1 move the stop to the entry, after TP2 to TP1.")
     if e.get("confidence") is not None:
-        lines.append(f"Win chance: {float(e['confidence']):.0f}% · ends after 8 days if neither level is hit")
+        lines.append(f"Chance of TP1: {float(e['confidence']):.0f}% · closes after 9 days at the latest")
     url = _link("/?coin=" + e["symbol"].replace("/", "%2F"))
     if url:
         lines.append(f'<a href="{html.escape(url)}">Open on Signals FM</a>')
@@ -313,8 +326,8 @@ def _signals_text():
     if not rows:
         return "The signals board is still loading. Please try again in a minute."
     if not active:
-        return ("No active signals right now. The engine is waiting for a strong setup; "
-                "new signals can start at every 4-hour close.")
+        return ("No active signals right now. New signals can start at every 4-hour close; "
+                "if no coin has had one for 24 hours, the best setup gets one.")
     out = [f"<b>Active signals ({len(active)})</b>"]
     for r in active[:12]:
         a, p = r["active"], r.get("progress") or {}
@@ -324,7 +337,9 @@ def _signals_text():
         line = f"{icon} <b>{coin}</b> {side}"
         line += f" · entry {_fmt(a['entry'])}"
         if p.get("pct") is not None:
-            line += f" · {abs(p['pct']):g}% to {'target' if p['pct'] >= 0 else 'stop'}"
+            line += f" · {abs(p['pct']):g}% to {('TP' + str(p.get('next') or 1)) if p['pct'] >= 0 else 'stop'}"
+        if a.get("hits"):
+            line += f" · TP{a['hits']} reached"
         if r.get("fresh"):
             line += " · <b>new</b>"
         out.append(line)
