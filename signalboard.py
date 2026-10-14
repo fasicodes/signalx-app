@@ -29,6 +29,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 
 from db import get_db_connection
 import signal_engine as se
+import markets
 
 signalboard_bp = Blueprint("signalboard", __name__)
 
@@ -79,22 +80,6 @@ def init_tables():
     with _Cursor() as cur:
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS signal_events (
-                id INT PRIMARY KEY AUTO_INCREMENT,
-                symbol VARCHAR(30) NOT NULL,
-                side VARCHAR(5) NOT NULL,
-                bar_time DATETIME NOT NULL,
-                entry DOUBLE NOT NULL,
-                stop_loss DOUBLE NOT NULL,
-                take_profit DOUBLE NOT NULL,
-                confidence DOUBLE NULL,
-                created_at DATETIME NOT NULL,
-                UNIQUE (symbol, bar_time)
-            )
-            """
-        )
-        cur.execute(
-            """
             CREATE TABLE IF NOT EXISTS signal_alert_subs (
                 user_id INT PRIMARY KEY,
                 enabled TINYINT(1) NOT NULL DEFAULT 1,
@@ -106,6 +91,8 @@ def init_tables():
             )
             """
         )
+    import signal_hub
+    signal_hub.init_tables()   # signal_events + the stream columns (safe, additive migration)
 
 
 # ===========================================================================
@@ -148,37 +135,68 @@ def refresh_board(now=None, only=None):
 
 
 def record_event(sym, res):
-    a = res["active"]
-    bar_time = _parse(a.get("bar_time"))
+    """Stores a new crypto 4h signal (engine v3.1) as a crypto/4h stream event."""
+    import signal_hub
     try:
-        with _Cursor() as cur:
-            cur.execute(
-                """INSERT INTO signal_events (symbol, side, bar_time, entry, stop_loss, take_profit, confidence, created_at)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                (sym, a["side"], bar_time, float(a["entry"]), float(a["stop_loss"]), float(a["take_profit"]),
-                 a.get("confidence"), _utcnow()),
-            )
-    except Exception:
-        return None  # already recorded (another instance, or a restart)
-    entry, stop = float(a["entry"]), float(a["stop_loss"])
-    return {"symbol": sym, "side": a["side"], "bar_time": bar_time, "entry": entry,
-            "stop_loss": stop, "take_profit": float(a["take_profit"]), "confidence": a.get("confidence"),
-            "targets": [float(x) for x in (a.get("targets") or se.targets(a["side"], entry, stop))],
-            "tier": a.get("tier") or "strong", "expires_at": a.get("expires_at")}
+        return signal_hub.record(sym, "crypto", "4h", res["active"])
+    except Exception as e:
+        print(f"[signalboard] could not store the signal for {sym}: {e}")
+        return None
 
 
 def _targets_txt(e):
     tps = e.get("targets") or se.targets(e["side"], float(e["entry"]), float(e["stop_loss"]))
-    return " · ".join(f"TP{k + 1} {_fmt(v)}" for k, v in enumerate(tps))
+    return " · ".join(f"TP{k + 1} {_fmt(v, e['symbol'])}" for k, v in enumerate(tps))
 
 
-def _fmt(x):
+def _fmt(x, symbol=None):
     x = float(x)
+    if symbol and markets.is_forex(symbol):
+        return f"{x:.{markets.price_decimals(symbol)}f}"
     if x >= 1000:
         return f"{x:,.2f}"
     if x >= 1:
         return f"{x:.4f}".rstrip("0").rstrip(".")
     return f"{x:.8f}".rstrip("0").rstrip(".")
+
+
+def _sub_list(raw, allowed):
+    if not raw or raw == "ALL":
+        return None
+    try:
+        v = json.loads(raw)
+        v = [x for x in v if x in allowed] if isinstance(v, list) else []
+        return set(v) if v else None
+    except (TypeError, ValueError):
+        return None
+
+
+def wants(sub, e):
+    """Does this subscriber want this event? (coins/pairs, markets, timeframes; empty = all)"""
+    coins = _sub_coins(sub.get("coins"))
+    mk = _sub_list(sub.get("markets"), markets.MARKETS)
+    tfs = _sub_list(sub.get("timeframes"), markets.TIMEFRAMES)
+    if mk is not None and (e.get("market") or "crypto") not in mk:
+        return False
+    if tfs is not None and (e.get("timeframe") or "4h") not in tfs:
+        return False
+    return coins is None or e["symbol"] in coins
+
+
+def event_title(e):
+    return f"New {e['side']} signal: {e['symbol']} ({e.get('timeframe') or '4h'})"
+
+
+def event_text(e):
+    msg = f"Entry {_fmt(e['entry'], e['symbol'])} · stop {_fmt(e['stop_loss'], e['symbol'])} · {_targets_txt(e)}"
+    if e.get("grade"):
+        msg += f" · grade {e['grade']}"
+    if (e.get("timeframe") or "4h") == "4h" and (e.get("market") or "crypto") == "crypto" and e.get("confidence") is not None:
+        msg += f" · chance of TP1 {float(e['confidence']):.0f}%"
+    news = e.get("news")
+    if isinstance(news, dict) and news.get("title"):
+        msg += f" · high-impact news soon: {news['title']}"
+    return msg
 
 
 def _sub_coins(raw):
@@ -202,20 +220,14 @@ def notify(events):
     per_user = {}
     with _Cursor() as cur:
         for sub in subs:
-            wanted = _sub_coins(sub.get("coins"))
-            mine = [e for e in events if wanted is None or e["symbol"] in wanted]
+            mine = [e for e in events if wants(sub, e)]
             if not mine:
                 continue
             per_user[sub["user_id"]] = mine
             for e in mine:
-                kind = "standard " if e.get("tier") == "standard" else ""
-                title = f"New {kind}{e['side']} signal: {e['symbol']}"
-                msg = f"Entry {_fmt(e['entry'])} · stop {_fmt(e['stop_loss'])} · {_targets_txt(e)}"
-                if e.get("confidence") is not None:
-                    msg += f" · chance of TP1 {float(e['confidence']):.0f}%"
                 cur.execute(
                     "INSERT INTO notifications (user_id, category, symbol, title, message) VALUES (%s,%s,%s,%s,%s)",
-                    (sub["user_id"], "SIGNAL", e["symbol"], title, msg),
+                    (sub["user_id"], "SIGNAL", e["symbol"], event_title(e)[:255], event_text(e)[:1000]),
                 )
             if sub.get("email") and sub.get("user_email"):
                 sent = int(sub.get("emails_sent") or 0) if sub.get("emails_day") == today else 0
@@ -252,14 +264,14 @@ def _email_html(events, user_id=None):
     base = (os.environ.get("SITE_URL") or "").rstrip("/")
     def tps(e):
         return e.get("targets") or se.targets(e["side"], float(e["entry"]), float(e["stop_loss"]))
-    std = ' <span style="color:#6f8279;font-size:12px">standard</span>'
     rows = "".join(
-        f"<tr><td style='padding:6px 10px'><b>{e['symbol']}</b>"
-        f"{std if e.get('tier') == 'standard' else ''}</td>"
+        f"<tr><td style='padding:6px 10px'><b>{e['symbol']}</b></td>"
+        f"<td style='padding:6px 10px'>{e.get('timeframe') or '4h'}</td>"
         f"<td style='padding:6px 10px;color:{'#0f8a50' if e['side'] == 'LONG' else '#d92d47'}'><b>{e['side']}</b></td>"
-        f"<td style='padding:6px 10px'>{_fmt(e['entry'])}</td><td style='padding:6px 10px'>{_fmt(e['stop_loss'])}</td>"
-        + "".join(f"<td style='padding:6px 10px'>{_fmt(v)}</td>" for v in tps(e))
-        + f"<td style='padding:6px 10px'>{(e.get('confidence') or 0):.0f}%</td></tr>"
+        f"<td style='padding:6px 10px'>{_fmt(e['entry'], e['symbol'])}</td>"
+        f"<td style='padding:6px 10px'>{_fmt(e['stop_loss'], e['symbol'])}</td>"
+        + "".join(f"<td style='padding:6px 10px'>{_fmt(v, e['symbol'])}</td>" for v in tps(e))
+        + f"<td style='padding:6px 10px'>{e.get('grade') or '-'}</td></tr>"
         for e in events)
     link = f"{base}/signals" if base else "/signals"
     if user_id is not None:
@@ -270,13 +282,13 @@ def _email_html(events, user_id=None):
     return f"""
     <div style="font-family:Segoe UI,Arial,sans-serif;color:#0d1c15;max-width:620px">
       <h2 style="margin:0 0 6px">New signal{'s' if len(events) > 1 else ''} from Signals FM</h2>
-      <p style="color:#4c5f56;margin:0 0 14px">Signal engine v3, 4-hour candles. Close a third at each target; after TP1 move
-      the stop to the entry, after TP2 to TP1. Time limit 9 days.</p>
+      <p style="color:#4c5f56;margin:0 0 14px">Close a third at each target; after TP1 move the stop to the entry,
+      after TP2 to TP1. Every signal has a time limit (see the signals page).</p>
       <table style="border-collapse:collapse;font-size:14px;border:1px solid #dbe6e0">
-        <tr style="background:#eef4f1;text-align:left"><th style="padding:6px 10px">Coin</th><th style="padding:6px 10px">Side</th>
+        <tr style="background:#eef4f1;text-align:left"><th style="padding:6px 10px">Symbol</th><th style="padding:6px 10px">Timeframe</th><th style="padding:6px 10px">Side</th>
         <th style="padding:6px 10px">Entry</th><th style="padding:6px 10px">Stop</th><th style="padding:6px 10px">TP1</th>
         <th style="padding:6px 10px">TP2</th><th style="padding:6px 10px">TP3</th>
-        <th style="padding:6px 10px">Chance of TP1</th></tr>{rows}
+        <th style="padding:6px 10px">Grade</th></tr>{rows}
       </table>
       <p style="margin:16px 0"><a href="{link}" style="background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open the signals board</a></p>
       <p style="color:#6f8279;font-size:12px;line-height:1.6">Not financial advice. Signals can and do lose; past results do not guarantee future results.
@@ -287,7 +299,7 @@ def _email_html(events, user_id=None):
 def _send_all(send, outbox):
     for item in outbox:
         to, uid, events = item if len(item) == 3 else (item[0], None, item[1])
-        subject = (f"New {events[0]['side']} signal: {events[0]['symbol']}" if len(events) == 1
+        subject = (event_title(events[0]) if len(events) == 1
                    else f"{len(events)} new signals on Signals FM")
         try:
             send(to, subject, _email_html(events, uid))
@@ -452,7 +464,9 @@ def public_summary(limit=3, now=None):
 def signals_page():
     if not _uid():
         return redirect("/login")
-    return render_template("signals.html", active="signals")
+    import signal_hub
+    return render_template("signals.html", active="signals", streams=signal_hub.stream_info(),
+                           crypto_coins=markets.CRYPTO_COINS, forex_pairs=markets.forex_signal_pairs())
 
 
 @signalboard_bp.route("/api/signals/board", methods=["GET"])
@@ -481,26 +495,55 @@ def api_board():
         "counts": {"active": sum(1 for r in rows if r["state"] == "ACTIVE"),
                    "new": sum(1 for r in rows if r.get("fresh")), "coins": len(rows),
                    "forming": sum(1 for r in rows if r.get("setup_forming"))},
-        "same_side_warning": warning,
+        "same_side_warning": warning, "streams_active": _streams_active(), "streams_enabled": _streams_enabled(),
     })
+
+
+def _streams_enabled():
+    try:
+        import signal_hub
+        return signal_hub.enabled_streams()
+    except Exception:
+        return []
+
+
+def _streams_active():
+    """Active signals of the 15m / 1h crypto streams and the forex streams (the board itself is crypto 4h)."""
+    try:
+        import signal_hub
+        return signal_hub.active_streams(limit=40)
+    except Exception:
+        return []
 
 
 @signalboard_bp.route("/api/signals/events", methods=["GET"])
 def api_events():
     if not _uid():
         return jsonify({"ok": False, "error": "Login required."}), 401
+    import signal_hub
     try:
         limit = max(1, min(int(request.args.get("limit", 20)), 100))
     except ValueError:
         limit = 20
-    with _Cursor() as cur:
-        cur.execute("SELECT * FROM signal_events ORDER BY bar_time DESC, id DESC LIMIT %s", (limit,))
-        rows = cur.fetchall() or []
-    out = [{"symbol": r["symbol"], "side": r["side"], "entry": r["entry"], "stop_loss": r["stop_loss"],
-            "take_profit": r["take_profit"], "confidence": r["confidence"],
-            "targets": se.targets(r["side"], float(r["entry"]), float(r["stop_loss"])),
-            "signal_at": _iso(_parse(r["bar_time"]) + timedelta(seconds=se.TF_SEC))} for r in rows]
-    return jsonify({"ok": True, "events": out})
+    market = request.args.get("market") if request.args.get("market") in markets.MARKETS else None
+    tf = request.args.get("timeframe") if request.args.get("timeframe") in markets.TIMEFRAMES else None
+    rows, _ = signal_hub.list_signals(market=market, tf=tf, per_page=limit)
+    return jsonify({"ok": True, "events": [signal_hub.signal_json(r) for r in rows]})
+
+
+def symbol_choices():
+    return list(crypto_coins() or markets.CRYPTO_COINS) + markets.forex_signal_pairs()
+
+
+def _clean_list(v, allowed, what):
+    if v in (None, "ALL", []):
+        return "ALL"
+    if isinstance(v, list) and all(isinstance(x, str) for x in v):
+        valid = sorted({x for x in v if x in allowed})
+        if not valid:
+            raise ValueError(f"Pick at least one {what}, or all.")
+        return "ALL" if set(valid) == set(allowed) else json.dumps(valid)
+    raise ValueError(f"Invalid {what} list.")
 
 
 @signalboard_bp.route("/api/signals/alerts", methods=["GET", "POST"])
@@ -513,33 +556,36 @@ def api_alerts():
             cur.execute("SELECT * FROM signal_alert_subs WHERE user_id=%s", (uid,))
             r = cur.fetchone()
         coins = _sub_coins(r.get("coins")) if r else None
+        mk = _sub_list(r.get("markets"), markets.MARKETS) if r else None
+        tfs = _sub_list(r.get("timeframes"), markets.TIMEFRAMES) if r else None
         return jsonify({"ok": True, "enabled": bool(r and r["enabled"]), "email": bool(r and r["email"]),
-                        "coins": sorted(coins) if coins else "ALL", "choices": crypto_coins(),
+                        "coins": sorted(coins) if coins else "ALL", "choices": symbol_choices(),
+                        "markets": sorted(mk) if mk else "ALL", "timeframes": sorted(tfs) if tfs else "ALL",
                         "email_ready": bool(os.environ.get("MAIL_USERNAME") and os.environ.get("MAIL_PASSWORD"))})
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"ok": False, "error": "Invalid request."}), 400
     enabled = bool(data.get("enabled"))
     email = bool(data.get("email")) and enabled
-    coins = data.get("coins")
-    if coins in (None, "ALL", []):
-        coins_val = "ALL"
-    elif isinstance(coins, list) and all(isinstance(c, str) for c in coins):
-        valid = [c for c in coins if c in crypto_coins()]
-        if not valid:
-            return jsonify({"ok": False, "error": "Pick at least one coin, or all coins."}), 400
-        coins_val = json.dumps(sorted(set(valid)))
-    else:
-        return jsonify({"ok": False, "error": "Invalid coin list."}), 400
+    try:
+        coins_val = _clean_list(data.get("coins"), symbol_choices(), "symbol")
+        markets_val = _clean_list(data.get("markets"), list(markets.MARKETS), "market")
+        tfs_val = _clean_list(data.get("timeframes"), list(markets.TIMEFRAMES), "timeframe")
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
     with _Cursor() as cur:
         cur.execute("SELECT user_id FROM signal_alert_subs WHERE user_id=%s", (uid,))
         if cur.fetchone():
-            cur.execute("UPDATE signal_alert_subs SET enabled=%s, email=%s, coins=%s, updated_at=%s WHERE user_id=%s",
-                        (int(enabled), int(email), coins_val, _utcnow(), uid))
+            cur.execute("""UPDATE signal_alert_subs SET enabled=%s, email=%s, coins=%s, markets=%s, timeframes=%s,
+                           updated_at=%s WHERE user_id=%s""",
+                        (int(enabled), int(email), coins_val, markets_val, tfs_val, _utcnow(), uid))
         else:
-            cur.execute("""INSERT INTO signal_alert_subs (user_id, enabled, email, coins, emails_sent, updated_at)
-                           VALUES (%s,%s,%s,%s,0,%s)""", (uid, int(enabled), int(email), coins_val, _utcnow()))
-    return jsonify({"ok": True, "enabled": enabled, "email": email, "coins": coins_val if coins_val == "ALL" else json.loads(coins_val)})
+            cur.execute("""INSERT INTO signal_alert_subs (user_id, enabled, email, coins, markets, timeframes,
+                           emails_sent, updated_at) VALUES (%s,%s,%s,%s,%s,%s,0,%s)""",
+                        (uid, int(enabled), int(email), coins_val, markets_val, tfs_val, _utcnow()))
+    dec = lambda v: v if v == "ALL" else json.loads(v)
+    return jsonify({"ok": True, "enabled": enabled, "email": email, "coins": dec(coins_val),
+                    "markets": dec(markets_val), "timeframes": dec(tfs_val)})
 
 
 @signalboard_bp.route("/signals/unsubscribe", methods=["GET"])
