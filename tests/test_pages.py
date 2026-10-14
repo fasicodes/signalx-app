@@ -231,8 +231,10 @@ check('href="/about" class="an-item"' in html and 'href="/faq" class="an-item"' 
       "menu links go to the new About/FAQ pages")
 check(html.count("data-guide-open") >= 2, "guide can be reopened from the menu and the account popover")
 st, html = get("/sig")
-check(st == 200 and 'id="tg"' in html and "/api/telegram/link" in html and 'data-tip="leaning"' in html and "data-auto" not in html,
+check(st == 200 and 'id="tg"' in html and "/api/telegram/link" in html and 'data-tip="win_rate"' in html and "data-auto" not in html,
       "signals: Telegram connect block + tips; guide does not pop up there")
+check('id="mk"' in html and 'data-v="forex"' in html and 'data-v="15m"' in html and "Past performance does not" in html
+      and 'id="f-status"' in html and 'id="f-sort"' in html, "signals: market switch, timeframe tabs, filters, sorting, risk warning")
 st, html = get("/demo")
 check(st == 200 and 'class="an-shell"' in html and 'href="/demo-trading" class="an-item" aria-current="page"' in html
       and "back-link" not in html.split("</style>", 1)[1] and "/static/legacy.css" in html, "demo trading: inside the app menu")
