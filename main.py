@@ -264,25 +264,8 @@ def get_cached_signal(symbol, max_age_sec=None):
 # LEO (UNUS SED LEO) is list mein NAHI hai kyunke wo Bitfinex ka apna token
 # hai aur OKX par generally available nahi hota - iski jagah DOT (Polkadot)
 # rakha gaya hai.
-AVAILABLE_COINS = [
-    # TOP 1-10
-    "BTC/USDT", "ETH/USDT", "BNB/USDT", "XRP/USDT", "SOL/USDT",
-    "TRX/USDT", "HYPE/USDT", "DOGE/USDT", "ZEC/USDT", "DOT/USDT",
-    # TOP 11-20
-    "XLM/USDT", "XMR/USDT", "LINK/USDT", "ADA/USDT", "BCH/USDT",
-    "GRAM/USDT", "LTC/USDT", "SUI/USDT", "HBAR/USDT", "FIL/USDT",
-    # TOP 21-30
-    "AVAX/USDT", "CRO/USDT", "NEAR/USDT", "SHIB/USDT", "UNI/USDT",
-    "TAO/USDT", "ONDO/USDT", "OKB/USDT", "ASTER/USDT", "ATOM/USDT",
-    # 31-62 (all on OKX spot; signal engine v3 was tested on them, see signal_model.json "test")
-    "ETC/USDT", "AAVE/USDT", "ICP/USDT", "APT/USDT", "ARB/USDT",
-    "OP/USDT", "FET/USDT", "TIA/USDT", "INJ/USDT", "SEI/USDT",
-    "STX/USDT", "IMX/USDT", "GRT/USDT", "ALGO/USDT", "LDO/USDT",
-    "CRV/USDT", "THETA/USDT", "SAND/USDT", "MANA/USDT", "AXS/USDT",
-    "GALA/USDT", "CHZ/USDT", "APE/USDT", "EGLD/USDT", "XTZ/USDT",
-    "SNX/USDT", "DYDX/USDT", "FLOW/USDT", "NEO/USDT", "IOTA/USDT",
-    "CFX/USDT", "MINA/USDT",
-]
+import markets as _markets
+AVAILABLE_COINS = list(_markets.CRYPTO_COINS)   # edit the list in markets.py
 
 # Forex pairs and metals (gold, silver, majors, crosses and common
 # exotics), used by the new Forex tab in the coin/pair picker
@@ -293,23 +276,7 @@ AVAILABLE_COINS = [
 # _is_forex_pair() and its use in /signal, /candles and /liquidity for
 # the friendly "coming soon" guard that keeps a Forex selection from
 # hitting the crypto-only exchange and blowing up with a raw ccxt error.
-FOREX_PAIRS = [
-    # Metals
-    "XAU/USD", "XAG/USD",
-    # Majors
-    "EUR/USD", "USD/JPY", "GBP/USD", "USD/CHF", "AUD/USD",
-    "USD/CAD", "NZD/USD",
-    # Minors / crosses
-    "EUR/JPY", "GBP/JPY", "EUR/GBP", "EUR/CHF", "AUD/JPY",
-    "EUR/AUD", "GBP/CHF", "AUD/NZD", "NZD/JPY", "CAD/JPY",
-    "CHF/JPY", "EUR/CAD", "GBP/CAD", "EUR/NZD", "AUD/CAD",
-    "GBP/AUD", "GBP/NZD", "AUD/CHF", "NZD/CAD", "NZD/CHF",
-    "CAD/CHF",
-    # Exotics
-    "USD/TRY", "USD/ZAR", "USD/MXN", "USD/SGD", "USD/HKD", "USD/SEK",
-    "USD/NOK", "USD/DKK", "USD/PLN", "USD/CNH", "EUR/SEK", "EUR/NOK",
-    "EUR/PLN", "EUR/TRY",
-]
+FOREX_PAIRS = list(_markets.FOREX_PAIRS)   # edit the list in markets.py
 
 
 def _is_forex_pair(symbol):
@@ -2131,8 +2098,8 @@ def login_page():
 def _landing_live():
     """Signal engine right now, for the landing page card (counts + newest signals; no levels, no network)."""
     try:
-        from signalboard import public_summary
-        return public_summary()
+        import signal_hub
+        return signal_hub.public_summary()
     except Exception:
         return {"ok": False}
 
@@ -2246,6 +2213,7 @@ def engine_endpoint():
     if coin not in AVAILABLE_COINS and coin not in FOREX_PAIRS:
         return jsonify({"ok": False, "error": "Unknown coin or pair."}), 400
     price = _live_price_cached(coin)
+    other = _other_active(coin, price) if session.get("user_id") else []   # signal levels: members only
     if _is_forex_pair(coin):
         try:
             brief = signal_engine.brief_for(get_signal_engine(), coin)
@@ -2253,7 +2221,7 @@ def engine_endpoint():
         except Exception as e:
             brief, err = None, f"Forex data is not available right now: {str(e)[:140]}"
         return jsonify(_jsonable({"ok": True, "coin": coin, "asset": "forex", "price": price, "brief": brief,
-                                  "error": err, "engine": None}))
+                                  "error": err, "engine": None, "other_active": other}))
     eng = engine_signal(coin)
     if eng.get("active"):
         eng["progress"] = signal_engine.progress(
@@ -2261,7 +2229,21 @@ def engine_endpoint():
             price if price is not None else eng.get("last_close"))
     return jsonify(_jsonable({"ok": True, "coin": coin, "asset": "crypto", "price": price, "brief": eng.get("brief"),
                               "engine": eng, "test": signal_engine.test_stats(), "error": eng.get("error"),
-                              "tested": coin in signal_engine.signal_coins()}))
+                              "tested": coin in signal_engine.signal_coins(), "other_active": other}))
+
+
+def _other_active(coin, price=None):
+    """Active signals of the other streams (15m / 1h, and forex 4h) for this symbol, newest timeframe first,
+    so the dashboard shows a live trade instead of 'Wait' when any stream has one."""
+    try:
+        import signal_hub
+        rows = [r for r in signal_hub.active_for(coin) if not ((r.get("market") or "crypto") == "crypto"
+                                                                and (r.get("timeframe") or "4h") == "4h")]
+        order = {"4h": 0, "1h": 1, "15m": 2}
+        rows.sort(key=lambda r: (order.get(r.get("timeframe") or "4h", 3), -(signal_hub._parse(r["bar_time"]) or _dt.min).timestamp()))
+        return [signal_hub.signal_json(r, price) for r in rows[:3]]
+    except Exception:
+        return []
 
 
 @app.route("/coins", methods=["GET"])
@@ -2595,6 +2577,95 @@ init_signalboard(app, engine_signal=engine_signal, coins=[c for c in AVAILABLE_C
                  prices=_ticker_prices, send_email=_send_email, telegram=telegram_bot.notify_users)
 telegram_bot.init_telegram(app, board_rows=_board_rows)
 
+# ============================================================
+# SIGNAL STREAMS - signal_hub.py + streams.py
+# 15m / 1h / 4h signals for crypto and forex (each stream separate), the
+# tracker that records every signal's real result, and the signals API.
+# ============================================================
+import signal_hub
+from signal_hub import hub_bp
+app.register_blueprint(hub_bp)
+limiter.limit("60 per minute")(hub_bp)
+
+
+def _stream_candles(symbol, timeframe, limit, since=None):
+    """Candles for the signal streams (forex waits for a free Twelve Data slot instead of failing)."""
+    if _is_forex_pair(symbol):
+        import forex_data
+        return forex_data.get_candles(symbol, timeframe=timeframe, limit=limit, since=since, wait=50)
+    return get_candles(symbol, timeframe=timeframe, limit=limit, since=since)
+
+
+def _hub_forex_price(symbol):
+    try:
+        return _live_price_cached(symbol)
+    except Exception:
+        return None
+
+
+# ============================================================
+# NEWS + ECONOMIC CALENDAR - news.py (licensed APIs + RSS only).
+# /news (calendar + news), /news/<slug> (own articles), /admin/news.
+# High-impact events pause new forex signals for that currency.
+# ============================================================
+import news
+app.register_blueprint(news.news_bp)
+limiter.limit("120 per minute")(news.news_bp)
+news.init_news(app, is_admin=lambda: _is_admin())
+
+signal_hub.init_hub(app, get_candles=_stream_candles, notify=__import__("signalboard").notify,
+                    crypto_prices=_ticker_prices, forex_price=_hub_forex_price, is_admin=lambda: _is_admin(),
+                    blocked=news.blackout_reason, news_for=news.upcoming_for_symbol)
+
+# ============================================================
+# SITE-WIDE AI ASSISTANT - site_assistant.py (chat widget on every main page)
+# Claude API (ANTHROPIC_API_KEY, server side), streaming, live context.
+# ============================================================
+import site_assistant
+
+
+def _assistant_context(page=None, signal_id=None, symbol=None):
+    """Live data for the assistant. Signal levels are members-only, so visitors get results and news only."""
+    from datetime import datetime as _d, timedelta as _td
+    now = _d.utcnow().replace(microsecond=0)
+    ctx = {"now": now.isoformat() + "Z", "page": page, "symbol": symbol}
+    member = bool(session.get("user_id"))
+    if member:
+        try:
+            if signal_id:
+                ctx["viewing_signal"] = signal_hub.signal_by_id(int(signal_id))
+            rows, _n = signal_hub.list_signals(status="active", sort="newest", per_page=8)
+            ctx["active_signals"] = [signal_hub.signal_json(r) for r in rows]
+        except Exception as e:
+            print(f"[assistant] signals context failed: {e}")
+    stats = []
+    for key in signal_hub.enabled_streams():
+        m, tf = key.split("_")
+        try:
+            st = signal_hub.stream_stats(m, tf) if member else {"windows": {}}
+            mt = signal_hub.model_test(m, tf) or {}
+            stats.append({"market": m, "timeframe": tf, "windows": st.get("windows"), "test": mt.get("holdout") or {}})
+        except Exception:
+            continue
+    ctx["stream_stats"] = stats
+    try:
+        ctx["next_events"] = [e for e in news.calendar(now, now + _td(days=3), impacts=["high"])][:6]
+        items, _n = news.list_news(per_page=6)
+        ctx["headlines"] = items
+    except Exception as e:
+        print(f"[assistant] news context failed: {e}")
+    return ctx
+
+
+app.register_blueprint(site_assistant.assistant_bp)
+limiter.limit("20 per minute")(site_assistant.assistant_bp)
+site_assistant.init_site_assistant(app, context=_assistant_context)
+
+# The auto-trade bot takes the site's signals from the hub (every stream, both markets).
+import autotrade as _autotrade
+_autotrade._hooks.update({"signal_feed": signal_hub.bot_feed, "signal_get": signal_hub.signal_by_id,
+                          "forex_price": _hub_forex_price})
+
 
 # ============================================================
 # TRACK RECORD + PUBLIC PAGES + SEO
@@ -2725,9 +2796,15 @@ def sitemap_xml():
              ("/risk-disclosure", "0.4"), ("/terms", "0.3"), ("/privacy", "0.3")]
     if _track_public():
         pages.insert(1, ("/track-record", "0.9"))
+    pages.insert(1, ("/news", "0.8"))
     today = _dt.utcnow().strftime("%Y-%m-%d")
     urls = "".join(f"<url><loc>{base}{path}</loc><lastmod>{today}</lastmod><priority>{prio}</priority></url>"
                    for path, prio in pages)
+    try:      # published articles (news.py)
+        for path, mod in news.sitemap_entries():
+            urls += f"<url><loc>{base}{path}</loc><lastmod>{mod}</lastmod><priority>0.6</priority></url>"
+    except Exception:
+        pass
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
     return app.response_class(xml, mimetype="application/xml")
 
