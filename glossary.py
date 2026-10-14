@@ -21,9 +21,9 @@ GROUPS = [
          "No trade on this coin right now. The engine gives strong signals only for its best setups; if no coin has had a "
          "signal for 24 hours, the best setup gets a standard signal, so there is rarely a long wait across all coins."),
         ("setup_forming", "Setup forming",
-         "The engine is close to a strong signal but not there yet. It is not a trade; keep an eye on the next 4-hour close."),
+         "The engine is close to a signal but not there yet. It is not a trade; keep an eye on the next candle close."),
         ("entry", "Entry",
-         "The price where a signal starts: the close of the 4-hour candle that gave the signal."),
+         "The price where a signal starts: the close of the candle (15-minute, 1-hour or 4-hour) that gave the signal."),
         ("stop_loss", "Stop loss",
          "The price where you accept the trade was wrong and exit, so the loss stays small. Every signal has one. Always use it."),
         ("target", "Targets",
