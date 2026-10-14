@@ -47,6 +47,8 @@ from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
 from db import get_db_connection
+import fxbroker
+import markets
 
 try:  # already in requirements.txt
     import ccxt
@@ -65,7 +67,17 @@ autotrade_bp = Blueprint("autotrade", __name__)
 # ---------------------------------------------------------------------------
 # Hard safety limits (enforced server-side)
 # ---------------------------------------------------------------------------
-MODES = ("paper", "demo", "live")
+MODES = ("paper", "demo", "live", "oanda_demo", "oanda_live")
+LIVE_MODES = ("live", "oanda_live")            # real money: explicit confirmation needed
+FX_MODES = ("oanda_demo", "oanda_live")        # OANDA accounts (forex only)
+BINANCE_MODES = ("demo", "live")
+MARKETS = ("crypto", "forex")
+SIGNAL_TIMEFRAMES = ("15m", "1h", "4h")
+GRADES = ("A", "B", "C")
+ENTRY_WINDOW_BARS = 2        # the bot takes a signal up to 2 candles of its timeframe after it starts
+MAX_ENTRY_DRIFT_R = 0.35     # ...while the price is still within 0.35 R of the signal's entry
+RETRY_BACKOFF_SEC = (20, 40, 80, 160, 320)   # waits between attempts on a retryable problem
+SL_MIN_PCT_SIGNAL = {"crypto": 0.15, "forex": 0.02}   # floor for a stop that comes from a site signal
 ALLOWED_LEVERAGE = (1, 2, 3, 5, 10, 20)
 TIMEFRAME_SCAN_SEC = {"15m": 180, "1h": 300, "4h": 600}
 TIMEFRAME_MINUTES = {"15m": 15, "1h": 60, "4h": 240}
@@ -96,6 +108,10 @@ DEFAULT_SETTINGS = {
     "timeframe": "1h",
     "reward_risk": 1.5,
     "coins": list(DEFAULT_COINS),
+    "markets": ["crypto", "forex"],
+    "timeframes": ["15m", "1h", "4h"],
+    "min_grade": "B",
+    "symbols_mode": "all",
 }
 
 ENGINE_LOCK_NAME = "signalx_autotrade_engine"
@@ -103,6 +119,9 @@ MONITOR_INTERVAL_SEC = max(5, int(os.environ.get("AUTOTRADE_MONITOR_SEC", "10") 
 
 # Injected from main.py (avoids a circular import)
 _hooks = {
+    "signal_feed": None,      # signal_hub.bot_feed: active site signals still open for entry
+    "signal_get": None,       # signal_hub.signal_by_id
+    "forex_price": None,      # live forex price (main._live_price_cached)
     "get_candles": None,
     "generate_signal": None,
     "engine_signal": None,
@@ -162,7 +181,8 @@ def _err(message, status=400, **extra):
 
 
 def _label(mode):
-    return {"live": "Live", "demo": "Binance Demo", "paper": "Site demo"}.get(mode, "Demo")
+    return {"live": "Live", "demo": "Binance Demo", "paper": "Site demo", "oanda_demo": "OANDA demo",
+            "oanda_live": "OANDA live"}.get(mode, "Demo")
 
 
 class _Cursor:
@@ -337,6 +357,7 @@ def init_tables():
         )
     _migrate_v1()
     _migrate_targets()
+    _migrate_bridge()
     print("[autotrade] tables ready")
 
 
@@ -356,6 +377,50 @@ def _migrate_targets():
             except Exception:
                 cur.execute(f"ALTER TABLE autotrade_positions ADD COLUMN {col} {ddl}")
                 print(f"[autotrade] migrated: autotrade_positions.{col} added")
+
+
+BRIDGE_SETTING_COLUMNS = (("markets", "TEXT NULL"), ("timeframes", "TEXT NULL"), ("min_grade", "VARCHAR(1) NULL"),
+                          ("symbols_mode", "VARCHAR(8) NULL"))
+BRIDGE_POSITION_COLUMNS = (("signal_id", "INT NULL"), ("timeframe", "VARCHAR(5) NULL"), ("market", "VARCHAR(10) NULL"),
+                           ("fx_rate", "DOUBLE NULL"))
+
+
+def _add_columns(table, columns):
+    for col, ddl in columns:
+        with _Cursor() as cur:
+            try:
+                cur.execute(f"SELECT {col} FROM {table} LIMIT 1")
+                cur.fetchall()
+            except Exception:
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+                print(f"[autotrade] migrated: {table}.{col} added")
+
+
+def _migrate_bridge():
+    """Site signals -> bot: filters per account, the signal a position came from, and one row per
+    (account, signal) so a signal is never ordered twice. Adds columns/tables only; no data changes."""
+    _add_columns("autotrade_bot_settings", BRIDGE_SETTING_COLUMNS)
+    _add_columns("autotrade_positions", BRIDGE_POSITION_COLUMNS)
+    with _Cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS autotrade_signal_orders (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                mode VARCHAR(12) NOT NULL,
+                signal_id INT NOT NULL,
+                status VARCHAR(10) NOT NULL,
+                reason VARCHAR(300) NULL,
+                attempts INT NOT NULL DEFAULT 0,
+                next_try_at DATETIME NULL,
+                position_id INT NULL,
+                source VARCHAR(10) NOT NULL DEFAULT 'BOT',
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                UNIQUE (user_id, mode, signal_id)
+            )
+            """
+        )
 
 
 def _migrate_v1():
@@ -450,6 +515,13 @@ def _row_to_settings(row):
         s["coins"] = coins if isinstance(coins, list) and coins else list(DEFAULT_COINS)
     except (TypeError, ValueError):
         s["coins"] = list(DEFAULT_COINS)
+    legacy = row.get("markets") is None      # a row from before the signal hand-off: keep its old behaviour
+    s["markets"] = _json_list(row.get("markets"), MARKETS) or (["crypto"] if legacy else list(DEFAULT_SETTINGS["markets"]))
+    s["timeframes"] = _json_list(row.get("timeframes"), SIGNAL_TIMEFRAMES) or (
+        ["4h"] if legacy else list(DEFAULT_SETTINGS["timeframes"]))
+    s["min_grade"] = row.get("min_grade") if row.get("min_grade") in GRADES else ("C" if legacy else "B")
+    s["symbols_mode"] = row.get("symbols_mode") if row.get("symbols_mode") in ("all", "list") else (
+        "list" if legacy else "all")
     s["enabled"] = int(s["enabled"] or 0)
     s["leverage"] = int(s["leverage"] or 1)
     s["max_open_positions"] = int(s["max_open_positions"] or 1)
@@ -458,6 +530,25 @@ def _row_to_settings(row):
     for k in ("paused_until", "pause_reason", "day_ref_date", "day_ref_balance", "last_scan_at"):
         s[k] = row.get(k)
     return s
+
+
+def _json_list(raw, allowed):
+    try:
+        v = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(v, list):
+        return None
+    out = [x for x in v if x in allowed]
+    return out or None
+
+
+def signal_symbols():
+    """Every symbol that gets site signals (crypto + forex), for the coin picker."""
+    try:
+        return list(markets.CRYPTO_COINS) + list(markets.forex_signal_pairs())
+    except Exception:
+        return coin_choices()
 
 
 def load_settings(user_id, mode, cur=None):
@@ -514,17 +605,36 @@ def validate_settings(raw, current=None):
         return None, "Timeframe must be 15m, 1h or 4h."
     clean["timeframe"] = timeframe
 
+    mk = raw.get("markets", cur.get("markets") or DEFAULT_SETTINGS["markets"])
+    if not isinstance(mk, list) or not [m for m in mk if m in MARKETS]:
+        return None, "Choose at least one market (crypto or forex)."
+    clean["markets"] = [m for m in MARKETS if m in mk]
+    tfs = raw.get("timeframes", cur.get("timeframes") or DEFAULT_SETTINGS["timeframes"])
+    if not isinstance(tfs, list) or not [t for t in tfs if t in SIGNAL_TIMEFRAMES]:
+        return None, "Choose at least one timeframe (15m, 1h or 4h)."
+    clean["timeframes"] = [t for t in SIGNAL_TIMEFRAMES if t in tfs]
+    grade = str(raw.get("min_grade", cur.get("min_grade") or "B")).upper()
+    if grade not in GRADES:
+        return None, "Minimum grade must be A, B or C."
+    clean["min_grade"] = grade
+    sm = str(raw.get("symbols_mode", cur.get("symbols_mode") or "all")).lower()
+    if sm not in ("all", "list"):
+        return None, "Symbols must be 'all' or 'list'."
+    clean["symbols_mode"] = sm
+
     coins = raw.get("coins", cur["coins"])
     if not isinstance(coins, list):
         return None, "Invalid coin list."
-    allowed = set(coin_choices())
+    allowed = set(coin_choices()) | set(signal_symbols())
     picked = []
     for c in coins:
         c = str(c).upper().strip()
         if c in allowed and c not in picked:
             picked.append(c)
-    if not picked:
+    if not picked and sm == "list":
         return None, "Select at least one coin."
+    if not picked:
+        picked = list(cur.get("coins") or DEFAULT_COINS)
     if len(picked) > MAX_COINS:
         return None, f"You can select up to {MAX_COINS} coins."
     clean["coins"] = picked
@@ -538,12 +648,16 @@ def save_settings(user_id, mode, clean, cur):
         clean["market_type"], clean["leverage"], clean["risk_pct"], clean["max_position_usdt"],
         clean["max_open_positions"], clean["daily_loss_limit_pct"], clean["min_confidence"],
         clean["timeframe"], clean["reward_risk"], json.dumps(clean["coins"]), _utcnow(),
+        json.dumps(clean.get("markets") or DEFAULT_SETTINGS["markets"]),
+        json.dumps(clean.get("timeframes") or DEFAULT_SETTINGS["timeframes"]),
+        clean.get("min_grade") or "B", clean.get("symbols_mode") or "all",
     )
     if exists:
         cur.execute(
             """UPDATE autotrade_bot_settings SET market_type=%s, leverage=%s, risk_pct=%s,
                max_position_usdt=%s, max_open_positions=%s, daily_loss_limit_pct=%s,
-               min_confidence=%s, timeframe=%s, reward_risk=%s, coins=%s, updated_at=%s
+               min_confidence=%s, timeframe=%s, reward_risk=%s, coins=%s, updated_at=%s,
+               markets=%s, timeframes=%s, min_grade=%s, symbols_mode=%s
                WHERE user_id=%s AND mode=%s""",
             values + (user_id, mode),
         )
@@ -551,8 +665,8 @@ def save_settings(user_id, mode, clean, cur):
         cur.execute(
             """INSERT INTO autotrade_bot_settings (market_type, leverage, risk_pct, max_position_usdt,
                max_open_positions, daily_loss_limit_pct, min_confidence, timeframe, reward_risk,
-               coins, updated_at, user_id, mode, enabled)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0)""",
+               coins, updated_at, markets, timeframes, min_grade, symbols_mode, user_id, mode, enabled)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0)""",
             values + (user_id, mode),
         )
 
@@ -560,13 +674,18 @@ def save_settings(user_id, mode, clean, cur):
 def _ensure_settings_row(user_id, mode, cur):
     cur.execute("SELECT user_id FROM autotrade_bot_settings WHERE user_id=%s AND mode=%s", (user_id, mode))
     if cur.fetchone() is None:
-        save_settings(user_id, mode, dict(DEFAULT_SETTINGS), cur)
+        d = dict(DEFAULT_SETTINGS)
+        if mode == "paper":
+            d["market_type"] = "futures"      # the demo account can short, so every site signal can be copied
+        if mode in FX_MODES:
+            d["markets"] = ["forex"]
+        save_settings(user_id, mode, d, cur)
 
 
 # ===========================================================================
 # Pure trading math (unit-testable, no network / DB)
 # ===========================================================================
-def plan_levels(side, entry_price, volatility_pct, reward_risk, leverage):
+def plan_levels(side, entry_price, volatility_pct, reward_risk, leverage, min_pct=None):
     """Stop-Loss / Take-Profit from the entry price.
 
     volatility_pct = the signal's `extreme_volatility_95_pct` (95th
@@ -580,7 +699,7 @@ def plan_levels(side, entry_price, volatility_pct, reward_risk, leverage):
     if not entry_price or entry_price <= 0:
         return None, "Price not available."
     vol = _f(volatility_pct)
-    sl_pct = _clamp(vol if vol and vol > 0 else SL_FALLBACK_PCT, SL_MIN_PCT, SL_MAX_PCT)
+    sl_pct = _clamp(vol if vol and vol > 0 else SL_FALLBACK_PCT, SL_MIN_PCT if min_pct is None else min_pct, SL_MAX_PCT)
     leverage = int(leverage or 1)
     if leverage > 1:
         liq_pct = 100.0 / leverage
@@ -630,6 +749,13 @@ def calc_pnl(side, entry, exit_price, amount, fee_rate):
     gross = (exit_price - entry) * amount if side == "LONG" else (entry - exit_price) * amount
     fees = (entry * amount + exit_price * amount) * float(fee_rate or 0)
     return round(gross - fees, 4)
+
+
+def _pnl(pos, exit_price, amount=None):
+    """P&L in the account currency (USDT / USD): forex results are converted from the pair's quote currency."""
+    pnl = calc_pnl(pos["side"], pos["entry_price"], exit_price, pos["amount"] if amount is None else amount,
+                   pos.get("fee_rate"))
+    return round(pnl * float(pos.get("fx_rate") or 1.0), 4)
 
 
 def level_hit(side, price, stop_loss, take_profit):
@@ -916,8 +1042,36 @@ def _client_factory(api_key, secret, mode, market_type):
     return BinanceClient(api_key, secret, mode, market_type)
 
 
+def _fx_price(symbol):
+    fn = _hooks.get("forex_price")
+    return fn(symbol) if fn else None
+
+
+def _oanda_factory(token, account_id, env):
+    return fxbroker.OandaClient(token, account_id, env)
+
+
 def get_client(account, market_type):
-    if account.get("mode") == "paper":
+    mode = account.get("mode")
+    if market_type == "forex":
+        if mode == "paper":
+            return fxbroker.FxPaperClient(account["user_id"], _fx_price, _Cursor)
+        if mode in FX_MODES:
+            key = (account["user_id"], mode, "forex", account.get("key_hint"), hash(account["api_key_enc"]))
+            now = time.time()
+            with _client_cache_lock:
+                hit = _client_cache.get(key)
+                if hit and now - hit[0] < CLIENT_TTL_SEC:
+                    return hit[1]
+            client = _oanda_factory(_decrypt(account["api_key_enc"]), _decrypt(account["api_secret_enc"]),
+                                    "live" if mode == "oanda_live" else "practice")
+            with _client_cache_lock:
+                _client_cache[key] = (now, client)
+            return client
+        raise RuntimeError("Binance has no forex. Use the Site demo account or connect an OANDA account.")
+    if mode in FX_MODES:
+        raise RuntimeError("An OANDA account trades forex only.")
+    if mode == "paper":
         return PaperClient(account["user_id"], market_type)
     key = (account["user_id"], account["mode"], market_type, account.get("key_hint"),
            hash(account["api_key_enc"]))
@@ -1076,14 +1230,46 @@ def _store_balance(user_id, mode, free, total, market_type, cur):
     )
 
 
+def _retry(fn, *args, tries=3, delay=0.5, **kwargs):
+    """Calls an exchange function, retrying network / rate-limit problems with a growing wait."""
+    last = None
+    for k in range(tries):
+        try:
+            return fn(*args, **kwargs)
+        except TradeError:
+            raise
+        except Exception as e:
+            last = e
+            if not _retryable(e) or k == tries - 1:
+                raise
+            time.sleep(delay * (2 ** k))
+    raise last
+
+
+def _retryable(e):
+    if ccxt is not None and isinstance(e, (getattr(ccxt, "NetworkError", ()), getattr(ccxt, "RateLimitExceeded", ()),
+                                           getattr(ccxt, "DDoSProtection", ()), getattr(ccxt, "RequestTimeout", ()))):
+        return True
+    text = f"{type(e).__name__} {e}".lower()
+    return any(w in text for w in ("timeout", "timed out", "temporar", "rate limit", "429", "502", "503", "504",
+                                   "connection", "not reachable", "network"))
+
+
 def open_position(user_id, account, settings, symbol, side, signal=None, source="BOT", dry_run=False):
     """Opens a new position with a market order (with SL/TP).
-    dry_run=True -> returns only the plan/size, places no order."""
+    dry_run=True -> returns only the plan/size, places no order.
+    A site signal (signal["sl_pct"] + signal["targets_r"]) keeps its own stop distance and targets in R,
+    applied to the actual fill price."""
     mode = account["mode"]
-    market_type = settings["market_type"]
+    fx = markets.is_forex(symbol)
+    market_type = "forex" if fx else settings["market_type"]
     leverage = int(settings["leverage"]) if market_type == "futures" else 1
     if side not in ("LONG", "SHORT"):
         raise TradeError("Side must be LONG or SHORT.")
+    if mode in FX_MODES and not fx:
+        raise TradeError("An OANDA account trades forex only.")
+    if fx and mode in BINANCE_MODES:
+        raise TradeError("Binance has no forex. Use the Site demo account or connect an OANDA account.")
     if market_type == "spot" and side == "SHORT":
         raise TradeError("SHORT is not possible on spot. Choose Futures in the bot settings.")
 
@@ -1094,35 +1280,55 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
     if len(existing) >= int(settings["max_open_positions"]):
         raise TradeError(f"Max open positions ({settings['max_open_positions']}) reached.")
 
-    client = get_client(account, market_type)
+    try:
+        client = get_client(account, market_type)
+    except RuntimeError as e:
+        raise TradeError(str(e))
     try:
         if not client.has_symbol(symbol):
-            where = "Demo trading" if getattr(client, "is_paper", False) else f"Binance {market_type}"
+            where = "Demo trading" if getattr(client, "is_paper", False) else (
+                "this account" if fx else f"Binance {market_type}")
             raise TradeError(f"{symbol} is not available on {where}.")
-        free, total = client.balance_usdt()
-        price = client.price(symbol)
+        free, total = _retry(client.balance_usdt)
+        price = _retry(client.price, symbol)
         rules = client.market_rules(symbol)
     except TradeError:
         raise
     except Exception as e:
         raise TradeError(_error_text(e))
 
-    vol = (signal or {}).get("volatility_pct")
-    rr = (signal or {}).get("reward_risk") or settings["reward_risk"]  # engine levels when the signal has them
-    plan, err = plan_levels(side, price, vol, rr, leverage)
+    sig = signal or {}
+    vol = sig.get("sl_pct") or sig.get("volatility_pct")
+    rr = sig.get("reward_risk") or settings["reward_risk"]  # engine levels when the signal has them
+    min_pct = SL_MIN_PCT_SIGNAL["forex" if fx else "crypto"] if sig.get("sl_pct") else SL_MIN_PCT
+    plan, err = plan_levels(side, price, vol, rr, leverage, min_pct=min_pct)
     if err:
         raise TradeError(err)
-    notional, risk_usdt = size_position(free, settings["risk_pct"], plan["sl_pct"],
-                                        settings["max_position_usdt"], leverage, market_type)
-    amount = client.amount_to_precision(symbol, notional / price) if notional > 0 else 0.0
-    min_cost = max(rules["min_cost"], 5.0)
-    if amount <= 0 or amount < rules["min_amount"] or amount * price < min_cost:
-        raise TradeError(
-            f"Trade size is too small ({amount * price:.2f} USDT). The minimum is about {min_cost:.2f} USDT - "
-            f"add balance or raise Risk % / Max position."
-        )
+    rate = 1.0
+    if fx:
+        rate = fxbroker.fx_rate(symbol, client.price)
+        if not rate:
+            raise TradeError(f"No conversion price for {symbol} right now.")
+        risk_usdt = (total or free) * float(settings["risk_pct"]) / 100.0
+        stop_dist = price * plan["sl_pct"] / 100.0
+        units = risk_usdt / (stop_dist * rate) if stop_dist > 0 else 0.0
+        units = min(units, free * fxbroker.FX_MAX_LEVERAGE / (price * rate))
+        amount = client.amount_to_precision(symbol, units)
+        notional = amount * price * rate
+        if amount < 1:
+            raise TradeError("Trade size is too small for this account balance.")
+    else:
+        notional, risk_usdt = size_position(free, settings["risk_pct"], plan["sl_pct"],
+                                            settings["max_position_usdt"], leverage, market_type)
+        amount = client.amount_to_precision(symbol, notional / price) if notional > 0 else 0.0
+        min_cost = max(rules["min_cost"], 5.0)
+        if amount <= 0 or amount < rules["min_amount"] or amount * price < min_cost:
+            raise TradeError(
+                f"Trade size is too small ({amount * price:.2f} USDT). The minimum is about {min_cost:.2f} USDT - "
+                f"add balance or raise Risk % / Max position."
+            )
 
-    targets_r = (signal or {}).get("targets_r")
+    targets_r = sig.get("targets_r")
     ladder = bool(targets_r and len(targets_r) >= 3)
 
     def plan_targets(entry_px, stop_px):
@@ -1132,27 +1338,28 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
 
     preview = {
         "symbol": symbol, "side": side, "market_type": market_type, "leverage": leverage,
-        "price": price, "amount": amount, "notional_usdt": round(amount * price, 2),
-        "margin_usdt": round(amount * price / leverage, 2), "risk_usdt": round(risk_usdt, 2),
+        "price": price, "amount": amount, "notional_usdt": round(amount * price * rate, 2),
+        "margin_usdt": round(amount * price * rate / (fxbroker.FX_MAX_LEVERAGE if fx else leverage), 2),
+        "risk_usdt": round(risk_usdt, 2),
         "stop_loss": client.price_to_precision(symbol, plan["stop_loss"]),
         "take_profit": client.price_to_precision(symbol, plan["take_profit"]),
         "targets": plan_targets(price, plan["stop_loss"]),
         "sl_pct": plan["sl_pct"], "tp_pct": plan["tp_pct"], "free_usdt": round(free, 2),
-        "mode": mode,
+        "mode": mode, "account_currency": "USD" if fx else "USDT",
     }
     if dry_run:
         return preview
 
     try:
         if market_type == "futures":
-            client.prepare_futures(symbol, leverage)
-        order = client.market_order(symbol, "buy" if side == "LONG" else "sell", amount)
+            _retry(client.prepare_futures, symbol, leverage)
+        order = _retry(client.market_order, symbol, "buy" if side == "LONG" else "sell", amount)
     except Exception as e:
         raise TradeError(_error_text(e))
 
     fill = order["average"] or price
     filled = order["filled"] or amount
-    plan, _ = plan_levels(side, fill, vol, rr, 1)  # levels from the actual fill
+    plan, _ = plan_levels(side, fill, vol, rr, 1, min_pct=min_pct)  # levels from the actual fill
     sl = client.price_to_precision(symbol, plan["stop_loss"])
     tp = client.price_to_precision(symbol, plan["take_profit"])
     tps = plan_targets(fill, plan["stop_loss"])
@@ -1166,11 +1373,12 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
                 """INSERT INTO autotrade_positions (user_id, mode, market_type, symbol, side, source, amount,
                    entry_price, stop_loss, take_profit, leverage, notional_usdt, fee_rate, confidence, status,
                    entry_order_id, last_price, unrealized_pnl, opened_at, status_changed_at,
-                   tp1, tp2, hits, initial_amount, initial_stop, realized_usdt)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'OPEN',%s,%s,0,%s,%s,%s,%s,0,%s,%s,0)""",
+                   tp1, tp2, hits, initial_amount, initial_stop, realized_usdt, signal_id, timeframe, market, fx_rate)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'OPEN',%s,%s,0,%s,%s,%s,%s,0,%s,%s,0,%s,%s,%s,%s)""",
                 (user_id, mode, market_type, symbol, side, source, filled, fill, sl, tp, leverage,
-                 round(filled * fill, 4), rules["taker"], (signal or {}).get("confidence"), order["id"],
-                 fill, now, now, tp1, tp2, filled, sl),
+                 round(filled * fill * rate, 4), rules["taker"], sig.get("confidence"), order["id"],
+                 fill, now, now, tp1, tp2, filled, sl, sig.get("signal_id"), sig.get("timeframe"),
+                 "forex" if fx else "crypto", rate if fx else None),
             )
             position_id = cur.lastrowid
             try:
@@ -1192,6 +1400,14 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
         except Exception as e:
             log_event(user_id, "WARN", f"{symbol}: SL/TP could not be set on the demo position ({type(e).__name__}). "
                                        f"The bot will monitor them itself.", mode=mode)
+    elif market_type == "forex":
+        try:
+            sid = _retry(client.set_stop, order["id"], symbol, sl)
+            with _Cursor() as cur:
+                cur.execute("UPDATE autotrade_positions SET backup_stop_id=%s WHERE id=%s", (sid, position_id))
+        except Exception as e:
+            log_event(user_id, "WARN", f"{symbol}: the stop-loss could not be attached at the broker "
+                                       f"({type(e).__name__}). The bot will monitor it itself.", mode=mode)
     elif market_type == "futures":
         dist = abs(fill - sl)
         backup_price = sl - dist * BACKUP_STOP_EXTRA if side == "LONG" else sl + dist * BACKUP_STOP_EXTRA
@@ -1204,11 +1420,12 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
             log_event(user_id, "WARN", f"{symbol}: backup stop could not be placed on Binance "
                                        f"({type(e).__name__}). The bot will monitor the SL itself.", mode=mode)
 
-    conf = (signal or {}).get("confidence")
+    conf = sig.get("confidence")
     conf_txt = f", signal {conf:.0f}%" if conf else ""
+    tf_txt = f" {sig['timeframe']}" if sig.get("timeframe") else ""
     tp_txt = f"TP1 {tp1:g} | TP2 {tp2:g} | TP3 {tp:g}" if tps else f"TP {tp:g}"
     log_event(user_id, "TRADE",
-              f"OPEN {side} {symbol} {filled:g} @ {fill:g} ({leverage}x{conf_txt}) | SL {sl:g} | {tp_txt} [{source}]",
+              f"OPEN {side} {symbol}{tf_txt} {filled:g} @ {fill:g} ({leverage}x{conf_txt}) | SL {sl:g} | {tp_txt} [{source}]",
               mode=mode)
     preview.update({"id": position_id, "entry_price": fill, "amount": filled, "stop_loss": sl, "take_profit": tp,
                     "targets": tps})
@@ -1237,7 +1454,7 @@ def _finalize(pos, exit_price, reason, client=None, pnl=None):
     """Closes the record. pnl = result of the part still open (computed when None); the profit already taken
     at TP1 / TP2 (realized_usdt) is added, so pnl_usdt is the whole trade."""
     if pnl is None:
-        pnl = calc_pnl(pos["side"], pos["entry_price"], exit_price, pos["amount"], pos["fee_rate"])
+        pnl = _pnl(pos, exit_price)
     pnl = round(float(pnl) + _f(pos.get("realized_usdt"), 0.0), 4)
     with _Cursor() as cur:
         cur.execute(
@@ -1292,6 +1509,14 @@ def close_position(pos, account, reason, price_hint=None, already_claimed=False)
             closed = order.get("closed") or {}
             exit_price = closed.get("exit_price") or order["average"] or price_hint or client.price(symbol)
             return _finalize(pos, exit_price, reason, client, pnl=closed.get("net_pnl"))
+        if pos["market_type"] == "forex":
+            live = client.futures_positions([symbol])
+            if live is not None and live.get(symbol, 0.0) <= 0:
+                exit_price, why, pnl = _gone_exit(client, pos, price_hint)
+                return _finalize(pos, exit_price, why, client, pnl=pnl)
+            order = client.market_order(symbol, close_side, float(pos["amount"]), reduce_only=True)
+            exit_price = order["average"] or price_hint or client.price(symbol)
+            return _finalize(pos, exit_price, reason, client)
         if pos["market_type"] == "futures":
             client.cancel_all(symbol)  # remove the backup stop
             qty = client.futures_positions([symbol]).get(symbol, 0.0)
@@ -1367,7 +1592,7 @@ def monitor_positions():
             account = load_account(user_id, mode)
             if not account:
                 continue
-            for market_type in ("spot", "futures"):
+            for market_type in ("spot", "futures", "forex"):
                 group = [p for p in positions if p["market_type"] == market_type]
                 if not group:
                     continue
@@ -1375,7 +1600,8 @@ def monitor_positions():
                 symbols = sorted({p["symbol"] for p in group})
                 prices = client.prices(symbols)
                 paper = getattr(client, "is_paper", False)
-                live_futures = client.futures_positions(symbols) if (market_type == "futures" or paper) else None
+                live_futures = client.futures_positions(symbols) if (
+                    market_type in ("futures", "forex") or paper) else None
                 for pos in group:
                     _check_position(pos, account, client, prices.get(pos["symbol"]), live_futures)
         except Exception as e:
@@ -1447,7 +1673,7 @@ def take_partial(pos, account, client, price):
                 order = client.market_order(symbol, close_side, part, reduce_only=True)
             fill = order.get("average") or price
             done = order.get("filled") or part
-            pnl_part = calc_pnl(side, entry, fill, done, pos["fee_rate"])
+            pnl_part = _pnl(pos, fill, done)
             remaining = max(0.0, remaining - done)
             realized += pnl_part
             what = f"closed {done:g} @ {fill:g} ({'+' if pnl_part >= 0 else ''}{pnl_part:.2f} USDT)"
@@ -1464,6 +1690,13 @@ def take_partial(pos, account, client, price):
                 client.attach_tpsl(symbol, new_stop, float(pos["take_profit"]))
             except Exception:
                 pass  # the bot watches the stop itself as well
+        elif pos["market_type"] == "forex":
+            try:
+                client.set_stop(pos.get("backup_stop_id") or pos.get("entry_order_id"), symbol, new_stop)
+            except Exception as e:
+                log_event(pos["user_id"], "WARN", f"{symbol}: the stop could not be moved at the broker "
+                                                  f"({type(e).__name__}). The bot keeps watching it itself.",
+                          mode=pos["mode"])
         elif pos["market_type"] == "futures":
             _replace_backup_stop(pos, client, new_stop, remaining)
         log_event(pos["user_id"], "TRADE",
@@ -1495,7 +1728,7 @@ def _check_position(pos, account, client, price, live_futures):
         return
     if price is None:
         return
-    unreal = calc_pnl(pos["side"], pos["entry_price"], price, pos["amount"], pos["fee_rate"])
+    unreal = _pnl(pos, price)
     with _Cursor() as cur:
         cur.execute("UPDATE autotrade_positions SET last_price=%s, unrealized_pnl=%s WHERE id=%s AND status='OPEN'",
                     (price, unreal, pos["id"]))
@@ -1625,6 +1858,202 @@ def scan_user(user_id, mode, between_coins=None):
     log_event(user_id, "SCAN", f"Scan {tf}: " + " | ".join(notes), mode=mode)
 
 
+# ===========================================================================
+# Site signals -> bot (the hand-off): every new signal of the site goes to
+# every bot whose filters it matches, once, with the signal's own levels.
+# ===========================================================================
+PERMANENT_SKIPS = ("SHORT is not possible on spot", "has no forex", "trades forex only", "is not available on")
+
+
+def _sig_for_order(row):
+    """A site signal (signal_hub.signal_json) -> what open_position needs."""
+    entry, stop = float(row["entry"]), float(row["stop_loss"])
+    tr = [float(x) for x in (row.get("targets_r") or [0.5, 1.0, 2.0])]
+    return {"signal_id": int(row["id"]), "timeframe": row.get("timeframe"), "market": row.get("market"),
+            "sl_pct": abs(entry - stop) / entry * 100 if entry else None, "targets_r": tr, "reward_risk": tr[-1],
+            "confidence": _f(row.get("confidence")), "grade": row.get("grade"), "entry": entry, "stop_loss": stop}
+
+
+def signal_wanted(settings, row):
+    """Does this bot account want this site signal? -> (True, None) or (False, reason)."""
+    if row.get("market") not in (settings.get("markets") or ["crypto"]):
+        return False, "market not selected"
+    if row.get("timeframe") not in (settings.get("timeframes") or ["4h"]):
+        return False, "timeframe not selected"
+    g = row.get("grade") or "C"
+    if GRADES.index(g if g in GRADES else "C") > GRADES.index(settings.get("min_grade") or "C"):
+        return False, f"grade {g} is below the minimum"
+    if settings.get("symbols_mode") == "list" and row["symbol"] not in (settings.get("coins") or []):
+        return False, "symbol not in the bot's list"
+    conf = _f(row.get("confidence"))
+    if conf is not None and str(row.get("engine") or "").startswith("v") and conf < float(settings["min_confidence"]):
+        return False, f"confidence {conf:.0f}% is below the minimum"
+    return True, None
+
+
+def entry_check(sig, price):
+    """None when the price is still a good entry for the signal, else the reason."""
+    if price is None:
+        return "no live price"
+    entry, stop = float(sig["entry"]), float(sig["stop_loss"])
+    risk = abs(entry - stop)
+    if risk <= 0:
+        return "the signal has no stop distance"
+    sgn = 1 if sig["side"] == "LONG" else -1
+    moved = sgn * (float(price) - entry) / risk
+    first = float((sig.get("targets_r") or [0.5])[0])
+    if moved <= -1:
+        return "the price is already past the stop"
+    if moved >= first:
+        return "the price already reached TP1"
+    if abs(moved) > MAX_ENTRY_DRIFT_R:
+        return f"the price is {moved:+.2f} R away from the entry (limit {MAX_ENTRY_DRIFT_R} R)"
+    return None
+
+
+def _order_get(cur, uid, mode, sid):
+    cur.execute("SELECT * FROM autotrade_signal_orders WHERE user_id=%s AND mode=%s AND signal_id=%s", (uid, mode, sid))
+    return cur.fetchone()
+
+
+def _order_set(uid, mode, sid, status, reason=None, position_id=None, source="BOT", next_try=None, bump=False):
+    now = _utcnow()
+    with _Cursor() as cur:
+        row = _order_get(cur, uid, mode, sid)
+        if row and row["status"] == "placed" and status != "placed":
+            return                      # a placed signal keeps its record (a later refusal does not overwrite it)
+        if row:
+            cur.execute("""UPDATE autotrade_signal_orders SET status=%s, reason=%s, position_id=COALESCE(%s, position_id),
+                           next_try_at=%s, attempts=attempts+%s, updated_at=%s WHERE id=%s""",
+                        (status, (reason or "")[:300] or None, position_id, next_try, 1 if bump else 0, now, row["id"]))
+        else:
+            cur.execute("""INSERT INTO autotrade_signal_orders (user_id, mode, signal_id, status, reason, attempts, next_try_at,
+                           position_id, source, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        (uid, mode, sid, status, (reason or "")[:300] or None, 1 if bump else 0, next_try, position_id,
+                         source, now, now))
+
+
+def _window_end(row):
+    sec = {"15m": 900, "1h": 3600, "4h": 14400}.get(row.get("timeframe"), 14400)
+    start = _to_dt(row.get("signal_at"))
+    return start + timedelta(seconds=sec * ENTRY_WINDOW_BARS) if start else None
+
+
+def trade_signal(uid, mode, row, source="BOT", dry_run=False, settings=None, account=None):
+    """Places one site signal on one account (also the 'Trade this signal' button).
+    Returns open_position's result; raises TradeError with a clear reason."""
+    if (row.get("status") or "ACTIVE") != "ACTIVE":
+        raise TradeError("This signal is no longer active.")
+    if int(row.get("hits") or 0) > 0:
+        raise TradeError("This signal already reached TP1, so it is too late to enter.")
+    with _Cursor() as cur:
+        _ensure_settings_row(uid, mode, cur)
+        settings = settings or load_settings(uid, mode, cur)
+        account = account or load_account(uid, mode, cur)
+        prev = _order_get(cur, uid, mode, int(row["id"]))
+    if not account:
+        raise TradeError(f"Connect your {_label(mode)} account first.")
+    if prev and prev["status"] == "placed":
+        raise TradeError(f"This signal was already traded on your {_label(mode)} account.")
+    sig = _sig_for_order(row)
+    sig["side"] = row["side"]
+    fx = markets.is_forex(row["symbol"])
+    try:
+        client = get_client(account, "forex" if fx else settings["market_type"])
+        price = _retry(client.price, row["symbol"])
+    except TradeError:
+        raise
+    except Exception as e:
+        raise TradeError(_error_text(e) if not isinstance(e, RuntimeError) else str(e))
+    why = entry_check(sig, price)
+    if why:
+        raise TradeError(f"Not entered: {why}.")
+    return open_position(uid, account, settings, row["symbol"], row["side"], signal=sig, source=source, dry_run=dry_run)
+
+
+def _bot_accounts():
+    with _Cursor() as cur:
+        cur.execute("""SELECT s.user_id, s.mode FROM autotrade_bot_settings s
+                       JOIN autotrade_exchange_accounts a ON a.user_id = s.user_id AND a.mode = s.mode
+                       WHERE s.enabled = 1""")
+        return [(r["user_id"], r["mode"]) for r in (cur.fetchall() or [])]
+
+
+def bridge_step(now=None):
+    """One pass: new site signals -> every bot account that wants them. Returns {(uid, mode): [results]}."""
+    feed = _hooks.get("signal_feed")
+    if not feed:
+        return {}
+    now = now or _utcnow()
+    signals = sorted(feed(now) or [], key=lambda r: (str(r.get("signal_at")), r["id"]))
+    if not signals:
+        return {}
+    out = {}
+    for uid, mode in _bot_accounts():
+        settings = load_settings(uid, mode)
+        account = load_account(uid, mode)
+        if not settings["enabled"] or not account:
+            continue
+        paused_until = _to_dt(settings.get("paused_until"))
+        if paused_until and paused_until > now:
+            continue
+        with _Cursor() as cur:
+            ids = [int(r["id"]) for r in signals]
+            cur.execute("SELECT * FROM autotrade_signal_orders WHERE user_id=%s AND mode=%s AND signal_id IN ("
+                        + ",".join(["%s"] * len(ids)) + ")", (uid, mode, *ids))
+            seen = {int(r["signal_id"]): r for r in (cur.fetchall() or [])}
+        guard_checked = False
+        res = []
+        for row in signals:
+            ok, _ = signal_wanted(settings, row)
+            if not ok:
+                continue
+            sid = int(row["id"])
+            prev = seen.get(sid)
+            if prev and prev["status"] in ("placed", "skipped", "failed"):
+                continue
+            if prev and prev["status"] == "retry" and _to_dt(prev.get("next_try_at")) and _to_dt(prev["next_try_at"]) > now:
+                continue
+            end = _window_end(row)
+            if not guard_checked:
+                guard_checked = True
+                try:
+                    gclient = get_client(account, "forex" if mode in FX_MODES else settings["market_type"])
+                    if not _daily_guard(uid, mode, settings, gclient):
+                        break
+                except Exception as e:
+                    _throttled_log(uid, mode, "ERROR", f"Bot paused for this pass: {_error_text(e)}")
+                    break
+            label = f"{row['symbol']} {row.get('timeframe')} {row['side']} (signal #{sid})"
+            try:
+                r = trade_signal(uid, mode, row, source="BOT", settings=settings, account=account)
+                _order_set(uid, mode, sid, "placed", position_id=r.get("id"), bump=True)
+                res.append((sid, "placed"))
+            except TradeError as e:
+                msg = str(e)
+                attempts = int((prev or {}).get("attempts") or 0) + 1
+                permanent = any(w in msg for w in PERMANENT_SKIPS)
+                expired = end is not None and now >= end
+                if permanent or expired or attempts > len(RETRY_BACKOFF_SEC):
+                    _order_set(uid, mode, sid, "skipped", msg, bump=True)
+                    log_event(uid, "WARN", f"Skipped {label}: {msg}", mode=mode)
+                    res.append((sid, "skipped"))
+                else:
+                    wait = RETRY_BACKOFF_SEC[min(attempts - 1, len(RETRY_BACKOFF_SEC) - 1)]
+                    _order_set(uid, mode, sid, "retry", msg, next_try=now + timedelta(seconds=wait), bump=True)
+                    if attempts == 1:
+                        log_event(uid, "INFO", f"Waiting to enter {label}: {msg} Next try in {wait}s.", mode=mode)
+                    res.append((sid, "retry"))
+            except Exception as e:
+                _order_set(uid, mode, sid, "retry", _error_text(e), next_try=now + timedelta(seconds=60), bump=True)
+                _throttled_log(uid, mode, "ERROR", f"{label}: {_error_text(e)}")
+                res.append((sid, "error"))
+        with _Cursor() as cur:
+            cur.execute("UPDATE autotrade_bot_settings SET last_scan_at=%s WHERE user_id=%s AND mode=%s", (now, uid, mode))
+        out[(uid, mode)] = res
+    return out
+
+
 def _due_bots():
     with _Cursor() as cur:
         cur.execute(
@@ -1671,7 +2100,11 @@ def _engine_loop(lock_conn):
         lock_conn.ping(reconnect=False)  # lost lock connection -> exception -> re-acquire the lock
         maybe_monitor()
         now = time.time()
-        if now - state["last_scan_check"] >= 30:
+        if _hooks.get("signal_feed"):
+            if now - state["last_scan_check"] >= 15:     # site signals -> bots
+                state["last_scan_check"] = now
+                _safe(bridge_step)
+        elif now - state["last_scan_check"] >= 30:       # no signal hub: the old per-coin polling
             state["last_scan_check"] = now
             for uid, mode in _safe(_due_bots) or []:
                 _safe(scan_user, uid, mode, between_coins=maybe_monitor)
@@ -1721,9 +2154,13 @@ def start_engine():
 
 
 def init_autotrade(app=None, *, get_candles=None, generate_signal=None, data_exchange=None,
-                   available_coins=None, start=True, engine_signal=None):
+                   available_coins=None, start=True, engine_signal=None, signal_feed=None, signal_get=None,
+                   forex_price=None):
     """Called from main.py. Injects the signal functions, creates tables and
     starts the background engine."""
+    for k, v in (("signal_feed", signal_feed), ("signal_get", signal_get), ("forex_price", forex_price)):
+        if v is not None:
+            _hooks[k] = v
     if get_candles and not _hooks["get_candles"]:
         _hooks["get_candles"] = get_candles
     if generate_signal and not _hooks["generate_signal"]:
@@ -1761,11 +2198,26 @@ def _pos_json(p):
         "targets": ([_f(p.get("tp1")), _f(p.get("tp2")), _f(p["take_profit"])] if p.get("tp1") is not None else None),
         "hits": int(p.get("hits") or 0), "realized_usdt": _f(p.get("realized_usdt"), 0.0),
         "initial_amount": _f(p.get("initial_amount")), "initial_stop": _f(p.get("initial_stop")),
+        "signal_id": p.get("signal_id"), "timeframe": p.get("timeframe"), "market": p.get("market") or (
+            "forex" if p.get("market_type") == "forex" else "crypto"),
     }
 
 
 def _settings_json(s):
-    return {k: s[k] for k in DEFAULT_SETTINGS}
+    return {k: s.get(k, DEFAULT_SETTINGS[k]) for k in DEFAULT_SETTINGS}
+
+
+def _recent_signal_orders(uid, mode, limit=15):
+    try:
+        with _Cursor() as cur:
+            cur.execute("""SELECT signal_id, status, reason, attempts, position_id, source, updated_at FROM autotrade_signal_orders
+                           WHERE user_id=%s AND mode=%s ORDER BY updated_at DESC, id DESC LIMIT %s""", (uid, mode, limit))
+            rows = cur.fetchall() or []
+    except Exception:
+        return []
+    return [{"signal_id": r["signal_id"], "status": r["status"], "reason": r.get("reason"), "attempts": r["attempts"],
+             "position_id": r.get("position_id"), "source": r.get("source"),
+             "updated_at": _iso(_to_dt(r.get("updated_at")))} for r in rows]
 
 
 def _confidence_levels():
@@ -1819,7 +2271,7 @@ def status():
         return _err("Login required.", 401)
     mode = _req_mode()
     if not mode:
-        return _err("Account must be 'paper', 'demo' or 'live'.")
+        return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
     with _Cursor() as cur:
         _ensure_settings_row(uid, mode, cur)
         settings = load_settings(uid, mode, cur)
@@ -1864,10 +2316,11 @@ def status():
             account["balance_error"] = recent_fail[1]
         elif stale:
             try:
-                client = get_client(account, settings["market_type"])
+                bal_market = "forex" if mode in FX_MODES else settings["market_type"]
+                client = get_client(account, bal_market)
                 free, total = client.balance_usdt()
                 with _Cursor() as cur:
-                    _store_balance(uid, mode, free, total, settings["market_type"], cur)
+                    _store_balance(uid, mode, free, total, bal_market, cur)
                 account.update({"balance_usdt": free, "balance_total_usdt": total, "balance_at": _utcnow(),
                                 "balance_market": settings["market_type"]})
                 _balance_failures.pop(fail_key, None)
@@ -1921,9 +2374,23 @@ def status():
         "logs": [{"id": l["id"], "level": l["level"], "message": l["message"],
                   "created_at": _iso(_to_dt(l["created_at"]))} for l in logs],
         "options": {"leverage": list(ALLOWED_LEVERAGE), "timeframes": list(TIMEFRAME_SCAN_SEC),
-                    "coins": coin_choices(), "max_coins": MAX_COINS, "confidence": _confidence_levels()},
+                    "coins": coin_choices(), "symbols": signal_symbols(), "forex_symbols": list(markets.forex_signal_pairs()),
+                    "max_coins": MAX_COINS, "confidence": _confidence_levels(), "markets": list(MARKETS),
+                    "signal_timeframes": list(SIGNAL_TIMEFRAMES), "grades": list(GRADES),
+                    "live_modes": list(LIVE_MODES), "fx_modes": list(FX_MODES),
+                    "signal_feed": bool(_hooks.get("signal_feed")), "streams_live": _streams_live()},
+        "signal_orders": _recent_signal_orders(uid, mode),
         "server_time": _iso(_utcnow()),
     })
+
+
+def _streams_live():
+    """Signal streams that are running on the site (the ones whose model passed its test on unseen data)."""
+    try:
+        import signal_hub
+        return signal_hub.enabled_streams()
+    except Exception:
+        return []
 
 
 @autotrade_bp.route("/api/autotrade/connect", methods=["POST"])
@@ -1937,9 +2404,11 @@ def connect():
     data = request.get_json(silent=True) or {}
     mode = _req_mode(data)
     if not mode:
-        return _err("Account must be 'paper', 'demo' or 'live'.")
+        return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
     if mode == "paper":
         return _err("The Site demo account needs no API keys: it trades your Demo trading account on this site.")
+    if mode in FX_MODES:
+        return _connect_oanda(uid, mode, data)
     if not encryption_ready():
         return _err("AUTOTRADE_ENCRYPTION_KEY is not set on the server, so keys cannot be stored. "
                     "Add it in Railway Variables.", 503)
@@ -1986,6 +2455,39 @@ def connect():
     return jsonify({"ok": True, "mode": mode, "balance_usdt": free, "balance_total_usdt": total, "note": note})
 
 
+def _connect_oanda(uid, mode, data):
+    if not encryption_ready():
+        return _err("AUTOTRADE_ENCRYPTION_KEY is not set on the server, so keys cannot be stored. "
+                    "Add it in Railway Variables.", 503)
+    token = str(data.get("api_key") or "").strip()
+    account_id = str(data.get("account_id") or data.get("api_secret") or "").strip()
+    if len(token) < 20 or not re.fullmatch(r"[0-9]{3}-[0-9]{3}-[0-9]+-[0-9]{3}", account_id):
+        return _err("Paste the OANDA API token and the account ID (it looks like 101-004-1234567-001).")
+    with _Cursor() as cur:
+        _ensure_settings_row(uid, mode, cur)
+        if _open_positions(uid, mode, cur):
+            return _err(f"The {_label(mode)} account has open positions. Close them before changing keys.", 409)
+    try:
+        client = _oanda_factory(token, account_id, "live" if mode == "oanda_live" else "practice")
+        free, total = client.balance_usdt()
+    except Exception as e:
+        return _err(f"Verification failed: {str(e)[:200]}")
+    now = _utcnow()
+    with _Cursor() as cur:
+        cur.execute("DELETE FROM autotrade_exchange_accounts WHERE user_id=%s AND mode=%s", (uid, mode))
+        cur.execute(
+            """INSERT INTO autotrade_exchange_accounts (user_id, mode, exchange, api_key_enc, api_secret_enc, key_hint,
+               balance_usdt, balance_total_usdt, balance_market, balance_at, connected_at)
+               VALUES (%s,%s,'oanda',%s,%s,%s,%s,%s,'forex',%s,%s)""",
+            (uid, mode, _encrypt(token), _encrypt(account_id), "..." + account_id[-4:], free, total, now, now),
+        )
+        cur.execute("UPDATE autotrade_bot_settings SET enabled=0 WHERE user_id=%s AND mode=%s", (uid, mode))
+        log_event(uid, "INFO", f"{_label(mode)} connected. Balance: {total:.2f} USD", cur, mode=mode)
+    _drop_clients(uid, mode)
+    return jsonify({"ok": True, "mode": mode, "balance_usdt": free, "balance_total_usdt": total,
+                    "note": "The OANDA API cannot withdraw money; the token only trades and reads this account."})
+
+
 @autotrade_bp.route("/api/autotrade/disconnect", methods=["POST"])
 def disconnect():
     uid = _user_id()
@@ -1993,7 +2495,7 @@ def disconnect():
         return _err("Login required.", 401)
     mode = _req_mode(request.get_json(silent=True) or {})
     if not mode:
-        return _err("Account must be 'paper', 'demo' or 'live'.")
+        return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
     if mode == "paper":
         return _err("The Site demo account has nothing to disconnect. Turn its bot off instead.")
     with _Cursor() as cur:
@@ -2017,7 +2519,7 @@ def update_settings():
     data = request.get_json(silent=True) or {}
     mode = _req_mode(data)
     if not mode:
-        return _err("Account must be 'paper', 'demo' or 'live'.")
+        return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
     with _Cursor() as cur:
         _ensure_settings_row(uid, mode, cur)
         current = load_settings(uid, mode, cur)
@@ -2043,7 +2545,7 @@ def toggle_bot():
     data = request.get_json(silent=True) or {}
     mode = _req_mode(data)
     if not mode:
-        return _err("Account must be 'paper', 'demo' or 'live'.")
+        return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
     enable = bool(data.get("enabled"))
     with _Cursor() as cur:
         _ensure_settings_row(uid, mode, cur)
@@ -2051,7 +2553,7 @@ def toggle_bot():
         if enable:
             if not account:
                 return _err(f"Connect your {_label(mode)} account first.")
-            if mode == "live" and not data.get("ack_live"):
+            if mode in LIVE_MODES and not data.get("ack_live"):
                 return _err("Please confirm the risk warning to run the bot on your live account.", 428, need_ack=True)
             cur.execute("""UPDATE autotrade_bot_settings SET enabled=1, last_scan_at=NULL, paused_until=NULL,
                            pause_reason=NULL WHERE user_id=%s AND mode=%s""", (uid, mode))
@@ -2094,7 +2596,7 @@ def panic():
     requested = str(data.get("account") or request.args.get("account") or "").lower()
     modes = MODES if requested == "all" else ((requested,) if requested in MODES else None)
     if not modes:
-        return _err("Account must be 'demo', 'live' or 'all'.")
+        return _err("Unknown account (or 'all').")
     closed, failed = 0, []
     for mode in modes:
         with _Cursor() as cur:
@@ -2128,10 +2630,10 @@ def manual_trade():
     data = request.get_json(silent=True) or {}
     mode = _req_mode(data)
     if not mode:
-        return _err("Account must be 'paper', 'demo' or 'live'.")
+        return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
     symbol = str(data.get("symbol") or "").upper()
     side = str(data.get("side") or "").upper()
-    if symbol not in coin_choices():
+    if symbol not in coin_choices() and symbol not in signal_symbols():
         return _err("This coin is not supported.")
     with _Cursor() as cur:
         _ensure_settings_row(uid, mode, cur)
@@ -2139,7 +2641,7 @@ def manual_trade():
         account = load_account(uid, mode, cur)
     if not account:
         return _err(f"Connect your {_label(mode)} account first.")
-    if mode == "live" and data.get("confirm") and not data.get("ack_live"):
+    if mode in LIVE_MODES and data.get("confirm") and not data.get("ack_live"):
         return _err("Live trades need an explicit confirmation.", 428, need_ack=True)
     try:
         sig = get_signal(symbol, settings["timeframe"], max_age_sec=600)
@@ -2280,6 +2782,84 @@ def assistant_route():
 
 
 _price_cache = {"ts": 0.0, "key": None, "data": None}
+
+
+def _signal_row(sid):
+    fn = _hooks.get("signal_get")
+    return fn(int(sid)) if fn else None
+
+
+@autotrade_bp.route("/api/autotrade/trade-signal", methods=["POST"])
+def trade_signal_route():
+    """'Trade this signal': confirm=false -> preview (size, levels), confirm=true -> order on the chosen account."""
+    uid = _user_id()
+    if not uid:
+        return _err("Login required.", 401)
+    bad = _require_json_post()
+    if bad:
+        return bad
+    data = request.get_json(silent=True) or {}
+    mode = _req_mode(data)
+    if not mode:
+        return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
+    try:
+        sid = int(data.get("signal_id"))
+    except (TypeError, ValueError):
+        return _err("Invalid signal.")
+    row = _signal_row(sid)
+    if not row:
+        return _err("Signal not found.", 404)
+    confirm = bool(data.get("confirm"))
+    if mode in LIVE_MODES and confirm and not data.get("ack_live"):
+        return _err("Live trades need an explicit confirmation.", 428, need_ack=True)
+    try:
+        result = trade_signal(uid, mode, row, source="SIGNAL", dry_run=not confirm)
+    except TradeError as e:
+        if confirm:
+            try:
+                _order_set(uid, mode, sid, "failed", str(e), source="SIGNAL", bump=True)
+            except Exception:
+                pass
+        return _err(str(e))
+    if confirm:
+        _order_set(uid, mode, sid, "placed", position_id=result.get("id"), source="SIGNAL", bump=True)
+    result["executed"] = confirm
+    result["account_label"] = _label(mode)
+    return jsonify({"ok": True, **result})
+
+
+@autotrade_bp.route("/api/autotrade/signal-status", methods=["GET"])
+def signal_status_route():
+    """For the signals page: what the user's bots did with each signal (placed / waiting / skipped) and the result."""
+    uid = _user_id()
+    if not uid:
+        return _err("Login required.", 401)
+    try:
+        ids = [int(x) for x in (request.args.get("ids") or "").split(",") if x.strip()][:100]
+    except ValueError:
+        return _err("Invalid ids.")
+    if not ids:
+        return jsonify({"ok": True, "signals": {}})
+    ph = ",".join(["%s"] * len(ids))
+    with _Cursor() as cur:
+        cur.execute(f"SELECT * FROM autotrade_signal_orders WHERE user_id=%s AND signal_id IN ({ph})", (uid, *ids))
+        orders = cur.fetchall() or []
+        pids = [o["position_id"] for o in orders if o.get("position_id")]
+        pos = {}
+        if pids:
+            cur.execute(f"SELECT * FROM autotrade_positions WHERE user_id=%s AND id IN ({','.join(['%s'] * len(pids))})",
+                        (uid, *pids))
+            pos = {p["id"]: p for p in (cur.fetchall() or [])}
+    out = {}
+    for o in orders:
+        p = pos.get(o.get("position_id"))
+        out.setdefault(str(o["signal_id"]), []).append({
+            "account": o["mode"], "label": _label(o["mode"]), "status": o["status"], "reason": o.get("reason"),
+            "source": o.get("source"),
+            "position": None if not p else {"status": p["status"], "pnl_usdt": _f(p.get("pnl_usdt")),
+                                            "unrealized_pnl": _f(p.get("unrealized_pnl")), "hits": int(p.get("hits") or 0),
+                                            "close_reason": p.get("close_reason")}})
+    return jsonify({"ok": True, "signals": out})
 
 
 @autotrade_bp.route("/api/autotrade/prices", methods=["GET"])
