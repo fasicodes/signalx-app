@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Live signals board | Signals FM</title>
+<title>Trading signals 15m, 1h, 4h | Signals FM</title>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -79,6 +79,56 @@
   .tg-note { margin: 0; font-size: 13.5px; color: var(--text-dim); line-height: 1.55; }
   .tg-note b { color: var(--text); }
   .tg .row-actions .switch { font-size: 14px; margin-right: 6px; }
+
+  /* streams: market switch, timeframe tabs, filters */
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 4px 0 14px; }
+  .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .tabs button { background: transparent; border: 0; color: var(--text-dim); font: 600 14px var(--body); padding: 9px 16px; cursor: pointer; min-height: 40px; }
+  .tabs button + button { border-left: 1px solid var(--line); }
+  .tabs button[aria-selected="true"] { background: var(--long-dim); color: var(--text); }
+  .stream-info { font-size: 13px; color: var(--text-dim); flex: 1 1 260px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+  .filters select, .filters input { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 14px var(--body); min-height: 38px; }
+  .filters .chip { min-height: 34px; }
+  .strip.s5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  @media (max-width: 900px) { .strip.s5 { grid-template-columns: 1fr 1fr; } }
+  .badge { font: 600 12px var(--body); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--text-dim); white-space: nowrap; }
+  .badge.A { color: #03140b; background: var(--accent); border-color: var(--accent); }
+  .badge.B { color: var(--long); border-color: var(--long); }
+  .badge.C { color: var(--text-dim); }
+  .st { font: 600 12px var(--body); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+  .st.ACTIVE { background: var(--wait-dim); color: var(--wait); }
+  .st.TP1, .st.TP2, .st.TP3 { background: var(--long-dim); color: var(--long); }
+  .st.SL { background: var(--short-dim); color: var(--short); }
+  .st.EXPIRED, .st.CANCELLED { background: var(--panel-raised); color: var(--text-dim); }
+  .card .tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .res { font: 600 15px var(--body); font-variant-numeric: tabular-nums; }
+  .res.pos { color: var(--long); } .res.neg { color: var(--short); }
+  .news-warn { font-size: 12.5px; background: var(--wait-dim); color: var(--text); border-radius: 8px; padding: 6px 10px; }
+  .pager { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 16px 0 4px; }
+  .gtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .gtable th, .gtable td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  .gtable td { font-variant-numeric: tabular-nums; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } .tabs button { padding: 9px 12px; } }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .box h3 { margin: 0 0 8px; font-size: 15px; }
+  .off-note { border: 1px solid var(--amber, #d97706); background: var(--amber-bg, rgba(217,119,6,.08)); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; line-height: 1.6; margin: 0 0 16px; }
+  .off-note ul { margin: 8px 0 0; padding-left: 18px; }
+  .off-note li { margin: 2px 0; }
+  .disclaimer { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: var(--text-dim); font-size: 13px; line-height: 1.6; margin: 18px 0; }
+  .admin-x { font-size: 12px; }
+  .card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .botst { font-size: 12.5px; color: var(--text-dim); }
+  .botst b { color: var(--text); font-weight: 600; }
+  .tmodal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
+  .tmodal.open { display: flex; }
+  .tbox { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(460px, 100%); display: grid; gap: 12px; max-height: 92vh; overflow: auto; }
+  .tbox h3 { margin: 0; font-size: 17px; }
+  .tbox dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
+  .tbox dt { color: var(--text-faint); } .tbox dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .tbox select { background: var(--void, #05080a); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 14px var(--body); }
+  .tbox .err { color: var(--short); font-size: 13.5px; } .tbox .ok { color: var(--long); font-size: 13.5px; }
 </style>
 {% include '_analytics.html' ignore missing %}
 </head>
@@ -89,51 +139,91 @@
 
 <main class="wrap">
   <div class="phead">
-    <h1>Live signals board</h1>
-    <p>Signal engine v3 reads all 62 crypto coins together when a 4-hour candle closes. Strong signals come from the model's best
-      setups; if no coin has had a signal for 24 hours, the best setup gets a standard one, so there is rarely a long wait.
-      Every signal has three targets: close a third at each, and after TP1 the stop moves to the entry.</p>
+    <h1>Trading signals</h1>
+    <p>Separate signal streams for 15-minute, 1-hour and 4-hour candles, for crypto and forex. Each stream has its own rules,
+      stop and target distances, holding time and track record, and a signal on one timeframe never changes another.</p>
   </div>
 
-  <dl class="strip" id="strip">
-    <div><dt>Active signals{{ tip('signal', 'signal') }}</dt><dd id="c-active">--</dd><small id="c-active-sub">&nbsp;</small></div>
-    <div><dt>New this candle{{ tip('candle_4h', '4-hour candle') }}</dt><dd id="c-new">--</dd><small>started at the last close</small></div>
-    <div><dt>Next check</dt><dd id="c-next">--</dd><small id="c-next-sub">&nbsp;</small></div>
-    <div><dt>Tested win rate{{ tip('win_rate', 'win rate') }}</dt><dd id="c-win">--</dd><small id="c-win-sub">&nbsp;</small></div>
+  <div class="disclaimer" role="note"><b>Risk warning:</b> trading involves risk and you can lose money. Past performance does not
+    guarantee future results. Signals are information, not financial advice. Risk only a small, fixed part of your account on each signal.</div>
+
+  <div class="bar">
+    <div class="tabs" role="tablist" aria-label="Market" id="mk">
+      <button type="button" role="tab" data-v="crypto" aria-selected="true">Crypto</button>
+      <button type="button" role="tab" data-v="forex" aria-selected="false">Forex</button>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Timeframe" id="tf">
+      <button type="button" role="tab" data-v="15m" aria-selected="false">15m</button>
+      <button type="button" role="tab" data-v="1h" aria-selected="false">1h</button>
+      <button type="button" role="tab" data-v="4h" aria-selected="true">4h</button>
+    </div>
+    <div class="stream-info" id="stream-info">&nbsp;</div>
+  </div>
+  <div class="off-note" id="off-note" role="note" hidden></div>
+
+  <dl class="strip s5" id="strip">
+    <div><dt>Active</dt><dd id="c-active">--</dd><small id="c-active-sub">&nbsp;</small></div>
+    <div><dt>Win rate, all time{{ tip('win_rate', 'win rate') }}</dt><dd id="c-win">--</dd><small id="c-win-sub">&nbsp;</small></div>
+    <div><dt>Last 30 days</dt><dd id="c-win30">--</dd><small id="c-win30-sub">&nbsp;</small></div>
+    <div><dt>Last 7 days</dt><dd id="c-win7">--</dd><small id="c-win7-sub">&nbsp;</small></div>
+    <div><dt>Result</dt><dd id="c-res">--</dd><small id="c-res-sub">&nbsp;</small></div>
   </dl>
+  <p class="note" id="stats-note">Live numbers come only from real signals of this stream that have closed. A win is a signal that reached at least TP1.</p>
 
-  <div id="loading" class="loading">Reading every coin. This takes a few seconds after a restart.</div>
-
-  <section class="block" id="sec-active" hidden>
-    <h2 class="sec">Active signals</h2>
-    <p class="sec-sub">Entry is the 4-hour close that gave the signal. The bar shows where the live price sits between the stop (left) and the last target (right); the ticks are TP1 and TP2.</p>
-    <div class="warn-box" id="same-side" hidden></div>
+  <section class="block">
+    <div class="filters" id="filters">
+      <select id="f-status" aria-label="Status">
+        <option value="active">Active</option>
+        <option value="closed">Closed</option>
+        <option value="tp">Target hit</option>
+        <option value="sl">Stop hit</option>
+        <option value="expired">Expired</option>
+        <option value="cancelled">Cancelled</option>
+        <option value="all" selected>All</option>
+      </select>
+      <select id="f-symbol" aria-label="Symbol"><option value="">All symbols</option></select>
+      <select id="f-side" aria-label="Direction">
+        <option value="">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option>
+      </select>
+      <span class="chips" role="group" aria-label="Grade">
+        <button type="button" class="chip" data-g="A" aria-pressed="false">Grade A</button>
+        <button type="button" class="chip" data-g="B" aria-pressed="false">Grade B</button>
+        <button type="button" class="chip" data-g="C" aria-pressed="false">Grade C</button>
+      </span>
+      <select id="f-sort" aria-label="Sort">
+        <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
+        <option value="grade">Best grade</option><option value="result">Best result</option>
+        <option value="symbol">Symbol A-Z</option>
+      </select>
+    </div>
+    <div id="list-state" class="loading">Loading signals…</div>
     <div class="cards" id="cards"></div>
+    <div class="pager" id="pager" hidden>
+      <button class="pbtn" type="button" id="p-prev">Previous</button>
+      <span class="dim" id="p-info"></span>
+      <button class="pbtn" type="button" id="p-next">Next</button>
+    </div>
   </section>
 
-  <section class="block" id="sec-watch" hidden>
-    <h2 class="sec">Closest to a signal{{ tip('closeness', 'closeness to a signal') }}</h2>
-    <p class="sec-sub">No signal yet. The meter shows how close the model's conviction came at the last close (100% = a strong signal).
-      "Setup forming" means very close, but still not a trade.</p>
-    <div class="watch" id="watch"></div>
-  </section>
-
-  <section class="block" id="sec-all" hidden>
-    <h2 class="sec">All coins</h2>
-    <div class="ptable-wrap">
-      <table class="ptable">
-        <thead><tr><th>Coin</th><th>Status</th><th>Leaning{{ tip('leaning', 'leaning') }}</th><th>Closeness to a signal{{ tip('closeness', 'closeness to a signal') }}</th><th>Last signal</th></tr></thead>
-        <tbody id="all"></tbody>
-      </table>
+  <section class="block">
+    <h2 class="sec">Results by grade</h2>
+    <p class="sec-sub">Grade A signals have the most confirming factors. The sample size is shown with every number; small samples swing a lot.</p>
+    <div class="two">
+      <div class="box"><h3>Live record (closed signals)</h3><div id="by-grade" class="dim">--</div></div>
+      <div class="box"><h3 id="sim-title">Recent replay</h3><div id="sim" class="dim">--</div></div>
     </div>
   </section>
 
   <section class="block" id="alerts">
     <h2 class="sec">Signal alerts</h2>
-    <p class="sec-sub">Get told the moment a new signal starts, so you don't have to keep checking.</p>
+    <p class="sec-sub">Get told the moment a new signal starts. Choose the markets, timeframes and symbols you care about.</p>
     <div class="alerts">
       <label class="switch"><input type="checkbox" id="a-on"> Notify me of new signals (bell icon in the dashboard)</label>
       <label class="switch"><input type="checkbox" id="a-email"> Also send me an email <span class="faint" id="a-email-note"></span></label>
+      <div class="row-actions"><span class="dim" style="font-size:14px">Markets:</span>
+        <span class="chips" id="a-mk"><button type="button" class="chip" data-v="crypto" aria-pressed="true">Crypto</button><button type="button" class="chip" data-v="forex" aria-pressed="true">Forex</button></span></div>
+      <div class="row-actions"><span class="dim" style="font-size:14px">Timeframes:</span>
+        <span class="chips" id="a-tf"><button type="button" class="chip" data-v="15m" aria-pressed="true">15m</button><button type="button" class="chip" data-v="1h" aria-pressed="true">1h</button><button type="button" class="chip" data-v="4h" aria-pressed="true">4h</button></span></div>
       <div class="tg" id="tg">
         <div class="tg-top">
           <span class="tg-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.7 4.1L2.9 11c-1.2.5-1.2 1.2-.2 1.5l4.6 1.4 1.7 5.4c.2.6.4.8.8.8.4 0 .6-.2.9-.5l2.2-2.2 4.6 3.4c.8.5 1.4.2 1.6-.8l3-14.1c.3-1.3-.5-1.8-1.4-1.6zM8.6 13.6l9.1-5.7c.4-.3.8-.1.5.2l-7.7 7-.3 3.3z"/></svg></span>
@@ -144,9 +234,9 @@
       </div>
       <div>
         <div class="row-actions" style="margin-bottom:8px">
-          <span class="dim" style="font-size:14px">Coins:</span>
-          <div class="pseg" role="group" aria-label="Which coins">
-            <button type="button" id="a-all" aria-pressed="true">All coins</button>
+          <span class="dim" style="font-size:14px">Symbols:</span>
+          <div class="pseg" role="group" aria-label="Which symbols">
+            <button type="button" id="a-all" aria-pressed="true">All symbols</button>
             <button type="button" id="a-pick" aria-pressed="false">Only these</button>
           </div>
         </div>
@@ -160,10 +250,27 @@
     </div>
   </section>
 
-  <p class="note">Signals come from a model, not a person, and they lose regularly: on 12 months of data the model never saw about 3 in 4
-    signals closed in profit, but a full loss (&minus;1R) is bigger than a TP1 win (+0.5R), so TP2 and TP3 matter. Results after 0.12% fees.
-    Past results do not guarantee future results. Not financial advice.</p>
+  <p class="note">How to use a signal: enter near the entry price, place the stop loss, and close a third of the position at each target.
+    After TP1 move the stop to the entry, after TP2 to TP1. If no level is reached before the time limit, the rest is closed.
+    Results include typical costs (0.12% per crypto trade, the usual spread per forex pair). Forex trades are closed before the
+    weekend, and no new forex signals start shortly before the weekly close.</p>
 </main>
+
+<div class="tmodal" id="tmodal" role="dialog" aria-modal="true" aria-labelledby="t-title">
+  <div class="tbox">
+    <h3 id="t-title">Trade this signal</h3>
+    <label class="dim" style="font-size:13.5px">Account <select id="t-acct"></select></label>
+    <dl id="t-kv"></dl>
+    <label class="switch" id="t-ackwrap" hidden><input type="checkbox" id="t-ack"> I understand this is a real-money trade and I can lose it.</label>
+    <p class="note" style="margin:0">The order uses the signal's stop and targets and your bot settings for size (risk % per trade, max open trades,
+      daily loss limit). It is refused if the price has moved too far from the entry.</p>
+    <div id="t-msg" role="status"></div>
+    <div class="row-actions" style="justify-content:flex-end">
+      <button class="pbtn" type="button" id="t-cancel">Close</button>
+      <button class="pbtn primary" type="button" id="t-go" disabled>Place order</button>
+    </div>
+  </div>
+</div>
 
 {% include '_public_footer.html' %}
 
@@ -171,132 +278,302 @@
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  let DATA = null, ALERTS = null, pick = new Set(), mode = "ALL";
-
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const coin = (s) => esc(String(s || "").replace("/USDT", ""));
-  const tip = (key, label) => `<button type="button" class="tip" data-tip="${key}" aria-label="What does ${label} mean?">?</button>`;
-  function price(v) {
+  const SYMBOLS = { crypto: {{ (crypto_coins or [])|tojson }}, forex: {{ (forex_pairs or [])|tojson }} };
+  const STREAMS = {{ (streams or [])|tojson }};
+  const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+  const q = new URLSearchParams(location.search);
+  let market = ["crypto", "forex"].includes(q.get("market")) ? q.get("market") : "crypto";
+  let tf = ["15m", "1h", "4h"].includes(q.get("timeframe")) ? q.get("timeframe") : "4h";
+  let page = 1, grades = new Set(), ALERTS = null, pick = new Set(), mode = "ALL", loadSeq = 0;
+
+  function price(v, dec) {
     if (v == null || isNaN(v)) return "--";
+    if (dec != null) return Number(v).toFixed(dec);
     const a = Math.abs(v);
     const d = a >= 1000 ? 2 : a >= 1 ? 4 : a >= 0.01 ? 5 : 8;
     return Number(v).toLocaleString(undefined, { minimumFractionDigits: Math.min(d, 2), maximumFractionDigits: d });
   }
-  const time = (iso) => { const d = new Date(iso); return isNaN(d) ? "--" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
   const dayTime = (iso) => { const d = new Date(iso); return isNaN(d) ? "--" : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); };
-  function ago(iso) {
-    const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
-    if (m < 60) return `${m} min ago`;
-    const h = Math.floor(m / 60);
-    return h < 48 ? `${h} h ago` : `${Math.floor(h / 24)} days ago`;
+  function dur(min) {
+    if (min == null) return "--";
+    if (min < 60) return `${min} min`;
+    const h = Math.round(min / 60);
+    return h < 48 ? `${h} h` : `${Math.round(h / 24)} days`;
   }
-  function left(iso) {
-    const m = Math.max(0, Math.round((new Date(iso) - Date.now()) / 60000));
-    if (m < 60) return `${m} min`;
-    const h = Math.floor(m / 60);
-    return h < 48 ? `${h} h` : `${Math.floor(h / 24)} d ${h % 24} h`;
+  const STATUS = { ACTIVE: "Active", TP1: "TP1 hit", TP2: "TP2 hit", TP3: "TP3 hit", SL: "Stop hit", EXPIRED: "Expired", CANCELLED: "Cancelled" };
+  const SETUP = { breakout: "Breakout", pullback: "Pullback", trend_continuation: "Trend continuation", reversal: "Reversal at support/resistance" };
+
+  function setTabs() {
+    document.querySelectorAll("#mk button").forEach((b) => b.setAttribute("aria-selected", b.dataset.v === market));
+    document.querySelectorAll("#tf button").forEach((b) => b.setAttribute("aria-selected", b.dataset.v === tf));
+    const s = STREAMS.find((x) => x.market === market && x.timeframe === tf) || {};
+    const tps = (s.targets_r || []).map((r, k) => `TP${k + 1} ${r}R`).join(" · ");
+    let info = `${market === "forex" ? "Forex" : "Crypto"} ${tf}: ${s.symbols || 0} symbols · expected hold ${esc(s.hold || "--")} · ${tps} · ${esc(s.engine || "")}`;
+    $("stream-info").textContent = info;
+    const off = $("off-note"), r = s.research;
+    if (s.enabled === false) {
+      off.hidden = false;
+      off.innerHTML = `<b>This stream is switched off.</b> ${r && r.reason ? esc(r.reason) + " " : "No model for it has passed the test on data it never saw yet. "}`
+        + "Signals start here only when a model reaches at least 70% wins (TP1 or better) with a positive average result after costs on data it never saw."
+        + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "");
+    } else if (s.validated === false) {
+      off.hidden = false;
+      off.innerHTML = "<b>Untested stream.</b> The site owner switched this stream on, but its rules have not passed the test on unseen data. Treat these signals with extra care.";
+    } else off.hidden = true;
+    const sel = $("f-symbol"), cur = sel.value;
+    sel.innerHTML = '<option value="">All symbols</option>' + SYMBOLS[market].map((c) => `<option value="${esc(c)}">${coin(c)}</option>`).join("");
+    if (SYMBOLS[market].includes(cur)) sel.value = cur;
+    const u = new URL(location.href); u.searchParams.set("market", market); u.searchParams.set("timeframe", tf);
+    history.replaceState(null, "", u);
   }
 
-  function card(r) {
-    const a = r.active, p = r.progress || {};
-    const tps = a.targets && a.targets.length ? a.targets : [a.take_profit];
-    const hits = a.hits || 0;
-    const stopNow = a.stop_now != null ? a.stop_now : a.stop_loss;
-    // position on the bar: stop (0%) .. entry .. last target (100%), in price terms
-    const span = Math.abs(tps[tps.length - 1] - a.stop_loss) || 1;
-    const at = (v) => Math.max(0, Math.min(100, Math.abs(v - a.stop_loss) / span * 100));
-    const now = p.price != null ? p.price : null;
-    const pos = now == null ? at(a.entry) : at(now);
-    const col = p.pct == null ? "var(--text-faint)" : p.pct >= 0 ? "var(--long)" : "var(--short)";
-    let line = "Waiting for a live price";
-    if (p.state === "target_touched") line = `<b class="pos">TP${p.next} touched</b> (confirms at the candle close)`;
-    else if (p.state === "stop_touched") line = `<b class="neg">Stop touched</b> (confirms at the candle close)`;
-    else if (p.pct != null) line = `Now <b class="num">${price(p.price)}</b> · <b class="${p.move_pct >= 0 ? "pos" : "neg"}">${p.move_pct >= 0 ? "+" : ""}${p.move_pct}%</b> · ${Math.abs(p.pct)}% of the way to ${p.pct >= 0 ? "TP" + p.next : "the stop"}`;
-    const tpCells = tps.map((v, k) => `<div><span>TP${k + 1}${k < hits ? " ✓" : ""}</span><b class="pos">${price(v)}</b></div>`).join("");
-    const ticks = tps.slice(0, -1).map((v) => `<span class="mid" style="left:${at(v)}%"></span>`).join("");
-    return `<article class="card ${r.fresh ? "fresh" : ""}">
-      <div class="card-head"><span class="coin">${coin(r.symbol)}</span><span class="side ${a.side}">${a.side === "LONG" ? "Long" : "Short"}</span>
-        ${r.fresh ? '<span class="tag-new">New</span>' : ""}${a.tier === "standard" ? `<span class="tag-std">Standard${tip("tier", "strong and standard signals")}</span>` : ""}
-        <span class="since">${ago(a.signal_at)}<br>${dayTime(a.signal_at)}</span></div>
-      <div class="lv lv5"><div><span>Entry</span><b>${price(a.entry)}</b></div><div><span>${hits ? "Stop (moved)" : "Stop"}</span><b class="neg">${price(stopNow)}</b></div>${tpCells}</div>
-      <div><div class="track" style="background:linear-gradient(90deg, var(--short-dim) 0 ${at(a.entry)}%, var(--long-dim) ${at(a.entry)}% 100%)"><span class="mid" style="left:${at(a.entry)}%;opacity:.9"></span>${ticks}<span class="dot" style="left:${pos}%;background:${col}"></span></div>
-        <div class="track-labels"><span>stop</span><span>entry</span><span>TP3</span></div></div>
-      <div class="prog-line">${line}</div>
-      <div class="meta"><span>Chance of TP1${tip("win_chance", "win chance")} <b class="num">${a.confidence}%</b></span><span>Closes in ${left(a.expires_at)} at the latest${tip("time_limit", "time limit")}</span></div>
+  function researchPart(x) {
+    if (!x || !x.signals) return "no score level reached the target";
+    return `${x.signals} signals (${x.signals_per_day}/day), win rate ${x.win_rate}%, average ${x.avg_net_r > 0 ? "+" : ""}${x.avg_net_r}R`;
+  }
+  function researchList(r) {
+    return (r.variants || []).map((v) => `<li><b>${esc(v.label)}</b>: walk-forward ${esc(v.validation_period || "")} ${researchPart(v.validation)}`
+      + (v.holdout ? `; unseen data ${esc(v.holdout.period || "")} ${researchPart(v.holdout)}` : "")
+      + ` - ${v.passed ? "passed" : "did not pass"}</li>`).join("");
+  }
+  function resultTxt(s) {
+    if (s.r == null) return "";
+    const unit = s.pips != null ? `${s.pips > 0 ? "+" : ""}${s.pips} pips` : (s.pct != null ? `${s.pct > 0 ? "+" : ""}${s.pct}%` : "");
+    return `<span class="res ${s.r >= 0 ? "pos" : "neg"}">${s.r > 0 ? "+" : ""}${s.r}R</span> <span class="dim">${unit}</span>`;
+  }
+  function nowTxt(s) {
+    if (s.status !== "ACTIVE" || s.r_now == null) return "";
+    const unit = s.pips_now != null ? `${s.pips_now > 0 ? "+" : ""}${s.pips_now} pips` : (s.pct_now != null ? `${s.pct_now > 0 ? "+" : ""}${s.pct_now}%` : "");
+    return `<div class="prog-line">Now ${price(s.price, s.decimals)} · <span class="res ${s.r_now >= 0 ? "pos" : "neg"}">${s.r_now > 0 ? "+" : ""}${s.r_now}R</span> <span class="dim">${unit}</span></div>`;
+  }
+  function card(s) {
+    const d = s.decimals;
+    const pip = (k) => s.tp_pips ? `<small class="dim">${s.tp_pips[k]} pips</small>` : "";
+    const lv = `<div class="lv lv5">
+        <div><span>Entry</span><b>${price(s.entry, d)}</b></div>
+        <div><span>Stop loss</span><b>${price(s.stop_loss, d)}</b>${s.sl_pips ? `<small class="dim">${s.sl_pips} pips</small>` : ""}</div>
+        ${(s.targets || []).map((t, k) => `<div><span>TP${k + 1}</span><b>${price(t, d)}</b>${pip(k)}</div>`).join("")}
+      </div>`;
+    const news = s.news && s.news.title ? `<div class="news-warn">High-impact news: ${esc(s.news.title)}${s.news.at ? " · " + dayTime(s.news.at) : ""}</div>` : "";
+    const admin = IS_ADMIN && s.status === "ACTIVE" ? `<button class="pbtn admin-x" type="button" data-cancel="${s.id}">Cancel signal</button>` : "";
+    const trade = s.status === "ACTIVE" && !s.hits ? `<button class="pbtn primary" type="button" data-trade="${s.id}">Trade this signal</button>` : "";
+    const bot = `<span class="botst" data-bot="${s.id}"></span>`;
+    const ask = `<button class="pbtn" type="button" data-ask="${s.id}" data-sym="${esc(s.symbol)}">Ask AI</button>`;
+    const closed = s.status !== "ACTIVE" ? `<div class="meta"><span>Closed ${dayTime(s.closed_at)}${s.exit_price != null ? " at " + price(s.exit_price, d) : ""}</span><span>${resultTxt(s)}</span></div>` : "";
+    const why = s.cancel_reason ? `<div class="dim" style="font-size:12.5px">Reason: ${esc(s.cancel_reason)}</div>` : "";
+    return `<article class="card${s.status === "ACTIVE" ? "" : " done"}">
+      <div class="card-head"><span class="coin">${coin(s.symbol)}</span><span class="side ${s.side}">${s.side === "LONG" ? "Long" : "Short"}</span>
+        <span class="since">${esc(s.timeframe)} · ${dayTime(s.signal_at)}</span></div>
+      <div class="tags"><span class="st ${s.status}">${STATUS[s.status] || esc(s.status)}${s.status === "ACTIVE" && s.hits ? ` · TP${s.hits} reached` : ""}</span>
+        <span class="badge ${esc(s.grade)}">Grade ${esc(s.grade)}</span>
+        ${s.setup ? `<span class="badge">${esc(SETUP[s.setup] || s.setup)}</span>` : ""}
+        <span class="badge">R:R 1:${s.rr != null ? s.rr : "--"}</span></div>
+      ${lv}
+      ${nowTxt(s)}
+      ${news}
+      <div class="meta"><span>Expected hold ${dur(s.hold_minutes)}</span><span>${s.status === "ACTIVE" ? "Expires " + dayTime(s.expires_at) : ""}</span></div>
+      ${closed}${why}
+      <div class="card-actions">${trade}${ask}${admin}${bot}</div>
     </article>`;
   }
 
-  function lean(r) {
-    const c = r.bias === "LONG" ? "var(--long)" : "var(--short)";
-    return `<span style="color:${c}">${esc(r.bias || "--")}</span> <span class="faint">${r.bias === "LONG" ? r.p_long : r.p_short}%</span>`;
-  }
-  function meter(v) {
-    const w = Math.max(2, Math.min(100, v || 0));
-    const c = w >= 95 ? "var(--accent)" : w >= 85 ? "var(--wait)" : "var(--text-faint)";
-    return `<span class="meter"><i style="width:${w}%;background:${c}"></i></span>`;
-  }
-  function lastSig(r) {
-    const l = r.last_closed;
-    if (!l) return '<span class="faint">none recently</span>';
-    const cls = l.r > 0 ? "pos" : "neg";
-    const how = { TP3: "all targets", TP2: "TP2", TP1: "TP1", SL: "stop", EXPIRED: "time limit" }[l.status] || l.status;
-    return `${esc(l.side)} · <b class="${cls}">${l.r > 0 ? "+" : ""}${l.r}R</b> <span class="faint">${esc(how)} ${ago(l.closed_at)}</span>`;
+  async function getJSON(url, opts) {
+    const r = await fetch(url, Object.assign({ credentials: "same-origin" }, opts || {}));
+    let d = {};
+    try { d = await r.json(); } catch (e) {}
+    if (!r.ok || d.ok === false) throw new Error(d.error || `Request failed (${r.status})`);
+    return d;
   }
 
-  function render() {
-    const d = DATA;
-    $("loading").hidden = !d.loading;
-    const rows = d.rows || [];
-    const act = rows.filter((r) => r.state === "ACTIVE");
-    const wait = rows.filter((r) => r.state === "WAIT");
-    $("c-active").textContent = d.loading ? "--" : act.length;
-    $("c-active-sub").textContent = d.loading ? "" : `of ${rows.length} coins`;
-    $("c-new").textContent = d.loading ? "--" : d.counts.new;
-    $("c-next").textContent = d.next_update ? time(d.next_update) : "--";
-    $("c-next-sub").textContent = d.next_update ? `in ${left(d.next_update)} (your time)` : "";
-    if (d.test && d.test.signals) {
-      $("c-win").textContent = `${d.test.win_rate}%`;
-      $("c-win-sub").textContent = `${d.test.signals} signals, ${d.test.avg_net_r >= 0 ? "+" : ""}${d.test.avg_net_r}R avg after fees`;
-    }
-    $("sec-active").hidden = d.loading;
-    const w = d.same_side_warning;
-    $("same-side").hidden = !w;
-    if (w) $("same-side").textContent = `${w.count} of ${w.total} active signals are ${w.side.toLowerCase()}. Coins tend to move together, so these can win or lose at the same time. Don't put full risk on all of them at once.`;
-    $("cards").innerHTML = act.length ? act.map(card).join("") :
-      '<div class="empty-box">No active signals right now. A new one can start at the next 4-hour close; the coins closest to a strong signal are listed below.</div>';
-    $("sec-watch").hidden = d.loading || !wait.length;
-    $("watch").innerHTML = wait.filter((r) => r.covered !== false).slice(0, 6).map((r) => `<div class="w">
-        <div class="top"><span class="coin" style="font-size:16px">${coin(r.symbol)}${r.setup_forming ? `<span class="tag-forming">Setup forming${tip("setup_forming", "setup forming")}</span>` : ""}</span><span class="lean">leaning ${lean(r)}</span></div>
-        ${meter(r.strength)}<small>${Math.round(r.strength || 0)}% of the way to a strong signal${r.limited_history ? " · new coin, short history" : ""}</small></div>`).join("");
-    $("sec-all").hidden = d.loading;
-    $("all").innerHTML = rows.map((r) => {
-      if (r.state === "ACTIVE") return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status"><span class="side ${r.active.side}">${r.active.side === "LONG" ? "Long" : "Short"}</span>${r.fresh ? ' <span class="tag-new">New</span>' : ""}</td><td>${lean(r)}</td><td>active since ${dayTime(r.active.signal_at)}</td><td>${lastSig(r)}</td></tr>`;
-      if (r.state === "WAIT" && r.covered === false) return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status faint">No signals</td><td>${lean(r)}</td><td colspan="2" class="faint">Not in the signal list: lean and brief only</td></tr>`;
-      if (r.state === "WAIT") return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status" style="color:var(--wait)">WAIT${r.setup_forming ? '<span class="tag-forming">forming</span>' : ""}</td><td>${lean(r)}</td><td>${meter(r.strength)}<span class="num">${Math.round(r.strength || 0)}%</span></td><td>${lastSig(r)}</td></tr>`;
-      return `<tr><td><b>${coin(r.symbol)}</b></td><td class="status faint">${r.state === "LOADING" ? "loading" : "unavailable"}</td><td colspan="3" class="faint">${esc(r.error || "")}</td></tr>`;
-    }).join("");
-    desktopNotify(act.filter((r) => r.fresh));
-  }
-
-  async function load() {
+  async function loadList() {
+    const seq = ++loadSeq;
+    const p = new URLSearchParams({ market, timeframe: tf, page, per_page: 24, status: $("f-status").value, sort: $("f-sort").value });
+    if ($("f-symbol").value) p.set("symbol", $("f-symbol").value);
+    if ($("f-side").value) p.set("side", $("f-side").value);
+    if (grades.size) p.set("grade", Array.from(grades).join(","));
+    $("list-state").hidden = false; $("list-state").className = "loading"; $("list-state").textContent = "Loading signals…";
     try {
-      const res = await fetch("/api/signals/board", { credentials: "same-origin" });
-      if (res.status === 401) { location.href = "/login"; return; }
-      DATA = await res.json();
-      render();
-      if (DATA.loading) setTimeout(load, 5000);
-    } catch (e) { $("loading").textContent = "Could not load the board. Retrying..."; setTimeout(load, 10000); }
+      const d = await getJSON("/api/signals?" + p);
+      if (seq !== loadSeq) return;
+      window.__SIGNALS = d.signals;
+      $("cards").innerHTML = d.signals.map(card).join("");
+      if (!d.signals.length) {
+        $("list-state").className = "empty-box";
+        $("list-state").textContent = $("f-status").value === "active"
+          ? `No active ${tf} ${market} signals right now. The scanner checks every symbol at each ${tf} candle close.`
+          : "No signals match these filters yet.";
+      } else $("list-state").hidden = true;
+      loadBotStatus(d.signals.map((x) => x.id));
+      $("pager").hidden = d.pages <= 1;
+      $("p-info").textContent = `Page ${d.page} of ${d.pages} · ${d.total} signals`;
+      $("p-prev").disabled = d.page <= 1; $("p-next").disabled = d.page >= d.pages;
+    } catch (e) {
+      if (seq !== loadSeq) return;
+      $("cards").innerHTML = "";
+      $("list-state").className = "empty-box"; $("list-state").textContent = "Could not load signals: " + e.message;
+    }
   }
+
+  const BOT_ST = { placed: "placed", retry: "waiting to enter", skipped: "skipped", failed: "not placed" };
+  async function loadBotStatus(ids) {
+    if (!ids.length) return;
+    try {
+      const d = await getJSON("/api/autotrade/signal-status?ids=" + ids.join(","));
+      Object.entries(d.signals || {}).forEach(([sid, list]) => {
+        const el = document.querySelector(`[data-bot="${sid}"]`);
+        if (!el) return;
+        el.innerHTML = list.map((o) => {
+          let t = `<b>${esc(o.label)}:</b> ${esc(BOT_ST[o.status] || o.status)}`;
+          if (o.position) {
+            const p = o.position;
+            const v = p.status === "CLOSED" ? p.pnl_usdt : p.unrealized_pnl;
+            if (v != null) t += ` · ${p.status === "CLOSED" ? "result" : "open"} ${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}`;
+          } else if (o.reason && o.status !== "placed") t += ` (${esc(o.reason)})`;
+          return t;
+        }).join("<br>");
+        const btn = document.querySelector(`[data-trade="${sid}"]`);
+        if (btn && list.some((o) => o.status === "placed")) { btn.textContent = "Trade on another account"; btn.classList.remove("primary"); }
+      });
+    } catch (e) { /* bot status is optional */ }
+  }
+
+  // ---- Trade this signal
+  let TRADE = null;
+  const ACCT = [["paper", "Site demo (virtual money)"], ["demo", "Binance demo"], ["live", "Binance live (real money)"],
+                ["oanda_demo", "OANDA demo (forex)"], ["oanda_live", "OANDA live (forex, real money)"]];
+  function tmsg(t, cls) { $("t-msg").textContent = t || ""; $("t-msg").className = cls || ""; }
+  async function preview() {
+    $("t-kv").innerHTML = '<dt>Loading</dt><dd>…</dd>'; tmsg("");
+    $("t-go").disabled = true;
+    try {
+      const d = await getJSON("/api/autotrade/trade-signal", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account: $("t-acct").value, signal_id: TRADE.id }) });
+      const cur = d.account_currency || "USDT";
+      const tg = (d.targets || []).map((v, k) => `TP${k + 1} ${price(v, TRADE.decimals)}`).join(" · ");
+      $("t-kv").innerHTML = `<dt>Side</dt><dd>${esc(d.side)} ${esc(TRADE.symbol)} (${esc(TRADE.timeframe)})</dd>
+        <dt>Price now</dt><dd>${price(d.price, TRADE.decimals)}</dd>
+        <dt>Size</dt><dd>${d.amount} (${d.notional_usdt} ${cur})</dd>
+        <dt>Stop loss</dt><dd>${price(d.stop_loss, TRADE.decimals)}</dd>
+        <dt>Targets</dt><dd>${tg || price(d.take_profit, TRADE.decimals)}</dd>
+        <dt>Risk</dt><dd>${d.risk_usdt} ${cur} if the stop is hit</dd>`;
+      $("t-go").disabled = false;
+    } catch (e) { $("t-kv").innerHTML = ""; tmsg(e.message, "err"); }
+  }
+  function openTrade(sid) {
+    TRADE = (window.__SIGNALS || []).find((x) => String(x.id) === String(sid));
+    if (!TRADE) return;
+    const fx = TRADE.market === "forex";
+    $("t-acct").innerHTML = ACCT.filter(([m]) => fx ? ["paper", "oanda_demo", "oanda_live"].includes(m) : !m.startsWith("oanda"))
+      .map(([m, l]) => `<option value="${m}">${l}</option>`).join("");
+    $("t-title").textContent = `Trade ${TRADE.symbol} ${TRADE.side === "LONG" ? "long" : "short"} (${TRADE.timeframe})`;
+    $("t-ack").checked = false; $("t-ackwrap").hidden = true;
+    $("tmodal").classList.add("open");
+    preview();
+  }
+  function closeTrade() { $("tmodal").classList.remove("open"); TRADE = null; }
+
+  function wr(w) { return w && w.win_rate != null ? `${w.win_rate}%` : "--"; }
+  function nTxt(w) { return w ? `${w.wins} of ${w.closed} closed` : "no closed signals"; }
+  function gradeTable(by) {
+    const rows = ["A", "B", "C"].map((g) => { const w = by[g] || {}; return `<tr><td><span class="badge ${g}">Grade ${g}</span></td><td>${w.closed || 0}</td><td>${wr(w)}</td><td>${w.avg_r != null ? w.avg_r + "R" : "--"}</td></tr>`; }).join("");
+    return `<table class="gtable"><thead><tr><th>Grade</th><th>Closed</th><th>Win rate</th><th>Avg result</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  async function loadStats() {
+    try {
+      const d = await getJSON(`/api/signals/stats?market=${market}&timeframe=${tf}`);
+      const W = d.windows || {};
+      $("c-active").textContent = d.active;
+      $("c-active-sub").textContent = d.signals_per_day != null ? `${d.total} signals · ${d.signals_per_day}/day` : `${d.total} signals so far`;
+      $("c-win").textContent = wr(W.all); $("c-win-sub").textContent = nTxt(W.all);
+      $("c-win30").textContent = wr(W["30d"]); $("c-win30-sub").textContent = nTxt(W["30d"]);
+      $("c-win7").textContent = wr(W["7d"]); $("c-win7-sub").textContent = nTxt(W["7d"]);
+      const a = W.all || {};
+      $("c-res").textContent = a.total_r != null && a.closed ? `${a.total_r > 0 ? "+" : ""}${a.total_r}R` : "--";
+      $("c-res-sub").textContent = a.closed ? (market === "forex" && a.total_pips != null ? `${a.total_pips > 0 ? "+" : ""}${a.total_pips} pips · avg ${a.avg_r}R` : `avg ${a.avg_r}R · PF ${a.profit_factor != null ? a.profit_factor : "--"}`) : "after costs";
+      $("by-grade").innerHTML = gradeTable(d.by_grade || {});
+      const sim = d.simulated, mt = d.model_test;
+      const H = mt && mt.holdout, WF = mt && mt.walk_forward;
+      if (H && H.signals) {
+        $("sim-title").textContent = "Backtest on data the model never saw";
+        const pf = H.profit_factor != null ? `, profit factor ${H.profit_factor}` : "";
+        let html = `<b>${esc(H.period || "")}</b>: ${H.signals} signals${H.signals_per_day != null ? ` (${H.signals_per_day} per day)` : ""}, `
+          + `win rate <b>${H.win_rate}%</b> (TP1 or better), average ${H.avg_net_r > 0 ? "+" : ""}${H.avg_net_r}R after costs${pf}.`;
+        if (WF && WF.signals) html += `<br>Walk-forward ${esc(WF.period || "")}: ${WF.signals} signals, win rate ${WF.win_rate}%, average ${WF.avg_net_r > 0 ? "+" : ""}${WF.avg_net_r}R.`;
+        if (mt.baseline && mt.baseline.signals) html += `<br>Before (rules R1) on the same data: win rate ${mt.baseline.win_rate}%, average ${mt.baseline.avg_net_r}R.`;
+        html += "<br>A backtest is not a promise: live results are shown separately above.";
+        $("sim").innerHTML = html;
+      } else if ((STREAMS.find((x) => x.market === market && x.timeframe === tf) || {}).research) {
+        const r = STREAMS.find((x) => x.market === market && x.timeframe === tf).research;
+        $("sim-title").textContent = "Tested on history, not used";
+        $("sim").innerHTML = `${esc(r.reason || "")}<ul style="margin:8px 0 0;padding-left:18px">${researchList(r)}</ul>`;
+      } else if (sim && sim.signals) {
+        $("sim-title").textContent = `Recent replay (last ${sim.window_days} days)`;
+        $("sim").innerHTML = `The same rules replayed on real ${tf} candles of ${sim.symbols} symbols: ${sim.signals} signals, win rate ${sim.win_rate}% (${sim.wins} of ${sim.signals}), avg ${sim.avg_r}R, total ${sim.total_r}R after costs. A replay is a simulation, shown separately from the live record.`;
+      } else {
+        $("sim-title").textContent = "Backtest";
+        $("sim").textContent = "No published test for this stream yet.";
+      }
+    } catch (e) {
+      ["c-active", "c-win", "c-win30", "c-win7", "c-res"].forEach((k) => $(k).textContent = "--");
+      $("c-active-sub").textContent = "Could not load the statistics.";
+    }
+  }
+  function reload() { page = 1; loadList(); loadStats(); }
+
+  $("mk").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; market = b.dataset.v; setTabs(); reload(); });
+  $("tf").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; tf = b.dataset.v; setTabs(); reload(); });
+  ["f-status", "f-symbol", "f-side", "f-sort"].forEach((id) => $(id).addEventListener("change", () => { page = 1; loadList(); }));
+  document.querySelectorAll("#filters .chip[data-g]").forEach((b) => b.addEventListener("click", () => {
+    const g = b.dataset.g; grades.has(g) ? grades.delete(g) : grades.add(g); b.setAttribute("aria-pressed", grades.has(g)); page = 1; loadList();
+  }));
+  $("p-prev").addEventListener("click", () => { if (page > 1) { page--; loadList(); } });
+  $("p-next").addEventListener("click", () => { page++; loadList(); });
+  $("cards").addEventListener("click", (e) => {
+    const t = e.target.closest("[data-trade]");
+    if (t) openTrade(t.dataset.trade);
+    const a = e.target.closest("[data-ask]");
+    if (a && window.sfmAssistant) window.sfmAssistant.open({ signal_id: +a.dataset.ask, symbol: a.dataset.sym, question: "Explain this signal" });
+  });
+  $("t-acct").addEventListener("change", () => { $("t-ackwrap").hidden = !["live", "oanda_live"].includes($("t-acct").value); preview(); });
+  $("t-cancel").addEventListener("click", closeTrade);
+  $("tmodal").addEventListener("click", (e) => { if (e.target === $("tmodal")) closeTrade(); });
+  $("t-go").addEventListener("click", async () => {
+    const acct = $("t-acct").value;
+    if (["live", "oanda_live"].includes(acct) && !$("t-ack").checked) { $("t-ackwrap").hidden = false; tmsg("Tick the box to confirm a real-money trade.", "err"); return; }
+    $("t-go").disabled = true;
+    try {
+      const d = await getJSON("/api/autotrade/trade-signal", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account: acct, signal_id: TRADE.id, confirm: true, ack_live: $("t-ack").checked }) });
+      tmsg(`Order placed on ${d.account_label}: ${d.amount} at ${price(d.entry_price, TRADE.decimals)}. The bot watches the stop and targets.`, "ok");
+      loadBotStatus([TRADE.id]);
+    } catch (e) {
+      tmsg(e.message + (/Connect your/.test(e.message) ? " (Auto-trade bot page → connect the account.)" : ""), "err");
+      $("t-go").disabled = false;
+    }
+  });
+  $("cards").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-cancel]"); if (!b) return;
+    const reason = prompt("Why cancel this signal? (shown to users)");
+    if (!reason) return;
+    try { await getJSON(`/api/signals/${b.dataset.cancel}/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }); loadList(); loadStats(); }
+    catch (err) { alert(err.message); }
+  });
 
   // ---- desktop notifications (this device, while the page is open)
-  function seenKey(r) { return `${r.symbol}@${r.active.signal_at}`; }
-  function desktopNotify(fresh) {
-    if (!("Notification" in window) || Notification.permission !== "granted" || !fresh.length) return;
-    let seen = [];
-    try { seen = JSON.parse(localStorage.getItem("sfm-seen-signals") || "[]"); } catch (e) {}
-    const newOnes = fresh.filter((r) => !seen.includes(seenKey(r)));
-    newOnes.forEach((r) => { try { new Notification(`New ${r.active.side} signal: ${r.symbol}`, { body: `Entry ${price(r.active.entry)} · stop ${price(r.active.stop_loss)} · ` + (r.active.targets || [r.active.take_profit]).map((v, k) => `TP${k + 1} ${price(v)}`).join(" · "), icon: "/static/favicon-32x32.png" }); } catch (e) {} });
-    try { localStorage.setItem("sfm-seen-signals", JSON.stringify(seen.concat(newOnes.map(seenKey)).slice(-100))); } catch (e) {}
+  let seenTop = null;
+  async function pollNew() {
+    try {
+      const d = await getJSON("/api/signals?status=active&per_page=10&sort=newest");
+      const ids = d.signals.map((s) => s.id);
+      if (seenTop !== null && "Notification" in window && Notification.permission === "granted") {
+        d.signals.filter((s) => s.id > seenTop).forEach((s) => {
+          try { new Notification(`New ${s.side} signal: ${s.symbol} (${s.timeframe})`, { body: `Entry ${price(s.entry, s.decimals)} · stop ${price(s.stop_loss, s.decimals)}`, icon: "/static/favicon-32x32.png" }); } catch (e) {}
+        });
+      }
+      seenTop = Math.max(seenTop || 0, ...ids, 0);
+    } catch (e) {}
   }
   $("a-desktop").addEventListener("click", async () => {
     if (!("Notification" in window)) { msg("This browser does not support desktop notifications.", "bad"); return; }
@@ -316,6 +593,18 @@
     $("a-chips").innerHTML = (ALERTS.choices || []).map((c) =>
       `<button type="button" class="chip" data-c="${esc(c)}" aria-pressed="${pick.has(c)}">${coin(c)}</button>`).join("");
   }
+  function chipGroup(id, val) {
+    document.querySelectorAll(`#${id} .chip`).forEach((b) => b.setAttribute("aria-pressed", val === "ALL" || (Array.isArray(val) && val.includes(b.dataset.v))));
+  }
+  function readGroup(id) {
+    const all = Array.from(document.querySelectorAll(`#${id} .chip`));
+    const on = all.filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.dataset.v);
+    return on.length === all.length ? "ALL" : on;
+  }
+  ["a-mk", "a-tf"].forEach((id) => $(id).addEventListener("click", (e) => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true");
+  }));
   $("a-chips").addEventListener("click", (e) => {
     const b = e.target.closest(".chip"); if (!b) return;
     const c = b.dataset.c; pick.has(c) ? pick.delete(c) : pick.add(c);
@@ -327,24 +616,25 @@
   $("a-email").addEventListener("change", () => { if ($("a-email").checked) $("a-on").checked = true; });
   async function loadAlerts() {
     try {
-      const res = await fetch("/api/signals/alerts", { credentials: "same-origin" });
-      ALERTS = await res.json();
+      ALERTS = await getJSON("/api/signals/alerts");
       $("a-on").checked = ALERTS.enabled; $("a-email").checked = ALERTS.email;
       pick = new Set(Array.isArray(ALERTS.coins) ? ALERTS.coins : []);
       chips(); setMode(Array.isArray(ALERTS.coins) ? "PICK" : "ALL");
+      chipGroup("a-mk", ALERTS.markets); chipGroup("a-tf", ALERTS.timeframes);
       if (!ALERTS.email_ready) $("a-email-note").textContent = "(email is not set up on this server yet)";
     } catch (e) { msg("Could not load your alert settings.", "bad"); }
   }
   $("a-save").addEventListener("click", async () => {
-    const body = { enabled: $("a-on").checked, email: $("a-email").checked, coins: mode === "ALL" ? "ALL" : Array.from(pick) };
+    const body = { enabled: $("a-on").checked, email: $("a-email").checked, coins: mode === "ALL" ? "ALL" : Array.from(pick),
+                   markets: readGroup("a-mk"), timeframes: readGroup("a-tf") };
+    if (Array.isArray(body.markets) && !body.markets.length) { msg("Pick at least one market.", "bad"); return; }
+    if (Array.isArray(body.timeframes) && !body.timeframes.length) { msg("Pick at least one timeframe.", "bad"); return; }
     try {
-      const res = await fetch("/api/signals/alerts", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const d = await res.json();
-      if (!res.ok || !d.ok) { msg(d.error || "Could not save.", "bad"); return; }
+      const d = await getJSON("/api/signals/alerts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       msg(d.enabled ? "Saved. You'll be notified of new signals." : "Saved. Signal alerts are off.", "ok");
       if (ALERTS) ALERTS.enabled = d.enabled;
       tgRender();
-    } catch (e) { msg("Could not save. Check your connection.", "bad"); }
+    } catch (e) { msg(e.message || "Could not save. Check your connection.", "bad"); }
   });
 
   // ---- Telegram
@@ -369,7 +659,7 @@
     }
     if (!TG.linked) {
       st.textContent = "Not connected"; st.className = "tg-state";
-      note.textContent = "Get every new signal in Telegram the moment it starts. It uses the coin choice below.";
+      note.textContent = "Get every new signal in Telegram the moment it starts. It uses the market, timeframe and symbol choices below.";
       act.innerHTML = '<button class="pbtn primary" type="button" id="tg-connect">Connect Telegram</button>';
       $("tg-connect").addEventListener("click", tgConnect);
       return;
@@ -428,9 +718,11 @@
     tgRender();
   }
 
-  load();
+  setTabs();
+  reload();
+  pollNew();
   loadAlerts().then(loadTelegram);
-  setInterval(load, 60000);
+  setInterval(() => { loadList(); loadStats(); pollNew(); }, 60000);
 })();
 </script>
 </body>
