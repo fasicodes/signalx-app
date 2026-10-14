@@ -41,6 +41,59 @@
       <div id="sig-body"></div>
     </section>
 
+    <section class="d-card" id="latest-streams">
+      <div class="d-head"><h2 class="d-h2">Latest signals by timeframe</h2><a class="d-more-link" href="/signals">All signals</a></div>
+      <div class="ls-tabs" role="tablist" aria-label="Market">
+        <button type="button" role="tab" data-m="crypto" aria-selected="true">Crypto</button>
+        <button type="button" role="tab" data-m="forex" aria-selected="false">Forex</button>
+      </div>
+      <div class="ls-grid" id="ls-grid"><p class="d-empty">Loading…</p></div>
+    </section>
+    <style>
+      .ls-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin: 0 0 12px; }
+      .ls-tabs button { background: transparent; border: 0; color: var(--text-dim); font: 600 13.5px var(--body); padding: 7px 14px; cursor: pointer; }
+      .ls-tabs button[aria-selected="true"] { background: var(--long-dim); color: var(--text); }
+      .ls-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      @media (max-width: 760px) { .ls-grid { grid-template-columns: 1fr; } }
+      .ls-col h3 { font-size: 13.5px; margin: 0 0 6px; color: var(--text-dim); font-weight: 600; }
+      .ls-row { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; text-decoration: none; color: var(--text); }
+      .ls-row .l { color: var(--long); font-weight: 600; } .ls-row .s { color: var(--short); font-weight: 600; }
+      .ls-row small { color: var(--text-faint); }
+    </style>
+    <script>
+    (function () {
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      const ST = { ACTIVE: "Active", TP1: "TP1 hit", TP2: "TP2 hit", TP3: "TP3 hit", SL: "Stop hit", EXPIRED: "Expired" };
+      let data = null, m = "crypto";
+      function render() {
+        const g = document.getElementById("ls-grid");
+        if (!data) return;
+        g.innerHTML = ["15m", "1h", "4h"].map((tf) => {
+          const rows = data[m + "_" + tf] || [];
+          const body = rows.length ? rows.map((s) => `<a class="ls-row" href="/signals?market=${m}&timeframe=${tf}">
+              <span><b>${esc(s.symbol.replace("/USDT", ""))}</b> <span class="${s.side === "LONG" ? "l" : "s"}">${s.side === "LONG" ? "Long" : "Short"}</span> <small>grade ${esc(s.grade)}</small></span>
+              <small>${ST[s.status] || esc(s.status)}${s.r != null ? " · " + (s.r > 0 ? "+" : "") + s.r + "R" : ""}</small></a>`).join("")
+            : '<p class="d-empty">No signals yet.</p>';
+          return `<div class="ls-col"><h3>${tf}</h3>${body}</div>`;
+        }).join("");
+      }
+      async function load() {
+        try {
+          const r = await fetch("/api/signals/latest", { credentials: "same-origin" });
+          const d = await r.json();
+          if (!r.ok || !d.ok) throw new Error(d.error || "failed");
+          data = d.streams; render();
+        } catch (e) { document.getElementById("ls-grid").innerHTML = '<p class="d-empty">Signals could not be loaded right now.</p>'; }
+      }
+      document.querySelectorAll("#latest-streams .ls-tabs button").forEach((b) => b.addEventListener("click", () => {
+        m = b.dataset.m;
+        document.querySelectorAll("#latest-streams .ls-tabs button").forEach((x) => x.setAttribute("aria-selected", x === b));
+        render();
+      }));
+      load(); setInterval(load, 120000);
+    })();
+    </script>
+
     <section class="d-card" id="brief-card" hidden>
       <div class="d-head"><h2 class="d-h2">Market brief</h2><p class="d-note" id="brief-time"></p></div>
       <dl class="d-brief" id="brief"></dl>
