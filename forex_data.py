@@ -38,7 +38,7 @@ YF_PLAN = {
 }
 YF_TICKER = {"XAU/USD": "GC=F", "XAG/USD": "SI=F"}   # spot metals are not on Yahoo: front-month futures instead
 
-TD_PER_MINUTE = 7
+TD_PER_MINUTE = int(os.environ.get("TWELVEDATA_PER_MINUTE", "7") or 7)
 _td_calls = deque()
 _cache = {}
 _lock = threading.Lock()
@@ -90,7 +90,19 @@ def _yahoo(symbol, timeframe, limit, since):
     return df
 
 
-def _td_slot():
+def _td_slot(wait=0.0):
+    """Takes one Twelve Data request slot (the plan allows TD_PER_MINUTE a minute).
+    wait > 0: background jobs wait up to that many seconds for a free slot."""
+    deadline = time.time() + max(0.0, wait)
+    while True:
+        if _td_take():
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(1.0)
+
+
+def _td_take():
     now = time.time()
     with _lock:
         while _td_calls and now - _td_calls[0] > 60:
@@ -101,7 +113,7 @@ def _td_slot():
         return True
 
 
-def _twelvedata(symbol, timeframe, limit, since, key):
+def _twelvedata(symbol, timeframe, limit, since, key, wait=0.0):
     import requests
 
     if timeframe in TD_NATIVE:
@@ -111,7 +123,7 @@ def _twelvedata(symbol, timeframe, limit, since, key):
         mult = {"3m": 3, "6h": 6, "12h": 12, "3M": 3}[timeframe]
     else:
         raise ValueError(f"timeframe {timeframe} not supported")
-    if not _td_slot():
+    if not _td_slot(wait):
         raise ValueError("Twelve Data minute limit reached")
     params = {"symbol": symbol.upper(), "interval": interval, "outputsize": min(5000, limit * mult + 5),
               "timezone": "UTC", "order": "asc", "apikey": key}
@@ -133,7 +145,7 @@ def _twelvedata(symbol, timeframe, limit, since, key):
     return df
 
 
-def get_candles(symbol, timeframe="1h", limit=200, since=None):
+def get_candles(symbol, timeframe="1h", limit=200, since=None, wait=0.0):
     tf_ttl = _ttl(timeframe)
     since_key = None if since is None else int(since) // (tf_ttl * 1000)
     key = (symbol.upper(), timeframe, int(limit), since_key)
@@ -158,7 +170,7 @@ def get_candles(symbol, timeframe="1h", limit=200, since=None):
         key_td = (os.environ.get("TWELVEDATA_API_KEY") or "").strip()
         if key_td:
             try:
-                df = _twelvedata(symbol, timeframe, limit, since, key_td)
+                df = _twelvedata(symbol, timeframe, limit, since, key_td, wait=wait)
             except Exception as e:
                 errors.append(str(e)[:120])
         if df is None:
