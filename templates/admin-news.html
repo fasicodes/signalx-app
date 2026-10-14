@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Articles admin | Signals FM</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
+<style>
+  .adm { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 960px) { .adm { grid-template-columns: 1fr; } }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .alist { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow: auto; }
+  .aitem { text-align: left; background: transparent; border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; color: var(--text); cursor: pointer; }
+  .aitem[aria-current="true"] { border-color: var(--accent, #16a34a); }
+  .aitem small { display: block; color: var(--text-faint); margin-top: 3px; }
+  .st { font: 600 11.5px var(--body); padding: 1px 7px; border-radius: 5px; margin-left: 6px; }
+  .st.draft { background: rgba(127,127,127,.18); } .st.published { background: rgba(22,163,74,.18); color: #22c55e; }
+  .st.scheduled { background: rgba(245,158,11,.18); color: #f59e0b; } .st.deleted { background: rgba(229,72,77,.18); color: #e5484d; }
+  .form { display: grid; gap: 12px; }
+  .form label { display: grid; gap: 5px; font-size: 13.5px; color: var(--text-dim); }
+  .form input, .form select, .form textarea { background: var(--void, #05080a); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: 14.5px var(--body); width: 100%; box-sizing: border-box; }
+  .form textarea { min-height: 320px; font: 14px/1.6 var(--mono, monospace); resize: vertical; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } @media (max-width: 640px) { .two { grid-template-columns: 1fr; } }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .cover-prev { max-width: 220px; border-radius: 8px; border: 1px solid var(--line); display: block; }
+  .prev { border: 1px dashed var(--line); border-radius: 10px; padding: 14px; line-height: 1.7; max-height: 60vh; overflow: auto; }
+  .prev img { max-width: 100%; }
+  .msg { font-size: 13.5px; } .msg.ok { color: #22c55e; } .msg.bad { color: #e5484d; }
+  .stat { font-size: 13px; color: var(--text-dim); line-height: 1.7; }
+  .stat code { font-size: 12.5px; }
+</style>
+</head>
+<body class="app an-shell">
+{% set active = 'admin-news' %}
+{% include '_app_nav.html' %}
+<main class="wrap">
+  <div class="phead">
+    <h1>Articles and news feeds</h1>
+    <p>Write, schedule and publish your own articles (Markdown), and check the news and calendar sources. Only admins see this page.</p>
+  </div>
+  <div class="adm">
+    <div>
+      <div class="box" style="margin-bottom:14px">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px">
+          <b>Articles</b>
+          <button class="pbtn primary" type="button" id="new">New article</button>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <label class="dim" style="font-size:13px"><input type="checkbox" id="show-deleted"> Show deleted</label>
+        </div>
+        <div class="alist" id="alist"><p class="dim">Loading…</p></div>
+      </div>
+      <div class="box">
+        <b>Sources</b>
+        <div class="stat" id="src">
+          Calendar: {{ status.calendar_provider or 'not configured (add FMP_API_KEY, or FINNHUB_API_KEY with a calendar plan, or TRADING_ECONOMICS_KEY)' }}<br>
+          Finnhub news: {{ 'on' if status.news_sources.finnhub else 'off (FINNHUB_API_KEY)' }} · FMP news: {{ 'on' if status.news_sources.fmp else 'off (FMP_API_KEY)' }} ·
+          RSS feeds: {{ status.news_sources.rss_feeds }}<br>
+          Last news refresh: <span id="ln">{{ status.last_news or 'not yet' }}</span><br>
+          Last calendar refresh: <span id="lc">{{ status.last_calendar or 'not yet' }}</span>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="pbtn" type="button" id="refresh">Refresh feeds now</button><span class="msg" id="rmsg"></span></div>
+      </div>
+    </div>
+    <div class="box">
+      <form class="form" id="form" autocomplete="off">
+        <label>Title<input id="f-title" maxlength="200" required></label>
+        <div class="two">
+          <label>URL slug (optional)<input id="f-slug" maxlength="100" placeholder="made from the title"></label>
+          <label>Category<select id="f-cat">{% for c in categories %}<option value="{{ c }}">{{ c | capitalize }}</option>{% endfor %}</select></label>
+        </div>
+        <label>Summary (shown in the news list and search results)<input id="f-sum" maxlength="500"></label>
+        <label>Tags (comma separated, e.g. USD, EUR, BTC)<input id="f-tags" maxlength="200"></label>
+        <div class="row">
+          <label style="flex:1">Cover image (PNG, JPEG, GIF or WebP, up to 3 MB)<input type="file" id="f-cover" accept="image/png,image/jpeg,image/gif,image/webp"></label>
+          <img id="cover-prev" class="cover-prev" alt="" hidden>
+          <button class="pbtn" type="button" id="cover-rm" hidden>Remove cover</button>
+        </div>
+        <label>Body (Markdown: # heading, **bold**, *italic*, [link](https://...), ![image](/media/1), lists, &gt; quotes)
+          <textarea id="f-body" maxlength="200000"></textarea></label>
+        <div class="row">
+          <button class="pbtn" type="button" id="img-btn">Insert image</button>
+          <input type="file" id="img-file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+          <button class="pbtn" type="button" id="prev-btn">Preview</button>
+        </div>
+        <div class="prev" id="prev" hidden></div>
+        <div class="two">
+          <label>Status<select id="f-status"><option value="draft">Draft</option><option value="published">Published</option><option value="scheduled">Scheduled</option></select></label>
+          <label id="when-wrap" hidden>Publish at (your local time)<input type="datetime-local" id="f-when"></label>
+        </div>
+        <div class="row">
+          <button class="pbtn primary" type="submit" id="save">Save</button>
+          <a class="pbtn" id="view" href="#" target="_blank" rel="noopener" hidden>Open article</a>
+          <button class="pbtn" type="button" id="del" hidden>Delete</button>
+          <button class="pbtn" type="button" id="restore" hidden>Restore</button>
+          <span class="msg" id="msg" role="status"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+{% include '_public_footer.html' %}
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  let cur = null, cover = null, list = [];
+  async function api(url, opts) {
+    const r = await fetch(url, Object.assign({ credentials: "same-origin" }, opts || {}));
+    let d = {}; try { d = await r.json(); } catch (e) {}
+    if (!r.ok || d.ok === false) throw new Error(d.error || `Request failed (${r.status})`);
+    return d;
+  }
+  const jpost = (url, body, method) => api(url, { method: method || "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  function msg(t, cls) { $("msg").textContent = t; $("msg").className = "msg " + (cls || ""); }
+  function when(iso) { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+  function renderList() {
+    $("alist").innerHTML = list.length ? list.map((a) => `<button type="button" class="aitem" data-id="${a.id}" aria-current="${cur && cur.id === a.id}">
+      ${esc(a.title)}<span class="st ${a.deleted ? "deleted" : esc(a.status)}">${a.deleted ? "deleted" : esc(a.status)}</span>
+      <small>${a.status === "scheduled" ? "Publishes " + esc(when(a.publish_at)) : "Updated " + esc(when(a.updated_at))}</small></button>`).join("")
+      : '<p class="dim">No articles yet. Press "New article".</p>';
+  }
+  async function loadList() {
+    try { list = (await api("/api/admin/articles" + ($("show-deleted").checked ? "?deleted=1" : ""))).articles; renderList(); }
+    catch (e) { $("alist").innerHTML = `<p class="msg bad">${esc(e.message)}</p>`; }
+  }
+  function setCover(id, url) {
+    cover = id || null;
+    $("cover-prev").hidden = !url; $("cover-rm").hidden = !url;
+    if (url) $("cover-prev").src = url;
+  }
+  function fill(a) {
+    cur = a;
+    $("f-title").value = a ? a.title : ""; $("f-slug").value = a ? a.slug : ""; $("f-sum").value = a ? (a.summary || "") : "";
+    $("f-cat").value = a ? a.category : "economy"; $("f-tags").value = a ? (a.tags || []).join(", ") : "";
+    $("f-body").value = a ? (a.body_md || "") : ""; $("f-status").value = a ? a.status : "draft";
+    if (a && a.publish_at && a.status === "scheduled") {
+      const d = new Date(a.publish_at); const off = d.getTimezoneOffset() * 60000;
+      $("f-when").value = new Date(d - off).toISOString().slice(0, 16);
+    } else $("f-when").value = "";
+    $("when-wrap").hidden = $("f-status").value !== "scheduled";
+    setCover(a && a.cover_id, a && a.cover);
+    $("view").hidden = !a; if (a) $("view").href = a.url;
+    $("del").hidden = !a || a.deleted; $("restore").hidden = !(a && a.deleted);
+    $("prev").hidden = true; msg("");
+    renderList();
+  }
+  $("alist").addEventListener("click", async (e) => {
+    const b = e.target.closest(".aitem"); if (!b) return;
+    try { fill((await api(`/api/admin/articles/${b.dataset.id}`)).article); } catch (err) { msg(err.message, "bad"); }
+  });
+  $("new").addEventListener("click", () => fill(null));
+  $("show-deleted").addEventListener("change", loadList);
+  $("f-status").addEventListener("change", () => { $("when-wrap").hidden = $("f-status").value !== "scheduled"; });
+  async function upload(file) {
+    const fd = new FormData(); fd.append("file", file);
+    return api("/api/admin/media", { method: "POST", body: fd });
+  }
+  $("f-cover").addEventListener("change", async () => {
+    const f = $("f-cover").files[0]; if (!f) return;
+    try { const d = await upload(f); setCover(d.id, d.url); msg("Cover uploaded. Save to keep it.", "ok"); }
+    catch (e) { msg(e.message, "bad"); }
+    $("f-cover").value = "";
+  });
+  $("cover-rm").addEventListener("click", () => setCover(null, null));
+  $("img-btn").addEventListener("click", () => $("img-file").click());
+  $("img-file").addEventListener("change", async () => {
+    const f = $("img-file").files[0]; if (!f) return;
+    try {
+      const d = await upload(f);
+      const ta = $("f-body"), pos = ta.selectionStart || ta.value.length;
+      ta.value = ta.value.slice(0, pos) + `\n![](${d.url})\n` + ta.value.slice(pos);
+      msg("Image inserted.", "ok");
+    } catch (e) { msg(e.message, "bad"); }
+    $("img-file").value = "";
+  });
+  $("prev-btn").addEventListener("click", async () => {
+    try { const d = await jpost("/api/admin/preview", { body_md: $("f-body").value }); $("prev").innerHTML = d.html; $("prev").hidden = false; }
+    catch (e) { msg(e.message, "bad"); }
+  });
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const st = $("f-status").value;
+    const body = { title: $("f-title").value, slug: $("f-slug").value || null, summary: $("f-sum").value, category: $("f-cat").value,
+      tags: $("f-tags").value, body_md: $("f-body").value, status: st, cover_id: cover };
+    if (st === "scheduled") {
+      if (!$("f-when").value) { msg("Pick the publish time.", "bad"); return; }
+      body.publish_at = new Date($("f-when").value).toISOString();
+    }
+    $("save").disabled = true;
+    try {
+      const d = cur ? await jpost(`/api/admin/articles/${cur.id}`, body, "PUT") : await jpost("/api/admin/articles", body);
+      await loadList(); fill(d.article);
+      msg(st === "published" ? "Saved and published." : st === "scheduled" ? "Saved. It will publish at the chosen time." : "Draft saved.", "ok");
+    } catch (err) { msg(err.message, "bad"); }
+    $("save").disabled = false;
+  });
+  $("del").addEventListener("click", async () => {
+    if (!cur || !confirm("Delete this article? You can restore it later from 'Show deleted'.")) return;
+    try { await api(`/api/admin/articles/${cur.id}`, { method: "DELETE" }); fill(null); await loadList(); msg("Deleted. It can be restored.", "ok"); }
+    catch (e) { msg(e.message, "bad"); }
+  });
+  $("restore").addEventListener("click", async () => {
+    if (!cur) return;
+    try { await jpost(`/api/admin/articles/${cur.id}/restore`); $("show-deleted").checked = false; await loadList(); fill(null); msg("Restored as a draft.", "ok"); }
+    catch (e) { msg(e.message, "bad"); }
+  });
+  $("refresh").addEventListener("click", async () => {
+    $("refresh").disabled = true; $("rmsg").textContent = "Refreshing…"; $("rmsg").className = "msg";
+    try {
+      const d = await jpost("/api/admin/news/refresh");
+      $("rmsg").textContent = `${d.news_added} new items, ${d.calendar_events} calendar events.`; $("rmsg").className = "msg ok";
+      $("ln").textContent = d.status.last_news || "not yet"; $("lc").textContent = d.status.last_calendar || "not yet";
+      const errs = Object.entries(d.status.news || {}).filter(([k, v]) => !v.ok).map(([k, v]) => `${k}: ${v.error}`);
+      if (d.status.calendar && d.status.calendar.ok === false) errs.push("calendar: " + d.status.calendar.error);
+      if (errs.length) { $("rmsg").textContent += " Problems: " + errs.join(" · "); $("rmsg").className = "msg bad"; }
+    } catch (e) { $("rmsg").textContent = e.message; $("rmsg").className = "msg bad"; }
+    $("refresh").disabled = false;
+  });
+  fill(null);
+  loadList();
+})();
+</script>
+</body>
+</html>
