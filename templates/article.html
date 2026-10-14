@@ -1,0 +1,67 @@
+{% extends '_info_base.html' %}
+{% set active = 'news' %}
+{% set seo_title = a.title ~ ' | Signals FM' %}
+{% set seo_description = a.summary or a.title %}
+{% set seo_path = '/news/' ~ a.slug %}
+{% block title %}{{ a.title }} | Signals FM{% endblock %}
+{% block description %}{{ a.summary or a.title }}{% endblock %}
+{% block seo %}
+{% include '_seo.html' ignore missing %}
+<meta property="article:published_time" content="{{ published.isoformat() + 'Z' if published else '' }}">
+<meta property="article:section" content="{{ a.category | capitalize }}">
+{% if a.preview %}<meta name="robots" content="noindex">{% endif %}
+<script type="application/ld+json">{{ {
+  "@context": "https://schema.org", "@type": "NewsArticle", "headline": a.title, "description": a.summary or a.title,
+  "datePublished": (published.isoformat() + 'Z') if published else None,
+  "dateModified": (updated.isoformat() + 'Z') if updated else None,
+  "author": {"@type": "Organization", "name": "Signals FM"},
+  "publisher": {"@type": "Organization", "name": "Signals FM"},
+  "mainEntityOfPage": canonical
+} | tojson }}</script>
+{% endblock %}
+{% block head %}
+<style>
+  .art { max-width: 760px; }
+  .art .crumb { font-size: 13.5px; color: var(--text-faint); margin: 0 0 10px; }
+  .art .crumb a { color: var(--text-dim); }
+  .art h1 { font-size: clamp(26px, 4.4vw, 38px); line-height: 1.2; margin: 0 0 10px; }
+  .art .lede { font-size: 18px; color: var(--text-dim); line-height: 1.55; margin: 0 0 14px; }
+  .art .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13.5px; color: var(--text-faint); margin: 0 0 18px; }
+  .art .tag { font-size: 12px; border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--text-dim); }
+  .art .cover { width: 100%; border-radius: 12px; margin: 0 0 22px; border: 1px solid var(--line); }
+  .art .body { font-size: 16.5px; line-height: 1.75; }
+  .art .body h2, .art .body h3, .art .body h4 { margin: 1.6em 0 .5em; line-height: 1.3; }
+  .art .body img { max-width: 100%; height: auto; border-radius: 10px; }
+  .art .body pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 14px; }
+  .art .body blockquote { border-left: 3px solid var(--line); margin: 1em 0; padding: 2px 16px; color: var(--text-dim); }
+  .art .body .table-wrap { overflow-x: auto; }
+  .art .body table { border-collapse: collapse; } .art .body th, .art .body td { border: 1px solid var(--line); padding: 6px 10px; }
+  .art .note { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: var(--text-dim); font-size: 13.5px; margin: 28px 0; }
+  .preview { background: rgba(245,158,11,.15); border: 1px solid #f59e0b; border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; }
+</style>
+{% endblock %}
+{% block content %}
+<article class="art">
+  {% if a.preview %}<div class="preview">Preview: this article is a {{ a.status }} and is not public yet.</div>{% endif %}
+  <p class="crumb"><a href="/news#news">News</a> · {{ a.category | capitalize }}</p>
+  <h1>{{ a.title }}</h1>
+  {% if a.summary %}<p class="lede">{{ a.summary }}</p>{% endif %}
+  <div class="meta">
+    <span>Signals FM</span>
+    {% if published %}<time datetime="{{ published.isoformat() }}Z" data-local>{{ published.strftime('%d %b %Y, %H:%M') }} UTC</time>{% endif %}
+    {% for t in tags %}<span class="tag">{{ t }}</span>{% endfor %}
+  </div>
+  {% if cover %}<img class="cover" src="{{ cover }}" alt="">{% endif %}
+  <div class="body">{{ a.body_html | safe }}</div>
+  <p class="note">This article is information, not financial advice. Trading involves risk; past performance does not guarantee future results.</p>
+  <p><a class="pbtn" href="/news#news">More news</a></p>
+</article>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll("time[data-local]").forEach(function (t) {
+    var d = new Date(t.getAttribute("datetime"));
+    if (!isNaN(d)) t.textContent = d.toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  });
+</script>
+{% endblock %}
