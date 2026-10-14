@@ -1,0 +1,85 @@
+# Signals FM (SignalX)
+
+Trading signals for crypto and forex on 15-minute, 1-hour and 4-hour candles, a news and economic
+calendar section, demo trading, an auto-trade bot and an AI assistant. Flask + MySQL, deployed on Railway.
+
+## Run locally
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env        # fill in at least SECRET_KEY and the DB_* values
+python main.py              # http://localhost:5000
+```
+
+Production (Railway) uses the `Procfile`: `gunicorn main:app --worker-class gthread --workers 1 --threads 8`.
+Every variable is described in `.env.example`; secrets live only in Railway Variables.
+
+## What runs in the background
+
+All background jobs start inside the web process and are safe with several workers or instances: each one
+takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes over if it stops.
+
+| Job | Module | What it does | Switch |
+|---|---|---|---|
+| Signal scanner + tracker | `signal_hub.py` | After every 15m / 1h / 4h candle close: runs each stream, stores new signals, sends alerts; follows every active signal to its result (TP1/TP2/TP3, stop, expiry). | `SIGNAL_HUB`, `SIGNAL_STREAMS` |
+| Crypto 4h engine | `signalboard.py` + `signal_engine.py` | Signal engine v3.1 board after each 4h close. | `SIGNAL_BOARD` |
+| Track record | `trackrecord.py` | Live record + backtest of engine v3.1. | `TRACK_RECORD_ENGINE` |
+| News + calendar | `news.py` | News every 10 min, calendar every 30 min (de-duplicated). | `NEWS_JOB` |
+| Auto-trade engine | `autotrade.py` | Hands every new site signal to the bots that want it, places orders, follows stops and targets. | `AUTOTRADE_ENGINE` |
+| Demo trading engine | `papertrade.py` | The site's paper exchange. | `PAPER_ENGINE` |
+
+## Signal streams
+
+* `markets.py` - every symbol (62 crypto coins, 45 forex pairs), the forex signal list (7 majors, crosses, gold;
+  `FOREX_SIGNAL_PAIRS`), pip sizes, spreads, the forex week (DST-aware) and sessions.
+* `streams.py` - the six streams, the shared selection policy (one trade per symbol, cooldown, max signals per
+  candle, forex sessions, weekend exit, news blackout) and the trade plan follower used by both the live site and the research.
+* `features.py` - model inputs (the same code for research and live).
+* `models/<market>_<timeframe>.json` - trained stream models with their walk-forward and holdout tests
+  (crypto 4h uses `signal_model.json`, engine v3.1). A stream without a model file falls back to rules engine R1.
+* Research code that trains and tests the models: see "Research" below.
+
+Database: every signal is a row in `signal_events` (market, timeframe, grade, plan, status, result). The
+migration only adds columns/indexes; signals from before it are crypto 4h signals and keep their data.
+
+## News and economic calendar
+
+`news.py`: calendar from Financial Modeling Prep, Finnhub or Trading Economics; news from Finnhub, FMP and
+central-bank RSS feeds (licensed APIs and RSS only, nothing scraped; third-party items keep only headline,
+summary, source and link). Admins (`ADMIN_EMAILS`) write their own articles at `/admin/news`
+(Markdown, draft / scheduled / published, cover image). High-impact events pause new forex signals for that
+currency (`NEWS_BLACKOUT_BEFORE_MIN` / `NEWS_BLACKOUT_AFTER_MIN`).
+
+## Auto-trade bot
+
+`autotrade.py` + `fxbroker.py`. Accounts: Site demo (virtual money: crypto via the demo exchange, forex via a
+virtual USD account), Binance demo / live (ccxt), OANDA demo / live (forex, v20 REST). Every new site
+signal is handed to every bot account whose filters match (markets, timeframes, minimum grade, minimum
+confidence, all symbols or a list), once per account, with the signal's own stop and targets, while the price
+is still close to the entry. Risk % per trade, max open trades, daily loss limit, kill switch, retries with
+backoff, an activity log, and "Trade this signal" on the Signals page. Keys are encrypted with
+`AUTOTRADE_ENCRYPTION_KEY` and never sent to the browser; Binance keys with withdrawal permission are refused.
+
+## AI assistant
+
+`site_assistant.py` + `static/assistant-widget.js`: a chat button on every main page. Uses the Claude API
+(`ANTHROPIC_API_KEY`, `ASSISTANT_MODEL`) server side with streaming, conversation history, live context (the
+signal on screen, the newest signals, each stream's results, upcoming high-impact events, headlines), a timeout
+with one retry, hourly limits per user / visitor, and built-in answers when the AI is off or busy. English only.
+
+## Tests
+
+```bash
+for t in tests/test_*.py; do python "$t" || echo "FAILED: $t"; done
+```
+
+The tests use a SQLite stand-in for MySQL (`tests/dbshim.py`) and fake brokers / APIs: no network needed.
+
+## Research (how the stream models were trained and tested)
+
+The research scripts are not part of the web app. Data: Binance spot 1-minute candles (public CC repositories
+on GitHub, aggregated to 15m) for 53 coins, 2020-2026, and 15-minute forex/gold candles (2012-2022-03).
+Protocol: features from `features.py`; label = first target (0.5 R) before the stop; walk-forward over the
+validation years (6-month folds, each trained only on earlier data with a purge gap); threshold, grades and
+calibration chosen on validation only; one final test on a later holdout period the model never saw.
+Results are written into each model file (`test` = holdout, `walk_forward` = validation) and shown on the Signals page.
