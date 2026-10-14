@@ -249,8 +249,12 @@ def _delete_chat(chat_id):
 # ===========================================================================
 # message text
 # ===========================================================================
-def _fmt(x):
+def _fmt(x, symbol=None):
     x = float(x)
+    if symbol:
+        import markets
+        if markets.is_forex(symbol):
+            return f"{x:.{markets.price_decimals(symbol)}f}"
     if x >= 1000:
         return f"{x:,.2f}"
     if x >= 1:
@@ -258,7 +262,11 @@ def _fmt(x):
     return f"{x:.8f}".rstrip("0").rstrip(".")
 
 
-def _pct(level, entry):
+def _pct(level, entry, symbol=None):
+    if symbol:
+        import markets
+        if markets.is_forex(symbol):
+            return f"{markets.to_pips(symbol, float(level) - float(entry)):+.1f} pips"
     return f"{(float(level) / float(entry) - 1) * 100:+.2f}%"
 
 
@@ -277,20 +285,33 @@ def _targets(e):
     return tps
 
 
+TF_NAME = {"15m": "15-minute", "1h": "1-hour", "4h": "4-hour"}
+
+
 def signal_block(e):
     side = e["side"]
     icon = "\U0001F7E2" if side == "LONG" else "\U0001F534"
-    sym = html.escape(e["symbol"])
-    kind = "standard " if e.get("tier") == "standard" else ""
-    lines = [f"{icon} <b>New {kind}{'Long' if side == 'LONG' else 'Short'} signal: {sym}</b>",
-             f"Entry: <b>{_fmt(e['entry'])}</b>",
-             f"Stop loss: {_fmt(e['stop_loss'])} ({_pct(e['stop_loss'], e['entry'])})"]
+    sym = e["symbol"]
+    tf = e.get("timeframe") or "4h"
+    grade = f" · grade {e['grade']}" if e.get("grade") else ""
+    lines = [f"{icon} <b>New {'Long' if side == 'LONG' else 'Short'} signal: {html.escape(sym)} ({tf})</b>{grade}",
+             f"Entry: <b>{_fmt(e['entry'], sym)}</b>",
+             f"Stop loss: {_fmt(e['stop_loss'], sym)} ({_pct(e['stop_loss'], e['entry'], sym)})"]
     for k, v in enumerate(_targets(e)):
-        lines.append(f"TP{k + 1}: {_fmt(v)} ({_pct(v, e['entry'])})")
+        lines.append(f"TP{k + 1}: {_fmt(v, sym)} ({_pct(v, e['entry'], sym)})")
     lines.append("Close a third at each target. After TP1 move the stop to the entry, after TP2 to TP1.")
-    if e.get("confidence") is not None:
-        lines.append(f"Chance of TP1: {float(e['confidence']):.0f}% · closes after 9 days at the latest")
-    url = _link("/?coin=" + e["symbol"].replace("/", "%2F"))
+    extra = []
+    if tf == "4h" and (e.get("market") or "crypto") == "crypto" and e.get("confidence") is not None:
+        extra.append(f"Chance of TP1: {float(e['confidence']):.0f}%")
+    if e.get("hold_minutes"):
+        h = int(e["hold_minutes"]) / 60
+        extra.append(f"expected hold about {h:.0f} h" if h >= 1 else f"expected hold about {int(e['hold_minutes'])} min")
+    if extra:
+        lines.append(" · ".join(extra))
+    news = e.get("news")
+    if news and news.get("title"):
+        lines.append(f"\u26A0\uFE0F High-impact news soon: {html.escape(str(news['title']))}")
+    url = _link("/signals?market=" + (e.get("market") or "crypto") + "&timeframe=" + tf)
     if url:
         lines.append(f'<a href="{html.escape(url)}">Open on Signals FM</a>')
     return "\n".join(lines)
@@ -317,35 +338,29 @@ def _not_linked_text():
 
 
 def _signals_text():
-    rows_fn = _state.get("board_rows")
     try:
-        rows = rows_fn()[0] if rows_fn else []
+        import signal_hub
+        rows, total = signal_hub.list_signals(status="active", sort="newest", per_page=12)
     except Exception:
-        rows = []
-    active = [r for r in rows if r.get("state") == "ACTIVE"]
+        return "The signals list is not available right now. Please try again in a minute."
     if not rows:
-        return "The signals board is still loading. Please try again in a minute."
-    if not active:
-        return ("No active signals right now. New signals can start at every 4-hour close; "
-                "if no coin has had one for 24 hours, the best setup gets one.")
-    out = [f"<b>Active signals ({len(active)})</b>"]
-    for r in active[:12]:
-        a, p = r["active"], r.get("progress") or {}
-        side = "Long" if a["side"] == "LONG" else "Short"
-        icon = "\U0001F7E2" if a["side"] == "LONG" else "\U0001F534"
-        coin = html.escape(r["symbol"].replace("/USDT", ""))
-        line = f"{icon} <b>{coin}</b> {side}"
-        line += f" · entry {_fmt(a['entry'])}"
-        if p.get("pct") is not None:
-            line += f" · {abs(p['pct']):g}% to {('TP' + str(p.get('next') or 1)) if p['pct'] >= 0 else 'stop'}"
-        if a.get("hits"):
-            line += f" · TP{a['hits']} reached"
-        if r.get("fresh"):
-            line += " · <b>new</b>"
+        return ("No active signals right now. New signals can start at every 15-minute, 1-hour and "
+                "4-hour candle close.")
+    out = [f"<b>Active signals ({total})</b>"]
+    for r in rows:
+        side = "Long" if r["side"] == "LONG" else "Short"
+        icon = "\U0001F7E2" if r["side"] == "LONG" else "\U0001F534"
+        sym = r["symbol"]
+        line = f"{icon} <b>{html.escape(sym.replace('/USDT', ''))}</b> {r.get('timeframe') or '4h'} {side}"
+        line += f" · entry {_fmt(r['entry'], sym)}"
+        if r.get("grade"):
+            line += f" · grade {r['grade']}"
+        if r.get("hits"):
+            line += f" · TP{r['hits']} reached"
         out.append(line)
     url = _link("/signals")
     if url:
-        out.append(f'\n<a href="{html.escape(url)}">Open the signals board</a>')
+        out.append(f'\n<a href="{html.escape(url)}">Open the signals page</a>')
     return "\n".join(out)
 
 
@@ -374,7 +389,7 @@ def handle_update(update):
                          "Open Signals FM, go to <b>Signal alerts</b> and press <b>Connect Telegram</b> again.")
             else:
                 reply = ("✅ <b>Connected to Signals FM.</b>\n\n"
-                         "New signals for the coins you chose will arrive here right after each 4-hour close.\n\n" + HELP_TEXT)
+                         "New signals for the coins you chose will arrive here right after each candle close of the timeframes you chose.\n\n" + HELP_TEXT)
         else:
             link = _link_of_chat(chat_id)
             if cmd in ("/start", "/help") or not cmd.startswith("/"):
