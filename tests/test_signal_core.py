@@ -19,6 +19,11 @@ src = open(os.path.join(ROOT, "main.py"), encoding="utf-8").read()
 tree = ast.parse(src)
 funcs = [n for n in tree.body if isinstance(n, ast.FunctionDef) and not n.decorator_list]
 module = ast.Module(body=funcs, type_ignores=[])
+if not any(f.name == "signal_core" for f in funcs):
+    # main.signal_core() was removed when the track record moved to signal engine v3 (signal_engine.py,
+    # covered by tests/test_signal_engine.py and tests/test_trackrecord.py), so there is nothing to compare.
+    print("SKIPPED: main.signal_core() no longer exists (the track record uses signal engine v3).")
+    sys.exit(0)
 
 
 class _Stub:
