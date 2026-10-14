@@ -349,6 +349,7 @@
     onOpen: () => { if (Date.now() - S.boardAt > 60000) loadBoard(); },
   });
   function selectCoin(sym, initial) {
+    window.SFM_ASSIST = { symbol: sym };          // the assistant widget explains the coin on screen
     if (!picker.valid(sym)) sym = "BTC/USDT";
     const changed = sym !== S.coin || initial;
     S.coin = sym;
