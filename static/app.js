@@ -88,11 +88,16 @@
     const rows = (S.board && S.board.rows) || [];
     const fresh = rows.find((r) => r.state === "ACTIVE" && r.fresh);
     const act = rows.find((r) => r.state === "ACTIVE");
-    return (fresh || act || {}).symbol || "BTC/USDT";
+    const other = streamsActive().find((x) => all.includes(x.symbol));
+    return (fresh || act || other || {}).symbol || "BTC/USDT";
   }
+  // active signals of the other streams (crypto 15m / 1h, forex), newest first - from /api/signals/board
+  function streamsActive() { return ((S.board && S.board.streams_active) || []).filter((x) => x && x.status === "ACTIVE"); }
+  function streamFor(sym) { return streamsActive().find((x) => x.symbol === sym); }
 
   function selectCoin(sym) {
     S.coin = sym;
+    window.SFM_ASSIST = { symbol: sym };          // the assistant widget explains the coin on screen
     S.kind = S.coins.forex.includes(sym) ? "forex" : "crypto";
     store.set("sfm-coin", sym);
     try { history.replaceState(null, "", `/?coin=${encodeURIComponent(sym)}`); } catch (e) {}
@@ -183,9 +188,11 @@
     if (sym !== S.coin) return;
     S.eng = d;
     renderHeaderPrice(d);
-    if (d.asset === "forex") renderForex(d);
+    const other = (d.other_active || []).filter((x) => x && x.status === "ACTIVE");
+    if (d.asset === "forex") (other.length ? renderOther(d, other) : renderForex(d));
+    else if (d.engine && d.engine.active) renderActive(d);
+    else if (other.length) renderOther(d, other);
     else if (!d.engine || d.engine.error || d.error) renderError((d.engine && d.engine.error) || d.error || "The signal engine did not answer.");
-    else if (d.engine.active) renderActive(d);
     else renderWait(d);
     renderBrief(d.brief);
     renderProof(d.test);
@@ -209,11 +216,42 @@
 
   function renderForex(d) {
     const gold = S.coin.startsWith("XAU");
-    setState("FOREX", "Chart and market brief",
-      d.error ? d.error : `Signals are made for crypto only for now. For ${gold ? "gold" : "forex pairs"} you get the live chart and a plain-language brief of trend, momentum and volatility.`);
+    const on = ((S.board && S.board.streams_enabled) || []).filter((k) => k.startsWith("forex_")).map((k) => k.split("_")[1]);
+    const names = { "15m": "15-minute", "1h": "1-hour", "4h": "4-hour" };
+    const how = !S.board ? "" : on.length
+      ? ` Forex signals run on ${on.map((t) => names[t] || t).join(" and ")} candles during the London and New York sessions.`
+      : " Forex signals are switched off on this site until a forex model passes its test on unseen data.";
+    setState("FOREX", "No active signal", d.error ? d.error : `No active ${gold ? "gold" : "forex"} signal on ${S.coin} right now.${how}`);
     $("sig-pill").hidden = true;
     $("sig-prob").hidden = true;
-    $("sig-body").innerHTML = `<div class="d-actions"><a class="d-btn" href="/signals">See crypto signals</a></div>`;
+    $("sig-body").innerHTML = `${liveElsewhere()}<div class="d-actions"><a class="d-btn" href="/signals?market=forex">See forex signals</a></div>`;
+    wireJump();
+  }
+
+  function renderOther(d, list) {
+    const a = list[0];
+    const long = a.side === "LONG";
+    const dec = a.decimals;
+    const px = (v) => dec != null ? Number(v).toFixed(dec) : price(v);
+    setState(a.side, `${long ? "Long" : "Short"} · ${a.timeframe} signal`,
+      `Started ${ago(a.signal_at)} on the ${a.timeframe} chart. Expires ${when(a.expires_at)}.`, long ? "long" : "short");
+    const pill = $("sig-pill");
+    pill.hidden = false; pill.className = "d-pill";
+    pill.textContent = `Grade ${a.grade}`;
+    $("sig-prob").hidden = a.confidence == null;
+    if (a.confidence != null) { $("sig-prob-v").textContent = `${Math.round(a.confidence)}%`; $("sig-prob-l").textContent = "chance of TP1"; }
+    const tps = (a.targets || []).map((v, k) => `<div><span class="c-dim">TP${k + 1}${k < (a.hits || 0) ? " ✓" : ""}</span> <b class="tnum c-long">${px(v)}</b></div>`).join("");
+    const now = a.price != null ? `<p class="d-copy">Now ${px(a.price)}${a.r_now != null ? ` (${a.r_now > 0 ? "+" : ""}${a.r_now}R)` : ""}.</p>` : "";
+    const more = list.length > 1 ? `<p class="d-copy">Also active: ${list.slice(1).map((x) => `${x.timeframe} ${x.side.toLowerCase()}`).join(", ")}.</p>` : "";
+    const fourH = d.engine && !d.engine.active && d.asset !== "forex" ? `<p class="d-copy c-dim">The 4-hour engine has no trade on ${esc(base(S.coin))} right now.</p>` : "";
+    $("sig-body").innerHTML = `
+      <div class="d-tiles" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
+        <div><span class="c-dim">Entry</span> <b class="tnum">${px(a.entry)}</b></div>
+        <div><span class="c-dim">Stop</span> <b class="tnum c-short">${px(a.stop_now != null ? a.stop_now : a.stop_loss)}</b></div>${tps}
+      </div>
+      ${now}${more}${fourH}
+      <p class="d-copy">Close a third at each target; after TP1 move the stop to the entry, after TP2 to TP1.</p>
+      <div class="d-actions"><a class="d-btn primary" href="/signals?market=${esc(a.market)}&timeframe=${esc(a.timeframe)}">Open on the signals page</a></div>`;
   }
 
   function renderWait(d) {
@@ -247,7 +285,27 @@
       <p class="d-copy">The model leans <b class="${lean === "long" ? "c-long" : "c-short"}">${lean}</b>${tip("leaning", "leaning")} (${leanPct}% estimated chance of reaching target 1).
         ${e.setup_forming ? "It is close, so keep an eye on the next 4-hour close. This is not a trade yet." : "The engine reads every coin in the list together and rarely goes a day without a signal on one of them."}</p>
       ${lastTxt ? `<p class="d-copy">${esc(lastTxt)}</p>` : ""}
+      ${liveElsewhere()}
       <div class="d-actions"><a class="d-btn primary" href="#others" id="go-others">See coins with signals</a></div>`;
+    wireJump();
+  }
+  // "Active now" buttons on the Wait card: up to three live signals on other coins (any timeframe)
+  function liveElsewhere() {
+    const list = [];
+    ((S.board && S.board.rows) || []).forEach((r) => { if (r.state === "ACTIVE" && r.symbol !== S.coin) list.push({ symbol: r.symbol, side: r.active.side, timeframe: "4h", at: r.active.signal_at }); });
+    streamsActive().forEach((x) => { if (x.symbol !== S.coin) list.push({ symbol: x.symbol, side: x.side, timeframe: x.timeframe, at: x.signal_at }); });
+    if (!list.length) return "";
+    list.sort((a, b) => toDate(b.at) - toDate(a.at));
+    const seen = new Set();
+    const top = list.filter((x) => (seen.has(x.symbol) ? false : seen.add(x.symbol))).slice(0, 3);
+    return `<p class="d-copy" style="margin-bottom:6px">Live signals on other ${list.length === 1 ? "symbol" : "symbols"} right now:</p>
+      <div class="d-actions" style="margin-top:0">${top.map((x) => `<button type="button" class="d-btn" data-jump="${esc(x.symbol)}">${esc(base(x.symbol))} · ${esc(x.timeframe)} ${x.side === "LONG" ? "long" : "short"}</button>`).join("")}</div>`;
+  }
+  function wireJump() {
+    document.querySelectorAll("#sig-body [data-jump]").forEach((el) => el.addEventListener("click", () => {
+      selectCoin(el.dataset.jump);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }));
   }
 
   function levelsOf(a) {
@@ -466,6 +524,15 @@
       <small>${p.move_pct == null ? "started " + ago(a.signal_at) : `${signed(p.move_pct)}% since entry, ${Math.abs(p.pct)}% to ${p.pct >= 0 ? "TP" + (p.next || 1) : "stop"}${a.hits ? ` · TP${a.hits} ✓` : ""}`}</small>
     </button>`;
   }
+  function miniStream(x) {
+    const long = x.side === "LONG";
+    const hits = x.hits ? ` · TP${x.hits} ✓` : "";
+    return `<button type="button" class="d-mini" data-sym="${esc(x.symbol)}" aria-current="${x.symbol === S.coin}">
+      <span class="d-mini-top"><b>${esc(base(x.symbol))}</b><span class="d-pill" style="background:var(--${long ? "long" : "short"}-bg);color:var(--${long ? "long" : "short"})">${esc(x.timeframe)} ${long ? "long" : "short"}</span></span>
+      <span class="d-mini-bar"><i style="left:0;width:${x.grade === "A" ? 100 : x.grade === "B" ? 70 : 40}%;background:var(--${long ? "long" : "short"})"></i></span>
+      <small>Grade ${esc(x.grade || "C")} · started ${ago(x.signal_at)}${hits}</small>
+    </button>`;
+  }
   function renderOthers() {
     const box = $("others-list");
     const b = S.board;
@@ -477,9 +544,10 @@
     const w = b.same_side_warning;
     $("others-warn").hidden = !w;
     if (w) $("others-warn").textContent = `${w.count} of ${w.total} active signals are ${w.side.toLowerCase()}. Coins tend to move together, so these can win or lose at the same time. Don't put full risk on all of them.`;
-    let html = act.map(mini).join("");
-    if (!act.length) {
-      html = `<p class="d-empty">No active signals right now. The engine checks every coin at each 4-hour close; if none has had a signal for 24 hours, the best setup gets one.${forming.length ? " Closest to a strong signal:" : ""}</p>`;
+    const others = streamsActive();
+    let html = act.map(mini).join("") + others.slice(0, 12).map(miniStream).join("");
+    if (!act.length && !others.length) {
+      html = `<p class="d-empty">No active signals right now. Each stream checks every symbol at its candle close (15 minutes, 1 hour, 4 hours).${forming.length ? " Closest to a strong 4-hour signal:" : ""}</p>`;
     }
     if (forming.length) {
       html += forming.slice(0, 4).map((r) => `<button type="button" class="d-mini" data-sym="${esc(r.symbol)}" aria-current="${r.symbol === S.coin}">
@@ -496,11 +564,16 @@
 
   // ---------------------------------------------------------------- coin sheet
   function statusPill(sym) {
-    const r = boardRow(sym);
-    if (!r) return "";
+    const r = boardRow(sym) || {};
+    if (!r.state && !streamFor(sym)) return "";
     if (r.state === "ACTIVE") {
       const s = r.active.side;
       return `<span class="d-pill" style="background:var(--${s === "LONG" ? "long" : "short"}-bg);color:var(--${s === "LONG" ? "long" : "short"})">${r.fresh ? "New " + (s === "LONG" ? "long" : "short") : (s === "LONG" ? "Long" : "Short")}</span>`;
+    }
+    const o = streamFor(sym);
+    if (o) {
+      const l = o.side === "LONG";
+      return `<span class="d-pill" style="background:var(--${l ? "long" : "short"}-bg);color:var(--${l ? "long" : "short"})">${esc(o.timeframe)} ${l ? "long" : "short"}</span>`;
     }
     if (r.setup_forming) return `<span class="d-pill" style="background:var(--amber-bg);color:var(--amber)">Forming</span>`;
     return "";
@@ -509,10 +582,10 @@
     const q = $("coin-search").value.trim().toUpperCase();
     const list = (S.coins[S.sheetKind] || []).filter((s) => !q || s.replace("/", "").includes(q.replace("/", "")) || s.includes(q));
     if (!list.length) { $("coin-list").innerHTML = `<p class="d-empty" style="padding:16px 6px">Nothing matches “${esc(q)}”.</p>`; return; }
-    const sorted = S.sheetKind === "crypto" ? list.slice().sort((a, b) => {
-      const rank = (s) => { const r = boardRow(s); return r && r.state === "ACTIVE" ? 0 : r && r.setup_forming ? 1 : 2; };
+    const sorted = list.slice().sort((a, b) => {
+      const rank = (s) => { const r = boardRow(s); return (r && r.state === "ACTIVE") || streamFor(s) ? 0 : r && r.setup_forming ? 1 : 2; };
       return rank(a) - rank(b);
-    }) : list;
+    });
     $("coin-list").innerHTML = sorted.map((s) => `<button type="button" class="d-row" data-sym="${esc(s)}">
       <img alt="" data-icon="${esc(s)}"><span><b>${esc(s)}</b><small>${S.sheetKind === "forex" ? (s.startsWith("XAU") ? "Gold" : "Forex") : "Crypto"}</small></span>${statusPill(s)}</button>`).join("");
     $("coin-list").querySelectorAll("img[data-icon]").forEach((img) => setIcon(img, img.dataset.icon));
