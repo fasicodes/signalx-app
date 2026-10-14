@@ -112,6 +112,8 @@ import signalboard as sb  # noqa: E402
 
 tg.get_db_connection = Conn
 sb.get_db_connection = Conn
+import signal_hub  # noqa: E402
+signal_hub.get_db_connection = Conn
 tg.time.sleep = lambda s: None
 tg._state["sync"] = True
 passed = 0
@@ -240,22 +242,18 @@ hook(update(999, "/signals"))
 check("not connected" in sent_to(999)[-1], "unknown chat: explains how to connect")
 hook(update(555, "/help"))
 check("/signals" in sent_to(555)[-1] and "/stop" in sent_to(555)[-1], "/help lists the commands")
-BOARD["rows"] = []
-hook(update(555, "/signals"))
-check("still loading" in sent_to(555)[-1], "/signals while the board loads")
-BOARD["rows"] = [{"symbol": "SOL/USDT", "state": "WAIT"}]
+signal_hub.init_tables()
 hook(update(555, "/signals"))
 check("No active signals" in sent_to(555)[-1], "/signals with nothing active")
-BOARD["rows"] = [{"symbol": "BTC/USDT", "state": "ACTIVE", "fresh": True,
-                  "active": {"side": "LONG", "entry": 63120.5, "stop_loss": 60000.0, "take_profit": 64700.0},
-                  "progress": {"pct": 42.5}},
-                 {"symbol": "ETH/USDT", "state": "ACTIVE", "fresh": False,
-                  "active": {"side": "SHORT", "entry": 2500.0, "stop_loss": 2600.0, "take_profit": 2450.0},
-                  "progress": {"pct": -12.0}}]
+_bt = datetime(2026, 10, 8, 4, 0)
+signal_hub.record("BTC/USDT", "crypto", "4h", {"side": "LONG", "entry": 63120.5, "stop_loss": 60000.0, "take_profit": 69361.5,
+                                              "targets": [64680.75, 66241.0, 69361.5], "confidence": 78, "bar_time": _bt})
+signal_hub.record("EUR/USD", "forex", "1h", {"side": "SHORT", "entry": 1.08123, "stop_loss": 1.0832, "take_profit": 1.0753,
+                                            "targets": [1.0793, 1.0773, 1.0753], "grade": "A", "bar_time": _bt})
 hook(update(555, "/signals"))
 txt = sent_to(555)[-1]
-check("Active signals (2)" in txt and "BTC</b> Long" in txt and "42.5% to TP1" in txt and "12% to stop" in txt and "<b>new</b>" in txt,
-      "/signals lists active signals with progress")
+check("Active signals (2)" in txt and "BTC</b> 4h Long" in txt and "EUR/USD</b> 1h Short" in txt and "1.08123" in txt
+      and "grade A" in txt, "/signals lists active signals of every stream from the database")
 check("https://signals.example/signals" in txt, "with a link to the board")
 hook(update(555, "/stop"))
 check("Alerts are paused" in sent_to(555)[-1], "/stop answered in the chat")
@@ -277,11 +275,11 @@ sb.notify([ev_btc, ev_eth])
 msgs = {p["chat_id"]: p["text"] for m, p in CALLS[n:] if m == "sendMessage"}
 check(set(msgs) == {555, 777}, "both linked users get a message")
 check("2 new signals" in msgs[555] and "BTC/USDT" in msgs[555] and "ETH/USDT" in msgs[555], "user 1 (all coins): one message with both")
-check("BTC/USDT" not in msgs[777] and "New Short signal: ETH/USDT" in msgs[777], "user 2 gets only the coin they chose")
+check("BTC/USDT" not in msgs[777] and "New Short signal: ETH/USDT (4h)" in msgs[777], "user 2 gets only the coin they chose")
 check("Entry: <b>63,120.50</b>" in msgs[555] and "(-4.94%)" in msgs[555] and "TP1: 64,680.75 (+2.47%)" in msgs[555]
       and "TP3: 69,361.50 (+9.89%)" in msgs[555] and "Chance of TP1: 73%" in msgs[555] and "a third at each target" in msgs[555],
       "message shows entry, stop, three targets and the chance of TP1")
-check('href="https://signals.example/?coin=BTC%2FUSDT"' in msgs[555] and "Not financial advice" in msgs[555], "link to the coin + risk note")
+check('href="https://signals.example/signals?market=crypto&amp;timeframe=4h"' in msgs[555] and "Not financial advice" in msgs[555], "link to the stream + risk note")
 cur = Conn().cursor(); cur.execute("SELECT user_id FROM notifications WHERE category='SIGNAL'"); bell = cur.fetchall()
 check(len(bell) == 5, "bell notifications still created for everyone with alerts on (2 + 1 + 2)")
 login(2)
