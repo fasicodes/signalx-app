@@ -1,260 +1,326 @@
-"""Tests for signalboard.py with a fake engine + SQLite shim (no network,
-no MySQL). Run from the project root:  python tests/test_signalboard.py
+"""Tests for markets.py, streams.py and signal_hub.py (SQLite shim, fake candles,
+no network). Run from the project root:  python tests/test_signal_hub.py
 """
+import json
 import os
-import re
-import sqlite3
 import sys
-import tempfile
-import types
 from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.dirname(HERE))
+from dbshim import setup  # noqa: E402
 
-pm = types.ModuleType("pymysql")
-pm.cursors = types.ModuleType("pymysql.cursors")
-pm.cursors.DictCursor = object
-pm.connect = lambda **kw: None
-sys.modules.setdefault("pymysql", pm)
-sys.modules.setdefault("pymysql.cursors", pm.cursors)
+Conn = setup("signal_hub")
 
-sqlite3.register_adapter(datetime, lambda d: d.strftime("%Y-%m-%d %H:%M:%S"))
-DB_PATH = os.path.join(tempfile.gettempdir(), "signalboard_test.db")
-if os.path.exists(DB_PATH):
-    os.remove(DB_PATH)
-
-
-def _translate(sql):
-    s = sql.strip()
-    if "GET_LOCK" in s:
-        return "SELECT 1 AS got"
-    if s.upper().startswith("CREATE TABLE"):
-        lines = [ln for ln in s.splitlines() if not ln.strip().startswith(("INDEX ", "FOREIGN KEY"))]
-        s = "\n".join(lines).replace("INT PRIMARY KEY AUTO_INCREMENT", "INTEGER PRIMARY KEY AUTOINCREMENT")
-        s = re.sub(r",\s*\)\s*$", "\n)", s)
-    return s.replace("%s", "?")
-
-
-class Cur:
-    def __init__(self, conn):
-        self.c = conn.cursor()
-        self.rowcount = -1
-
-    def execute(self, sql, params=()):
-        t = _translate(sql)
-        self.c.execute(t, tuple(params or ()) if "?" in t else ())
-        self.rowcount = self.c.rowcount
-
-    def fetchone(self):
-        r = self.c.fetchone()
-        return dict(r) if r else None
-
-    def fetchall(self):
-        return [dict(r) for r in self.c.fetchall()]
-
-    def close(self):
-        self.c.close()
-
-
-class Conn:
-    def __init__(self):
-        self.conn = sqlite3.connect(DB_PATH, isolation_level=None)
-        self.conn.row_factory = sqlite3.Row
-
-    def cursor(self):
-        return Cur(self.conn)
-
-    def close(self):
-        self.conn.close()
-
-    def ping(self, reconnect=False):
-        pass
-
-
+import markets  # noqa: E402
+import streams  # noqa: E402
+import signal_hub as hub  # noqa: E402
 import signalboard as sb  # noqa: E402
+
+hub.get_db_connection = Conn
 sb.get_db_connection = Conn
-import signal_hub  # noqa: E402
-signal_hub.get_db_connection = Conn
-sb.time.sleep = lambda s: None
-passed = 0
+
+FAILS = []
 
 
-def check(cond, label):
-    global passed
+def check(cond, name):
+    print(("PASS " if cond else "FAIL ") + name)
     if not cond:
-        raise AssertionError("FAIL: " + label)
-    passed += 1
-    print("  ok -", label)
+        FAILS.append(name)
 
 
-c = Conn().cursor()
-c.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT)")
-c.execute("""CREATE TABLE notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, category TEXT, symbol TEXT,
-             title TEXT, message TEXT, is_read INT DEFAULT 0, alert_id INT, created_at TEXT)""")
-for i, e in ((1, "a@x.com"), (2, "b@x.com"), (3, "c@x.com")):
-    c.execute("INSERT INTO users (id, email) VALUES (?, ?)", (i, e))
+# ---------------------------------------------------------------------------
+# markets: pips, weekend, daylight saving, sessions
+# ---------------------------------------------------------------------------
+check(markets.pip_size("EUR/USD") == 0.0001 and markets.pip_size("USD/JPY") == 0.01 and markets.pip_size("XAU/USD") == 0.1,
+      "pip sizes: majors 0.0001, JPY 0.01, gold 0.1")
+check(abs(markets.to_pips("EUR/USD", 0.0025) - 25) < 1e-9 and abs(markets.to_pips("XAU/USD", 3.5) - 35) < 1e-9,
+      "price difference -> pips")
+check(len(markets.FOREX_MAJORS) == 7 and all(p in markets.forex_signal_pairs() for p in markets.FOREX_MAJORS)
+      and "XAU/USD" in markets.forex_signal_pairs() and "EUR/JPY" in markets.forex_signal_pairs(),
+      "forex signal list: 7 majors + crosses + gold")
+os.environ["FOREX_SIGNAL_PAIRS"] = "EUR/USD, gbp/usd, NOPE/XXX"
+check(markets.forex_signal_pairs() == ["EUR/USD", "GBP/USD"], "FOREX_SIGNAL_PAIRS env override keeps only known pairs")
+del os.environ["FOREX_SIGNAL_PAIRS"]
+check(markets.forex_week_close(datetime(2026, 1, 14, 10)) == datetime(2026, 1, 16, 22, 0),
+      "weekly close in winter: Friday 22:00 UTC (17:00 New York)")
+check(markets.forex_week_close(datetime(2026, 7, 15, 10)) == datetime(2026, 7, 17, 21, 0),
+      "weekly close in summer: Friday 21:00 UTC (daylight saving)")
+check(not markets.forex_open(datetime(2026, 7, 18, 12)) and not markets.forex_open(datetime(2026, 7, 19, 20))
+      and markets.forex_open(datetime(2026, 7, 19, 21, 30)) and markets.forex_open(datetime(2026, 7, 15, 12)),
+      "forex closed Saturday and Sunday before 17:00 NY, open after")
+check("London" in markets.sessions_at(datetime(2026, 7, 15, 9)) and "New York" in markets.sessions_at(datetime(2026, 7, 15, 14))
+      and markets.sessions_at(datetime(2026, 7, 18, 12)) == [], "sessions: London morning, New York afternoon, none on Saturday")
 
-NOW = datetime(2026, 10, 8, 8, 2)           # 4h candle 04:00-08:00 closed at 08:00
-BAR = datetime(2026, 10, 8, 4, 0)
-STATE = {"BTC/USDT": "new", "ETH/USDT": "old", "SOL/USDT": "wait", "HYPE/USDT": "error"}
-CALLS = []
+# ---------------------------------------------------------------------------
+# trade following (plan, stop moves, weekend exit)
+# ---------------------------------------------------------------------------
+plan = {"targets_r": [1.0, 2.0, 3.0], "fractions": [1 / 3] * 3, "be_after": 1, "max_bars": 10}
+o = np.array([100, 100, 101, 101.5, 100.5])
+h = np.array([100.5, 101.2, 101.8, 101.6, 100.6])
+l = np.array([99.5, 99.8, 100.6, 100.4, 99.0])
+c = np.array([100, 101, 101.5, 100.6, 99.5])
+r = streams.follow("LONG", 100.0, 99.0, o, h, l, c, 1, plan)
+check(r["status"] == "TP1" and abs(r["r_gross"] - 1 / 3) < 1e-9,
+      "follow: TP1 hit, then the stop at entry closes the rest at 0R -> +0.33R")
+r = streams.follow("SHORT", 100.0, 101.0, o, h, l, c, 1, plan)
+check(r["status"] == "SL" and abs(r["r_gross"] + 1) < 1e-9, "follow: short stopped out -> -1R")
+r = streams.follow("LONG", 100.0, 99.0, o[:2], h[:2], l[:2], c[:2], 1, plan)
+check(r["status"] is None and r["hits"] == 1, "follow: still running when candles run out")
+ts = pd.Series(pd.date_range("2026-07-17 18:00", periods=3, freq="h"))   # Friday 18:00-20:00 UTC, close 21:00
+mask = streams.weekend_exit_mask(ts, 3600)
+check(list(mask) == [False, False, True], "weekend exit: the last candle before the Friday close")
+r = streams.follow("LONG", 100.0, 99.0, np.array([100, 100.2, 100.3]), np.array([100.4, 100.5, 100.6]),
+                   np.array([99.9, 99.9, 99.9]), np.array([100.2, 100.3, 100.5]), 0, plan, exit_mask=mask)
+check(r["status"] == "EXPIRED" and abs(r["exit_price"] - 100.5) < 1e-9, "forex trade closed at the weekly close, no weekend gap")
+check(abs(streams.cost_r("EUR/USD", 1.1000, 1.0980) - 1.2 * 0.0001 / 0.002) < 1e-9, "forex costs in R from the pair's spread")
+check(streams.grade_of(85) == "A" and streams.grade_of(72) == "B" and streams.grade_of(61) == "C", "grades A/B/C from the score")
+
+# ---------------------------------------------------------------------------
+# rules engine on fake candles
+# ---------------------------------------------------------------------------
+SEC = markets.TF_SEC
 
 
-def fake_engine(sym):
-    CALLS.append(sym)
-    kind = STATE[sym]
-    base = {"engine_version": "2.0", "p_long": 70.0, "p_short": 40.0, "bias": "LONG", "strength": 88.0,
-            "last_close": 100.0, "history_bars": 600, "next_update": "2026-10-08T12:00:00Z", "last_closed": None}
-    if kind == "error":
-        return {"error": "Signal engine unavailable: no market"}
-    if kind == "wait":
-        return {**base, "verdict": "WAIT", "fresh": False, "active": None, "strength": 91.0}
-    bt = "2026-10-08T04:00:00Z" if kind == "new" else "2026-10-07T12:00:00Z"
-    act = {"side": "LONG", "entry": 100.0, "stop_loss": 94.0, "take_profit": 103.0, "atr": 2.0, "confidence": 76.4,
-           "bar_time": bt, "signal_at": bt.replace("04:00", "08:00").replace("12:00", "16:00"), "bars_held": 0,
-           "expires_at": "2026-10-16T08:00:00Z"}
-    return {**base, "verdict": "LONG", "fresh": kind == "new", "active": act, "entry": 100.0, "stop_loss": 94.0,
-            "take_profit": 103.0, "confidence": 76.4}
+def fake_candles(symbol, timeframe, limit, since=None):
+    rng = np.random.default_rng(abs(hash(symbol)) % 2 ** 32)
+    sec = SEC[timeframe]
+    base = datetime(2026, 5, 1)
+    n = int((datetime(2026, 10, 14) - base).total_seconds() // sec)
+    ret = rng.normal(0, 0.004 * np.sqrt(sec / 900), n) + np.sin(np.arange(n) / 250) * 0.0006
+    cl = 100 * np.exp(np.cumsum(ret))
+    op = np.r_[cl[0], cl[:-1]]
+    hi = np.maximum(op, cl) * (1 + abs(rng.normal(0, 0.002, n)))
+    lo = np.minimum(op, cl) * (1 - abs(rng.normal(0, 0.002, n)))
+    df = pd.DataFrame({"timestamp": [base + timedelta(seconds=sec * i) for i in range(n)], "open": op, "high": hi,
+                       "low": lo, "close": cl, "volume": rng.uniform(1, 3, n)})
+    if since is not None:
+        df = df[df.timestamp >= pd.Timestamp(since, unit="ms")]
+        return df.head(limit)
+    return df.tail(limit)
 
 
-SENT = []
-sb.init_signalboard(engine_signal=fake_engine, coins=list(STATE), prices=lambda syms: {s: 101.5 for s in syms},
-                    send_email=lambda to, subj, html: SENT.append((to, subj, html)), start=False)
-sb.threading.Thread = lambda target=None, args=(), **k: type("T", (), {"start": lambda self: target(*args)})()
+NOW = datetime(2026, 10, 13, 12, 7)
+store = streams.CandleStore(fake_candles, sleep=0)
+eng = streams.StreamEngine("crypto", "1h", store, ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"])
+board = eng.board(NOW)
+check(set(board) == {"BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"} and all("verdict" in v for v in board.values()),
+      "rules engine: a result for every symbol")
+recent = [t for v in board.values() for t in v["recent"]]
+check(len(recent) > 0, f"rules engine: replay finds closed signals ({len(recent)})")
+ok_levels = all((t["side"] == "LONG" and t["stop_loss"] < t["entry"] < t["targets"][0] < t["targets"][1] < t["targets"][2]) or
+                (t["side"] == "SHORT" and t["stop_loss"] > t["entry"] > t["targets"][0] > t["targets"][1] > t["targets"][2])
+                for t in recent)
+check(ok_levels, "every signal: stop and targets on the right sides of the entry")
+check(all(t["grade"] in ("A", "B", "C") and t["score"] >= streams.MIN_SCORE and t["setup"] in
+          ("breakout", "pullback", "trend_continuation", "reversal") and t["rr"] >= 1.5 for t in recent),
+      "every signal: a grade, a qualified setup, score >= minimum and R:R >= 1.5")
+d0 = recent[0]
+risk = abs(d0["entry"] - d0["stop_loss"])
+check(d0["atr"] * streams.SL_ATR_MIN - 1e-9 <= risk <= d0["atr"] * streams.SL_ATR_MAX + 1e-9, "ATR stop between 1.0 and 2.5 ATR")
+by_sym = {}
+for t in sorted(recent, key=lambda x: x["bar_time"]):
+    by_sym.setdefault(t["symbol"] if "symbol" in t else id(t), []).append(t)
+overlap = False
+for sym, v in board.items():
+    lst = sorted(v["recent"], key=lambda x: x["bar_time"])
+    for a, b in zip(lst, lst[1:]):
+        if b["bar_time"] < a["closed_at"]:
+            overlap = True
+check(not overlap, "one trade at a time per symbol (no overlap)")
+per_bar = {}
+for t in recent:
+    per_bar[t["bar_time"]] = per_bar.get(t["bar_time"], 0) + 1
+check(max(per_bar.values()) <= streams.MAX_PER_BAR, "at most 5 new signals per candle")
 
-print("\n[1] subscriptions")
+fx = streams.StreamEngine("forex", "1h", store, ["EUR/USD", "USD/JPY", "XAU/USD"])
+fb = fx.board(NOW)
+fxr = [t for v in fb.values() for t in v["recent"]]
+check(all(markets.forex_open(t["bar_time"]) for t in fxr), "forex: no signal on a weekend candle")
+check(all(set(markets.sessions_at(t["signal_at"])) & {"London", "New York"} for t in fxr),
+      "forex 1h: signals only in the London / New York sessions")
+check(all("pips" in t for t in fxr) and all(t.get("sl_pips") for t in fxr), "forex results and stops in pips")
+check(all(t["closed_at"] <= markets.forex_week_close(t["bar_time"]) + timedelta(hours=1) for t in fxr),
+      "forex trades never run over a weekend")
+blocked = streams.StreamEngine("forex", "1h", store, ["EUR/USD", "USD/JPY", "XAU/USD"],
+                               blocked=lambda s, at: "news" if s == "EUR/USD" else None)
+bb = blocked.board(NOW)
+check(not bb["EUR/USD"]["recent"] and not bb["EUR/USD"]["active"], "news blackout hook stops new signals for that pair")
+
+# ---------------------------------------------------------------------------
+# migration keeps old rows and gives them crypto / 4h
+# ---------------------------------------------------------------------------
+cn = Conn()
+cu = cn.cursor()
+cu.execute("""CREATE TABLE signal_events (id INTEGER PRIMARY KEY AUTOINCREMENT, symbol VARCHAR(30) NOT NULL,
+              side VARCHAR(5) NOT NULL, bar_time DATETIME NOT NULL, entry DOUBLE NOT NULL, stop_loss DOUBLE NOT NULL,
+              take_profit DOUBLE NOT NULL, confidence DOUBLE NULL, created_at DATETIME NOT NULL)""")
+cu.execute("""INSERT INTO signal_events (symbol, side, bar_time, entry, stop_loss, take_profit, confidence, created_at)
+              VALUES ('BTC/USDT','LONG','2026-10-01 08:00:00',60000,59000,62000,78,'2026-10-01 12:01:00')""")
+cu.execute("""CREATE TABLE signal_alert_subs (user_id INT PRIMARY KEY, enabled TINYINT(1) NOT NULL DEFAULT 1,
+              email TINYINT(1) NOT NULL DEFAULT 0, coins TEXT NULL, emails_day VARCHAR(10) NULL,
+              emails_sent INT NOT NULL DEFAULT 0, updated_at DATETIME NOT NULL)""")
+cu.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT)")
+cu.execute("CREATE TABLE notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INT, category TEXT, symbol TEXT, title TEXT, message TEXT)")
+cn.close()
+sb.init_tables()
+sb.init_tables()   # twice: the migration must be safe to repeat
+with hub._Cursor() as cur:
+    cur.execute("SELECT * FROM signal_events")
+    rows = cur.fetchall()
+check(len(rows) == 1 and rows[0]["market"] == "crypto" and rows[0]["timeframe"] == "4h" and rows[0]["status"] == "ACTIVE"
+      and rows[0]["entry"] == 60000, "migration keeps the old signal and gives it crypto / 4h / active")
+with hub._Cursor() as cur:
+    cols = hub._columns(cur, "signal_alert_subs")
+check({"markets", "timeframes"} <= cols, "alert settings get market and timeframe columns")
+
+# ---------------------------------------------------------------------------
+# recording: streams never overwrite each other
+# ---------------------------------------------------------------------------
+with hub._Cursor() as cur:
+    cur.execute("DELETE FROM signal_events")
+bt = datetime(2026, 10, 13, 8, 0)
+a = {"side": "LONG", "entry": 100.0, "stop_loss": 99.0, "take_profit": 103.0, "targets": [101.0, 102.0, 103.0],
+     "confidence": 74.0, "grade": "B", "setup": "pullback", "bar_time": bt, "signal_at": bt + timedelta(hours=1)}
+e1 = hub.record("SOL/USDT", "crypto", "1h", a)
+e2 = hub.record("SOL/USDT", "crypto", "15m", dict(a, signal_at=bt + timedelta(minutes=15)))
+e3 = hub.record("SOL/USDT", "crypto", "1h", a)
+check(e1 is not None and e2 is not None and e3 is None, "15m and 1h signal on the same symbol + candle both stored; duplicates ignored")
+with hub._Cursor() as cur:
+    cur.execute("SELECT * FROM signal_events WHERE timeframe='1h'")
+    row = cur.fetchone()
+check(json.loads(row["plan"])["max_bars"] == streams.STREAMS["crypto_1h"]["max_bars"] and row["grade"] == "B"
+      and row["expires_at"] is not None, "stored with its plan, grade and expiry")
+
+# tracker: TP1 then back to the entry -> TP1, +1/3 R minus costs
+df = pd.DataFrame({"timestamp": [bt + timedelta(hours=k) for k in range(4)],
+                   "open": [99.5, 100.0, 101.0, 100.6], "high": [100.2, 101.3, 101.4, 100.7],
+                   "low": [99.3, 99.6, 100.5, 99.9], "close": [100.0, 101.0, 100.6, 100.1], "volume": 1.0})
+upd = hub.evaluate_row(row, df, now=bt + timedelta(hours=5))
+exp_r = 1 / 3 - streams.cost_r("SOL/USDT", 100.0, 99.0)
+check(upd["status"] == "TP1" and abs(upd["r_multiple"] - round(exp_r, 3)) < 1e-6 and upd["closed_at"] == bt + timedelta(hours=4),
+      "tracker: TP1 reached, then stopped at entry; result after costs and close time")
+running = hub.evaluate_row(row, df.iloc[:2], now=bt + timedelta(hours=3))
+check("status" not in running and running["hits"] == 1 and abs(running["stop_now"] - 100.0) < 1e-9,
+      "tracker: running signal gets its hits and the moved stop")
+
+hub._hooks["get_candles"] = lambda symbol, timeframe, limit, since=None: df if timeframe == "1h" else None
+hub._store = None
+store_fail = hub.store()
+store_fail.frame = lambda *a, **k: (_ for _ in ()).throw(ValueError("no cache"))
+n = hub.track_open(now=bt + timedelta(hours=5))
+with hub._Cursor() as cur:
+    cur.execute("SELECT status FROM signal_events WHERE timeframe='1h'")
+    st1 = cur.fetchone()["status"]
+check(n >= 1 and st1 == "TP1", "track_open writes the result to the database")
+
+# stats only from closed real signals, with windows
+with hub._Cursor() as cur:
+    cur.execute("UPDATE signal_events SET closed_at=%s WHERE timeframe='1h'", (datetime(2026, 9, 1),))
+s = hub.stream_stats("crypto", "1h", now=datetime(2026, 10, 14))
+check(s["windows"]["all"]["closed"] == 1 and s["windows"]["all"]["win_rate"] == 100.0 and s["windows"]["30d"]["closed"] == 0
+      and s["windows"]["7d"]["win_rate"] is None, "stats: all-time counts the closed signal; 30d/7d windows exclude it")
+s15 = hub.stream_stats("crypto", "15m")
+check(s15["active"] == 1 and s15["windows"]["all"]["closed"] == 0 and s15["windows"]["all"]["win_rate"] is None,
+      "stats per stream: the 15m record is separate and has no invented win rate")
+
+# scanner: fresh signals of a rules stream are stored once
+hub._hooks["get_candles"] = fake_candles
+hub._store = streams.CandleStore(fake_candles, sleep=0)
+hub._engines.clear()
+os.environ["SIGNAL_STREAMS"] = "crypto_1h"
+hub.symbols_for = lambda market: ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"]
+due = hub.due_streams(datetime(2026, 10, 13, 12, 0, 30))
+check(due == [], "scanner waits for the publish delay after the close")
+due = hub.due_streams(datetime(2026, 10, 13, 12, 1, 0))
+check(due == [("crypto_1h", datetime(2026, 10, 13, 11, 0))], "scanner: crypto 1h due after the 12:00 close")
+evs = hub.scan_stream("crypto_1h", NOW)
+again = hub.scan_stream("crypto_1h", NOW)
+fresh = [k for k, v in hub.engine("crypto_1h").board(NOW).items() if v.get("fresh")]
+check(len(evs) == len(fresh) and again == [], f"scanner stores each fresh signal once ({len(evs)} new)")
+os.environ.pop("SIGNAL_STREAMS")
+check(hub.enabled_streams() == hub.validated_streams() and "crypto_4h" in hub.enabled_streams(),
+      "default: only the streams whose model passed its test on unseen data (crypto 4h always)")
+os.environ["SIGNAL_STREAMS"] = "all"
+check(len(hub.enabled_streams()) == 6, "SIGNAL_STREAMS=all turns on all six streams")
+os.environ["SIGNAL_STREAMS"] = "crypto_1h,bogus"
+check(hub.enabled_streams() == ["crypto_1h"], "SIGNAL_STREAMS list: unknown names ignored")
+os.environ.pop("SIGNAL_STREAMS")
+import streams as _st  # noqa: E402
+check(not _st.passed_test({"signals": 400, "win_rate": 71.0, "avg_net_r": -0.01})
+      and not _st.passed_test({"signals": 400, "win_rate": 69.9, "avg_net_r": 0.05})
+      and not _st.passed_test({"signals": 20, "win_rate": 80.0, "avg_net_r": 0.2})
+      and _st.passed_test({"signals": 400, "win_rate": 70.0, "avg_net_r": 0.01}),
+      "the live bar: >= 70% wins, positive average after costs, enough signals")
+
+# alert filters
+sub = {"coins": "ALL", "markets": json.dumps(["forex"]), "timeframes": json.dumps(["1h", "4h"])}
+check(sb.wants(sub, {"symbol": "EUR/USD", "market": "forex", "timeframe": "1h"})
+      and not sb.wants(sub, {"symbol": "EUR/USD", "market": "forex", "timeframe": "15m"})
+      and not sb.wants(sub, {"symbol": "BTC/USDT", "market": "crypto", "timeframe": "4h"}),
+      "alerts: users get only the markets and timeframes they chose")
+check(sb.wants({"coins": None}, {"symbol": "BTC/USDT"}), "alerts: old subscriptions (no filters) still get everything")
+title = sb.event_title({"symbol": "EUR/USD", "side": "LONG", "timeframe": "15m"})
+check("15m" in title and "EUR/USD" in title, "alert title names the timeframe")
+txt = sb.event_text({"symbol": "EUR/USD", "side": "LONG", "entry": 1.08123, "stop_loss": 1.0795, "targets": [1.083, 1.085, 1.087],
+                     "timeframe": "1h", "market": "forex", "grade": "A"})
+check("1.08123" in txt and "grade A" in txt, "alert text: forex prices with 5 decimals and the grade")
+
+# ---------------------------------------------------------------------------
+# API
+# ---------------------------------------------------------------------------
 from flask import Flask  # noqa: E402
-app = Flask(__name__, template_folder=os.path.join(ROOT, "templates"), static_folder=os.path.join(ROOT, "static"))
+
+app = Flask(__name__, template_folder=os.path.join(os.path.dirname(HERE), "templates"))
 app.secret_key = "t"
+app.register_blueprint(hub.hub_bp)
 app.register_blueprint(sb.signalboard_bp)
-app.jinja_env.globals.update(track_record_public=False, current_year=2026, ga_measurement_id=None)
-
-
-@app.route("/login")
-def login_page():
-    return "login"
-
-
 cl = app.test_client()
-check(cl.get("/api/signals/board").status_code == 401 and cl.get("/signals").status_code == 302, "login required")
+check(cl.get("/api/signals").status_code == 401, "API needs a login")
+with cl.session_transaction() as ss:
+    ss["user_id"] = 1
+d = cl.get("/api/signals?market=crypto&timeframe=1h").get_json()
+check(d["ok"] and d["total"] >= 1 and all(x["timeframe"] == "1h" and x["market"] == "crypto" for x in d["signals"]),
+      "GET /api/signals filters by market and timeframe")
+sig = [x for x in d["signals"] if x["symbol"] == "SOL/USDT"][0]
+check(all(k in sig for k in ("entry", "stop_loss", "targets", "rr", "grade", "status", "hold_minutes", "signal_at",
+                             "closed_at", "expires_at", "market", "timeframe", "side")), "signal JSON has every field")
+d = cl.get("/api/signals?status=active&timeframe=15m").get_json()
+check(all(x["status"] == "ACTIVE" for x in d["signals"]) and d["total"] >= 1, "status filter")
+check(cl.get("/api/signals?symbol=FAKE/USDT").status_code == 400, "unknown symbol rejected")
+d = cl.get("/api/signals?grade=A&timeframe=1h&market=crypto").get_json()
+check(all(x["grade"] == "A" for x in d["signals"]), "grade filter")
+d = cl.get("/api/signals/stats?market=crypto&timeframe=1h").get_json()
+check(d["ok"] and "windows" in d and set(d["windows"]) == {"all", "30d", "7d"}, "GET /api/signals/stats")
+os.environ["SIGNAL_STREAMS"] = "all"
+d = cl.get("/api/signals/latest").get_json()
+check(d["ok"] and "crypto_1h" in d["streams"], "GET /api/signals/latest per stream")
+os.environ.pop("SIGNAL_STREAMS")
+d = cl.get("/api/signals/streams").get_json()
+check(d["ok"] and len(d["streams"]) == 6, "GET /api/signals/streams lists the six streams")
+hub._hooks["is_admin"] = lambda: False
+r = cl.post(f"/api/signals/{sig['id']}/cancel", json={"reason": "test"})
+check(r.status_code == 403, "cancel: admin only")
+hub._hooks["is_admin"] = lambda: True
+with hub._Cursor() as cur:
+    cur.execute("SELECT id FROM signal_events WHERE status='ACTIVE' LIMIT 1")
+    aid = cur.fetchone()["id"]
+check(cl.post(f"/api/signals/{aid}/cancel", json={}).status_code == 400, "cancel needs a reason")
+r = cl.post(f"/api/signals/{aid}/cancel", json={"reason": "Exchange outage"})
+check(r.status_code == 200 and hub.get_signal(aid)["status"] == "CANCELLED", "admin can cancel an active signal with a reason")
+r = cl.post("/api/signals/alerts", json={"enabled": True, "email": False, "coins": "ALL", "markets": ["forex"],
+                                          "timeframes": ["15m", "1h"]})
+d = r.get_json()
+check(d["ok"] and d["markets"] == ["forex"] and d["timeframes"] == ["15m", "1h"], "alerts save markets and timeframes")
+d = cl.get("/api/signals/alerts").get_json()
+check(d["markets"] == ["forex"] and "EUR/USD" in d["choices"], "alerts read back; forex pairs are choices")
+r = cl.post("/api/signals/alerts", json={"enabled": True, "markets": ["stocks"]})
+check(r.status_code == 400, "alerts: invalid market rejected")
 
-
-def as_user(uid):
-    t = app.test_client()
-    with t.session_transaction() as s:
-        s["user_id"] = uid
-    return t
-
-
-u1, u2, u3 = as_user(1), as_user(2), as_user(3)
-d = u1.get("/api/signals/alerts").get_json()
-check(d["ok"] and not d["enabled"] and d["coins"] == "ALL" and "BTC/USDT" in d["choices"], "default: alerts off, all coins")
-r = u1.post("/api/signals/alerts", json={"enabled": True, "email": True, "coins": "ALL"}).get_json()
-check(r["ok"] and r["enabled"] and r["email"], "user 1: all coins + email")
-r = u2.post("/api/signals/alerts", json={"enabled": True, "email": False, "coins": ["ETH/USDT", "FAKE/USDT"]}).get_json()
-check(r["ok"] and r["coins"] == ["ETH/USDT"], "user 2: only ETH, unknown coins dropped")
-check(u3.post("/api/signals/alerts", json={"enabled": True, "coins": ["NOPE/USDT"]}).status_code == 400, "empty coin pick rejected")
-check(u3.post("/api/signals/alerts", data="x").status_code == 400, "non-JSON rejected")
-u3.post("/api/signals/alerts", json={"enabled": False, "email": True})
-check(u3.get("/api/signals/alerts").get_json()["email"] is False, "email can't be on while alerts are off")
-
-print("\n[2] refresh + events + notifications")
-act = sb.board_step(NOW)
-check(act == "refresh" and CALLS == list(STATE), "first pass reads every coin")
-q = Conn().cursor()
-q.execute("SELECT * FROM signal_events")
-ev = q.fetchall()
-check(len(ev) == 1 and ev[0]["symbol"] == "BTC/USDT", "only the NEW signal is stored as an event (not the older active one)")
-q.execute("SELECT user_id, title FROM notifications ORDER BY user_id")
-nt = q.fetchall()
-check([n["user_id"] for n in nt] == [1] and "New LONG signal: BTC/USDT" in nt[0]["title"], "bell notification for subscribers of that coin only")
-check(len(SENT) == 1 and SENT[0][0] == "a@x.com" and "BTC/USDT" in SENT[0][1] and "94" in SENT[0][2], "email to the user who asked for it")
-CALLS.clear()
-check(sb.board_step(NOW + timedelta(minutes=5)) is None and not CALLS, "nothing re-read inside the same candle")
-sb._board["attempt_at"] = 0
-check(sb.board_step(NOW + timedelta(minutes=15)) == "retry" and CALLS == ["HYPE/USDT"], "coins that failed are retried every 10 min")
-sb._board["bar"] = None
-sb.board_step(NOW + timedelta(minutes=20))
-q.execute("SELECT COUNT(*) AS n FROM signal_events"); n1 = q.fetchone()["n"]
-q.execute("SELECT COUNT(*) AS n FROM notifications"); n2 = q.fetchone()["n"]
-check(n1 == 1 and n2 == 1 and len(SENT) == 1, "restart in the same candle: no duplicate event, bell or email")
-STATE["ETH/USDT"] = "new"
-CALLS.clear()
-nxt = NOW + timedelta(hours=4)
-check(sb.board_step(nxt - timedelta(seconds=90)) is None, "waits a minute after the close for the exchange")
-check(sb.board_step(nxt) == "refresh", "next candle close -> refresh")
-q.execute("SELECT user_id, symbol FROM notifications ORDER BY id")
-nt = q.fetchall()
-check(sorted((n["user_id"], n["symbol"]) for n in nt[1:]) == [(1, "ETH/USDT"), (2, "ETH/USDT")],
-      "new ETH signal reaches user 1 (all coins) and user 2 (ETH only); BTC not repeated")
-check(len(SENT) == 2 and "ETH/USDT" in SENT[1][1], "email for the new ETH signal")
-sb.MAX_EMAILS_PER_DAY = 2
-STATE["SOL/USDT"] = "new"
-sb.board_step(nxt + timedelta(hours=4))
-q.execute("SELECT COUNT(*) AS n FROM notifications WHERE symbol='SOL/USDT'")
-check(q.fetchone()["n"] == 1 and len(SENT) == 2, "daily email cap respected (bell still works)")
-box = []
-sb._send_all(lambda to, subj, html: box.append(subj), [("z@x.com", [{"symbol": "A/USDT", "side": "LONG", "entry": 1, "stop_loss": 0.9,
-             "take_profit": 1.05, "confidence": 70}, {"symbol": "B/USDT", "side": "SHORT", "entry": 2, "stop_loss": 2.1,
-             "take_profit": 1.9, "confidence": 72}])])
-check(box == ["2 new signals on Signals FM"], "several signals at once -> one email")
-
-print("\n[3] board API + page")
-d = u1.get("/api/signals/board").get_json()
-rows = d["rows"]
-check(d["ok"] and not d["loading"] and d["counts"]["coins"] == 4, "board lists every coin")
-check(rows[0]["state"] == "ACTIVE" and rows[0]["fresh"], "new signals first")
-check(rows[0]["progress"]["pct"] == 50.0 and rows[0]["live_price"] == 101.5, "live progress toward the target")
-check(rows[-1]["state"] == "UNAVAILABLE" and "error" in rows[-1], "a coin that failed is listed as unavailable")
-e = u1.get("/api/signals/events").get_json()
-check(e["ok"] and e["events"][0]["signal_at"].endswith("Z") and len(e["events"]) >= 2, "recent events feed")
-pg = u1.get("/signals")
-check(pg.status_code == 200 and b"Trading signals" in pg.data and b"Signal alerts" in pg.data, "page renders")
-check("same_side_warning" in d and d["counts"]["forming"] >= 0, "board reports same-direction warning + forming count")
-STATE.update({"BTC/USDT": "old", "ETH/USDT": "old", "SOL/USDT": "new"})
-sb._board["bar"] = None
-sb.board_step(nxt + timedelta(hours=8))
-d = u1.get("/api/signals/board").get_json()
-w = d["same_side_warning"]
-check(w and w["side"] == "LONG" and w["count"] == 3 and w["total"] == 3, "3 active signals the same way -> warning")
-STATE.update({"SOL/USDT": "wait"})
-
-print("\n[4] one-click unsubscribe")
-sb._hooks["secret"] = "unit-secret"
-html = sb._email_html([{"symbol": "A/USDT", "side": "LONG", "entry": 1, "stop_loss": 0.9, "take_profit": 1.05, "confidence": 70}], user_id=1)
-import re as _re
-tok = _re.search(r"unsubscribe\?t=([^\"]+)", html).group(1)
-check(sb._unsub_user(tok) == 1 and sb._unsub_user(tok + "x") is None, "signed token, tampering rejected")
-r = cl.get("/signals/unsubscribe?t=" + tok)
-q.execute("SELECT email, enabled FROM signal_alert_subs WHERE user_id=1")
-row = q.fetchone()
-check(r.status_code == 200 and b"Email alerts are off" in r.data and row["email"] == 0 and row["enabled"] == 1,
-      "no login needed: email off, bell alerts kept")
-check(cl.get("/signals/unsubscribe?t=bad").status_code == 400, "bad link -> clear message")
-
-print("\n[landing summary]")
-from datetime import datetime as _D, timedelta as _T
-_now = _D(2026, 10, 9, 12, 0, 0)
-with sb._board_lock:
-    _saved = dict(sb._board["rows"])
-    sb._board["rows"] = {
-        "BTC/USDT": {"active": {"side": "SHORT", "signal_at": "2026-10-09T10:00:00Z", "entry": 1, "stop_loss": 2, "take_profit": 0.5}},
-        "ETH/USDT": {"active": {"side": "LONG", "signal_at": "2026-10-09T11:30:00Z", "entry": 1, "stop_loss": 0.5, "take_profit": 2}},
-        "SOL/USDT": {"verdict": "WAIT"},
-        "XRP/USDT": {"error": "no data"},
-    }
-ps = sb.public_summary(now=_now)
-check(ps["ok"] and ps["active"] == 2 and [r["coin"] for r in ps["recent"]] == ["ETH", "BTC"], "landing summary: active count, newest first")
-check(ps["recent"][0] == {"coin": "ETH", "side": "LONG", "ago": "30 min ago"} and ps["recent"][1]["ago"] == "2 h ago", "landing summary: side and age only")
-check(all("entry" not in r and "stop_loss" not in r for r in ps["recent"]), "landing summary: no entry/stop/target for visitors")
-with sb._board_lock:
-    sb._board["rows"] = {}
-check(sb.public_summary(now=_now) == {"ok": False}, "landing summary: nothing loaded yet -> ok False")
-with sb._board_lock:
-    sb._board["rows"] = _saved
-
-print(f"\nALL {passed} CHECKS PASSED")
+print()
+print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
+sys.exit(1 if FAILS else 0)
