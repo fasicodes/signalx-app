@@ -195,6 +195,15 @@
   .acct-switch button[aria-pressed="true"][data-mode="demo"] { box-shadow: inset 0 -2px 0 var(--wait); }
   .acct-switch button[aria-pressed="true"][data-mode="paper"] { box-shadow: inset 0 -2px 0 var(--long); }
   .acct-switch button[aria-pressed="true"][data-mode="live"] { box-shadow: inset 0 -2px 0 var(--short); }
+  .acct-switch button[aria-pressed="true"][data-mode="oanda_demo"] { box-shadow: inset 0 -2px 0 var(--wait); }
+  .acct-switch button[aria-pressed="true"][data-mode="oanda_live"] { box-shadow: inset 0 -2px 0 var(--short); }
+  .acct-switch { flex-wrap: wrap; }
+  .chipset { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chipset label { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 14px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; }
+  .chipset input { accent-color: var(--long); }
+  .sig-orders { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+  .sig-orders .so { display: flex; gap: 8px; align-items: baseline; border-bottom: 1px solid var(--line); padding: 4px 0; }
+  .so .st-placed { color: var(--long); } .so .st-retry { color: var(--wait); } .so .st-skipped, .so .st-failed { color: var(--short); }
   .acct-switch .mini { font-weight: 500; font-size: 10.5px; color: var(--text-faint); }
 </style>
 {% include '_analytics.html' ignore missing %}
@@ -213,6 +222,8 @@
         <button type="button" data-mode="paper" aria-pressed="true" title="Trades your Demo trading account on this site. No keys needed."><span class="at-dot" id="sw-dot-paper"></span>Site demo <span class="mini" id="sw-mini-paper"></span></button>
         <button type="button" data-mode="demo" aria-pressed="false" title="Binance Demo Trading (demo.binance.com API key)"><span class="at-dot" id="sw-dot-demo"></span>Binance demo <span class="mini" id="sw-mini-demo"></span></button>
         <button type="button" data-mode="live" aria-pressed="false"><span class="at-dot" id="sw-dot-live"></span>Live <span class="mini" id="sw-mini-live"></span></button>
+        <button type="button" data-mode="oanda_demo" aria-pressed="false" title="OANDA practice account (forex)"><span class="at-dot" id="sw-dot-oanda_demo"></span>OANDA demo <span class="mini" id="sw-mini-oanda_demo"></span></button>
+        <button type="button" data-mode="oanda_live" aria-pressed="false" title="OANDA live account (forex, real money)"><span class="at-dot" id="sw-dot-oanda_live"></span>OANDA live <span class="mini" id="sw-mini-oanda_live"></span></button>
       </div>
       <div class="conn-badge"><span class="at-dot" id="conn-dot"></span><span id="conn-text">Not connected</span></div>
       <button class="btn btn-primary" id="btn-connect">Connect Binance</button>
@@ -243,13 +254,13 @@
           <button class="switch" id="bot-switch" role="switch" aria-checked="false" aria-label="Auto-trade bot on/off" disabled></button>
         </div>
         <div class="bot-state" id="bot-detail"></div>
-        <button class="btn btn-danger" id="btn-panic" disabled title="Turn the bot off and close every open position">Stop all</button>
+        <button class="btn btn-danger" id="btn-panic" disabled title="Kill switch: turn the bot off and close every open position">Kill switch: stop &amp; close all</button>
       </div>
 
       <div class="panel">
         <div class="panel-title"><span>Coins</span><span class="faint" id="coin-count">0 / 8 in bot</span></div>
         <div class="coin-tools"><input class="inp" id="coin-search" placeholder="Search coins…" aria-label="Search coins"></div>
-        <div class="note">Tick a coin to let the bot trade it (max 8). Click a row to view its chart.</div>
+        <div class="note" id="coin-note">The bot takes every site signal that matches the settings. With <b>Only the ticked coins</b>, tick the coins and pairs it may trade. Click a row to view its chart.</div>
         <div class="coin-list" id="coin-list"></div>
       </div>
     </div>
@@ -286,7 +297,14 @@
             <select class="sel" id="s-market"><option value="spot">Spot (LONG only, no leverage)</option><option value="futures">USDT-M Futures (LONG + SHORT)</option></select></div>
           <div class="field"><label for="s-leverage">Leverage</label><select class="sel" id="s-leverage"></select>
             <span class="hint">Server cap: 20x. 1–3x is safer to start.</span></div>
-          <div class="field"><label for="s-timeframe">Signal timeframe</label><select class="sel" id="s-timeframe"></select></div>
+          <div class="field" style="grid-column:1/-1"><label>Signals to take</label>
+            <div class="chipset" id="s-markets"><label><input type="checkbox" value="crypto"> Crypto</label><label><input type="checkbox" value="forex"> Forex</label></div>
+            <div class="chipset" id="s-tfs" style="margin-top:6px"><label><input type="checkbox" value="15m"> 15m</label><label><input type="checkbox" value="1h"> 1h</label><label><input type="checkbox" value="4h"> 4h</label></div>
+            <span class="hint">Every new signal of these markets and timeframes goes to the bot at once (forex needs the Site demo or an OANDA account).
+              <span id="s-live"></span></span></div>
+          <div class="field"><label for="s-grade">Minimum grade</label><select class="sel" id="s-grade"><option value="A">Grade A only</option><option value="B">Grades A and B</option><option value="C">All grades</option></select></div>
+          <div class="field"><label for="s-symbols">Symbols</label><select class="sel" id="s-symbols"><option value="all">All signal symbols</option><option value="list">Only the ticked coins</option></select></div>
+          <select class="sel" id="s-timeframe" hidden aria-hidden="true"></select>
           <div class="field"><label for="s-risk">Risk per trade (% of balance)</label><input class="inp" type="number" id="s-risk" min="0.1" max="3" step="0.1">
             <span class="hint">Loss if the stop-loss is hit (0.1–3%)</span></div>
           <div class="field"><label for="s-maxpos">Max position size (USDT)</label><input class="inp" type="number" id="s-maxpos" min="10" step="10"></div>
@@ -337,6 +355,11 @@
       </div>
 
       <div class="panel">
+        <div class="panel-title"><span>Site signals for this account</span><span class="faint" id="so-note"></span></div>
+        <div class="sig-orders" id="sig-orders"><div class="empty">No signals handed to this account yet.</div></div>
+      </div>
+
+      <div class="panel">
         <div class="panel-title"><span>Activity log</span>
           <label class="faint" style="font-family:var(--mono);font-size:10.5px;display:flex;gap:5px;align-items:center;cursor:pointer;">
             <input type="checkbox" id="log-show-scan"> Show scans</label></div>
@@ -346,11 +369,11 @@
   </div>
 
   <p class="faint" style="font-size:11.5px;line-height:1.6;max-width:900px;">
-    Bot decisions come from signal engine v3 (closed 4-hour candles, the same signal as the dashboard and the Track Record), whatever scan
-    interval you pick. Its stop is 2&times; ATR with three targets (0.5R, 1R, 2R): the bot closes a third at each and moves the stop to the
-    entry after TP1. On 12 months of data the model never saw, about 3 in 4 signals closed in profit, with a modest average gain after fees,
-    and it also had losing months. Past results do not guarantee future results. Crypto trading, especially with leverage, can lose all of the money in the account. Test on the Demo account first.
-    This is not financial advice.
+    The bot copies the site's signals (every stream that is switched on) with each signal's own stop and three targets: it closes a third
+    at each target and moves the stop to the entry after TP1 and to TP1 after TP2. It only enters while the price is still close to the
+    signal's entry (within 0.35 of the stop distance, before TP1, at most two candles after the signal). The test results of each stream are
+    on the Signals page. Past results do not guarantee future results. Trading, especially with leverage, can lose all of the money in the account.
+    Test on a demo account first. This is not financial advice.
     Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener" style="color:inherit;">TradingView</a>.
   </p>
 </div>
@@ -432,13 +455,15 @@
   const $ = (id) => document.getElementById(id);
   const savedMode = localStorage.getItem("signalsfm-at-account");
   const S = {
-    mode: ["paper", "demo", "live"].includes(savedMode) ? savedMode : "paper",
+    mode: ["paper", "demo", "live", "oanda_demo", "oanda_live"].includes(savedMode) ? savedMode : "paper",
     status: null, prices: {}, selected: "BTC/USDT", form: null, formDirty: false,
     lastLogId: null, signal: null, pendingTrade: null, voice: localStorage.getItem("signalsfm-at-voice") !== "off",
     refreshSeq: 0,
   };
-  const LABEL = (m) => ({ live: "Live", demo: "Binance Demo", paper: "Site demo" }[m] || "Demo");
-  const MODES = ["paper", "demo", "live"];
+  const LABEL = (m) => ({ live: "Live", demo: "Binance Demo", paper: "Site demo", oanda_demo: "OANDA demo", oanda_live: "OANDA live" }[m] || "Demo");
+  const MODES = ["paper", "demo", "live", "oanda_demo", "oanda_live"];
+  const IS_FX = (m) => m === "oanda_demo" || m === "oanda_live";
+  const IS_LIVE = (m) => m === "live" || m === "oanda_live";
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -638,7 +663,8 @@
     if (!st) return;
     const q = $("coin-search").value.trim().toUpperCase();
     const list = $("coin-list");
-    const coins = st.options.coins.filter((c) => !q || c.includes(q));
+    const all = IS_FX(S.mode) ? (st.options.forex_symbols || []) : (st.options.symbols || st.options.coins);
+    const coins = all.filter((c) => !q || c.includes(q));
     list.innerHTML = "";
     coins.forEach((c) => {
       const p = S.prices[c];
@@ -647,7 +673,7 @@
       const checked = botCoins().includes(c);
       const chg = p && p.change_pct != null ? `<span class="${cls(p.change_pct)}">${p.change_pct > 0 ? "+" : ""}${p.change_pct.toFixed(2)}%</span>` : "";
       row.innerHTML = `<input type="checkbox" ${checked ? "checked" : ""} aria-label="Bot trades ${esc(c)}">
-        <span>${esc(c.replace("/USDT", ""))}<span class="faint">/USDT</span></span>
+        <span>${c.endsWith("/USDT") ? esc(c.replace("/USDT", "")) + '<span class="faint">/USDT</span>' : esc(c)}</span>
         <span class="px">${p ? "$" + fmtPrice(p.last) : ""}<br>${chg}</span>`;
       const cb = row.querySelector("input");
       cb.addEventListener("click", (e) => e.stopPropagation());
@@ -657,7 +683,8 @@
           if (set.size >= st.options.max_coins) { cb.checked = false; toast(`Up to ${st.options.max_coins} coins`, "err"); return; }
           set.add(c);
         } else set.delete(c);
-        S.form.coins = st.options.coins.filter((x) => set.has(x));
+        S.form.coins = all.filter((x) => set.has(x));
+        if (S.form.symbols_mode !== "list") { S.form.symbols_mode = "list"; $("s-symbols").value = "list"; }
         markDirty(); renderCoinCount();
       });
       row.addEventListener("click", () => selectCoin(c));
@@ -666,8 +693,12 @@
     renderCoinCount();
   }
   function renderCoinCount() {
-    if (S.status) $("coin-count").textContent = `${botCoins().length} / ${S.status.options.max_coins} in bot`;
+    if (!S.status) return;
+    const allMode = !S.form || S.form.symbols_mode !== "list";
+    $("coin-count").textContent = allMode ? "All signal symbols" : `${botCoins().length} / ${S.status.options.max_coins} in bot`;
+    $("coin-list").style.opacity = allMode ? "0.6" : "";
   }
+  $("s-symbols").addEventListener("change", () => renderCoinCount());
   $("coin-search").addEventListener("input", renderCoins);
 
   async function loadPrices() {
@@ -736,6 +767,10 @@
     $("s-leverage").value = String(f.leverage);
     $("s-leverage").disabled = f.market_type === "spot";
     $("s-timeframe").value = f.timeframe;
+    document.querySelectorAll("#s-markets input").forEach((i) => { i.checked = (f.markets || []).includes(i.value); });
+    document.querySelectorAll("#s-tfs input").forEach((i) => { i.checked = (f.timeframes || []).includes(i.value); });
+    $("s-grade").value = f.min_grade || "B";
+    $("s-symbols").value = f.symbols_mode || "all";
     $("s-risk").value = f.risk_pct;
     $("s-maxpos").value = f.max_position_usdt;
     $("s-maxopen").value = f.max_open_positions;
@@ -747,7 +782,11 @@
     const f = S.form;
     f.market_type = $("s-market").value;
     f.leverage = f.market_type === "spot" ? 1 : parseInt($("s-leverage").value, 10);
-    f.timeframe = $("s-timeframe").value;
+    f.timeframe = $("s-timeframe").value || f.timeframe;
+    f.markets = [...document.querySelectorAll("#s-markets input:checked")].map((i) => i.value);
+    f.timeframes = [...document.querySelectorAll("#s-tfs input:checked")].map((i) => i.value);
+    f.min_grade = $("s-grade").value;
+    f.symbols_mode = $("s-symbols").value;
     f.risk_pct = parseFloat($("s-risk").value);
     f.max_position_usdt = parseFloat($("s-maxpos").value);
     f.max_open_positions = parseInt($("s-maxopen").value, 10);
@@ -756,9 +795,10 @@
     f.reward_risk = parseFloat($("s-rr").value);
   }
   function markDirty() { S.formDirty = true; $("settings-dirty").textContent = "Unsaved changes"; $("settings-dirty").className = "pos"; }
-  ["s-market", "s-leverage", "s-timeframe", "s-risk", "s-maxpos", "s-maxopen", "s-daily", "s-conf", "s-rr"].forEach((id) => {
+  ["s-market", "s-leverage", "s-timeframe", "s-risk", "s-maxpos", "s-maxopen", "s-daily", "s-conf", "s-rr", "s-grade", "s-symbols"].forEach((id) => {
     $(id).addEventListener("input", () => { if (!S.form) return; readForm(); $("s-leverage").disabled = S.form.market_type === "spot"; markDirty(); });
   });
+  ["s-markets", "s-tfs"].forEach((id) => $(id).addEventListener("change", () => { if (!S.form) return; readForm(); markDirty(); }));
   $("btn-reset-settings").addEventListener("click", () => {
     if (!S.status) return;
     S.form = formFromSettings(S.status.settings); S.formDirty = false;
@@ -799,7 +839,7 @@
       $("btn-connect").className = "btn";
     } else if (st.connected) {
       dot.className = "at-dot " + (acct.balance_error ? "warn" : "on");
-      $("conn-text").textContent = `Binance ${L} · ${acct.key_hint || ""}`;
+      $("conn-text").textContent = `${IS_FX(S.mode) ? "" : "Binance "}${L} · ${acct.key_hint || ""}`;
       $("btn-connect").textContent = "Manage account";
       $("btn-connect").className = "btn";
     } else {
@@ -813,6 +853,19 @@
     if (paper) {
       strip.className = "mode-strip paper";
       strip.innerHTML = `<strong>SITE DEMO account</strong> — the bot trades your <a href="/demo-trading">Demo trading</a> account on this site: virtual USDT, live prices, real fees and stops. No Binance keys needed. Every bot trade shows up there (tagged “Auto-trade bot”) with its stop-loss and target on the chart.`;
+    } else if (IS_FX(S.mode) && !st.ready.encryption) {
+      strip.className = "mode-strip live";
+      strip.innerHTML = `<strong>Setup incomplete.</strong> The server is missing the <b>AUTOTRADE_ENCRYPTION_KEY</b> environment variable, so OANDA cannot be connected. Add it in Railway Variables.`;
+    } else if (IS_FX(S.mode) && !st.connected) {
+      strip.className = "mode-strip" + (IS_LIVE(S.mode) ? " live" : "");
+      strip.innerHTML = `<strong>Forex with OANDA${IS_LIVE(S.mode) ? " — real money" : " (practice account, no real money)"}:</strong><ol>
+          <li>On oanda.com open ${IS_LIVE(S.mode) ? "your live account" : "a free practice (demo) account"} and create a <b>personal API token</b> (Manage API Access).</li>
+          <li>Click <b>Connect ${L}</b> above and paste the token and your account ID (like 101-004-1234567-001).</li>
+          <li>Save the settings below and turn the bot on. It takes the site's forex signals; the stop-loss is placed at OANDA itself.</li></ol>`;
+    } else if (IS_FX(S.mode)) {
+      strip.className = "mode-strip " + (IS_LIVE(S.mode) ? "live" : "demo");
+      strip.innerHTML = IS_LIVE(S.mode) ? `<strong>OANDA LIVE — real money.</strong> Every order uses real funds in your OANDA account.`
+        : `<strong>OANDA practice account</strong> — real OANDA prices and orders, but the money is not real.`;
     } else if (!st.ready.encryption || !st.ready.ccxt) {
       strip.className = "mode-strip live";
       strip.innerHTML = `<strong>Setup incomplete.</strong> The server is missing ${!st.ready.encryption ? "the <b>AUTOTRADE_ENCRYPTION_KEY</b> environment variable" : "the <b>ccxt</b> library"}, so Binance cannot be connected. Add it in Railway Variables.`;
@@ -863,9 +916,12 @@
     if (!st.connected) $("bot-sub").textContent = `Connect the ${L} account first`;
     else if (!bot.enabled) $("bot-sub").textContent = "Not taking new trades";
     else if (bot.paused_until) $("bot-sub").textContent = `${bot.pause_reason} — paused until ${hhmm(bot.paused_until)}`;
-    else $("bot-sub").textContent = `Scans signals every ${st.settings.timeframe === "15m" ? "3" : st.settings.timeframe === "1h" ? "5" : "10"} min`;
+    else $("bot-sub").textContent = st.options.signal_feed ? "Takes new site signals as soon as they appear" : `Scans signals every ${st.settings.timeframe === "15m" ? "3" : st.settings.timeframe === "1h" ? "5" : "10"} min`;
     const det = [];
-    det.push(`${st.settings.market_type === "futures" ? "Futures " + st.settings.leverage + "x" : "Spot"} · risk ${st.settings.risk_pct}% · min ${st.settings.min_confidence}%`);
+    const ss = st.settings;
+    det.push(`${IS_FX(S.mode) ? "Forex" : ss.market_type === "futures" ? "Futures " + ss.leverage + "x" : "Spot"} · risk ${ss.risk_pct}% · max ${ss.max_open_positions} open · daily loss limit ${ss.daily_loss_limit_pct}%`);
+    det.push(`${(ss.markets || []).join(" + ")} · ${(ss.timeframes || []).join(", ")} · grade ${ss.min_grade === "A" ? "A" : ss.min_grade === "B" ? "A/B" : "any"} · ${ss.symbols_mode === "list" ? ss.coins.length + " chosen symbols" : "all symbols"}`);
+    if (!IS_FX(S.mode) && ss.market_type === "spot") det.push(`<span class="neg">Spot cannot short: SHORT signals are skipped. Choose Futures to take them.</span>`);
     det.push(`Last scan: ${ago(bot.last_scan_at)}`);
     const cl = st.options.confidence;
     if (cl && st.settings.min_confidence > cl.max) det.push(`<span class="neg">No signal reaches ${st.settings.min_confidence}% confidence, so the bot will not trade. Set ${Math.floor(cl.strong)}% or lower.</span>`);
@@ -880,6 +936,17 @@
 
     renderPositions();
     renderLog();
+    renderSignalOrders();
+  }
+
+  const SO_STATUS = { placed: "Placed", retry: "Waiting", skipped: "Skipped", failed: "Not placed" };
+  function renderSignalOrders() {
+    const rows = S.status.signal_orders || [];
+    $("so-note").textContent = S.status.options.signal_feed ? "placed / waiting / skipped, with the reason" : "";
+    $("sig-orders").innerHTML = rows.length ? rows.map((o) => `<div class="so"><span class="faint">${hhmm(o.updated_at)}</span>
+        <span>#${o.signal_id}</span><span class="st-${esc(o.status)}">${SO_STATUS[o.status] || esc(o.status)}</span>
+        <span class="faint">${esc(o.source === "SIGNAL" ? "you" : "bot")}</span><span>${esc(o.reason || "")}</span></div>`).join("")
+      : `<div class="empty">No signals handed to this account yet. New signals appear on the <a href="/signals" style="color:inherit;text-decoration:underline">Signals</a> page.</div>`;
   }
 
   const REASON = { TP: "Last target", SL: "Stop", SL_ENTRY: "Stop at entry (after TP1)", SL_TP1: "Stop at TP1 (after TP2)",
@@ -948,6 +1015,8 @@
         fillSelect("s-timeframe", d.options.timeframes);
       }
       if (first || !S.formDirty) { S.form = formFromSettings(d.settings); writeForm(); }
+      const live = d.options.streams_live || [];
+      $("s-live").textContent = live.length ? `Streams sending signals now: ${live.map((k) => k.replace("_", " ")).join(", ")}. The others are switched off until their model passes its test on unseen data (see the Signals page).` : "";
       const cl = d.options.confidence;
       if (cl) $("s-conf-hint").textContent = `Signals show about ${Math.floor(cl.standard)}–${Math.floor(cl.max)}%. ${Math.floor(cl.standard)}% or lower takes every signal; ${Math.floor(cl.strong)}% takes strong signals only.`;
       renderStatus();
@@ -967,23 +1036,30 @@
     $("c-error").hidden = true;
     $("c-key").value = ""; $("c-secret").value = "";
     $("c-disconnect").hidden = !(st && st.connected);
-    $("m-connect-title").textContent = `${st && st.connected ? "Manage" : "Connect"} Binance ${LABEL(S.mode)} account`;
-    $("c-live-warn").hidden = !live;
+    const fx = IS_FX(S.mode);
+    $("m-connect-title").textContent = `${st && st.connected ? "Manage" : "Connect"} ${fx ? "" : "Binance "}${LABEL(S.mode)} account`;
+    document.querySelector('label[for="c-key"]').textContent = fx ? "OANDA API token" : "API key";
+    document.querySelector('label[for="c-secret"]').textContent = fx ? "Account ID (e.g. 101-004-1234567-001)" : "Secret key";
+    $("c-secret").type = fx ? "text" : "password";
+    $("c-live-warn").hidden = !live || fx;
     $("c-help").innerHTML = (st && st.connected ? `Connected key: <b>${esc(st.account.key_hint || "")}</b>. Paste a new key below to replace it.<br>` : "") +
-      (live ? "Create the key on <b>binance.com</b> → Profile → API Management."
-            : "Create the key on <b>demo.binance.com</b> → Profile → API Management.") +
-      " The market (Spot/Futures) follows this account's bot settings.";
+      (fx ? `Create the token on <b>oanda.com</b> → My Account → Manage API Access (${S.mode === "oanda_live" ? "live" : "practice"} account). The OANDA API cannot withdraw money.`
+          : (live ? "Create the key on <b>binance.com</b> → Profile → API Management."
+                  : "Create the key on <b>demo.binance.com</b> → Profile → API Management.") +
+            " The market (Spot/Futures) follows this account's bot settings.");
     openModal("m-connect");
   });
   $("c-submit").addEventListener("click", async () => {
     const btn = $("c-submit");
     btn.disabled = true; btn.textContent = "Verifying…"; $("c-error").hidden = true;
     try {
-      const d = await api("/api/autotrade/connect", { method: "POST", body: withAcct({ api_key: $("c-key").value.trim(), api_secret: $("c-secret").value.trim() }) });
+      const body = IS_FX(S.mode) ? { api_key: $("c-key").value.trim(), account_id: $("c-secret").value.trim() }
+                                 : { api_key: $("c-key").value.trim(), api_secret: $("c-secret").value.trim() };
+      const d = await api("/api/autotrade/connect", { method: "POST", body: withAcct(body) });
       $("c-key").value = ""; $("c-secret").value = "";
       closeModal("m-connect");
-      chat("ai", `Binance ${LABEL(d.mode)} connected. Balance: ${fmtUsd(d.balance_usdt)} USDT.` + (d.note ? "\n" + d.note : ""));
-      speak(`Binance ${LABEL(d.mode)} connected`);
+      chat("ai", `${LABEL(d.mode)} connected. Balance: ${fmtUsd(d.balance_total_usdt != null ? d.balance_total_usdt : d.balance_usdt)}.` + (d.note ? "\n" + d.note : ""));
+      speak(`${LABEL(d.mode)} connected`);
       await refresh();
     } catch (e) {
       $("c-error").textContent = e.message; $("c-error").hidden = false;
@@ -1015,7 +1091,7 @@
   }
   function requestBot(enabled) {
     if (enabled && S.formDirty) { toast("Save your settings first", "err"); return; }
-    if (enabled && S.mode === "live") {
+    if (enabled && IS_LIVE(S.mode)) {
       $("l-ack").checked = false; $("l-submit").disabled = true; openModal("m-live"); return;
     }
     setBot(enabled);
@@ -1067,7 +1143,7 @@
   async function previewTrade(side, symbol) {
     symbol = symbol || S.selected;
     if (S.formDirty) { toast("Save your settings first", "err"); return; }
-    const live = S.mode === "live";
+    const live = IS_LIVE(S.mode);
     $("t-error").hidden = true;
     $("t-kv").innerHTML = `<dt>Calculating…</dt><dd></dd>`;
     $("t-signal").innerHTML = "";
@@ -1080,7 +1156,7 @@
       const d = await api("/api/autotrade/manual", { method: "POST", body: withAcct({ symbol, side, confirm: false }) });
       S.pendingTrade = { symbol, side, mode: S.mode };
       $("t-kv").innerHTML = `
-        <dt>Account</dt><dd>${d.mode === "live" ? '<span class="neg">LIVE</span>' : "DEMO"} · ${esc(d.market_type)} ${d.leverage}x</dd>
+        <dt>Account</dt><dd>${IS_LIVE(d.mode) ? '<span class="neg">LIVE</span>' : "DEMO"} · ${esc(d.market_type)} ${d.leverage}x</dd>
         <dt>Price (approx.)</dt><dd>$${fmtPrice(d.price)}</dd>
         <dt>Quantity</dt><dd>${d.amount} ${esc(symbol.split("/")[0])}</dd>
         <dt>Position size</dt><dd>${fmtUsd(d.notional_usdt)}</dd>
@@ -1114,7 +1190,7 @@
       await refresh();
     } catch (e) {
       $("t-error").textContent = e.message; $("t-error").hidden = false;
-      btn.disabled = t.mode === "live" && !$("t-live-ack").checked;
+      btn.disabled = IS_LIVE(t.mode) && !$("t-live-ack").checked;
     } finally { btn.textContent = "Place order"; }
   });
   $("btn-long").addEventListener("click", () => previewTrade("LONG"));
