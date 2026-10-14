@@ -77,6 +77,8 @@ class Conn:
 
 import signalboard as sb  # noqa: E402
 sb.get_db_connection = Conn
+import signal_hub  # noqa: E402
+signal_hub.get_db_connection = Conn
 sb.time.sleep = lambda s: None
 passed = 0
 
@@ -211,7 +213,7 @@ check(rows[-1]["state"] == "UNAVAILABLE" and "error" in rows[-1], "a coin that f
 e = u1.get("/api/signals/events").get_json()
 check(e["ok"] and e["events"][0]["signal_at"].endswith("Z") and len(e["events"]) >= 2, "recent events feed")
 pg = u1.get("/signals")
-check(pg.status_code == 200 and b"Live signals board" in pg.data and b"Signal alerts" in pg.data, "page renders")
+check(pg.status_code == 200 and b"Trading signals" in pg.data and b"Signal alerts" in pg.data, "page renders")
 check("same_side_warning" in d and d["counts"]["forming"] >= 0, "board reports same-direction warning + forming count")
 STATE.update({"BTC/USDT": "old", "ETH/USDT": "old", "SOL/USDT": "new"})
 sb._board["bar"] = None
