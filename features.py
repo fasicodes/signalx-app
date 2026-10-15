@@ -39,6 +39,9 @@ HISTORY = {"15m": 2600, "1h": 3700, "4h": 1000}
 ZK = (6, 24, 42, 180)
 _ZC = [f"z{k}" for k in ZK]
 CS_K = (6, 24, 42)
+# order-flow inputs (crypto): taker buy volume and trade counts from the exchange's candles
+FLOW_RAW = ["quote_volume", "trade_count", "taker_buy_volume"]
+FLOW_COLS = ["f_tbr", "f_tbr_z", "f_cd6", "f_cd24", "f_sz_z", "f_tc_z"]
 
 
 def epoch_s(ts):
@@ -52,14 +55,15 @@ def resample_closed(df, tf, last_close=None, min_share=0.25):
     buckets; an exchange outage leaves a few missing candles)."""
     if df is None or not len(df):
         return df
-    d = df[["timestamp", "open", "high", "low", "close", "volume"]].copy()
+    extra = [c for c in FLOW_RAW if c in df.columns]
+    d = df[["timestamp", "open", "high", "low", "close", "volume"] + extra].copy()
     d["timestamp"] = pd.to_datetime(d["timestamp"])
     small = int((d["timestamp"].diff().dt.total_seconds()).median() or 900)
     if tf == "1w":
         g = d.set_index("timestamp").resample("W-MON", label="left", closed="left")
     else:
         g = d.set_index("timestamp").resample(RULE[tf], label="left", closed="left", origin="epoch")
-    out = g.agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+    out = g.agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum", **{c: "sum" for c in extra}})
     cnt = g["close"].count()
     expected = max(1, TF_SEC[tf] // max(small, 1))
     out = out[cnt >= max(1, int(expected * min_share))].dropna(subset=["open", "close"]).reset_index()
@@ -98,16 +102,41 @@ def _session_block(ts, tf):
     return out
 
 
-def symbol_features(df, tf, session=True, volume=True):
+def flow_block(df):
+    """Order-flow readings from the candle's taker data (scale-free):
+    f_tbr   share of the candle's volume bought by takers (0.5 = balanced), f_tbr_z its z-score vs the last 50 candles,
+    f_cd6 / f_cd24  cumulative buy-minus-sell volume over 6 / 24 candles as a share of volume,
+    f_sz_z  average trade size vs normal (z), f_tc_z  number of trades vs normal (z)."""
+    v = df["volume"].astype(float)
+    tb = df["taker_buy_volume"].astype(float)
+    tc = df["trade_count"].astype(float)
+    qv = df["quote_volume"].astype(float)
+    tbr = (tb / v.replace(0, np.nan)).clip(0, 1)
+    out = pd.DataFrame(index=df.index)
+    out["f_tbr"] = tbr
+    out["f_tbr_z"] = (tbr - tbr.rolling(50).mean()) / (tbr.rolling(50).std(ddof=0) + 1e-9)
+    delta = 2 * tb - v
+    for k in (6, 24):
+        out[f"f_cd{k}"] = delta.rolling(k).sum() / (v.rolling(k).sum() + 1e-9)
+    sz = (qv / tc.replace(0, np.nan))
+    lsz = np.log(sz.where(sz > 0))
+    out["f_sz_z"] = (lsz - lsz.rolling(50).mean()) / (lsz.rolling(50).std(ddof=0) + 1e-9)
+    ltc = np.log1p(tc)
+    out["f_tc_z"] = (ltc - ltc.rolling(50).mean()) / (ltc.rolling(50).std(ddof=0) + 1e-9)
+    return out
+
+
+def symbol_features(df, tf, session=True, volume=True, flow=False):
     """All per-symbol features on candles of timeframe `tf` (closed, oldest first)."""
     df = df.reset_index(drop=True)
-    d = df[["timestamp", "open", "high", "low", "close", "volume"]].copy()
+    flow = bool(flow) and all(c in df.columns for c in FLOW_RAW)
+    d = df[["timestamp", "open", "high", "low", "close", "volume"] + (FLOW_RAW if flow else [])].copy()
     d["timestamp"] = pd.to_datetime(d["timestamp"])
     for k in ("open", "high", "low", "close", "volume"):
         d[k] = d[k].astype(float)
     if not volume:
         d["volume"] = 1.0
-    F = base_features(d)
+    F = base_features(d[["timestamp", "open", "high", "low", "close", "volume"]])
     if not volume:
         F["vol_z"] = np.nan
         F["vol_trend"] = np.nan
@@ -127,6 +156,10 @@ def symbol_features(df, tf, session=True, volume=True):
         S = _session_block(d["timestamp"], tf)
         S.index = F.index
         F = pd.concat([F, S], axis=1)
+    if flow:
+        Fl = flow_block(d)
+        Fl.index = F.index
+        F = pd.concat([F, Fl], axis=1)
     F["timestamp"] = d["timestamp"].values
     for k in ("open", "high", "low", "close"):
         F[k] = d[k].values
@@ -254,6 +287,10 @@ def flip(X):
                 G[col] = X[other]
         elif col.startswith("cs_d"):
             G[col] = -X[col]
-        elif col in ("s_hsin", "s_hcos", "s_dow", "s_london", "s_ny", "n_syms"):
+        elif col in ("s_hsin", "s_hcos", "s_dow", "s_london", "s_ny", "n_syms", "f_sz_z", "f_tc_z"):
             G[col] = X[col]
+        elif col == "f_tbr":
+            G[col] = 1 - X[col]
+        elif col in ("f_tbr_z", "f_cd6", "f_cd24"):
+            G[col] = -X[col]
     return G
