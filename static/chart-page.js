@@ -2021,7 +2021,7 @@
     const d = S.eng;
     if (!d || d.coin !== S.coin) { box.innerHTML = `<p class="mk-empty">Loading…</p>`; chip.hidden = true; return; }
     if (d.asset === "forex") {
-      box.innerHTML = `<p class="eng-copy">Signals are made for crypto only for now. For ${S.coin.startsWith("XAU") ? "gold" : "forex pairs"} you get this chart and the market brief on the dashboard.</p>`;
+      box.innerHTML = `<p class="eng-copy">${S.coin.startsWith("XAU") ? "Gold" : "Forex"} signals appear on the Signals page only when their model passes the unseen-data test (at least 70% wins and a positive average after costs). Until then you get this chart and the market brief on the dashboard.</p>`;
       chip.hidden = false; chip.className = "mk-sig"; chip.innerHTML = "<i></i>Chart only";
       return;
     }
