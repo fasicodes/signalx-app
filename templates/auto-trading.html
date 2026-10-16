@@ -922,6 +922,7 @@
     det.push(`${IS_FX(S.mode) ? "Forex" : ss.market_type === "futures" ? "Futures " + ss.leverage + "x" : "Spot"} · risk ${ss.risk_pct}% · max ${ss.max_open_positions} open · daily loss limit ${ss.daily_loss_limit_pct}%`);
     det.push(`${(ss.markets || []).join(" + ")} · ${(ss.timeframes || []).join(", ")} · grade ${ss.min_grade === "A" ? "A" : ss.min_grade === "B" ? "A/B" : "any"} · ${ss.symbols_mode === "list" ? ss.coins.length + " chosen symbols" : "all symbols"}`);
     if (!IS_FX(S.mode) && ss.market_type === "spot") det.push(`<span class="neg">Spot cannot short: SHORT signals are skipped. Choose Futures to take them.</span>`);
+    if (!IS_FX(S.mode) && !paper && ss.market_type === "spot") det.push(`Spot stop-losses are watched by this bot and are not placed on Binance, so a spot position has no stop while the server is offline. Futures adds a backup stop on Binance.`);
     det.push(`Last scan: ${ago(bot.last_scan_at)}`);
     const cl = st.options.confidence;
     if (cl && st.settings.min_confidence > cl.max) det.push(`<span class="neg">No signal reaches ${st.settings.min_confidence}% confidence, so the bot will not trade. Set ${Math.floor(cl.strong)}% or lower.</span>`);
