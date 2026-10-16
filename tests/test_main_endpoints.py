@@ -194,6 +194,135 @@ check(r.status_code == 200 and d["total_qualifying_trades"] == 5 and d["winning_
 check(d["total_profit"] == 150.0 and d["total_loss"] == 180.0 and d["net_pnl"] == -30.0 and d["win_rate"] == 40.0,
       "net result is -30 and the win rate 40%, not the flattering 66.7% / +90 that hiding manual losses gave")
 
+print("\n[6] speed: shared exchange data, one analysis at a time")
+import gzip as _gzip
+import threading as _threading
+import time as _time
+
+
+def hammer(path, n=10):
+    """n members request `path` at the same moment; returns their status codes."""
+    codes = []
+
+    def one():
+        cl = main.app.test_client()
+        with cl.session_transaction() as sess:
+            sess["user_id"] = uid
+            sess["email"] = "member@example.com"
+            sess["sv"] = 0
+        codes.append(cl.get(path).status_code)
+
+    ts = [_threading.Thread(target=one) for _ in range(n)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    return codes
+
+
+slow_calls = []
+
+
+def slow_candles(symbol="BTC/USDT", timeframe="1h", limit=200, since=None):
+    slow_calls.append((symbol, timeframe, limit))
+    _time.sleep(0.3)
+    return synthetic_candles(max(int(limit), 120))
+
+
+main._SHARED.clear()
+main.get_candles = slow_candles
+codes = hammer("/candles?coin=SOL/USDT&timeframe=15m&limit=2", 10)
+check(codes == [200] * 10 and len(slow_calls) == 1, f"10 members polling the same chart at once -> 1 exchange call (got {len(slow_calls)})")
+member.get("/candles?coin=SOL/USDT&timeframe=15m&limit=2")
+check(len(slow_calls) == 1, "the next poll within 2 s is answered from the shared copy")
+main._SHARED[("candles", "SOL/USDT", "15m", 2)] = (_time.time() - 3, main._SHARED[("candles", "SOL/USDT", "15m", 2)][1])
+member.get("/candles?coin=SOL/USDT&timeframe=15m&limit=2")
+check(len(slow_calls) == 2, "after 2 s the copy is refreshed from the exchange")
+r1 = member.get("/candles?coin=SOL/USDT&timeframe=15m&limit=2").get_json()
+check(r1["candles"] and r1["server_time"] and r1["coin"] == "SOL/USDT", "the shared answer has the same shape (candles, server_time)")
+
+# exchange down: the last good answer (<= 30 s old past its freshness) is still shown, then an honest error
+main._SHARED[("candles", "SOL/USDT", "15m", 2)] = (_time.time() - 10, main._SHARED[("candles", "SOL/USDT", "15m", 2)][1])
+main.get_candles = failing_candles
+r = member.get("/candles?coin=SOL/USDT&timeframe=15m&limit=2")
+check(r.status_code == 200 and r.get_json()["candles"], "exchange hiccup: the chart keeps the last good candles")
+main._SHARED[("candles", "SOL/USDT", "15m", 2)] = (_time.time() - 100, main._SHARED[("candles", "SOL/USDT", "15m", 2)][1])
+r = member.get("/candles?coin=SOL/USDT&timeframe=15m&limit=2")
+check(r.status_code == 502 and SECRET not in r.get_data(as_text=True), "…but a long outage still ends in the safe 502")
+
+tick_calls = []
+
+
+def fake_tickers(syms):
+    tick_calls.append(1)
+    return {s_: {"last": 1.0, "percentage": 0.5} for s_ in syms}
+
+
+main.exchange.fetch_tickers = fake_tickers
+main._SHARED.clear()
+codes = hammer("/ticker", 8)
+member.get("/ticker")
+check(codes == [200] * 8 and len(tick_calls) == 1, f"/ticker: 9 requests, 1 exchange call (got {len(tick_calls)})")
+main._SHARED[("ticker",)] = (_time.time() - 20, main._SHARED[("ticker",)][1])
+main.exchange.fetch_tickers = lambda syms: (_ for _ in ()).throw(RuntimeError(SECRET))
+r = member.get("/ticker")
+check(r.status_code == 200 and r.get_json(), "/ticker: exchange hiccup keeps showing the last prices")
+
+sig_calls = []
+main.get_candles = fake_candles
+
+
+def slow_signal(df, symbol=None, include_orderbook=True):
+    sig_calls.append(symbol)
+    _time.sleep(0.3)
+    return {"final_verdict": "WAIT", "confidence_pct": 50}
+
+
+main.generate_signal = slow_signal
+main._SIGNAL_RESPONSE_CACHE.clear()
+codes = hammer("/signal?coin=XRP/USDT&timeframe=1h", 8)
+check(codes == [200] * 8 and len(sig_calls) == 1, f"/signal: 8 members open the same coin at once -> the analysis runs once (got {len(sig_calls)})")
+
+print("\n[7] speed: gzip and cached static files")
+gz = {"Accept-Encoding": "gzip, deflate, br"}
+plain = guest.get("/pricing")
+packed = guest.get("/pricing", headers=gz)
+check(packed.headers.get("Content-Encoding") == "gzip" and "Accept-Encoding" in packed.headers.get("Vary", "")
+      and _gzip.decompress(packed.data) == plain.data and len(packed.data) < len(plain.data) / 2,
+      f"pages are gzip-compressed ({len(plain.data)} -> {len(packed.data)} bytes) and decompress to the same page")
+check(plain.headers.get("Content-Encoding") is None, "no gzip for a browser that does not ask for it")
+small = member.get("/api/me", headers=gz)
+check(small.headers.get("Content-Encoding") is None and small.status_code == 200, "tiny JSON answers are not compressed")
+big = member.get("/candles?coin=BTC/USDT&timeframe=1h&limit=300", headers=gz)
+check(big.headers.get("Content-Encoding") == "gzip" and _gzip.decompress(big.data), "large JSON (candles) is compressed")
+css = guest.get("/static/app.css", headers=gz)
+raw_css = open(os.path.join(ROOT, "static", "app.css"), "rb").read()
+check(css.headers.get("Content-Encoding") == "gzip" and _gzip.decompress(css.data) == raw_css, "static css is compressed byte-for-byte correctly")
+png = guest.get("/static/logo.png", headers=gz)
+check(png.headers.get("Content-Encoding") is None and png.data == open(os.path.join(ROOT, "static", "logo.png"), "rb").read(),
+      "images are sent as they are")
+etag = css.headers.get("ETag")
+r = guest.get("/static/app.css", headers={**gz, "If-None-Match": etag})
+check(etag and etag.startswith("W/") and r.status_code == 304, "a browser that already has the file gets a 304")
+r = guest.get("/static/app.css", headers={**gz, "Range": "bytes=0-99"})
+check(r.status_code == 206 and r.headers.get("Content-Encoding") is None and len(r.data) == 100, "partial downloads are untouched")
+
+page = guest.get("/login").get_data(as_text=True)
+import re as _re
+links = _re.findall(r'(?:href|src)="(/static/[^"]+\?v=[0-9a-f]{10})"', page)
+check(len(links) >= 2, f"static links in pages carry a content hash ({len(links)} found)")
+good = guest.get(links[0], headers=gz)
+check(good.status_code == 200 and "max-age=31536000" in good.headers.get("Cache-Control", "") and "immutable" in good.headers["Cache-Control"],
+      "a hashed static URL is cached for a year")
+stale = guest.get(links[0].split("?")[0] + "?v=0000000000")
+check(stale.status_code == 200 and "max-age=31536000" not in stale.headers.get("Cache-Control", ""),
+      "a wrong / old version tag is NOT cached long")
+check("max-age=31536000" not in guest.get("/static/app.css").headers.get("Cache-Control", ""), "an unversioned static URL still revalidates")
+for name in ("/advanced", "/demo-trading", "/auto-trading"):
+    html = member.get(name).get_data(as_text=True)
+    check(_re.search(r'/static/style\.css\?v=[0-9a-f]{10}', html) or _re.search(r'/static/script\.js\?v=[0-9a-f]{10}', html),
+          f"{name}: its big css/js files are versioned too")
+check(not _re.search(r'/static/[a-z\-]+\.(?:css|js)\?v=20\d{6}', "".join(member.get(n).get_data(as_text=True) for n in ("/advanced", "/demo-trading", "/auto-trading"))),
+      "no hand-written version tags left in the big templates")
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
