@@ -92,8 +92,17 @@ def google_login():
 
 @oauth_bp.route("/api/auth/google/callback")
 def google_callback():
-    token = oauth.google.authorize_access_token()
-    userinfo = token.get("userinfo") or oauth.google.parse_id_token(token)
+    try:
+        google = oauth.google
+    except AttributeError:          # Google login is not configured on this server
+        return redirect("/login?error=google_not_configured")
+    try:
+        token = google.authorize_access_token()
+        userinfo = token.get("userinfo") or google.parse_id_token(token)
+    except Exception as e:
+        # The person pressed "Cancel" at Google, the link expired, or the state did not match.
+        print(f"[oauth] Google sign-in did not complete: {type(e).__name__}")
+        return redirect("/login?error=google_failed")
     email = (userinfo.get("email") or "").lower()
     avatar_url = userinfo.get("picture")
     if not email:
