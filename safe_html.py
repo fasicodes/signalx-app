@@ -13,7 +13,9 @@ import html
 import re
 import unicodedata
 
-_URL_OK = re.compile(r"^(https?://[^\s<>\"']+|/[^\s<>\"']*)$", re.I)
+# http(s) addresses, or a path on this site. "//host" and "/\\host" are NOT allowed: browsers treat them as
+# another website, so a "site-relative" link could silently leave the site.
+_URL_OK = re.compile(r"^(https?://[^\s<>\"']+|/(?![/\\])[^\s<>\"']*)$", re.I)
 
 
 def slugify(text, max_len=80):
@@ -37,10 +39,15 @@ def _safe_url(u):
 def _inline(text):
     """Inline Markdown on ALREADY-ESCAPED text."""
     codes = []
+    tags = []          # <a ...> / <img ...> tags: kept aside so that the bold/italic rules cannot change a URL
 
     def keep_code(m):
         codes.append(m.group(1))
         return f"\x00{len(codes) - 1}\x00"
+
+    def keep_tag(tag):
+        tags.append(tag)
+        return f"\x01{len(tags) - 1}\x01"
 
     t = re.sub(r"`([^`]+)`", keep_code, text)
 
@@ -48,7 +55,7 @@ def _inline(text):
         alt, url = m.group(1), _safe_url(html.unescape(m.group(2)))
         if not url:
             return alt
-        return f'<img src="{html.escape(url, quote=True)}" alt="{alt}" loading="lazy">'
+        return keep_tag(f'<img src="{html.escape(url, quote=True)}" alt="{alt}" loading="lazy">')
 
     def link(m):
         label, url = m.group(1), _safe_url(html.unescape(m.group(2)))
@@ -56,19 +63,22 @@ def _inline(text):
             return label
         ext = url.lower().startswith("http")
         rel = ' rel="nofollow noopener" target="_blank"' if ext else ""
-        return f'<a href="{html.escape(url, quote=True)}"{rel}>{label}</a>'
+        return keep_tag(f'<a href="{html.escape(url, quote=True)}"{rel}>') + label + "</a>"
 
     t = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", img, t)
     t = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, t)
     t = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", t)
     t = re.sub(r"(?<![*\w])\*([^*\n]+)\*(?![*\w])", r"<em>\1</em>", t)
     t = re.sub(r"(?<![_\w])_([^_\n]+)_(?![_\w])", r"<em>\1</em>", t)
+    t = re.sub(r"\x01(\d+)\x01", lambda m: tags[int(m.group(1))], t)
     t = re.sub(r"\x00(\d+)\x00", lambda m: f"<code>{codes[int(m.group(1))]}</code>", t)
     return t
 
 
 def markdown_to_html(md):
-    lines = html.escape(str(md or "").replace("\r\n", "\n"), quote=True).split("\n")
+    # \x00 / \x01 are the markers used inside _inline(); text that already contains them is not trusted.
+    md = str(md or "").replace("\x00", "").replace("\x01", "")
+    lines = html.escape(md.replace("\r\n", "\n"), quote=True).split("\n")
     out, i, n = [], 0, len(lines)
     para = []
 
