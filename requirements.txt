@@ -1,16 +1,19 @@
-flask
-flask-cors
-PyMySQL
-cryptography
-Authlib
-Flask-Limiter
-pandas
-pandas-ta
-ccxt
-yfinance
-numpy
-hmmlearn
-scikit-learn
-PyWavelets
-requests
-gunicorn
+# Lower bounds are the oldest versions this code was written against. Upper bounds stop a future MAJOR release
+# (which can remove things, like numpy 2 removed np.math) from being installed by a normal deploy.
+flask>=3.0,<4
+flask-cors>=4.0
+PyMySQL>=1.1
+cryptography>=42
+Authlib>=1.3
+Flask-Limiter>=3.5
+pandas>=2.1,<4
+ccxt>=4.4
+yfinance>=0.2.40
+numpy>=1.26,<3
+hmmlearn>=0.3
+scikit-learn>=1.4,<2
+PyWavelets>=1.5
+requests>=2.31
+gunicorn>=21.2
+# pandas-ta is optional and not published for every Python version: main.py has its own RSI/MACD, so it is
+# not listed. Add "pandas-ta" here only if you want the library itself.
