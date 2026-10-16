@@ -14,6 +14,14 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 from dbshim import setup  # noqa: E402
 
+import shutil  # noqa: E402
+import tempfile  # noqa: E402
+
+# the tests must not depend on the model files that ship with the site: they run against an empty models folder
+# (rules engine fallback); the shipped crypto 1h model is checked separately below
+_MD = tempfile.mkdtemp(prefix="models_")
+os.environ["MODELS_DIR"] = _MD
+
 Conn = setup("signal_hub")
 
 import markets  # noqa: E402
@@ -245,6 +253,23 @@ check(len(evs) == len(fresh) and again == [], f"scanner stores each fresh signal
 os.environ.pop("SIGNAL_STREAMS")
 check(hub.enabled_streams() == hub.validated_streams() and "crypto_4h" in hub.enabled_streams(),
       "default: only the streams whose model passed its test on unseen data (crypto 4h always)")
+check(hub.validated_streams() == ["crypto_4h"], "no model file -> only crypto 4h is on by default")
+_real = os.path.join(os.path.dirname(HERE), "models", "crypto_1h.json")
+if os.path.exists(_real):
+    shutil.copy(_real, os.path.join(_MD, "crypto_1h.json"))
+    streams.reset_models()
+    _m = streams.load_model("crypto_1h")
+    check(_m is not None and _m.gate is not None and streams.validated("crypto_1h")
+          and "crypto_1h" in hub.validated_streams() and "forex_1h" not in hub.validated_streams(),
+          "shipped crypto 1h model (with its 4h gate) passed its unseen-data test -> on by default")
+    _eng = streams.StreamEngine("crypto", "1h", streams.CandleStore(fake_candles, sleep=0),
+                                ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"])
+    _b = _eng.board(NOW)
+    check(streams.engine_name("crypto_1h") == "model" and not _eng.errors
+          and all("verdict" in v and v["engine_version"].startswith("v4") for v in _b.values()),
+          "crypto 1h model + 4h gate run end to end on candles (no errors)")
+    os.remove(os.path.join(_MD, "crypto_1h.json"))
+    streams.reset_models()
 os.environ["SIGNAL_STREAMS"] = "all"
 check(len(hub.enabled_streams()) == 6, "SIGNAL_STREAMS=all turns on all six streams")
 os.environ["SIGNAL_STREAMS"] = "crypto_1h,bogus"
