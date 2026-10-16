@@ -1,3 +1,12 @@
 __pycache__/
 *.pyc
 .env
+.venv/
+venv/
+*.db
+*.sqlite3
+.DS_Store
+.idea/
+.vscode/
+# research scratch (downloaded candle data and intermediate results); the finished models live in models/
+research/work/
