@@ -22,6 +22,10 @@ def get_db_connection():
         database=os.environ.get("DB_NAME", "signalx_db"),
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=True,
+        # Without timeouts a database that stops answering would hold every request thread forever.
+        connect_timeout=10,
+        read_timeout=60,
+        write_timeout=60,
     )
 
 
