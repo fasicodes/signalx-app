@@ -424,7 +424,7 @@ def webhook():
     if not enabled():
         return jsonify({"ok": False}), 404
     got = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
-    if not hmac.compare_digest(got, webhook_secret()):
+    if not hmac.compare_digest(got.encode("utf-8"), webhook_secret().encode("utf-8")):   # bytes: a non-ASCII header must not crash the compare
         return jsonify({"ok": False}), 403
     update = request.get_json(silent=True)
     if isinstance(update, dict):
