@@ -1,0 +1,294 @@
+{
+ "generated": "2026-10-15",
+ "rule": "A stream goes live only when the model version picked on the validation years also reaches at least 70% wins (TP1 or better) and a positive average result after costs on later data it never saw.",
+ "streams": {
+  "crypto_15m": {
+   "live": false,
+   "chosen": null,
+   "reason": "Not tested yet.",
+   "variants": []
+  },
+  "crypto_1h": {
+   "live": true,
+   "chosen": "s2_mtf",
+   "reason": "Live: 1-hour model with the 4-hour model agreeing - 72.6% wins and +0.083R on average after costs on data it never saw (2025-10-01 to 2026-10-11).",
+   "variants": [
+    {
+     "variant": "s2",
+     "label": "1-hour model alone",
+     "mtf": false,
+     "passed_validation": false,
+     "validation_period": "2023-01-01 to 2025-10-01",
+     "validation": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 13421,
+      "signals_per_day": 13.37,
+      "win_rate": 72.2,
+      "avg_net_r": 0.045,
+      "profit_factor": 1.16,
+      "stop_rate": 27.2,
+      "tp2_rate": 37.7,
+      "tp3_rate": 12.0,
+      "max_drawdown_r": -39.3,
+      "years": {
+       "2023": {
+        "signals": 5776,
+        "win_rate": 73.3,
+        "avg_net_r": 0.052
+       },
+       "2024": {
+        "signals": 4954,
+        "win_rate": 71.0,
+        "avg_net_r": 0.036
+       },
+       "2025": {
+        "signals": 2691,
+        "win_rate": 72.2,
+        "avg_net_r": 0.045
+       }
+      }
+     },
+     "holdout": {
+      "period": "2025-10-01 to 2026-10-11",
+      "signals": 2645,
+      "signals_per_day": 7.05,
+      "win_rate": 68.1,
+      "avg_net_r": -0.004,
+      "profit_factor": 0.99,
+      "stop_rate": 31.4,
+      "tp2_rate": 35.7,
+      "tp3_rate": 13.0,
+      "max_drawdown_r": -39.9,
+      "years": {
+       "2025": {
+        "signals": 702,
+        "win_rate": 69.1,
+        "avg_net_r": 0.024
+       },
+       "2026": {
+        "signals": 1943,
+        "win_rate": 67.7,
+        "avg_net_r": -0.014
+       }
+      }
+     },
+     "rule": "v1: validation win rate >= 72%, average >= 0.02R",
+     "chosen": false,
+     "passed": false
+    },
+    {
+     "variant": "s2_mtf",
+     "label": "1-hour model with the 4-hour model agreeing",
+     "mtf": true,
+     "passed_validation": true,
+     "validation_period": "2023-01-01 to 2025-10-01",
+     "validation": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 9115,
+      "signals_per_day": 9.08,
+      "win_rate": 73.3,
+      "avg_net_r": 0.073,
+      "profit_factor": 1.27,
+      "stop_rate": 26.0,
+      "tp2_rate": 39.6,
+      "tp3_rate": 12.8,
+      "max_drawdown_r": -21.9,
+      "years": {
+       "2023": {
+        "signals": 3679,
+        "win_rate": 74.7,
+        "avg_net_r": 0.081
+       },
+       "2024": {
+        "signals": 3449,
+        "win_rate": 72.0,
+        "avg_net_r": 0.068
+       },
+       "2025": {
+        "signals": 1987,
+        "win_rate": 73.2,
+        "avg_net_r": 0.068
+       }
+      }
+     },
+     "holdout": {
+      "period": "2025-10-01 to 2026-10-11",
+      "signals": 1691,
+      "signals_per_day": 4.51,
+      "win_rate": 72.6,
+      "avg_net_r": 0.083,
+      "profit_factor": 1.29,
+      "stop_rate": 27.1,
+      "tp2_rate": 40.4,
+      "tp3_rate": 15.3,
+      "max_drawdown_r": -12.1,
+      "years": {
+       "2025": {
+        "signals": 472,
+        "win_rate": 72.9,
+        "avg_net_r": 0.089
+       },
+       "2026": {
+        "signals": 1219,
+        "win_rate": 72.4,
+        "avg_net_r": 0.081
+       }
+      }
+     },
+     "rule": "v2: validation win rate >= 73.0%, average >= 0.03R after costs, every validation year >= 70.0% with a positive average, >= 100 signals",
+     "chosen": true,
+     "passed": true
+    }
+   ]
+  },
+  "forex_15m": {
+   "live": false,
+   "chosen": null,
+   "reason": "No model version reached the target on the validation years, so none was tried on the unseen data.",
+   "variants": [
+    {
+     "variant": "s3",
+     "label": "15-minute model alone",
+     "mtf": false,
+     "passed_validation": false,
+     "validation_period": "2017-01-01 to 2021-01-01",
+     "validation": null,
+     "holdout": null,
+     "rule": "v2: validation win rate >= 73.0%, average >= 0.03R after costs, every validation year >= 70.0% with a positive average, >= 100 signals",
+     "chosen": false,
+     "passed": false
+    }
+   ]
+  },
+  "forex_1h": {
+   "live": false,
+   "chosen": null,
+   "reason": "No model version passed the validation rule. An earlier, looser version (1-hour model alone, stop 2 ATR) was tested on data it never saw (2021-01-01 to 2022-03-05) and reached 70.8% wins and -0.072R on average, so it is not used.",
+   "variants": [
+    {
+     "variant": "s2",
+     "label": "1-hour model alone, stop 2 ATR",
+     "mtf": false,
+     "passed_validation": false,
+     "validation_period": "2017-01-01 to 2021-01-01",
+     "validation": {
+      "period": "2017-01-01 to 2021-01-01",
+      "signals": 1682,
+      "signals_per_day": 1.15,
+      "win_rate": 73.1,
+      "avg_net_r": 0.032,
+      "profit_factor": 1.11,
+      "stop_rate": 26.3,
+      "tp2_rate": 37.6,
+      "tp3_rate": 11.5,
+      "max_drawdown_r": -15.6,
+      "years": {
+       "2017": {
+        "signals": 443,
+        "win_rate": 73.1,
+        "avg_net_r": 0.044
+       },
+       "2018": {
+        "signals": 416,
+        "win_rate": 77.2,
+        "avg_net_r": 0.076
+       },
+       "2019": {
+        "signals": 460,
+        "win_rate": 72.6,
+        "avg_net_r": 0.034
+       },
+       "2020": {
+        "signals": 363,
+        "win_rate": 68.9,
+        "avg_net_r": -0.034
+       }
+      }
+     },
+     "holdout": {
+      "period": "2021-01-01 to 2022-03-05",
+      "signals": 408,
+      "signals_per_day": 0.95,
+      "win_rate": 70.8,
+      "avg_net_r": -0.072,
+      "profit_factor": 0.77,
+      "stop_rate": 29.2,
+      "tp2_rate": 28.4,
+      "tp3_rate": 8.1,
+      "max_drawdown_r": -32.7,
+      "years": {
+       "2021": {
+        "signals": 353,
+        "win_rate": 73.4,
+        "avg_net_r": -0.027
+       },
+       "2022": {
+        "signals": 55,
+        "win_rate": 54.5,
+        "avg_net_r": -0.361
+       }
+      }
+     },
+     "rule": "v1: validation win rate >= 72%, average >= 0.02R",
+     "chosen": false,
+     "passed": false
+    },
+    {
+     "variant": "s3",
+     "label": "1-hour model alone, stop 3 ATR",
+     "mtf": false,
+     "passed_validation": false,
+     "validation_period": "2017-01-01 to 2021-01-01",
+     "validation": null,
+     "holdout": null,
+     "rule": "v2: validation win rate >= 73.0%, average >= 0.03R after costs, every validation year >= 70.0% with a positive average, >= 100 signals",
+     "chosen": false,
+     "passed": false
+    },
+    {
+     "variant": "s3_mtf",
+     "label": "1-hour model with the 4-hour model agreeing, stop 3 ATR",
+     "mtf": true,
+     "passed_validation": false,
+     "validation_period": "2017-01-01 to 2021-01-01",
+     "validation": null,
+     "holdout": null,
+     "rule": "v2: validation win rate >= 73.0%, average >= 0.03R after costs, every validation year >= 70.0% with a positive average, >= 100 signals",
+     "chosen": false,
+     "passed": false
+    }
+   ]
+  },
+  "forex_4h": {
+   "live": false,
+   "chosen": null,
+   "reason": "No model version reached the target on the validation years, so none was tried on the unseen data.",
+   "variants": [
+    {
+     "variant": "s2",
+     "label": "4-hour model, stop 2 ATR",
+     "mtf": false,
+     "passed_validation": false,
+     "validation_period": "2017-01-01 to 2021-01-01",
+     "validation": null,
+     "holdout": null,
+     "rule": "v1: validation win rate >= 72%, average >= 0.02R",
+     "chosen": false,
+     "passed": false
+    },
+    {
+     "variant": "s15",
+     "label": "4-hour model, stop 1.5 ATR",
+     "mtf": false,
+     "passed_validation": false,
+     "validation_period": "2017-01-01 to 2021-01-01",
+     "validation": null,
+     "holdout": null,
+     "rule": "v1: validation win rate >= 72%, average >= 0.02R",
+     "chosen": false,
+     "passed": false
+    }
+   ]
+  }
+ }
+}
