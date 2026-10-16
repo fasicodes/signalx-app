@@ -223,7 +223,9 @@ check(code == 409 and "already exists" in d.get("error", ""), "signing up again 
 print("\n[3] expired verification link -> Forgot password gets the user in")
 MAIL.clear()
 post("/api/register", {"email": "sara@example.com", "password": "secret123"})
-tok = row("sara@example.com")["verify_token"]
+tok = link_in(MAIL[-1], "/api/verify-email?token=").split("token=")[1]
+check(row("sara@example.com")["verify_token"] == auth._hash_token(tok) and row("sara@example.com")["verify_token"] != tok
+      and len(row("sara@example.com")["verify_token"]) == 64, "the verification token is stored as a hash, not as the token")
 sql("UPDATE users SET verify_token_expires = %s WHERE email = %s", (datetime.utcnow() - timedelta(hours=1), "sara@example.com"))
 r = client.get("/api/verify-email?token=" + tok)
 check(r.headers["Location"].endswith("/login?error=verify_token_expired"), "expired link -> clear error on the login page")
@@ -235,6 +237,10 @@ check(code == 200 and "spam" in d.get("message", "") and len(MAIL) == 1, "forgot
 rlink = link_in(MAIL[0], "/reset-password?token=")
 check(rlink and rlink.startswith("https://signals.example.com/reset-password?token=") and "Signals FM" in MAIL[0]["subject"], "reset email: Signals FM, SITE_URL link")
 rtok = rlink.split("token=")[1]
+check(row("sara@example.com")["reset_token"] == auth._hash_token(rtok) and row("sara@example.com")["reset_token"] != rtok,
+      "the reset token is stored as a hash, not as the token")
+code, d = post("/api/reset-password", {"token": row("sara@example.com")["reset_token"], "password": "newpass99"})
+check(code == 400, "a copy of the database (the hash) cannot be used as a reset token")
 code, d = post("/api/reset-password", {"token": rtok, "password": "newpass99"})
 check(code == 200, "new password saved")
 check(row("sara@example.com")["email_verified"] == 1 and row("sara@example.com")["verify_token"] is None, "reset also verified the email")
@@ -244,6 +250,20 @@ code, d = post("/api/login", {"email": "sara@example.com", "password": "secret12
 check(code == 401, "old password no longer works")
 code, d = post("/api/reset-password", {"token": rtok, "password": "again123x"})
 check(code == 400, "a reset link works only once")
+
+print("\n[3b] input limits")
+code, d = post("/api/register", {"email": "big@example.com", "password": "a1" * 100})
+check(code == 400 and "at most" in d.get("error", ""), "a very long password is refused")
+code, d = post("/api/register", {"email": ("x" * 250) + "@example.com", "password": "secret123"})
+check(code == 400, "a very long email is refused")
+code, d = post("/api/login", {"email": "ali@example.com", "password": "a1" * 5000})
+check(code == 401, "login with a huge password: plain 401, nothing is hashed")
+os.environ.pop("SITE_URL", None); os.environ.pop("RAILWAY_PUBLIC_DOMAIN", None); os.environ.pop("ALLOWED_ORIGIN", None)
+with app.test_request_context("/", headers={"Host": "evil.example.net"}):
+    check(auth._base_url() == auth.DEFAULT_SITE_URL, "email links never use a visitor-supplied Host header")
+with app.test_request_context("/", base_url="http://localhost:5000"):
+    check(auth._base_url() == "http://localhost:5000", "on localhost the request address is used (development)")
+os.environ["SITE_URL"] = "https://signals.example.com"
 
 print("\n[4] someone pre-registers another person's email")
 MAIL.clear()
@@ -296,6 +316,14 @@ r = client.get("/api/auth/google/callback")
 with client.session_transaction() as s:
     check(r.headers["Location"].endswith("/") and s.get("email") == "new@gmail.com", "verified Google email: logged in")
 
+print("\n[7a] cancelled / failed Google sign-in is a friendly redirect, not a 500")
+class GBad:
+    def authorize_access_token(self):
+        raise RuntimeError("access_denied")
+oauth.oauth.google = GBad()
+r = client.get("/api/auth/google/callback?error=access_denied")
+check(r.status_code == 302 and r.headers["Location"].endswith("error=google_failed"), "cancel at Google -> back to login with a message")
+
 print("\n[7b] Google callback without an email_verified claim is refused")
 oauth.oauth.google = G({"email": "nofield@gmail.com"})
 r = client.get("/api/auth/google/callback")
@@ -343,7 +371,10 @@ with app.test_request_context("/", base_url="https://evil.example.org"):
     os.environ["RAILWAY_PUBLIC_DOMAIN"] = "signalx-app-production.up.railway.app"
     check(auth._base_url() == "https://signalx-app-production.up.railway.app", "bad SITE_URL ignored, Railway domain used")
     os.environ.pop("SITE_URL"); os.environ.pop("RAILWAY_PUBLIC_DOMAIN")
-    check(auth._base_url() == "https://evil.example.org", "no settings: falls back to the request address")
+    check(auth._base_url() == auth.DEFAULT_SITE_URL, "no settings: a visitor-supplied host is NOT used (default site address)")
+    os.environ["ALLOWED_ORIGIN"] = "https://signals.example.com"
+    check(auth._base_url() == "https://signals.example.com", "ALLOWED_ORIGIN is used when SITE_URL is missing")
+    os.environ.pop("ALLOWED_ORIGIN")
 body = auth._email_html("T", "<p>x</p>", "Go", 'https://a.example/x?token=a"b<c')
 check('href="https://a.example/x?token=a&quot;b&lt;c"' in body, "link in emails is escaped")
 
