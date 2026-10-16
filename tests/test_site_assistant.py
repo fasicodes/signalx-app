@@ -162,6 +162,13 @@ check(len(CALLS) == n and d["source"] == "built-in" and notes and "hourly limit"
       "hourly limit reached: built-in answer with a notice, no API call")
 check(cl.get("/api/assistant/status").get_json()["ai"] is True, "status endpoint")
 
+# ---- a visitor cannot dodge the limit by changing the X-Forwarded-For header
+n = len(CALLS)
+for i in range(3):
+    t, d, notes = sse(cl.post("/api/assistant/chat", json={"question": f"Explain RSI {i}"},
+                              headers={"X-Forwarded-For": f"10.9.8.{i}"}))
+check(len(CALLS) == n, "changing X-Forwarded-For does not give a visitor a fresh hourly limit")
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
