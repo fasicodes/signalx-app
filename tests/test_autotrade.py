@@ -312,6 +312,9 @@ check(r.status_code == 200 and r.get_json()["balance_usdt"] == 1000.0, "demo con
 FakeBinance.state["restrictions"] = {"enableWithdrawals": True, "ipRestrict": False}
 r = post("/api/autotrade/connect", {"account": "live", "api_key": "L" * 24, "api_secret": "S" * 24})
 check(r.status_code == 400 and "WITHDRAWALS" in r.get_json()["error"], "live key with withdrawals refused")
+FakeBinance.state["restrictions"] = None
+r = post("/api/autotrade/connect", {"account": "live", "api_key": "L" * 24, "api_secret": "S" * 24})
+check(r.status_code == 503 and "verify" in r.get_json()["error"].lower(), "live key refused when its permissions cannot be read (fail closed)")
 FakeBinance.state["restrictions"] = {"enableWithdrawals": False, "ipRestrict": False}
 r = post("/api/autotrade/connect", {"account": "live", "api_key": "LKEY" + "k" * 20 + "LIVE", "api_secret": "LIVESECRET" * 3})
 check(r.status_code == 200 and "IP" in (r.get_json()["note"] or ""), "live connect ok + IP tip")
@@ -538,5 +541,68 @@ c = Conn(); cu = c.cursor(); cu.execute("UPDATE autotrade_exchange_accounts SET 
 at._client_cache.clear()
 status("demo"); d2 = status("demo")
 check(FakeBinance.state["bal_fail_calls"] == 1 and d2["account"]["balance_error"], "failing balance refresh throttled")
+
+print("\n[13] entry order is never sent twice after a timeout")
+class _Flaky:
+    """Binance-like client: the order reaches the exchange, but the reply times out."""
+    def __init__(self, lose_reply_times, order_exists_after):
+        self.sent = []
+        self.lose = lose_reply_times
+        self.exists = order_exists_after
+    def market_order(self, symbol, side, amount, reduce_only=False, client_order_id=None):
+        self.sent.append(client_order_id)
+        if self.lose > 0:
+            self.lose -= 1
+            raise TimeoutError("request timed out")
+        return {"id": "1", "average": 100.0, "filled": amount}
+    def find_order(self, symbol, cid):
+        if self.exists and cid in self.sent:
+            return {"id": "1", "average": 100.0, "filled": 1.0}
+        return None
+import time as _t
+_sleep = _t.sleep
+at.time.sleep = lambda s: None
+c1 = _Flaky(1, True)
+o = at._place_entry(c1, "BTC/USDT", "buy", 1.0)
+check(len(c1.sent) == 1 and o["id"] == "1", "timeout but order exists -> found by its id, NOT sent again")
+c2 = _Flaky(1, False)
+o = at._place_entry(c2, "BTC/USDT", "buy", 1.0)
+check(len(c2.sent) == 2 and len(set(c2.sent)) == 1, "timeout and order missing -> sent again with the SAME id")
+class _Blind(_Flaky):
+    def find_order(self, symbol, cid):
+        raise TimeoutError("still down")
+c3 = _Blind(1, True)
+try:
+    at._place_entry(c3, "BTC/USDT", "buy", 1.0); got = None
+except at.TradeError as e:
+    got = str(e)
+check(got and "Nothing was sent again" in got and len(c3.sent) == 1, "outcome unknown -> stop, no second order, clear message")
+at.time.sleep = _sleep
+class _Plain:
+    def __init__(self): self.n = 0
+    def market_order(self, symbol, side, amount, reduce_only=False):
+        self.n += 1
+        raise TimeoutError("request timed out")
+c4 = _Plain()
+try:
+    at._place_entry(c4, "EUR/USD", "buy", 1000); ok = False
+except TimeoutError:
+    ok = True
+check(ok and c4.n == 1, "non-Binance client: entry order sent exactly once")
+
+print("\n[14] only the bot's own stop is cancelled")
+class _Ex:
+    def __init__(self): self.cancelled = []
+    def cancel_order(self, oid, sym, params=None):
+        self.cancelled.append((oid, sym, params))
+    def cancel_all_orders(self, sym):
+        raise AssertionError("cancel_all_orders must not be used by the bot")
+bc = at.BinanceClient.__new__(at.BinanceClient)
+bc.market_type = "futures"; bc.ex = _Ex()
+at._cancel_backup(bc, {"symbol": "BTC/USDT", "backup_stop_id": "777"})
+check(bc.ex.cancelled == [("777", "BTC/USDT:USDT", {})], "backup stop cancelled by its own order id")
+bc.ex = _Ex()
+at._cancel_backup(bc, {"symbol": "BTC/USDT", "backup_stop_id": None})
+check(bc.ex.cancelled == [], "no stop id -> nothing cancelled (the user's own orders stay)")
 
 print(f"\nALL {passed} CHECKS PASSED")
