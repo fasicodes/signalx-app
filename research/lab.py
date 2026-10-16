@@ -58,6 +58,13 @@ CFG = {
     "crypto_1h": dict(market="crypto", tf="1h", data_start="2020-03-01", dev=("2023-01-01", "2025-10-01"),
                       hold=("2025-10-01", "2026-10-11"), sub=2, geoms={"s2": (2.0, 48), "s3": (3.0, 48)},
                       session=True, volume=True, anchor="BTC/USDT", max_per_bar=4, cooldown=2),
+    # same as crypto_1h / crypto_4h plus order-flow inputs (taker buy volume, trade counts)
+    "crypto_1hf": dict(market="crypto", tf="1h", data_start="2020-03-01", dev=("2023-01-01", "2025-10-01"),
+                       hold=("2025-10-01", "2026-10-11"), sub=2, geoms={"s2": (2.0, 48)}, flow=True,
+                       session=True, volume=True, anchor="BTC/USDT", max_per_bar=4, cooldown=2),
+    "crypto_4hf": dict(market="crypto", tf="4h", data_start="2020-03-01", dev=("2023-01-01", "2025-10-01"),
+                       hold=("2025-10-01", "2026-10-11"), sub=1, geoms={"s2": (2.0, 54)}, flow=True,
+                       session=False, volume=True, anchor="BTC/USDT", max_per_bar=5, cooldown=1),
     "crypto_4h": dict(market="crypto", tf="4h", data_start="2020-03-01", dev=("2023-01-01", "2025-10-01"),
                       hold=("2025-10-01", "2026-10-11"), sub=1, geoms={"s2": (2.0, 54)},
                       session=False, volume=True, anchor="BTC/USDT", max_per_bar=5, cooldown=1),
@@ -88,10 +95,10 @@ def crypto_symbols():
     return sorted(os.path.basename(p).split("_")[0] + "/USDT" for p in glob.glob(f"{R}/data/crypto/*_15m.csv.gz"))
 
 
-def load_crypto(sym, start):
+def load_crypto(sym, start, flow=False):
     coin = sym.split("/")[0]
-    d = pd.read_csv(f"{R}/data/crypto/{coin}_15m.csv.gz", usecols=["timestamp", "open", "high", "low", "close", "volume"],
-                    parse_dates=["timestamp"])
+    cols = ["timestamp", "open", "high", "low", "close", "volume"] + (FE.FLOW_RAW if flow else [])
+    d = pd.read_csv(f"{R}/data/crypto/{coin}_15m.csv.gz", usecols=cols, parse_dates=["timestamp"])
     return d[d["timestamp"] >= pd.Timestamp(start) - pd.Timedelta(days=200)].reset_index(drop=True)
 
 
@@ -140,6 +147,8 @@ def feature_list(c):
     cols += ["r42", "r180"] + [f"z{k}" for k in FE.ZK]
     if c["session"]:
         cols += ["s_hsin", "s_hcos", "s_dow", "s_london", "s_ny"]
+    if c.get("flow"):
+        cols += FE.FLOW_COLS
     if c["market"] == "crypto":
         cols += ["b_r6", "b_r24", "b_d_sma50", "b_rsi14", "b_slope50", "b_atr_rank", "bh_d_sma50", "bh_slope50",
                  "bh_rsi14", "bh_r6"]
@@ -232,13 +241,13 @@ def build(stream):
     anchor = None
     keep_cols = ["timestamp", "close", "d_sma200", "h_d_sma50"] + FE._ZC
     for sym in syms:                        # pass 1: per-symbol features (kept on disk, small part in memory)
-        raw = load_crypto(sym, c["data_start"]) if c["market"] == "crypto" else load_fx(sym, c["data_start"])
+        raw = load_crypto(sym, c["data_start"], flow=c.get("flow")) if c["market"] == "crypto" else load_fx(sym, c["data_start"])
         b = base_bars(raw, c["tf"])
         del raw
         if len(b) < 600:
             log("skip", sym, len(b))
             continue
-        F = FE.symbol_features(b, c["tf"], session=c["session"], volume=c["volume"])
+        F = FE.symbol_features(b, c["tf"], session=c["session"], volume=c["volume"], flow=c.get("flow", False))
         F = F[F["timestamp"] >= pd.Timestamp(c["data_start"]) - pd.Timedelta(days=60)].reset_index(drop=True)
         for col in F.columns:
             if F[col].dtype == np.float64 and col not in ("open", "high", "low", "close", "atr"):
@@ -666,7 +675,11 @@ def evaluate_mtf(stream, g, htf_stream, htf_g, write=True):
     pv, yv = np.concatenate(vals), np.concatenate(labs)
     cal = calibration(pv, yv)
     okv = np.isfinite(pv)
-    hv = np.concatenate([np.concatenate([H[s][0], H[s][1]]) for s in H])
+    parts = []                  # gate levels come from the validation years only (no holdout scores)
+    for s in H:
+        mv = (D[s]["ts"] >= np.datetime64(ds)) & (D[s]["ts"] < np.datetime64(de)) & D[s]["elig"]
+        parts += [H[s][0][mv], H[s][1][mv]]
+    hv = np.concatenate(parts)
     hv = hv[np.isfinite(hv)]
     levels = {"lean": 0.0, "h50": float(np.quantile(hv, 0.5)), "h70": float(np.quantile(hv, 0.7)),
               "h85": float(np.quantile(hv, 0.85))}
@@ -917,7 +930,14 @@ def pick(stream):
         reason = (f"The model picked on the validation years ({chosen['label']}) reached {h.get('win_rate')}% wins and "
                   f"{(h.get('avg_net_r') or 0):+}R on average on data it never saw ({h.get('period')}), so it is not used.")
     elif rows:
-        reason = "No model version reached the target on the validation years, so none was tried on the unseen data."
+        seen = [x for x in rows if x["holdout"]]
+        if seen:
+            h = seen[0]["holdout"]
+            reason = (f"No model version passed the validation rule. An earlier, looser version ({seen[0]['label']}) was tested on "
+                      f"data it never saw ({h.get('period')}) and reached {h.get('win_rate')}% wins and "
+                      f"{(h.get('avg_net_r') or 0):+}R on average, so it is not used.")
+        else:
+            reason = "No model version reached the target on the validation years, so none was tried on the unseen data."
     else:
         reason = "Not tested yet."
     return {"live": live, "chosen": chosen["variant"] if chosen else None, "reason": reason, "variants": rows}
