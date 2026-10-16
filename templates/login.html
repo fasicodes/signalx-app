@@ -373,6 +373,9 @@ let verifyToken = '';
   } else if (params.get('error') === 'google_no_email') {
     msg.textContent = 'Could not get your email from Google.';
     msg.classList.add('error');
+  } else if (params.get('error') === 'google_failed') {
+    msg.textContent = 'Google sign-in was cancelled or did not finish. Please try again.';
+    msg.classList.add('error');
   }
 })();
 
