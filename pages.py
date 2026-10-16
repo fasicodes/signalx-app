@@ -13,7 +13,6 @@ Public pages (logged-in users see them inside the app menu, visitors with the pu
 import hashlib
 import os
 import re
-import threading
 from datetime import datetime
 
 from flask import Blueprint, jsonify, render_template, request, session
@@ -37,7 +36,7 @@ _hooks = {"send_email": None}
 
 # Every feature, as shown on the pricing page. Edit here when plans change.
 PLAN_FEATURES = [
-    ("Signals on 30 coins", "Long or Short with entry, stop loss and target, every 4 hours"),
+    ("Signals on 62 coins", "Long or Short with entry, stop loss and target, every 4 hours"),
     ("Live signals board", "Every coin at a glance, active signals with live progress"),
     ("Signal alerts", "In the app, by email and by Telegram"),
     ("Pro terminal", "Advanced chart, liquidity scanner and 27-channel analysis"),
@@ -113,14 +112,21 @@ FAQ = [
          "(73.9% reached TP1), +0.105R average per signal after fees</b>, profit factor 1.40, a worst drawdown of &minus;23.9R, "
          "and 3 of the 12 full months lost money. Coins the model trained on did better (+0.15R) than new ones (+0.08R). A "
          "walk-forward test on January 2023 to October 2026 (21 coins, re-trained every 6 months, tested on the next 6) gave 2,495 "
-         "signals, 72.7% won, +0.10R average, and every year was above zero. Past results do not guarantee future results.</p>"),
+         "signals, 72.7% won, +0.10R average, and every year was above zero. Past results do not guarantee future results.</p>"
+         "<p>Read the win rate with care: TP1 is a small target (half the stop distance), so about 65% of all trades of this kind "
+         "reach it even without any model. The model adds roughly 8 to 9 points on top of that, and the average result after fees "
+         "(+0.10R per signal) is the better measure of what it earns.</p>"
+         "<p>Strong and standard signals are not equal. In the 12-month test the strong ones (399 signals) won 77.2% with "
+         "+0.158R on average; the standard ones (336 signals, given when no coin has had a signal for 24 hours) won 69.3% with only "
+         "+0.042R, close to break-even after fees. Treat a standard signal as lower conviction: use a smaller size or skip it.</p>"),
         ("If about 3 in 4 signals win, why is the profit per signal modest?",
          "<p>Because many wins are small. A signal that reaches TP1 and then comes back to the entry makes about +0.17R, while a "
          "full loss is &minus;1R. The profit comes from the signals that go on to TP2 (+0.67R) and TP3 (+1.17R). In the test the "
          "average win was +0.50R and the average loss &minus;1.0R.</p>"),
         ("How much should I risk on each signal?",
-         "<p>Keep it small and the same every time; that amount is 1R. Losing streaks happen: in testing the worst drop was about "
-         "24R, which is about 24% of an account at 1% per signal. There are often four or more signals open at once, so 0.5% per "
+         "<p>Keep it small and the same every time; that amount is 1R. Losing streaks happen: the worst drop was 23.9R in the "
+         "12-month test and 41.5R in the longer walk-forward test. At 1% per signal, 41.5R is about 41% of an account (simple sum, "
+         "before compounding), so plan for a drop at least that deep. There are often four or more signals open at once, so 0.5% per "
          "signal (or a limit on open trades) is a sensible start. Only trade money you can afford to lose. The <a href=\"/tools\">position size "
          "calculator</a> works out the size for you.</p>"),
         ("Where can I see the live results?",
