@@ -1,78 +1,38 @@
 """
-Trading Signal Backend + Frontend - v7
----------------------------------------------------
-IMPORTANT: FINAL VERDICT + CONFIDENCE ka logic v4 jaisa hi hai
-(sirf Hawkes Process + Bayesian Classifier, Conformal Prediction ke
-zariye combine hote hain). Neeche wale 9 NAYE concepts verdict ko
-BILKUL touch nahi karte - ye sirf extra "display panels" hain, jaisa
-v4 mein OFI/VPIN/HMM/Jump/Meta add hue thay.
-
-v7 mein sirf ye add hua hai:
-  - /candles endpoint -> naye "LIVE CHART" tab (frontend) ke liye
-    OHLCV candle series return karta hai, taake ek live candlestick
-    chart bana ja sake. Verdict/confidence logic ko bilkul touch
-    nahi kiya gaya.
-
-PURANE 5 concepts (WAISAY HI, koi change nahi):
-  1. Hawkes Process        -> Buying/Selling Pressure (0-10)
-  2. Bayesian Classifier   -> Bullish% / Bearish%
-  3. Quantile Volatility   -> Expected move, SL/TP
-  4. Conformal Prediction  -> Confidence%, Trade/Skip (WAIT)   <-- VERDICT YAHAN SE BANTA HAI
-  5. Fractional Kelly      -> Suggested Risk%
-
-v4 ke 4 concepts (display-only, verdict ko touch nahi karte):
-  6. Order Flow Imbalance (OFI)
-  7. VPIN (Toxic Flow)
-  8. HMM Regime Detection
-  9. Jump Diffusion Detector
-  10. Meta-Labeling (ML filter)
-
-v6 ke 9 concepts (display-only, verdict ko touch nahi karte):
-  11. Cross-Asset Flow & Intermarket Divergence
-  12. Multi-Timeframe Permutation Entropy
-  13. Order Book Depth Profiling (L2 Slope)
-  14. Volume-Synchronized VWAP Deviation & Toxicity
-  15. RL-style Dynamic Risk Agent (simplified heuristic)
-  16. Adaptive Hurst Exponent
-  17. Wavelet Transform Noise Filtering
-  18. Structural Break Detection (CUSUM)
-  19. Liquidity Sweep / Stop-Cluster Detection
-
-Folder structure honi chahiye:
-  main.py
-  templates/design.html
-  static/style.css
-  static/script.js
-  Procfile
-  requirements.txt
-
-Chalane ka tareeqa (local):
-    pip install flask flask-cors pandas pandas-ta ccxt numpy hmmlearn scikit-learn PyWavelets --break-system-packages
-    python main.py
-
-URL: http://localhost:5000/
-
-IMPORTANT DISCLAIMER (sach mein padhein):
-Ye tamam concepts statistically "sound-looking" hain lekin koi bhi is code
-mein NO real backtesting / walk-forward validation nahi ho rahi. Isliye
-"accuracy %" ka koi guaranteed number nahi diya ja sakta. Neeche har naye
-function ke comment mein iski asli limitation likhi hui hai.
-
+Signals FM - main application (Flask)
 ---------------------------------------------------------------------------
-PATCH NOTE (is file mein): /liquidity route ko resilient bana diya gaya hai.
-Pehle is route ke andar kuch calculations (sweep detector, hawkes pressure,
-zones, spoofing, crash risk) bina try/except ke seedha call ho rahe thay -
-agar in mein se kisi ek mein bhi koi chhota runtime error aata (jaise
-order-book empty, ya edge-case data), to POORA route 400 (Bad Request)
-return kar deta tha, chahe baaqi sab data theek se mil raha hota.
-Ab har sub-calculation apne alag try/except mein hai (waisa hi jaisa
-generate_signal() mein already ho raha hai) - agar ek panel fail ho to
-sirf wo panel "N/A"/None dikhata hai, baaqi route normally kaam karta hai.
-Sirf candle-fetch fail hone par (invalid coin/timeframe) hi 400 aata hai,
-aur us waqt error message clear batata hai ke asal wajah kya thi.
+What decides a signal
+  The verdict (LONG / SHORT / WAIT), the confidence, the stop-loss and the
+  three targets come from the signal engine (signal_engine.py, v3.1): a model
+  trained on 2020-2025 candles and tested on data it never saw (see
+  signal_model.json for the test results, README.md for how to read them).
+
+What the "Pro terminal" adds (display only, none of it changes the verdict)
+  The analysis functions in this file: Hawkes pressure, Bayesian lean,
+  quantile volatility, conformal confidence, Kelly sizing, order-flow and
+  VPIN, HMM regime, jump detector, meta-label filter, cross-asset divergence,
+  permutation entropy, order-book depth, VWAP deviation, Hurst, wavelet
+  denoising, CUSUM breaks, liquidity sweeps and the other liquidity-scanner
+  panels. They describe the market; they were not backtested as a trading
+  system and must not be read as a win probability.
+
+Routes defined here
+  /signal, /api/engine, /candles, /liquidity, /ticker  -> members only,
+      rate limited, coin and timeframe checked against the site's lists
+  /coins                                               -> public list of names
+  plus the pages (landing, login, dashboard, terms, privacy, ...) and the
+  registration of every blueprint (auth, trades, watchlist, alerts, autotrade,
+  demo trading, signal hub, news, track record, assistant, ...).
+
+Run locally
+    pip install -r requirements.txt
+    python main.py            ->  http://localhost:5000/
+  Deployed with gunicorn (see Procfile) on Railway; settings come from
+  environment variables (.env.example lists them).
 ---------------------------------------------------------------------------
 """
 
+import math
 import os
 import time
 
@@ -152,7 +112,9 @@ app.secret_key = _secret_key
 # proxy environment mein implicit defaults kabhi kabhi sahi kaam nahi
 # karte, jisse "state not equal" jaisi CSRF mismatch error aati hai).
 app.config.update(
-    SESSION_COOKIE_SECURE=True,
+    # The browser only keeps a "Secure" cookie over https, so for local testing on http://localhost
+    # run with FLASK_DEBUG=1 (login then works there). On Railway it is always on.
+    SESSION_COOKIE_SECURE=os.environ.get("FLASK_DEBUG", "0") != "1",
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_HTTPONLY=True,
     # Session persistence fix: without this, Flask issues a browser-session
@@ -167,7 +129,9 @@ app.config.update(
 # doosri website aapke API/cookies tak access kar sakti thi (security risk).
 # Agar aap koi aur domain (misal custom domain) use karein, to
 # ALLOWED_ORIGIN environment variable set kar dein.
-_allowed_origin = os.environ.get("ALLOWED_ORIGIN", "https://signalx-app-production.up.railway.app")
+_rw_domain = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or "").strip()
+_allowed_origin = (os.environ.get("ALLOWED_ORIGIN") or os.environ.get("SITE_URL")
+                   or (f"https://{_rw_domain}" if _rw_domain else "https://signalx-app-production.up.railway.app")).rstrip("/")
 CORS(app, supports_credentials=True, origins=[_allowed_origin, "http://localhost:5000", "http://127.0.0.1:5000"])
 
 from auth import auth_bp
@@ -177,6 +141,32 @@ app.register_blueprint(auth_bp)
 # thori si limit lagate hain (per IP address).
 limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
 limiter.limit("10 per minute")(auth_bp)
+
+
+def _rate_key():
+    """Rate-limit key for the data endpoints: the logged-in member (so several people behind one office or
+    phone network do not share a limit), otherwise the visitor's address."""
+    uid = session.get("user_id")
+    return f"u{uid}" if uid else get_remote_address()
+
+
+# Nothing on this site uploads more than a 3 MB image (admin news), so bigger request bodies are refused.
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+
+
+@app.after_request
+def _security_headers(resp):
+    """Standard browser protections on every response. (No script-src rule on purpose: the pages use inline
+    scripts, which such a rule would break.)"""
+    h = resp.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "SAMEORIGIN")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    h.setdefault("Content-Security-Policy", "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'")
+    if request.is_secure:
+        h.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return resp
 
 from oauth import oauth_bp, init_oauth
 init_oauth(app)
@@ -417,7 +407,9 @@ def bayesian_bullish_bearish(df):
     data = df.copy()
     data["rsi_bucket"] = pd.cut(data["rsi"], bins=[0, 35, 65, 100], labels=["low", "mid", "high"])
     data["macd_state"] = np.where(data["macd"] > data["macd_signal"], "bullish", "bearish")
-    data["next_up"] = data["close"].shift(-1) > data["close"]
+    # The newest candle has no "next candle" yet: its outcome is unknown (NaN), not "down".
+    nxt = data["close"].shift(-1)
+    data["next_up"] = np.where(nxt.isna(), np.nan, (nxt > data["close"]).astype(float))
 
     current = data.iloc[-1]
     current_bucket = current["rsi_bucket"]
@@ -458,8 +450,8 @@ def quantile_volatility(df, current_price, direction):
     return {
         "expected_volatility_pct": round(float(typical_move) * 100, 2),
         "extreme_volatility_95_pct": round(float(extreme_move) * 100, 2),
-        "stop_loss": round(float(stop_loss), 2) if stop_loss else None,
-        "take_profit": round(float(take_profit), 2) if take_profit else None,
+        "stop_loss": signal_engine.price_round(float(stop_loss)) if stop_loss else None,
+        "take_profit": signal_engine.price_round(float(take_profit)) if take_profit else None,
     }
 
 
@@ -893,7 +885,8 @@ def meta_label_filter(df, execute_threshold=0.55):
     data = df.copy()
     data["macd_diff"] = data["macd"] - data["macd_signal"]
     data["future_return"] = data["close"].shift(-3) / data["close"] - 1
-    data["label"] = (data["future_return"] > 0).astype(int)
+    # The last 3 candles have no result yet (NaN): they must not be trained as "lost" trades.
+    data["label"] = np.where(data["future_return"].isna(), np.nan, (data["future_return"] > 0).astype(float))
     data = data.dropna(subset=["rsi", "macd_diff", "label"])
 
     if len(data) < 30:
@@ -901,7 +894,7 @@ def meta_label_filter(df, execute_threshold=0.55):
 
     feature_cols = ["rsi", "macd_diff"]
     X = data[feature_cols].values
-    y = data["label"].values
+    y = data["label"].astype(int).values
 
     current_row = df.dropna(subset=["rsi", "macd", "macd_signal"]).iloc[-1]
     current_features = np.array([[current_row["rsi"], current_row["macd"] - current_row["macd_signal"]]])
@@ -988,7 +981,7 @@ def _permutation_entropy(series, order=3, delay=1):
         return None
     probs = np.array([c / total for c in counts.values()])
     pe = -np.sum(probs * np.log2(probs))
-    max_entropy = np.log2(np.math.factorial(order))
+    max_entropy = np.log2(math.factorial(order))
     return pe / max_entropy if max_entropy > 0 else None
 
 
@@ -1135,12 +1128,15 @@ def hurst_exponent(df, lookback=100):
     if len(prices) < 30:
         return {"hurst": None, "memory": "INSUFFICIENT_DATA"}
 
-    log_returns = np.diff(np.log(prices))
-    lags = list(range(2, 20))
+    # Hurst from the spread of LOG PRICE changes over growing lags (a random walk gives H = 0.5).
+    # The root-mean-square change is used (not the standard deviation): on a short window the standard
+    # deviation reads too low at long lags and made every random walk look "mean reverting".
+    log_prices = np.log(prices)
+    lags = list(range(2, 12))
     tau = []
     for lag in lags:
-        diffs = log_returns[lag:] - log_returns[:-lag]
-        tau.append(np.sqrt(np.std(diffs)))
+        diffs = log_prices[lag:] - log_prices[:-lag]
+        tau.append(np.mean(diffs ** 2) ** 0.25)
 
     tau = np.array(tau)
     valid = tau > 0
@@ -1985,7 +1981,7 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
         "confidence_pct": confidence_pct,
         "suggested_risk_pct": suggested_risk_pct,
         "final_verdict": final_verdict,
-        "last_price": round(current_price, 2),
+        "last_price": signal_engine.price_round(float(current_price)),
         "rsi": round(float(latest["rsi"]), 2),
         "macd": round(float(latest["macd"]), 4),
 
@@ -2060,7 +2056,8 @@ def engine_signal(symbol):
     try:
         res = dict(get_signal_engine().signal(symbol))
     except Exception as e:
-        return {"error": f"Signal engine unavailable: {str(e)[:160]}"}
+        print(f"[engine] signal engine failed for {symbol}: {type(e).__name__}: {e}")
+        return {"error": "The signal engine is not available right now."}
     return _jsonable(res)
 
 
@@ -2153,10 +2150,43 @@ def privacy_page():
     return render_template("privacy.html")
 
 
+def _clean_coin(raw, default="BTC/USDT"):
+    """The symbol in upper case when it is one of the site's coins or forex pairs, otherwise None."""
+    coin = str(raw or default).strip().upper()
+    return coin if (coin in AVAILABLE_COINS or coin in FOREX_PAIRS) else None
+
+
+def _clean_timeframe(raw, default="1h"):
+    tf = str(raw or default).strip()
+    return tf if tf in TIMEFRAME_SECONDS else None
+
+
+def _members_only():
+    """These data endpoints each call the exchanges, so they are for logged-in members and rate limited:
+    anonymous scripts could otherwise use up the site's exchange quota."""
+    if "user_id" not in session:
+        return jsonify({"error": "Please log in."}), 401
+    return None
+
+
+def _data_error(where, e):
+    """Logs the real error on the server and gives the browser a short safe message (no internals)."""
+    import traceback
+    print(f"[{where}] {type(e).__name__}: {e}")
+    traceback.print_exc()
+    return jsonify({"error": "Data is not available right now. Please try again in a moment."}), 502
+
+
 @app.route("/signal", methods=["GET"])
+@limiter.limit("30 per minute", key_func=_rate_key)
 def signal_endpoint():
-    coin = request.args.get("coin", "BTC/USDT")
-    timeframe = request.args.get("timeframe", "1h")
+    bad = _members_only()
+    if bad:
+        return bad
+    coin = _clean_coin(request.args.get("coin"))
+    timeframe = _clean_timeframe(request.args.get("timeframe"))
+    if not coin or not timeframe:
+        return jsonify({"error": "Unknown coin or timeframe."}), 400
     orderbook = request.args.get("orderbook", "true").lower() != "false"
 
     # Forex pairs have no free order-book/funding/OI source (that's
@@ -2182,7 +2212,7 @@ def signal_endpoint():
             _SIGNAL_RESPONSE_CACHE.clear()
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return _data_error("signal", e)
 
 
 # /signal runs ~27 analysis channels (order book, HMM, ...). Many users and the
@@ -2205,21 +2235,25 @@ def _live_price_cached(symbol, ttl=10):
 
 
 @app.route("/api/engine", methods=["GET"])
+@limiter.limit("120 per minute", key_func=_rate_key)
 def engine_endpoint():
     """Light endpoint for the dashboard: the v3 engine's state for one symbol
     (active trade with live progress, or WAIT with lean/closeness), plus a
     plain-language market brief. Forex gets the brief and chart only."""
-    coin = (request.args.get("coin") or "BTC/USDT").upper()
-    if coin not in AVAILABLE_COINS and coin not in FOREX_PAIRS:
+    if "user_id" not in session:                      # signal levels are for members
+        return jsonify({"ok": False, "error": "Please log in."}), 401
+    coin = _clean_coin(request.args.get("coin"))
+    if not coin:
         return jsonify({"ok": False, "error": "Unknown coin or pair."}), 400
     price = _live_price_cached(coin)
-    other = _other_active(coin, price) if session.get("user_id") else []   # signal levels: members only
+    other = _other_active(coin, price)
     if _is_forex_pair(coin):
         try:
             brief = signal_engine.brief_for(get_signal_engine(), coin)
             err = None
         except Exception as e:
-            brief, err = None, f"Forex data is not available right now: {str(e)[:140]}"
+            print(f"[engine] forex brief failed for {coin}: {type(e).__name__}: {e}")
+            brief, err = None, "Forex data is not available right now."
         return jsonify(_jsonable({"ok": True, "coin": coin, "asset": "forex", "price": price, "brief": brief,
                                   "error": err, "engine": None, "other_active": other}))
     eng = engine_signal(coin)
@@ -2247,6 +2281,7 @@ def _other_active(coin, price=None):
 
 
 @app.route("/coins", methods=["GET"])
+@limiter.limit("60 per minute", key_func=_rate_key)
 def available_coins():
     # Grouped by asset type for the picker's Forex/Crypto tabs. Old shape
     # (a flat list) is still available at ?flat=true for any caller that
@@ -2268,7 +2303,11 @@ TICKER_SYMBOLS = [
 
 
 @app.route("/ticker", methods=["GET"])
+@limiter.limit("60 per minute", key_func=_rate_key)
 def ticker_strip():
+    bad = _members_only()
+    if bad:
+        return bad
     try:
         tickers = exchange.fetch_tickers(TICKER_SYMBOLS)
         out = []
@@ -2283,7 +2322,7 @@ def ticker_strip():
             })
         return jsonify(out)
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return _data_error("ticker", e)
 
 
 # ============================================================
@@ -2296,9 +2335,15 @@ def ticker_strip():
 # logic ko bilkul touch nahi karta.
 # ============================================================
 @app.route("/candles", methods=["GET"])
+@limiter.limit("240 per minute", key_func=_rate_key)
 def candles_endpoint():
-    coin = request.args.get("coin", "BTC/USDT")
-    timeframe = request.args.get("timeframe", "1h")
+    bad = _members_only()
+    if bad:
+        return bad
+    coin = _clean_coin(request.args.get("coin"))
+    timeframe = _clean_timeframe(request.args.get("timeframe"))
+    if not coin or not timeframe:
+        return jsonify({"error": "Unknown coin or timeframe."}), 400
     try:
         limit = int(request.args.get("limit", 200))
     except ValueError:
@@ -2360,7 +2405,7 @@ def candles_endpoint():
             "server_time": int(time.time()),
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return _data_error("candles", e)
 
 
 # ============================================================
@@ -2379,17 +2424,21 @@ def candles_endpoint():
 # error message mein saaf batayi jati hai.
 # ============================================================
 @app.route("/liquidity", methods=["GET"])
+@limiter.limit("30 per minute", key_func=_rate_key)
 def liquidity_endpoint():
-    coin = request.args.get("coin", "BTC/USDT")
-    timeframe = request.args.get("timeframe", "1h")
+    bad = _members_only()
+    if bad:
+        return bad
+    coin = _clean_coin(request.args.get("coin"))
+    timeframe = _clean_timeframe(request.args.get("timeframe"))
+    if not coin or not timeframe:
+        return jsonify({"error": "Unknown coin or timeframe."}), 400
 
     try:
         df = get_candles(symbol=coin, timeframe=timeframe, limit=120)
         float(df["close"].iloc[-1])
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"candle fetch failed: {e}"}), 400
+        return _data_error("liquidity", e)
 
     return jsonify(build_liquidity_payload(coin, timeframe, df=df))
 
