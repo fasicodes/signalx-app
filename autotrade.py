@@ -28,10 +28,15 @@ ENVIRONMENT VARIABLES
   AUTOTRADE_MONITOR_SEC     (optional) position check interval, default 10.
 
 LIMITATIONS
-  - The signal engine has no walk-forward backtest yet (see main.py
-    disclaimer). There is no guarantee of profit.
+  - Signals come from the site's signal engine (walk-forward tested, see
+    signal_model.json). A positive test result is not a guarantee of profit.
   - Run on the Demo account for a few weeks before going live.
   - Spot = LONG only. SHORT requires USDT-M futures.
+  - Spot stop-losses are watched by the bot (checked every few seconds), not
+    placed on Binance. If the server is down, a spot position has no stop.
+    Futures positions also get a backup stop on Binance.
+  - An entry order is never re-sent blindly after a timeout: the bot first
+    asks Binance whether the order exists (see _place_entry).
 """
 
 import json
@@ -911,10 +916,17 @@ class BinanceClient:
         return out
 
     # --- orders --------------------------------------------------------------
-    def market_order(self, symbol, side, amount, reduce_only=False):
+    def market_order(self, symbol, side, amount, reduce_only=False, client_order_id=None):
+        """Sends ONE market order. client_order_id (optional) tags the order so that, after a timeout, the caller
+        can ask Binance whether it was placed (see find_order) instead of blindly sending it a second time."""
         s = self.sym(symbol)
         params = {"reduceOnly": True} if (reduce_only and self.market_type == "futures") else {}
+        if client_order_id:
+            params["newClientOrderId"] = client_order_id
         o = self.ex.create_order(s, "market", side, amount, None, params)
+        return self._order_result(o, s)
+
+    def _order_result(self, o, s):
         avg = o.get("average") or o.get("price")
         filled = o.get("filled")
         if not avg or not filled:
@@ -926,10 +938,39 @@ class BinanceClient:
                 pass
         return {"id": str(o.get("id")), "average": _f(avg), "filled": _f(filled)}
 
+    def find_order(self, symbol, client_order_id):
+        """The order that was sent with this client_order_id, or None when Binance confirms there is no such
+        order (so it is safe to send it again). Any other error is raised: the outcome is then unknown."""
+        s = self.sym(symbol)
+        try:
+            o = self.ex.fetch_order(None, s, {"origClientOrderId": client_order_id})
+        except Exception as e:
+            text = f"{type(e).__name__} {e}".lower()
+            if (ccxt is not None and isinstance(e, getattr(ccxt, "OrderNotFound", ()))) \
+                    or "order does not exist" in text or "-2013" in text:
+                return None
+            raise
+        if (o.get("status") in ("canceled", "cancelled", "rejected", "expired")) and not _f(o.get("filled"), 0.0):
+            return None
+        return self._order_result(o, s)
+
     def backup_stop(self, symbol, close_side, amount, stop_price):
         o = self.ex.create_order(self.sym(symbol), "market", close_side, amount, None,
                                  {"stopLossPrice": stop_price, "reduceOnly": True})
         return str(o.get("id"))
+
+    def cancel_stop(self, symbol, order_id):
+        """Cancels only the bot's own safety stop. The account may hold the user's other orders on the same
+        symbol, so nothing else is touched."""
+        if not order_id:
+            return
+        s = self.sym(symbol)
+        for params in ({}, {"trigger": True}):   # newer Binance futures keeps stop orders in a separate service
+            try:
+                self.ex.cancel_order(order_id, s, params)
+                return
+            except Exception:
+                continue
 
     def order_average(self, order_id, symbol):
         try:
@@ -941,6 +982,8 @@ class BinanceClient:
         return None
 
     def cancel_all(self, symbol):
+        """Cancels every open order on the symbol. The bot does not use this any more (see cancel_stop); it is
+        kept for emergency tools only."""
         try:
             self.ex.cancel_all_orders(self.sym(symbol))
         except Exception:
@@ -1255,6 +1298,44 @@ def _retryable(e):
                                    "connection", "not reachable", "network"))
 
 
+def _place_entry(client, symbol, order_side, amount):
+    """Sends the entry market order so that it can never be placed twice.
+
+    A timeout does not tell us whether the exchange received the order. Re-sending blindly could open the
+    position twice with real money. So on Binance the order carries its own id; after a network problem we first
+    ask Binance whether that order exists and only send it again when Binance confirms it does not. If even that
+    question cannot be answered, we stop and tell the user to check the account instead of guessing.
+    Other clients (the site demo account, OANDA) send the order exactly once."""
+    if not hasattr(client, "find_order"):
+        return client.market_order(symbol, order_side, amount)
+    cid = "sfm" + os.urandom(14).hex()          # 31 characters: letters + digits only, as Binance requires
+    for k in range(3):
+        try:
+            return client.market_order(symbol, order_side, amount, client_order_id=cid)
+        except TradeError:
+            raise
+        except Exception as e:
+            if not _retryable(e) or k == 2:
+                raise
+            time.sleep(1.0 + k)                 # give a slow request time to finish before asking
+            try:
+                found = client.find_order(symbol, cid)
+            except Exception:
+                raise TradeError(
+                    f"The exchange did not confirm whether the {symbol} order was placed. Nothing was sent again. "
+                    f"Check your Binance account for an open {symbol} position before trying again.")
+            if found:
+                return found
+
+
+def _cancel_backup(client, pos):
+    """Removes the bot's own backup stop for this position. Never cancels the user's other orders."""
+    if hasattr(client, "cancel_stop"):
+        client.cancel_stop(pos["symbol"], pos.get("backup_stop_id"))
+    else:
+        client.cancel_all(pos["symbol"])         # site demo / OANDA clients: no-op or the bot's own orders
+
+
 def open_position(user_id, account, settings, symbol, side, signal=None, source="BOT", dry_run=False):
     """Opens a new position with a market order (with SL/TP).
     dry_run=True -> returns only the plan/size, places no order.
@@ -1353,7 +1434,9 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
     try:
         if market_type == "futures":
             _retry(client.prepare_futures, symbol, leverage)
-        order = _retry(client.market_order, symbol, "buy" if side == "LONG" else "sell", amount)
+        order = _place_entry(client, symbol, "buy" if side == "LONG" else "sell", amount)
+    except TradeError:
+        raise
     except Exception as e:
         raise TradeError(_error_text(e))
 
@@ -1518,7 +1601,7 @@ def close_position(pos, account, reason, price_hint=None, already_claimed=False)
             exit_price = order["average"] or price_hint or client.price(symbol)
             return _finalize(pos, exit_price, reason, client)
         if pos["market_type"] == "futures":
-            client.cancel_all(symbol)  # remove the backup stop
+            _cancel_backup(client, pos)  # remove the bot's own backup stop
             qty = client.futures_positions([symbol]).get(symbol, 0.0)
             if qty <= 0:
                 # Already closed on Binance (backup stop fired, or closed by hand)
@@ -1634,7 +1717,7 @@ def _replace_backup_stop(pos, client, stop, amount):
     dist = abs(float(pos["entry_price"]) - float(pos.get("initial_stop") or pos["stop_loss"]))
     level = stop - dist * BACKUP_STOP_EXTRA if side == "LONG" else stop + dist * BACKUP_STOP_EXTRA
     try:
-        client.cancel_all(symbol)
+        _cancel_backup(client, pos)
         sid = client.backup_stop(symbol, "sell" if side == "LONG" else "buy", amount, client.price_to_precision(symbol, level))
         with _Cursor() as cur:
             cur.execute("UPDATE autotrade_positions SET backup_stop_id=%s WHERE id=%s", (sid, pos["id"]))
@@ -1720,7 +1803,7 @@ def _check_position(pos, account, client, price, live_futures):
                 exit_price, why, pnl = _gone_exit(client, pos, price)
                 if why == "SL":
                     why = _stop_reason(pos)
-                client.cancel_all(pos["symbol"])
+                _cancel_backup(client, pos)
                 _finalize(pos, exit_price, why, client, pnl=pnl)
             except Exception:
                 _release(pos["id"])
@@ -2432,10 +2515,14 @@ def connect():
     note = None
     if mode == "live":
         restrictions = client.api_restrictions()
-        if restrictions and restrictions.get("enableWithdrawals"):
+        if not restrictions:
+            # Fail closed: if the key's permissions cannot be read, we cannot prove withdrawals are off.
+            return _err("Could not verify this API key's permissions with Binance, so it was not saved. "
+                        "Please try again in a minute.", 503)
+        if restrictions.get("enableWithdrawals"):
             return _err("This API key has WITHDRAWALS enabled. For safety, disable that permission on Binance "
                         "(keep only Reading + Spot/Futures Trading) and connect again.")
-        if restrictions and not restrictions.get("ipRestrict"):
+        if not restrictions.get("ipRestrict"):
             note = "Tip: restrict this API key to your server's IP address on Binance for extra safety."
 
     now = _utcnow()
