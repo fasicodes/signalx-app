@@ -438,24 +438,24 @@ def list_trade_history():
 
 @trades_bp.route("/api/trades/summary", methods=["GET"])
 def trade_performance_summary():
-    """Performance Summary — qualifying-outcome statistics.
+    """Performance Summary — every closed trade counts.
 
-    Only trades classified via `outcome_class` (see db.py migration +
+    Trades classified via `outcome_class` (see db.py migration +
     _evaluate_trade / close_trade above) count toward Total Profit/Loss
     and Win Rate:
-        TAKE_PROFIT, MANUAL_PROFIT  -> qualifying profit
-        STOP_LOSS                   -> qualifying loss
-        MANUAL_LOSS                 -> excluded from stats (still shown
-                                        normally in /api/trades/history)
+        TAKE_PROFIT, MANUAL_PROFIT  -> profit
+        STOP_LOSS, MANUAL_LOSS      -> loss
+    A trade the user closed by hand at a loss is a real loss. It used to be
+    left out, which made the win rate and the net result look better than
+    the account really was, and it did not match the Trade Journal.
     Trades closed before this feature existed and never backfilled
     (outcome_class IS NULL) are excluded rather than guessed at here.
 
     "User Mistake" widget: separately counts MANUAL_LOSS trades where
     `is_user_mistake` was set (no risk-warning condition was active when
     the user closed it - see condition_engine.RISK_WARNING_CONDITIONS and
-    close_trade() above). This is informational only and does NOT affect
-    win_rate / total_qualifying_trades, exactly like MANUAL_LOSS already
-    doesn't.
+    close_trade() above). These trades are already inside the loss and
+    win-rate numbers; the widget only points them out.
     """
     user_id = _require_login()
     if not user_id:
@@ -489,10 +489,9 @@ def trade_performance_summary():
             if oc in ("TAKE_PROFIT", "MANUAL_PROFIT"):
                 total_profit += max(pnl, 0.0)
                 winning_trades += 1
-            elif oc == "STOP_LOSS":
+            elif oc in ("STOP_LOSS", "MANUAL_LOSS"):
                 total_loss += abs(min(pnl, 0.0))
                 losing_trades += 1
-            # MANUAL_LOSS intentionally excluded from the Performance Summary
 
         total_qualifying = winning_trades + losing_trades
         net_pnl = total_profit - total_loss
