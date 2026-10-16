@@ -30,7 +30,7 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 
 ## Signal streams
 
-* `markets.py` - every symbol (62 crypto coins, 45 forex pairs), the forex signal list (7 majors, crosses, gold;
+* `markets.py` - every symbol (62 crypto coins, 44 forex pairs), the forex signal list (7 majors, crosses, gold;
   `FOREX_SIGNAL_PAIRS`), pip sizes, spreads, the forex week (DST-aware) and sessions.
 * `streams.py` - the six streams, the shared selection policy (one trade per symbol, cooldown, max signals per
   candle, forex sessions, weekend exit, news blackout) and the trade plan follower used by both the live site and the research.
@@ -74,6 +74,9 @@ for t in tests/test_*.py; do python "$t" || echo "FAILED: $t"; done
 ```
 
 The tests use a SQLite stand-in for MySQL (`tests/dbshim.py`) and fake brokers / APIs: no network needed.
+`tests/test_main_endpoints.py` loads the whole app (`main.py`), so it needs the packages from `requirements.txt`
+installed (`pip install -r requirements.txt`); it checks the login rule and the coin / timeframe checks on the data
+endpoints, the security headers and the analysis functions that once had bugs.
 
 ## Results: what is live and what is not (tested on data the models never saw)
 
