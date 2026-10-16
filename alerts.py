@@ -30,6 +30,7 @@ Routes:
     POST   /api/notifications/read-all
 """
 
+import re
 from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify, session
@@ -37,6 +38,10 @@ from flask import Blueprint, request, jsonify, session
 from db import get_db_connection
 
 alerts_bp = Blueprint("alerts", __name__)
+
+# Letters and digits on both sides of one slash (BTC/USDT, EUR/USD). Anything else is refused, so a symbol can
+# never carry markup into a page or an odd name into an exchange request.
+SYMBOL_RE = re.compile(r"^[A-Z0-9]{2,15}/[A-Z0-9]{2,10}$")
 
 COOLDOWN_MINUTES = 30
 
@@ -177,7 +182,7 @@ def create_alert():
     alert_type = (data.get("alert_type") or "").strip().upper()
     target_value = data.get("target_value")
 
-    if not symbol or "/" not in symbol:
+    if not SYMBOL_RE.match(symbol):
         return jsonify({"error": "A valid symbol (e.g. BTC/USDT) is required"}), 400
     if alert_type not in ALL_TYPES:
         return jsonify({"error": f"Unknown alert_type. Must be one of: {sorted(ALL_TYPES)}"}), 400
