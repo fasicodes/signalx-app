@@ -17,6 +17,7 @@ Routes:
     POST /api/reset-password         -> { "token": "...", "password": "..." }
 """
 
+import hashlib
 import html
 import os
 import re
@@ -27,7 +28,6 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify, session, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
-import pymysql
 
 from db import get_db_connection
 from mailer import send_email
@@ -36,6 +36,8 @@ auth_bp = Blueprint("auth", __name__)
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+MAX_EMAIL_LEN = 254             # the longest address the standard allows
+MAX_PASSWORD_LEN = 128          # a hard cap, so nobody can make the server hash a huge text
 VERIFY_TOKEN_HOURS = 24
 RESET_TOKEN_MINUTES = 30
 SESSION_CHECK_SEC = 60          # how long a "this login is still valid" answer is cached per user
@@ -144,20 +146,36 @@ def session_still_valid(user_id, sv):
     return int(sv or 0) >= current
 
 
+def _hash_token(token):
+    """Verification and reset tokens are stored as a SHA-256 hash (64 characters), never as the token itself, so
+    a copy of the database cannot be used to take over accounts. The email carries the real token."""
+    return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
+
+
+DEFAULT_SITE_URL = "https://signalx-app-production.up.railway.app"
+
+
 def _base_url():
-    """Public address for the links in emails: SITE_URL (or Railway's public domain) when set,
-    otherwise the address of the current request."""
+    """Public address for the links in emails: SITE_URL, then Railway's public domain, then ALLOWED_ORIGIN.
+    The address typed into the browser is trusted only on a developer's own computer: a visitor can send any
+    Host header, and a reset link built from it could point to someone else's website."""
     site = (os.environ.get("SITE_URL") or "").strip().rstrip("/")
     if re.fullmatch(r"https://[A-Za-z0-9.\-:]+", site):
         return site
     dom = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or "").strip().rstrip("/")
     if re.fullmatch(r"[A-Za-z0-9.\-]+", dom):
         return "https://" + dom
+    origin = (os.environ.get("ALLOWED_ORIGIN") or "").strip().rstrip("/")
+    if re.fullmatch(r"https://[A-Za-z0-9.\-:]+", origin):
+        return origin
     if not _warned_base:
         _warned_base.append(1)
-        print("[auth] WARNING: set SITE_URL (https://your-domain) in Railway Variables; "
-              "email links are using the request's address for now")
-    return request.host_url.rstrip("/")
+        print("[auth] WARNING: set SITE_URL (https://your-domain) in Railway Variables so email links "
+              "point to your site")
+    host = request.host.split(":")[0].lower()
+    if host in ("localhost", "127.0.0.1"):
+        return request.host_url.rstrip("/")
+    return DEFAULT_SITE_URL
 
 
 _warned_base = []
@@ -189,10 +207,12 @@ def register():
 
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
-    if not EMAIL_RE.match(email):
+    if not EMAIL_RE.match(email) or len(email) > MAX_EMAIL_LEN:
         return jsonify({"error": "Please enter a valid email address"}), 400
     if len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters"}), 400
+    if len(password) > MAX_PASSWORD_LEN:
+        return jsonify({"error": f"Password must be at most {MAX_PASSWORD_LEN} characters"}), 400
     if not re.search(r"[A-Za-z]", password) or not re.search(r"[0-9]", password):
         return jsonify({"error": "Password must contain both letters and numbers"}), 400
 
@@ -224,7 +244,7 @@ def register():
                 """INSERT INTO users
                    (email, password_hash, auth_provider, email_verified, verify_token, verify_token_expires)
                    VALUES (%s, %s, 'password', 0, %s, %s)""",
-                (email, password_hash, token, expires),
+                (email, password_hash, _hash_token(token), expires),
             )
         verify_link = f"{_base_url()}/api/verify-email?token={token}"
         send_email(
@@ -261,7 +281,7 @@ def verify_email():
         with conn.cursor() as cursor:
             cursor.execute(
                 "SELECT id, verify_token_expires FROM users WHERE verify_token = %s",
-                (token,),
+                (_hash_token(token),),
             )
             user = cursor.fetchone()
             if not user:
@@ -279,6 +299,9 @@ def login():
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
     verify_token = str(data.get("verify_token") or "")
+
+    if len(email) > MAX_EMAIL_LEN or len(password) > MAX_PASSWORD_LEN:
+        return jsonify({"error": "Incorrect email or password"}), 401
 
     conn = get_db_connection()
     try:
@@ -299,7 +322,7 @@ def login():
                 # password belong to the same person: only then is the email confirmed.
                 exp = user.get("verify_token_expires")
                 if (re.fullmatch(r"[A-Za-z0-9_\-]{20,100}", verify_token) and user.get("verify_token")
-                        and secrets.compare_digest(verify_token, str(user["verify_token"]))
+                        and secrets.compare_digest(_hash_token(verify_token), str(user["verify_token"]))
                         and not (exp and exp < datetime.utcnow())):
                     cursor.execute(
                         "UPDATE users SET email_verified = 1, verify_token = NULL, verify_token_expires = NULL WHERE id = %s",
@@ -343,7 +366,7 @@ def forgot_password():
         "message": "If an account with that email exists, we sent a reset link. Check your spam folder too."
     }), 200
 
-    if not email:
+    if not email or len(email) > MAX_EMAIL_LEN:
         return generic_response
 
     token = secrets.token_urlsafe(32)
@@ -362,7 +385,7 @@ def forgot_password():
 
             cursor.execute(
                 "UPDATE users SET reset_token = %s, reset_token_expires = %s WHERE id = %s",
-                (token, expires, user["id"]),
+                (_hash_token(token), expires, user["id"]),
             )
     finally:
         conn.close()
@@ -390,10 +413,12 @@ def reset_password():
     token = data.get("token") or ""
     password = data.get("password") or ""
 
-    if not token:
+    if not token or not isinstance(token, str) or len(token) > 200:
         return jsonify({"error": "Invalid or missing reset token"}), 400
     if len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters"}), 400
+    if len(password) > MAX_PASSWORD_LEN:
+        return jsonify({"error": f"Password must be at most {MAX_PASSWORD_LEN} characters"}), 400
     if not re.search(r"[A-Za-z]", password) or not re.search(r"[0-9]", password):
         return jsonify({"error": "Password must contain both letters and numbers"}), 400
 
@@ -402,7 +427,7 @@ def reset_password():
         with conn.cursor() as cursor:
             cursor.execute(
                 "SELECT id, reset_token_expires FROM users WHERE reset_token = %s",
-                (token,),
+                (_hash_token(token),),
             )
             user = cursor.fetchone()
             if not user:
