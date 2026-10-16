@@ -89,7 +89,10 @@ def _limit_key():
     uid = session.get("user_id")
     if uid:
         return f"u:{uid}", int(os.environ.get("ASSISTANT_PER_HOUR", "30") or 30)
-    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "?").split(",")[0].strip()
+    # main.py runs behind ProxyFix, so remote_addr is already the visitor's real address as seen by Railway's
+    # proxy. The X-Forwarded-For header must not be read here: its first entry is written by the visitor,
+    # who could change it on every request and so never reach the limit.
+    ip = request.remote_addr or "?"
     return f"ip:{ip}", int(os.environ.get("ASSISTANT_GUEST_PER_HOUR", "8") or 8)
 
 
