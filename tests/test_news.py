@@ -39,6 +39,11 @@ check("javascript:" not in h.split("&lt;")[0] and 'href="javascript' not in h, "
 check('onerror="x"' not in h and "alt=\"a&quot; onerror=&quot;x\"" in h, "image alt text cannot break out of the attribute")
 check('<h2>Rates</h2>' in h and '<strong>ECB</strong>' in h and 'rel="nofollow noopener"' in h, "headings, bold, outside links")
 check(safe_html.slugify("ECB holds rates: what's next?") == "ecb-holds-rates-what-s-next", "slugs")
+h2 = safe_html.markdown_to_html("[a](//evil.example/x) [b](/\\evil.example) [c](/pricing)")
+check('href="//evil' not in h2 and "evil.example" not in h2 and 'href="/pricing"' in h2, "protocol-relative links (//host) are not accepted")
+h3 = safe_html.markdown_to_html("[doc](https://example.com/_notes_/page) and _slanted_ text")
+check('href="https://example.com/_notes_/page"' in h3 and "<em>slanted</em>" in h3 and "<em>notes</em>" not in h3, "italic rules never change a link's address")
+check("<p>x 0 y</p>" in safe_html.markdown_to_html("x \x000\x00 y"), "stray internal marker characters cannot crash the renderer")
 check(safe_html.strip_tags("<p>Hi <b>there</b></p>") == "Hi there", "strip tags")
 
 # ---------------------------------------------------------------------------
