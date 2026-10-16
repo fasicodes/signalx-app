@@ -14,11 +14,17 @@ Routes:
     POST   /api/watchlist/reorder         -> { "symbols": ["BTC/USDT", ...] }
 """
 
+import re
+
 from flask import Blueprint, request, jsonify, session
 
 from db import get_db_connection
 
 watchlist_bp = Blueprint("watchlist", __name__)
+
+# Letters and digits on both sides of one slash (BTC/USDT, EUR/USD). Anything else is refused, so a symbol can
+# never carry markup into a page or an odd name into an exchange request.
+SYMBOL_RE = re.compile(r"^[A-Z0-9]{2,15}/[A-Z0-9]{2,10}$")
 
 
 def _require_login():
@@ -105,7 +111,7 @@ def add_to_watchlist():
 
     data = request.get_json(silent=True) or {}
     symbol = (data.get("symbol") or "").strip().upper()
-    if not symbol or "/" not in symbol:
+    if not SYMBOL_RE.match(symbol):
         return jsonify({"error": "A valid symbol (e.g. BTC/USDT) is required"}), 400
 
     conn = get_db_connection()
