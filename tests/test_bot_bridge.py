@@ -82,12 +82,27 @@ class Broker:
     def futures_positions(self, syms):
         return {s: q for s, q in self.st["fut"].items() if s in syms and q > 0}
 
-    def market_order(self, s, side, amount, reduce_only=False):
+    def find_order(self, s, cid):
+        """Like BinanceClient.find_order: the order sent with this id, or None when the exchange has no such order."""
+        for k, o in enumerate(self.st["orders"]):
+            if self.st.setdefault("cids", {}).get(k) == cid:
+                return {"id": f"o{k + 1}", "average": self.st["prices"][s], "filled": o[2]}
+        return None
+
+    def market_order(self, s, side, amount, reduce_only=False, client_order_id=None):
         if self.st.get("fail_next", 0) > 0:
             self.st["fail_next"] -= 1
             raise RuntimeError("Connection reset by peer (network)")
+        lose_reply = self.st.get("lose_reply", 0) > 0
         px = self.st["prices"][s]
+        self.st.setdefault("cids", {})[len(self.st["orders"])] = client_order_id
         self.st["orders"].append((s, side, amount, reduce_only))
+        if lose_reply:      # the order reached the exchange, but the answer never came back
+            self.st["lose_reply"] -= 1
+            self.st["base"][s] = self.st["base"].get(s, 0) + (amount if side == "buy" else -amount) if self.market_type == "spot" else 0
+            if self.market_type != "spot":
+                self.st["fut"][s] = self.st["fut"].get(s, 0) + amount
+            raise RuntimeError("Read timed out (network)")
         if self.market_type == "spot":
             self.st["base"][s] = self.st["base"].get(s, 0) + (amount if side == "buy" else -amount)
         elif reduce_only:
@@ -301,6 +316,18 @@ n1 = add_signal("ETH/USDT", "LONG", "15m", 3000.0, 2985.0)
 at.bridge_step(NOW)
 check(q("SELECT status FROM autotrade_signal_orders WHERE signal_id=%s", (n1,))[0]["status"] == "placed"
       and len(Broker.state["orders"]) == 1, "two network errors, third try fills (one order, no duplicate)")
+
+# a reply lost AFTER the exchange accepted the order must not produce a second order
+reset_broker()
+q("DELETE FROM autotrade_positions")
+q("DELETE FROM autotrade_signal_orders")
+q("DELETE FROM signal_events")
+Broker.state["lose_reply"] = 1
+at.time.sleep = lambda s: None
+n2 = add_signal("ETH/USDT", "LONG", "15m", 3000.0, 2985.0)
+at.bridge_step(NOW)
+check(q("SELECT status FROM autotrade_signal_orders WHERE signal_id=%s", (n2,))[0]["status"] == "placed"
+      and len(Broker.state["orders"]) == 1, "reply lost after the order was accepted: found by its id, still ONE order")
 Broker.state["fail_next"] = 5
 n2 = add_signal("SOL/USDT", "LONG", "15m", 150.0, 149.0)
 at.bridge_step(NOW)
