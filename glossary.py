@@ -34,10 +34,11 @@ GROUPS = [
          "that reached TP1 can no longer lose (apart from a price gap)."),
         ("tier", "Strong and standard signals",
          "Strong: the model's score is in its top 3%. Standard: when no coin has had a signal for 24 hours, the best coin gets "
-         "one if its score is at least average. Strong signals did better in testing; standard ones keep signals coming."),
+         "one if its score is at least average. Strong signals did better in testing (about +0.16R each); standard ones keep signals coming but earned much less "
+         "(about +0.04R, close to break-even after fees), so treat them as lower conviction."),
         ("win_chance", "Win chance",
          "The model's estimate of how often signals like this one reach target 1 before the stop. "
-         "In testing about 3 in 4 signals reached TP1; a full loss (-1R) is bigger than one TP1 (+0.5R), which is why TP2 and TP3 matter."),
+         "In testing about 3 in 4 signals reached TP1 (about 2 in 3 trades of this kind reach it even without a model); a full loss (-1R) is bigger than one TP1 (+0.5R), which is why TP2 and TP3 matter."),
         ("progress", "Progress",
          "Where the live price is between the current stop and the next target. 100% to a target means it is reached; "
          "100% to stop means the stop is hit."),
