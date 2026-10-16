@@ -32,8 +32,11 @@ Run locally
 ---------------------------------------------------------------------------
 """
 
+import gzip
+import hashlib
 import math
 import os
+import threading
 import time
 
 from flask import Flask, jsonify, request, render_template, redirect, url_for, session
@@ -167,6 +170,134 @@ def _security_headers(resp):
     if request.is_secure:
         h.setdefault("Strict-Transport-Security", "max-age=31536000")
     return resp
+
+# ---------------------------------------------------------------------------
+# Speed
+#   * gzip: a page or script is 100-175 KB of text; compressed it is about a quarter of that.
+#   * static files get a content hash in their URL (url_for adds ?v=...), so the browser can keep
+#     them for a year and a changed file is fetched again at once.
+#   * _shared(): everybody asking for the same exchange data / analysis within a few seconds
+#     gets one shared answer instead of each user (and each 3-5 second poll) calling the exchange.
+# ---------------------------------------------------------------------------
+from werkzeug.security import safe_join
+
+_GZIP_TYPES = ("text/html", "text/css", "text/plain", "text/xml", "application/json", "application/javascript",
+               "text/javascript", "application/xml", "application/manifest+json", "image/svg+xml")
+_GZIP_STATIC = {}       # (path, etag) -> compressed bytes (static files only, kept small)
+_STATIC_HASH = {}       # file name -> (modified time, short content hash)
+
+
+def _static_hash(filename):
+    """Short content hash of a file in /static (changes whenever the file changes)."""
+    path = safe_join(app.static_folder or "", filename or "")
+    if not path:
+        return None
+    try:
+        mtime = os.path.getmtime(path)
+        hit = _STATIC_HASH.get(filename)
+        if hit and hit[0] == mtime:
+            return hit[1]
+        with open(path, "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()[:10]
+    except OSError:
+        return None
+    _STATIC_HASH[filename] = (mtime, digest)
+    return digest
+
+
+@app.url_defaults
+def _version_static_urls(endpoint, values):
+    if endpoint == "static" and "v" not in values:
+        v = _static_hash(values.get("filename"))
+        if v:
+            values["v"] = v
+
+
+@app.after_request
+def _cache_static(resp):
+    """A static file requested with its current content hash never changes under that URL: keep it a year."""
+    if request.endpoint == "static" and resp.status_code in (200, 304):
+        v = request.args.get("v", "")
+        if v and v == _static_hash((request.view_args or {}).get("filename")):
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return resp
+
+
+@app.after_request
+def _gzip_response(resp):
+    """Compress text responses for browsers that accept gzip. Live streams (the assistant's answer),
+    images and partial downloads are left alone."""
+    try:
+        if (resp.status_code != 200 or resp.headers.get("Content-Encoding")
+                or "gzip" not in request.headers.get("Accept-Encoding", "").lower()):
+            return resp
+        if (resp.mimetype or "").lower() not in _GZIP_TYPES:
+            return resp
+        resp.headers.add("Vary", "Accept-Encoding")
+        is_static = request.endpoint == "static"
+        if resp.direct_passthrough:
+            if not is_static:
+                return resp
+            resp.direct_passthrough = False     # a static file: read it whole so it can be compressed
+        elif resp.is_streamed:
+            return resp
+        data = resp.get_data()
+        if len(data) < 600:
+            return resp
+        etag = resp.headers.get("ETag")
+        key = (request.path, etag) if (is_static and etag) else None
+        packed = _GZIP_STATIC.get(key) if key else None
+        if packed is None:
+            packed = gzip.compress(data, compresslevel=9 if key else 5, mtime=0)
+            if key:
+                if len(_GZIP_STATIC) > 60:
+                    _GZIP_STATIC.clear()
+                _GZIP_STATIC[key] = packed
+        resp.set_data(packed)
+        resp.headers["Content-Encoding"] = "gzip"
+        if etag and not etag.startswith("W/"):
+            resp.headers["ETag"] = "W/" + etag     # the compressed copy is not byte-identical to the file
+    except Exception as e:                          # never break a page because of compression
+        print(f"[gzip] skipped: {type(e).__name__}: {e}")
+    return resp
+
+
+_FLIGHTS = {}
+_FLIGHTS_GUARD = threading.Lock()
+_SHARED = {}
+
+
+def _flight_lock(key):
+    """One lock per piece of work: when 20 users ask for the same thing at the same moment, one of them does
+    the work and the other 19 wait for that answer instead of repeating it."""
+    with _FLIGHTS_GUARD:
+        if len(_FLIGHTS) > 400:
+            _FLIGHTS.clear()
+        return _FLIGHTS.setdefault(key, threading.Lock())
+
+
+def _shared(key, ttl, produce, stale_ok=0):
+    """produce()'s result, shared by all users for `ttl` seconds. If produce() fails and the previous result
+    is at most `stale_ok` seconds older than that, the previous result is returned instead of an error."""
+    hit = _SHARED.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    with _flight_lock(key):
+        hit = _SHARED.get(key)
+        if hit and time.time() - hit[0] < ttl:
+            return hit[1]
+        try:
+            value = produce()
+        except Exception:
+            if hit and time.time() - hit[0] < ttl + stale_ok:
+                return hit[1]
+            raise
+        _SHARED[key] = (time.time(), value)
+        if len(_SHARED) > 300:
+            for k, _v in sorted(_SHARED.items(), key=lambda kv: kv[1][0])[:100]:
+                _SHARED.pop(k, None)
+        return value
+
 
 from oauth import oauth_bp, init_oauth
 init_oauth(app)
@@ -2201,18 +2332,24 @@ def signal_endpoint():
     hit = _SIGNAL_RESPONSE_CACHE.get(key)
     if hit and time.time() - hit[0] < _SIGNAL_RESPONSE_TTL:
         return jsonify(hit[1])
-    try:
-        df = get_candles(symbol=coin, timeframe=timeframe)
-        result = generate_signal(df, symbol=coin, include_orderbook=orderbook)
-        result["coin"] = coin
-        result["timeframe"] = timeframe
-        _cache_signal_result(coin, result)
-        _SIGNAL_RESPONSE_CACHE[key] = (time.time(), result)
-        if len(_SIGNAL_RESPONSE_CACHE) > 300:
-            _SIGNAL_RESPONSE_CACHE.clear()
-        return jsonify(result)
-    except Exception as e:
-        return _data_error("signal", e)
+    # The analysis (HMM + forest fits) takes a while: when many users open the same coin at once, one of them
+    # runs it and the others wait for that result instead of each running it.
+    with _flight_lock(("signal",) + key):
+        hit = _SIGNAL_RESPONSE_CACHE.get(key)
+        if hit and time.time() - hit[0] < _SIGNAL_RESPONSE_TTL:
+            return jsonify(hit[1])
+        try:
+            df = get_candles(symbol=coin, timeframe=timeframe)
+            result = generate_signal(df, symbol=coin, include_orderbook=orderbook)
+            result["coin"] = coin
+            result["timeframe"] = timeframe
+            _cache_signal_result(coin, result)
+            _SIGNAL_RESPONSE_CACHE[key] = (time.time(), result)
+            if len(_SIGNAL_RESPONSE_CACHE) > 300:
+                _SIGNAL_RESPONSE_CACHE.clear()
+            return jsonify(result)
+        except Exception as e:
+            return _data_error("signal", e)
 
 
 # /signal runs ~27 analysis channels (order book, HMM, ...). Many users and the
@@ -2309,7 +2446,8 @@ def ticker_strip():
     if bad:
         return bad
     try:
-        tickers = exchange.fetch_tickers(TICKER_SYMBOLS)
+        # one exchange call every 5 seconds for ALL users (not one per user per poll)
+        tickers = _shared(("ticker",), 5, lambda: exchange.fetch_tickers(TICKER_SYMBOLS), stale_ok=60)
         out = []
         for sym in TICKER_SYMBOLS:
             t = tickers.get(sym)
@@ -2365,12 +2503,17 @@ def candles_endpoint():
             before_ts = None
 
     try:
+        # Shared by all users: the live chart polls this every 3-5 seconds, so without this every open chart
+        # would call the exchange that often. Polls (a few candles) share a 2 s copy, full loads a 10 s copy,
+        # older history (it never changes) a 2 minute copy.
         if before_ts is not None:
             from market_tools import candles_before
-            df = candles_before(get_candles, coin, timeframe, limit, before_ts,
-                                TIMEFRAME_SECONDS.get(timeframe, 3600))
+            df = _shared(("candles-before", coin, timeframe, limit, before_ts), 120,
+                         lambda: candles_before(get_candles, coin, timeframe, limit, before_ts,
+                                                TIMEFRAME_SECONDS.get(timeframe, 3600)), stale_ok=120)
         else:
-            df = get_candles(symbol=coin, timeframe=timeframe, limit=limit)
+            df = _shared(("candles", coin, timeframe, limit), 2 if limit <= 5 else 10,
+                         lambda: get_candles(symbol=coin, timeframe=timeframe, limit=limit), stale_ok=30)
 
         if df.empty:
             # no more history available further back — let the frontend
