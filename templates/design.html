@@ -273,17 +273,17 @@
       </div>
     </section>
 
-    <!-- PROMINENT ACCURACY SCORE -->
-    <section class="accuracy-score-card accuracy-score-card--hero" aria-label="Accuracy Score">
+    <!-- CONCEPT AGREEMENT (how many indicator concepts agree with the verdict; it is NOT a win rate) -->
+    <section class="accuracy-score-card accuracy-score-card--hero" aria-label="Concept agreement">
       <div class="accuracy-score-head">
         <div class="channel-id-group">
           <span class="scope-ticks"><span style="height:4px"></span><span style="height:8px"></span><span style="height:5px"></span><span style="height:11px"></span><span style="height:6px"></span></span>
           <div>
             <div class="channel-id">CH.01–27</div>
-            <div class="channel-title">Accuracy Score</div>
+            <div class="channel-title">Concept Agreement</div>
           </div>
         </div>
-        <span class="channel-model">MODEL AGREEMENT</span>
+        <span class="channel-model">NOT A WIN RATE</span>
       </div>
       <div class="accuracy-score-main">
         <div class="accuracy-gauge-row">
@@ -298,9 +298,10 @@
           <div class="accuracy-score-data">
             <div id="accuracy-score-pct" class="accuracy-score-pct">--%</div>
             <div id="accuracy-score-sub" class="accuracy-score-sub">waiting for a verdict</div>
+            <div class="accuracy-score-sub" style="font-size:10.5px; opacity:.8; margin-top:4px;">How many indicator concepts point the same way as the verdict. It is not the chance that a trade wins; tested results are on the <a href="/track-record">Track record</a> page.</div>
           </div>
         </div>
-        <div id="accuracy-history" class="accuracy-history" aria-label="Accuracy history"></div>
+        <div id="accuracy-history" class="accuracy-history" aria-label="Concept agreement history"></div>
       </div>
     </section>
 
@@ -943,7 +944,7 @@
 
           <!-- Performance Summary — see #perf-summary-list below for the
                metric cards; computed via GET /api/trades/summary
-               (qualifying trades only, per outcome_class). -->
+               (all closed trades, per outcome_class). -->
           <div id="perf-summary" class="perf-summary">
             <div class="perf-summary-headrow">
               <h3 class="perf-summary-title">Performance Summary</h3>
@@ -1768,8 +1769,8 @@
 
       const netUp = s.net_pnl >= 0;
       statementEl.innerHTML = s.total_qualifying_trades
-        ? `Overall, you are currently <span class="${netUp ? 'up' : 'down'}">${netUp ? 'in profit of ' + fmtMoney(s.net_pnl) : 'down ' + fmtMoney(Math.abs(s.net_pnl))}</span>, across ${s.total_qualifying_trades} qualifying trade${s.total_qualifying_trades === 1 ? '' : 's'}.`
-        : 'No qualifying trades yet — Performance Summary will update once trades close via Take Profit, Stop Loss, or a manual profitable exit.';
+        ? `Overall, you are currently <span class="${netUp ? 'up' : 'down'}">${netUp ? 'in profit of ' + fmtMoney(s.net_pnl) : 'down ' + fmtMoney(Math.abs(s.net_pnl))}</span>, across ${s.total_qualifying_trades} closed trade${s.total_qualifying_trades === 1 ? '' : 's'}.`
+        : 'No closed trades yet — Performance Summary will update once a trade closes.';
 
       gridEl.innerHTML = [
         perfMetricCardHtml('Total Profit', fmtMoney(s.total_profit), 'up'),
@@ -1778,9 +1779,9 @@
         perfMetricCardHtml('Win Rate', s.win_rate + '%', ''),
         perfMetricCardHtml('Winning Trades', s.winning_trades, 'up'),
         perfMetricCardHtml('Losing Trades', s.losing_trades, 'down'),
-        perfMetricCardHtml('Qualifying Trades', s.total_qualifying_trades, ''),
+        perfMetricCardHtml('Closed Trades', s.total_qualifying_trades, ''),
         perfMetricCardHtml('User Mistakes', s.user_mistake_trades, s.user_mistake_trades > 0 ? 'down' : '',
-          'Trades manually closed at a loss with no system risk-warning active at the time. Does not affect Win Rate.'),
+          'Trades you closed by hand at a loss while no risk warning was active. They are already counted in Losing Trades, Total Loss and Win Rate.'),
       ].join('');
     } catch (e) {
       statementEl.textContent = 'Could not connect to the server to summarize trade history.';
@@ -1804,7 +1805,7 @@
     try {
       const res = await fetch(`/api/trades/${id}`, { credentials: 'same-origin' });
       const t = await res.json();
-      if (!res.ok) { content.innerHTML = `<p style="color:var(--short);">${t.error || 'Could not load trade'}</p>`; return; }
+      if (!res.ok) { content.innerHTML = `<p style="color:var(--short);">${escapeHtml(t.error || 'Could not load trade')}</p>`; return; }
 
       let pnl = Number(t.estimated_pnl) || 0;
       if (Object.is(pnl, -0)) pnl = 0;
@@ -1820,7 +1821,7 @@
           <span class="msg-icon">${TONE_ICON[tone]}</span>
           <span class="msg-body">
             <span class="msg-time">${new Date(e.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-            <span class="msg-text">${e.message}</span>
+            <span class="msg-text">${escapeHtml(e.message)}</span>
           </span>
         </div>`;
       }).join('');
@@ -1925,10 +1926,10 @@
     listEl.innerHTML = items.map(n => `
       <div class="notif-item" data-id="${n.id}" style="padding:10px; border-radius:6px; margin-bottom:4px; cursor:pointer; background:${n.is_read ? 'transparent' : 'color-mix(in srgb, var(--accent) 8%, transparent)'};">
         <div style="display:flex; justify-content:space-between; gap:8px;">
-          <span style="font-family:var(--mono); font-size:11px; font-weight:700; color:var(--text);">${n.title}</span>
+          <span style="font-family:var(--mono); font-size:11px; font-weight:700; color:var(--text);">${escapeHtml(n.title)}</span>
           <span style="font-family:var(--mono); font-size:9.5px; color:var(--text-faint); white-space:nowrap;">${timeAgo(n.created_at)}</span>
         </div>
-        <p style="margin:4px 0 0; font-size:11px; color:var(--text-dim); line-height:1.4;">${n.message}</p>
+        <p style="margin:4px 0 0; font-size:11px; color:var(--text-dim); line-height:1.4;">${escapeHtml(n.message)}</p>
       </div>
     `).join('');
     listEl.querySelectorAll('.notif-item').forEach(el => {
@@ -2020,18 +2021,18 @@
       const dirColor = dir === 'LONG' ? 'var(--long)' : dir === 'SHORT' ? 'var(--short)' : 'var(--text-faint)';
       const conf = typeof r.signal_confidence === 'number' ? r.signal_confidence + '% confidence' : 'no recent signal';
       return `
-      <div class="watchlist-row" data-symbol="${r.symbol}" style="display:flex; align-items:center; gap:10px; padding:11px 8px; border-bottom:1px solid var(--line); cursor:pointer;">
+      <div class="watchlist-row" data-symbol="${escapeHtml(r.symbol)}" style="display:flex; align-items:center; gap:10px; padding:11px 8px; border-bottom:1px solid var(--line); cursor:pointer;">
         ${icon ? `<img src="${icon}" alt="" style="width:22px;height:22px;border-radius:50%;" onerror="this.style.display='none'">` : ''}
         <div style="flex:1; min-width:0;">
-          <div style="font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--text);">${r.symbol}</div>
+          <div style="font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--text);">${escapeHtml(r.symbol)}</div>
           <div style="font-family:var(--mono); font-size:10px; color:${dirColor};">${dir || '—'} · ${conf}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-family:var(--mono); font-size:12px; color:var(--text);">${r.data_unavailable ? 'N/A' : '$' + fmtPrice(r.last_price)}</div>
           <div style="font-family:var(--mono); font-size:10.5px; color:${pctColor};">${pctText}</div>
         </div>
-        <button type="button" class="watchlist-fav-btn" data-symbol="${r.symbol}" title="Favorite" style="background:none;border:none;cursor:pointer;color:${r.is_favorite ? 'var(--accent)' : 'var(--text-faint)'};font-size:16px;padding:0 4px;">★</button>
-        <button type="button" class="watchlist-remove-btn" data-symbol="${r.symbol}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:14px;padding:0 4px;">✕</button>
+        <button type="button" class="watchlist-fav-btn" data-symbol="${escapeHtml(r.symbol)}" title="Favorite" style="background:none;border:none;cursor:pointer;color:${r.is_favorite ? 'var(--accent)' : 'var(--text-faint)'};font-size:16px;padding:0 4px;">★</button>
+        <button type="button" class="watchlist-remove-btn" data-symbol="${escapeHtml(r.symbol)}" title="Remove" style="background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:14px;padding:0 4px;">✕</button>
       </div>`;
     }).join('');
 
@@ -2152,7 +2153,7 @@
       <div class="alert-row" data-id="${a.id}" style="padding:11px 10px; border:1px solid var(--line); border-radius:7px; margin-bottom:8px; background:var(--panel-raised);">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
           <div>
-            <span style="font-family:var(--mono); font-size:12px; font-weight:700; color:var(--text);">${a.symbol}</span>
+            <span style="font-family:var(--mono); font-size:12px; font-weight:700; color:var(--text);">${escapeHtml(a.symbol)}</span>
             <span style="font-family:var(--mono); font-size:10.5px; color:var(--text-dim); margin-left:6px;">${a.alert_type.replace(/_/g, ' ')}${a.target_value != null ? ' · ' + a.target_value : ''}</span>
           </div>
           <span style="font-family:var(--mono); font-size:9.5px; font-weight:800; color:${statusColor(a.status)};">${a.status}</span>
@@ -2392,7 +2393,7 @@
     try {
       const res = await fetch('/api/trades/journal/stats', { credentials: 'same-origin' });
       const s = await res.json();
-      if (!res.ok) { statsEl.innerHTML = `<p style="color:var(--short); font-size:13px;">${s.error || 'Unable to load stats.'}</p>`; return; }
+      if (!res.ok) { statsEl.innerHTML = `<p style="color:var(--short); font-size:13px;">${escapeHtml(s.error || 'Unable to load stats.')}</p>`; return; }
       const netUp = s.net_pnl >= 0;
       statsEl.innerHTML = [
         perfMetricCardHtml('Total Trades', s.total_trades),
@@ -2472,7 +2473,7 @@
       const qs = buildQuery();
       const res = await fetch('/api/trades/journal' + (qs ? '?' + qs : ''), { credentials: 'same-origin' });
       const trades = await res.json();
-      if (!res.ok) { listEl.innerHTML = `<p style="color:var(--short); font-size:13px;">${trades.error || 'Unable to load trade journal.'}</p>`; return; }
+      if (!res.ok) { listEl.innerHTML = `<p style="color:var(--short); font-size:13px;">${escapeHtml(trades.error || 'Unable to load trade journal.')}</p>`; return; }
       if (!trades.length) { listEl.innerHTML = '<p style="color:var(--text-faint); font-size:13px;">No trades match these filters yet.</p>'; return; }
       listEl.innerHTML = trades.map(journalRowHtml).join('');
       listEl.querySelectorAll('.trade-card[data-id]').forEach(card => {
@@ -2489,7 +2490,7 @@
     try {
       const res = await fetch(`/api/trades/${id}`, { credentials: 'same-origin' });
       const t = await res.json();
-      if (!res.ok) { contentEl.innerHTML = `<p style="color:var(--short);">${t.error || 'Could not load trade'}</p>`; return; }
+      if (!res.ok) { contentEl.innerHTML = `<p style="color:var(--short);">${escapeHtml(t.error || 'Could not load trade')}</p>`; return; }
 
       let pnl = Number(t.estimated_pnl) || 0;
       if (Object.is(pnl, -0)) pnl = 0;
@@ -2540,7 +2541,7 @@
             <div class="timeline-msg neutral">
               <span class="msg-body">
                 <span class="msg-time">${fmtDateTime(e.timestamp)}</span>
-                <span class="msg-text">${e.message}</span>
+                <span class="msg-text">${escapeHtml(e.message)}</span>
               </span>
             </div>`).join('') || '<p style="color:var(--text-faint); font-size:12px;">No events yet.</p>'
         }</div>
@@ -2651,7 +2652,7 @@
     try {
       const res = await fetch(`/api/trades/pnl/overview?period=${periodSel.value}`, { credentials: 'same-origin' });
       const s = await res.json();
-      if (!res.ok) { overviewGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${s.error || 'Unable to load overview.'}</p>`; return; }
+      if (!res.ok) { overviewGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${escapeHtml(s.error || 'Unable to load overview.')}</p>`; return; }
       const totalUp = s.total_pnl >= 0;
       overviewGrid.innerHTML = [
         metricCard('Total P&amp;L', (totalUp ? '+' : '') + fmtMoney(s.total_pnl), totalUp ? 'up' : 'down'),
@@ -2679,7 +2680,7 @@
     try {
       const res = await fetch(`/api/trades/pnl/equity-curve?granularity=${granularitySel.value}&period=${periodSel.value}`, { credentials: 'same-origin' });
       const data = await res.json();
-      if (!res.ok) { equityWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${data.error || 'Unable to load equity curve.'}</p>`; return; }
+      if (!res.ok) { equityWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${escapeHtml(data.error || 'Unable to load equity curve.')}</p>`; return; }
       const points = data.points || [];
       if (!points.length) {
         equityWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">No closed trades yet — the equity curve will appear once trades close.</p>';
@@ -2720,7 +2721,7 @@
     try {
       const res = await fetch('/api/trades/pnl/drawdown', { credentials: 'same-origin' });
       const d = await res.json();
-      if (!res.ok) { drawdownGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${d.error || 'Unable to load drawdown.'}</p>`; return; }
+      if (!res.ok) { drawdownGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${escapeHtml(d.error || 'Unable to load drawdown.')}</p>`; return; }
       drawdownGrid.innerHTML = [
         metricCard('Max Drawdown', fmtMoney(-Math.abs(d.max_drawdown)), 'down'),
         metricCard('Current Drawdown', fmtMoney(-Math.abs(d.current_drawdown)), d.current_drawdown > 0 ? 'down' : ''),
@@ -2739,7 +2740,7 @@
     try {
       const res = await fetch('/api/trades/pnl/distribution', { credentials: 'same-origin' });
       const d = await res.json();
-      if (!res.ok) { distributionWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${d.error || 'Unable to load distribution.'}</p>`; return; }
+      if (!res.ok) { distributionWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${escapeHtml(d.error || 'Unable to load distribution.')}</p>`; return; }
       const total = d.winning + d.losing + d.breakeven;
       if (!total) { distributionWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">No closed trades yet.</p>'; return; }
       const rows = [
@@ -2769,7 +2770,7 @@
     try {
       const res = await fetch('/api/trades/pnl/by-direction', { credentials: 'same-origin' });
       const d = await res.json();
-      if (!res.ok) { directionGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${d.error || 'Unable to load.'}</p>`; return; }
+      if (!res.ok) { directionGrid.innerHTML = `<p style="color:var(--short); font-size:13px;">${escapeHtml(d.error || 'Unable to load.')}</p>`; return; }
       directionGrid.innerHTML = ['LONG', 'SHORT'].map(dir => {
         const s = d[dir] || { trades: 0, win_rate: 0, pnl: 0, avg_trade: 0 };
         const dirCls = dir === 'SHORT' ? 'short' : 'long';
@@ -2794,7 +2795,7 @@
     try {
       const res = await fetch('/api/trades/pnl/by-symbol', { credentials: 'same-origin' });
       const rows = await res.json();
-      if (!res.ok) { symbolTableWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${rows.error || 'Unable to load.'}</p>`; return; }
+      if (!res.ok) { symbolTableWrap.innerHTML = `<p style="color:var(--short); font-size:13px; margin:0;">${escapeHtml(rows.error || 'Unable to load.')}</p>`; return; }
       if (!rows.length) { symbolTableWrap.innerHTML = '<p style="color:var(--text-faint); font-size:13px; margin:0;">No closed trades yet.</p>'; return; }
       symbolTableWrap.innerHTML = `
         <div style="display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr 1fr 1fr; gap:6px; font-family:var(--mono); font-size:10.5px; color:var(--text-faint); padding:0 8px 6px; border-bottom:1px solid var(--line);">
@@ -2802,7 +2803,7 @@
         </div>
         ${rows.map(r => `
           <div style="display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr 1fr 1fr; gap:6px; font-family:var(--mono); font-size:11.5px; padding:8px; border-bottom:1px solid var(--line);">
-            <span style="color:var(--text);">${r.symbol}</span>
+            <span style="color:var(--text);">${escapeHtml(r.symbol)}</span>
             <span style="color:var(--text-dim);">${r.trades}</span>
             <span style="color:var(--text-dim);">${r.win_rate}%</span>
             <span style="color:${r.pnl >= 0 ? 'var(--long)' : 'var(--short)'};">${fmtMoney(r.pnl)}</span>
@@ -2822,7 +2823,7 @@
       const monthStr = `${year}-${String(month).padStart(2, '0')}`;
       const res = await fetch(`/api/trades/pnl/calendar?month=${monthStr}`, { credentials: 'same-origin' });
       const data = await res.json();
-      if (!res.ok) { calendarGrid.innerHTML = `<p style="color:var(--short); font-size:13px; grid-column:1/-1;">${data.error || 'Unable to load calendar.'}</p>`; return; }
+      if (!res.ok) { calendarGrid.innerHTML = `<p style="color:var(--short); font-size:13px; grid-column:1/-1;">${escapeHtml(data.error || 'Unable to load calendar.')}</p>`; return; }
 
       const byDate = {};
       (data.days || []).forEach(d => { byDate[d.date] = d; });
