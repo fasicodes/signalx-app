@@ -49,10 +49,60 @@ python lab.py mtf     crypto_1h s2 crypto_4h s2    # multi-timeframe version
 python lab.py export  crypto_1h s2                 # or export_mtf: writes models/crypto_1h.json
 python lab.py rules   crypto_1h                    # rules R1 baseline
 python lab.py summary all                          # models/research.json (what is live and why)
+python legacy_prompt.py parity 4h                  # the site's first engine (the 5-model prompt), vectorised == main.py
+python legacy_prompt.py run 4h                     # its backtest (1h too); nothing is fitted
+python prompt_lab.py pbuild 4h && python prompt_lab.py run 4h nb   # the prompt's ideas as a calibrated model
 ```
+
+`crypto_1hf` / `crypto_4hf` are the same models with order-flow inputs (taker buy volume, trade counts; `flow=True`).
 
 Geometries: `s2` = stop 2 ATR, `s3` = stop 3 ATR, `s15` = stop 1.5 ATR (targets always 0.5 / 1 / 2 R).
 
 ## Results
 
 See `models/research.json` (written by `lab.py summary`) and the final report in the main README.
+
+### Experiments after the first release (all with the protocol above; the holdout is never used to choose)
+
+**1. The "Professional AI Trading Prompt" (Hawkes / Bayesian / quantile volatility / conformal / Kelly)**
+is the site's first engine (`main.py`: `hawkes_pressure`, `bayesian_bullish_bearish`, `quantile_volatility`,
+`conformal_confidence`, `fractional_kelly`). `legacy_prompt.py` runs those exact functions on the last 200
+closed candles of every coin (a vectorised copy that gives the same verdict as `main.py` on 300 random
+windows, 0 differences). Nothing in it is fitted, so 2023-01-01 to 2026-10-11 is all out of sample.
+
+| 53 coins | next-candle direction right (trade verdicts) | candles the up-share was | own plan (stop = 95th pct move, target 1.5x): wins / average after costs | common plan (stop 2 ATR, 0.5/1/2 R): wins / average |
+|---|---|---|---|---|
+| 4h, 2023-01 to 2025-09 | 49.5 % | 49.2 % | 40.0 % / -0.033 R | 66.6 % / -0.018 R |
+| 4h, holdout | 50.8 % | 47.5 % | 41.3 % / -0.004 R | 68.1 % / +0.003 R |
+| 1h, 2023-01 to 2025-09 | 49.5 % | 48.6 % | 40.0 % / -0.073 R | 66.4 % / -0.055 R |
+| 1h, holdout | 51.4 % | 46.9 % | 39.8 % / -0.081 R | 67.6 % / -0.041 R |
+
+It says trade on about half of all candles (30 signals a day on 4h, 120 on 1h) and is right about as often as a
+coin flip. "Bullish 70 %+" was followed by an up candle 48 % of the time, so its Kelly sizing (which uses that
+percentage as the win probability) is not usable. In the common plan the win rate is the base rate of the plan
+(66 %), not skill.
+
+**2. The prompt's ideas rebuilt as a calibrated model** (`prompt_lab.py`: Hawkes-style buy / sell intensity from
+taker volume, naive Bayes or gradient boosting on those inputs plus trend / momentum / volatility, conformal
+confidence 70 %, volatility filter, Kelly from the validation results):
+naive Bayes with the prompt's rule (confidence >= 70 %): validation 71.4 % / +0.059 R, holdout **65.0 % / -0.056 R**;
+gradient boosting on the same inputs (v2 rule): validation 73.5 %, holdout **68.9 % / +0.015 R** (fails 70 %).
+Without the market-wide and higher-timeframe inputs the models do not hold on unseen data.
+
+**3. Order-flow inputs** (taker buy volume, trade counts, `features.flow_block`) do not help.
+4h: at the same number of signals the plain and the order-flow model are the same (validation at 1.9 / day:
+73.7 % vs 73.0 %; holdout at 1.8 / day: 81.0 % vs 79.0 %). 1h: validation 73.3 %, holdout 69.8 % / +0.021 R
+alone and 69.9 % / +0.035 R with the 4h gate, against 72.6 % / +0.083 R without order flow. They are not used,
+so the live engine does not need taker volume.
+
+**4. Crypto 4h research model vs engine v3.1.** The research pipeline gives a 4h model that also passes
+(validation 73.7 % at 1.9 signals / day; holdout 86.5 % at 0.7 / day, 81.0 % / +0.257 R at 1.8 / day when the
+threshold of the 98th/95th validation percentile is used); engine v3.1 (live) had 73.6 % / +0.105 R at 2.0 / day.
+Both hold above 70 %, so the 4h edge is real, but holdout signals come in bursts (the 649-signal order-flow
+variant fired on only 61 of 375 days, up to 30 in one day), so the holdout numbers are less certain than the
+signal counts suggest. The research 4h model is used as the gate of the 1h stream; engine v3.1 stays the 4h stream.
+
+**5. Crypto 1h with the 4h model agreeing** (the multi-timeframe variant; the gate level and the threshold come
+from the validation years only): validation 73.3 % / +0.073 R (9.1 / day; 74.4 %, 71.8 %, 72.8 % per year),
+holdout **72.6 % / +0.083 R, 1,691 signals (4.5 / day)** -> passes the live bar. The same model without the gate
+fails (holdout 68.1 % / -0.004 R).
