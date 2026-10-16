@@ -75,6 +75,34 @@ for t in tests/test_*.py; do python "$t" || echo "FAILED: $t"; done
 
 The tests use a SQLite stand-in for MySQL (`tests/dbshim.py`) and fake brokers / APIs: no network needed.
 
+## Results: what is live and what is not (tested on data the models never saw)
+
+Rule fixed before the results: a stream is switched on only if the model version picked on the validation years
+(2023-01 to 2025-09) also reaches **at least 70 % wins (TP1 or better), a positive average result after costs and
+at least 50 signals** on a later holdout (2025-10-01 to 2026-10-11, crypto; 2021-01 to 2022-03, forex).
+Crypto costs 0.12 % per round trip; the holdout was scored once per picked version.
+
+| Stream | On the site | Unseen-data result |
+|---|---|---|
+| Crypto 4h (engine v3.1) | **on** | 73.6 % wins, +0.105 R per signal, 735 signals (about 2 a day) |
+| Crypto 1h, with the 4h model agreeing | **on** | 72.6 % wins, +0.083 R per signal, 1,691 signals (about 4.5 a day) |
+| Crypto 1h alone | off | 68.1 %, -0.004 R |
+| Crypto 15m | off (not tested yet) | - |
+| Forex 15m / 1h / 4h and gold | off | no version reached the validation target, or lost money on unseen data (best: 1h, 70.8 % but -0.072 R) |
+
+Things the numbers say, plainly:
+
+* A "win" is TP1 (half of the stop distance) or better; about 66 % of all trades in the data reach TP1 whatever
+  the signal, so a high win rate alone is not skill. The measure that matters is the average result after
+  costs (R = the risk of one trade). The two live models add about 6-7 points of win rate and +0.08 to +0.1 R per signal.
+* More signals cost accuracy: the 1h model alone (13 signals a day) is close to the base rate and earns about
+  nothing on unseen data. With both live streams expect roughly 6-7 signals a day across all coins, not 2-3 per coin.
+* Crypto signals come in bursts: on busy days many coins fire together, so the unseen-data samples are smaller than
+  the signal counts suggest. Treat the averages as indications, not promises.
+* Not used because they did not help or did not hold: order-flow inputs, the Hawkes / Bayesian / conformal /
+  Kelly prompt (the site's first engine: 49.5-51 % right on the next candle), forex models (see `research/README.md`).
+* The numbers come from history; live results will differ. The Track record page keeps the live record.
+
 ## Research (how the stream models were trained and tested)
 
 The research scripts are not part of the web app. Data: Binance spot 1-minute candles (public CC repositories
