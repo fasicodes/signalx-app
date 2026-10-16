@@ -496,7 +496,7 @@ function renderHero(data) {
   tag.textContent = `${data.coin || ""} · ${state} · ${data.trend || "--"}`.toUpperCase();
 }
 
-/* ---------------------------- accuracy score (Ch.01-05 signaling-concept agreement) ---------------------------- */
+/* ---------------------------- concept agreement (Ch.01-05 signaling-concept agreement; NOT a win rate) ---------------------------- */
 // Verdict/confidence still come ONLY from the 5 core concepts (unchanged
 // backend logic) - this widget just reads concept_accuracy_pct (how many
 // of all 19 channels currently point the same way as that verdict) and
@@ -539,7 +539,7 @@ function renderAccuracyScore(data) {
     const color = accuracyColor(pct);
     pctEl.textContent = fmtPct(pct);
     pctEl.style.color = color;
-    subEl.textContent = `${data.concept_agree_count} of ${data.concept_total} concepts agree with ${verdict}`;
+    subEl.textContent = `${data.concept_agree_count} of ${data.concept_total} concepts agree with ${verdict}`;  // agreement between indicators, not a win rate
     fillEl.style.stroke = color;
     fillEl.style.strokeDasharray = ACCURACY_GAUGE_ARC;
     fillEl.style.strokeDashoffset = ACCURACY_GAUGE_ARC * (1 - ratio);
