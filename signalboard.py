@@ -187,6 +187,15 @@ def event_title(e):
     return f"New {e['side']} signal: {e['symbol']} ({e.get('timeframe') or '4h'})"
 
 
+def _untested(e):
+    """True when the signal comes from a stream that has not passed its test on unseen data."""
+    try:
+        import streams
+        return not streams.validated(f"{e.get('market') or 'crypto'}_{e.get('timeframe') or '4h'}")
+    except Exception:
+        return False
+
+
 def event_text(e):
     msg = f"Entry {_fmt(e['entry'], e['symbol'])} · stop {_fmt(e['stop_loss'], e['symbol'])} · {_targets_txt(e)}"
     if e.get("grade"):
@@ -196,6 +205,8 @@ def event_text(e):
     news = e.get("news")
     if isinstance(news, dict) and news.get("title"):
         msg += f" · high-impact news soon: {news['title']}"
+    if _untested(e):
+        msg += " · untested stream: its rules have not passed the test on unseen data, take extra care"
     return msg
 
 
