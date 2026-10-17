@@ -92,10 +92,12 @@ Crypto costs 0.12 % per round trip; the holdout was scored once per picked versi
 | Crypto 4h (engine v3.1) | **on** | 73.6 % wins, +0.105 R per signal, 735 signals (about 2 a day) |
 | Crypto 1h, with the 4h model agreeing | **on** | 72.6 % wins, +0.083 R per signal, 1,691 signals (about 4.5 a day) |
 | Crypto 1h alone | off | 68.1 %, -0.004 R |
-| Crypto 15m | on, **untested** (no model yet) | - |
-| Forex 15m / 1h / 4h and gold | on, **untested** (simple rules) | no version reached the validation target, or lost money on unseen data (best: 1h, 70.8 % but -0.072 R) |
+| Crypto 15m | on, **untested** (no model yet; simple rules R1) | rules replay 2023-2025: ~84 signals a day, 48.1 % reach TP1, **-0.139 R** per signal |
+| Forex 15m / 1h / 4h and gold | on, **untested** (simple rules R1) | no model version reached the validation target, or lost money on unseen data (best: 1h, 70.8 % but -0.072 R). Rules replay 2017-2020: 15m ~9 a day **-0.218 R**, 1h ~2.9 a day **-0.112 R**, 4h ~1 a day **-0.082 R** |
 
 Things the numbers say, plainly:
+
+* The simple rules (R1) that the untested streams run lose money on average in every validation year and every grade (see `models/research.json`, `rules_replay`; reproduce with `research/rules_replay.py`). Loosening them (lower score, weaker higher-timeframe filter) gives more signals but the same average loss, so more signals on every timeframe needs a trained model that passes the test, not looser rules.
 
 * A "win" is TP1 (half of the stop distance) or better; about 66 % of all trades in the data reach TP1 whatever
   the signal, so a high win rate alone is not skill. The measure that matters is the average result after
