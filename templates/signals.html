@@ -96,6 +96,7 @@
   .badge.A { color: #03140b; background: var(--accent); border-color: var(--accent); }
   .badge.B { color: var(--long); border-color: var(--long); }
   .badge.C { color: var(--text-dim); }
+  .badge.untested { color: var(--wait); border-color: var(--wait); }
   .st { font: 600 12px var(--body); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
   .st.ACTIVE { background: var(--wait-dim); color: var(--wait); }
   .st.TP1, .st.TP2, .st.TP3 { background: var(--long-dim); color: var(--long); }
@@ -320,7 +321,10 @@
         + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "");
     } else if (s.validated === false) {
       off.hidden = false;
-      off.innerHTML = "<b>Untested stream.</b> The site owner switched this stream on, but its rules have not passed the test on unseen data. Treat these signals with extra care.";
+      off.innerHTML = "<b>Untested stream.</b> These signals come from simple rules that have not passed the test on data they never saw. "
+        + (r && r.reason ? esc(r.reason) + " " : "")
+        + "Their real results are tracked below like every other signal. Live auto-trading accounts do not copy this stream; demo accounts do. Treat these signals with extra care."
+        + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "");
     } else off.hidden = true;
     const sel = $("f-symbol"), cur = sel.value;
     sel.innerHTML = '<option value="">All symbols</option>' + SYMBOLS[market].map((c) => `<option value="${esc(c)}">${coin(c)}</option>`).join("");
@@ -368,6 +372,7 @@
         <span class="since">${esc(s.timeframe)} · ${dayTime(s.signal_at)}</span></div>
       <div class="tags"><span class="st ${s.status}">${STATUS[s.status] || esc(s.status)}${s.status === "ACTIVE" && s.hits ? ` · TP${s.hits} reached` : ""}</span>
         <span class="badge ${esc(s.grade)}">Grade ${esc(s.grade)}</span>
+        ${s.tested === false ? '<span class="badge untested" title="This stream has not passed the test on unseen data">Untested</span>' : ""}
         ${s.setup ? `<span class="badge">${esc(SETUP[s.setup] || s.setup)}</span>` : ""}
         <span class="badge">R:R 1:${s.rr != null ? s.rr : "--"}</span></div>
       ${lv}
