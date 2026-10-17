@@ -5,8 +5,36 @@
   "crypto_15m": {
    "live": false,
    "chosen": null,
-   "reason": "Not tested yet.",
-   "variants": []
+   "reason": "No model has been trained for this stream yet, so it runs the site's simple rules (R1).",
+   "variants": [],
+   "rules_replay": {
+    "engine": "Rules R1 (the simple rules this stream runs now)",
+    "period": "2023-01-01 to 2025-10-01",
+    "symbols": "53 coins",
+    "signals_per_day": 83.63,
+    "win_rate": 48.1,
+    "avg_net_r": -0.139,
+    "profit_factor": 0.75,
+    "stop_rate": 47.5,
+    "years": {
+     "2023": {
+      "signals": 32077,
+      "win_rate": 46.9,
+      "avg_net_r": -0.188
+     },
+     "2024": {
+      "signals": 30953,
+      "win_rate": 49.3,
+      "avg_net_r": -0.094
+     },
+     "2025": {
+      "signals": 20932,
+      "win_rate": 48.2,
+      "avg_net_r": -0.13
+     }
+    },
+    "note": "Replayed on the validation years only (never on the unseen holdout). A win = TP1 (1 R) or better; results after costs. Loosening these rules (lower score, weaker higher-timeframe filter) gives more signals but the same average loss."
+   }
   },
   "crypto_1h": {
    "live": true,
@@ -158,7 +186,40 @@
      "chosen": false,
      "passed": false
     }
-   ]
+   ],
+   "rules_replay": {
+    "engine": "Rules R1 (the simple rules this stream runs now)",
+    "period": "2017-01-01 to 2021-01-01",
+    "symbols": "11 pairs and gold",
+    "signals_per_day": 9.3,
+    "win_rate": 44.2,
+    "avg_net_r": -0.218,
+    "profit_factor": 0.62,
+    "stop_rate": 47.2,
+    "years": {
+     "2017": {
+      "signals": 3457,
+      "win_rate": 44.0,
+      "avg_net_r": -0.234
+     },
+     "2018": {
+      "signals": 3487,
+      "win_rate": 44.4,
+      "avg_net_r": -0.199
+     },
+     "2019": {
+      "signals": 3402,
+      "win_rate": 42.6,
+      "avg_net_r": -0.274
+     },
+     "2020": {
+      "signals": 3240,
+      "win_rate": 46.0,
+      "avg_net_r": -0.163
+     }
+    },
+    "note": "Replayed on the validation years only (never on the unseen holdout). A win = TP1 (1 R) or better; results after costs. Loosening these rules (lower score, weaker higher-timeframe filter) gives more signals but the same average loss."
+   }
   },
   "forex_1h": {
    "live": false,
@@ -257,7 +318,40 @@
      "chosen": false,
      "passed": false
     }
-   ]
+   ],
+   "rules_replay": {
+    "engine": "Rules R1 (the simple rules this stream runs now)",
+    "period": "2017-01-01 to 2021-01-01",
+    "symbols": "11 pairs and gold",
+    "signals_per_day": 2.89,
+    "win_rate": 44.2,
+    "avg_net_r": -0.112,
+    "profit_factor": 0.79,
+    "stop_rate": 46.9,
+    "years": {
+     "2017": {
+      "signals": 1044,
+      "win_rate": 44.9,
+      "avg_net_r": -0.125
+     },
+     "2018": {
+      "signals": 1085,
+      "win_rate": 45.1,
+      "avg_net_r": -0.079
+     },
+     "2019": {
+      "signals": 1098,
+      "win_rate": 44.2,
+      "avg_net_r": -0.142
+     },
+     "2020": {
+      "signals": 995,
+      "win_rate": 42.7,
+      "avg_net_r": -0.102
+     }
+    },
+    "note": "Replayed on the validation years only (never on the unseen holdout). A win = TP1 (1 R) or better; results after costs. Loosening these rules (lower score, weaker higher-timeframe filter) gives more signals but the same average loss."
+   }
   },
   "forex_4h": {
    "live": false,
@@ -288,7 +382,40 @@
      "chosen": false,
      "passed": false
     }
-   ]
+   ],
+   "rules_replay": {
+    "engine": "Rules R1 (the simple rules this stream runs now)",
+    "period": "2017-01-01 to 2021-01-01",
+    "symbols": "11 pairs and gold",
+    "signals_per_day": 0.95,
+    "win_rate": 40.4,
+    "avg_net_r": -0.082,
+    "profit_factor": 0.83,
+    "stop_rate": 44.2,
+    "years": {
+     "2017": {
+      "signals": 316,
+      "win_rate": 40.2,
+      "avg_net_r": -0.073
+     },
+     "2018": {
+      "signals": 357,
+      "win_rate": 40.6,
+      "avg_net_r": -0.101
+     },
+     "2019": {
+      "signals": 335,
+      "win_rate": 42.1,
+      "avg_net_r": -0.086
+     },
+     "2020": {
+      "signals": 380,
+      "win_rate": 38.9,
+      "avg_net_r": -0.069
+     }
+    },
+    "note": "Replayed on the validation years only (never on the unseen holdout). A win = TP1 (1 R) or better; results after costs. Loosening these rules (lower score, weaker higher-timeframe filter) gives more signals but the same average loss."
+   }
   }
  }
 }
