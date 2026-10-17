@@ -251,25 +251,80 @@ again = hub.scan_stream("crypto_1h", NOW)
 fresh = [k for k, v in hub.engine("crypto_1h").board(NOW).items() if v.get("fresh")]
 check(len(evs) == len(fresh) and again == [], f"scanner stores each fresh signal once ({len(evs)} new)")
 os.environ.pop("SIGNAL_STREAMS")
+check(len(hub.enabled_streams()) == 6 and hub.enabled_streams() == hub.ALL_STREAMS,
+      "default: all six streams run (the ones that have not passed the test are marked untested)")
+os.environ["SIGNAL_STREAMS"] = "validated"
 check(hub.enabled_streams() == hub.validated_streams() and "crypto_4h" in hub.enabled_streams(),
-      "default: only the streams whose model passed its test on unseen data (crypto 4h always)")
-check(hub.validated_streams() == ["crypto_4h"], "no model file -> only crypto 4h is on by default")
-_real = os.path.join(os.path.dirname(HERE), "models", "crypto_1h.json")
-if os.path.exists(_real):
-    shutil.copy(_real, os.path.join(_MD, "crypto_1h.json"))
-    streams.reset_models()
-    _m = streams.load_model("crypto_1h")
-    check(_m is not None and _m.gate is not None and streams.validated("crypto_1h")
-          and "crypto_1h" in hub.validated_streams() and "forex_1h" not in hub.validated_streams(),
-          "shipped crypto 1h model (with its 4h gate) passed its unseen-data test -> on by default")
-    _eng = streams.StreamEngine("crypto", "1h", streams.CandleStore(fake_candles, sleep=0),
-                                ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"])
-    _b = _eng.board(NOW)
-    check(streams.engine_name("crypto_1h") == "model" and not _eng.errors
-          and all("verdict" in v and v["engine_version"].startswith("v4") for v in _b.values()),
-          "crypto 1h model + 4h gate run end to end on candles (no errors)")
-    os.remove(os.path.join(_MD, "crypto_1h.json"))
-    streams.reset_models()
+      "SIGNAL_STREAMS=validated: only the streams whose model passed its test on unseen data (crypto 4h always)")
+check(hub.validated_streams() == ["crypto_4h"], "no model file -> only crypto 4h counts as tested")
+os.environ["SIGNAL_STREAMS"] = "bogus"
+check(len(hub.enabled_streams()) == 6, "SIGNAL_STREAMS with only unknown names falls back to all six")
+os.environ.pop("SIGNAL_STREAMS")
+check(hub.stream_tested("crypto", "4h") and not hub.stream_tested("crypto", "15m") and not hub.stream_tested("forex", "1h")
+      and not hub.stream_tested("forex", "15m") and not hub.stream_tested("forex", "4h"),
+      "stream_tested: only crypto 4h (and a stream with a passed test) is tested")
+
+# every stream that is on by default really scans and stores signals (15m, forex and gold included):
+# scan 60 consecutive candle closes of each stream on the fake candles
+import zlib  # noqa: E402
+
+
+def trending_candles(symbol, timeframe, limit, since=None):
+    """Deterministic candles with trend legs and pullbacks (so the rules find setups on every timeframe)."""
+    rng = np.random.default_rng(zlib.crc32(symbol.encode()) + 1)
+    sec = SEC[timeframe]
+    base = datetime(2026, 5, 1)
+    n = int((datetime(2026, 10, 14) - base).total_seconds() // sec)
+    vol = 0.0025 * np.sqrt(sec / 900)
+    ret = np.zeros(n)
+    i, sign = 0, 1
+    while i < n:
+        leg = int(rng.integers(30, 90))
+        part = ret[i:i + leg]
+        part[:] = sign * vol * rng.uniform(0.25, 0.6) + rng.normal(0, vol, len(part))
+        i += leg
+        sign = -sign if rng.random() < 0.6 else sign
+    cl = 100 * np.exp(np.cumsum(ret))
+    op = np.r_[cl[0], cl[:-1]]
+    hi = np.maximum(op, cl) * (1 + abs(rng.normal(0, vol / 2, n)))
+    lo = np.minimum(op, cl) * (1 - abs(rng.normal(0, vol / 2, n)))
+    df = pd.DataFrame({"timestamp": [base + timedelta(seconds=sec * k) for k in range(n)], "open": op, "high": hi,
+                       "low": lo, "close": cl, "volume": rng.uniform(1, 3, n)})
+    if since is not None:
+        return df[df.timestamp >= pd.Timestamp(since, unit="ms")].head(limit)
+    return df.tail(limit)
+
+
+hub.symbols_for = lambda market: (["EUR/USD", "USD/JPY", "XAU/USD"] if market == "forex" else ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"])
+hub._hooks["get_candles"] = trending_candles
+hub._store = streams.CandleStore(trending_candles, sleep=0)
+hub._engines.clear()
+with hub._Cursor() as cur:
+    cur.execute("SELECT COALESCE(MAX(id), 0) AS m FROM signal_events")
+    keep_id = cur.fetchone()["m"]
+made, scan_errors = {}, []
+for key in hub.enabled_streams():
+    if key == "crypto_4h":
+        continue                      # produced by signalboard.py (signal engine v3.1), tested elsewhere
+    sec = markets.TF_SEC[streams.STREAMS[key]["tf"]]
+    made[key] = 0
+    for k in range(60):
+        made[key] += len(hub.scan_stream(key, NOW - timedelta(seconds=sec * k)))
+    if hub.engine(key).errors:
+        scan_errors.append(key)
+check(not scan_errors, "every default stream scans every symbol without errors")
+check(len(made) == 5 and all(v >= 1 for v in made.values()),
+      "crypto 15m + 1h and forex 15m + 1h + 4h (gold included) each produce signals: " + ", ".join(f"{k} {v}" for k, v in made.items()))
+with hub._Cursor() as cur:
+    cur.execute("SELECT * FROM signal_events WHERE id > %s", (keep_id,))
+    new_rows = cur.fetchall()
+check(new_rows and all(hub.signal_json(r)["tested"] is False for r in new_rows if (r["market"], r["timeframe"]) != ("crypto", "4h")),
+      "signals of the untested streams carry tested = false")
+with hub._Cursor() as cur:
+    cur.execute("DELETE FROM signal_events WHERE id > %s", (keep_id,))
+hub._engines.clear()
+hub._hooks["get_candles"] = fake_candles
+hub._store = streams.CandleStore(fake_candles, sleep=0)
 os.environ["SIGNAL_STREAMS"] = "all"
 check(len(hub.enabled_streams()) == 6, "SIGNAL_STREAMS=all turns on all six streams")
 os.environ["SIGNAL_STREAMS"] = "crypto_1h,bogus"
@@ -294,6 +349,10 @@ check("15m" in title and "EUR/USD" in title, "alert title names the timeframe")
 txt = sb.event_text({"symbol": "EUR/USD", "side": "LONG", "entry": 1.08123, "stop_loss": 1.0795, "targets": [1.083, 1.085, 1.087],
                      "timeframe": "1h", "market": "forex", "grade": "A"})
 check("1.08123" in txt and "grade A" in txt, "alert text: forex prices with 5 decimals and the grade")
+check("untested stream" in txt, "alert text: a signal from an untested stream says so")
+txt4 = sb.event_text({"symbol": "BTC/USDT", "side": "LONG", "entry": 100.0, "stop_loss": 99.0, "targets": [101.0, 102.0, 103.0],
+                      "timeframe": "4h", "market": "crypto", "grade": "A"})
+check("untested" not in txt4, "alert text: crypto 4h (tested) carries no warning")
 
 # ---------------------------------------------------------------------------
 # API
@@ -313,7 +372,8 @@ check(d["ok"] and d["total"] >= 1 and all(x["timeframe"] == "1h" and x["market"]
       "GET /api/signals filters by market and timeframe")
 sig = [x for x in d["signals"] if x["symbol"] == "SOL/USDT"][0]
 check(all(k in sig for k in ("entry", "stop_loss", "targets", "rr", "grade", "status", "hold_minutes", "signal_at",
-                             "closed_at", "expires_at", "market", "timeframe", "side")), "signal JSON has every field")
+                             "closed_at", "expires_at", "market", "timeframe", "side", "tested")), "signal JSON has every field")
+check(sig["tested"] is False, "signal JSON: a stream without a passed test is marked tested = false")
 d = cl.get("/api/signals?status=active&timeframe=15m").get_json()
 check(all(x["status"] == "ACTIVE" for x in d["signals"]) and d["total"] >= 1, "status filter")
 check(cl.get("/api/signals?symbol=FAKE/USDT").status_code == 400, "unknown symbol rejected")
