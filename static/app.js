@@ -236,15 +236,15 @@
     setState(a.side, `${long ? "Long" : "Short"} · ${a.timeframe} signal`,
       `Started ${ago(a.signal_at)} on the ${a.timeframe} chart. Expires ${when(a.expires_at)}.`, long ? "long" : "short");
     const pill = $("sig-pill");
-    pill.hidden = false; pill.className = "d-pill";
-    pill.textContent = `Grade ${a.grade}`;
+    pill.hidden = a.tested !== false; pill.className = "d-pill";
+    pill.textContent = "Experimental";
     $("sig-prob").hidden = a.confidence == null;
     if (a.confidence != null) { $("sig-prob-v").textContent = `${Math.round(a.confidence)}%`; $("sig-prob-l").textContent = "chance of TP1"; }
     const tps = (a.targets || []).map((v, k) => `<div><span class="c-dim">TP${k + 1}${k < (a.hits || 0) ? " ✓" : ""}</span> <b class="tnum c-long">${px(v)}</b></div>`).join("");
     const now = a.price != null ? `<p class="d-copy">Now ${px(a.price)}${a.r_now != null ? ` (${a.r_now > 0 ? "+" : ""}${a.r_now}R)` : ""}.</p>` : "";
     const more = list.length > 1 ? `<p class="d-copy">Also active: ${list.slice(1).map((x) => `${x.timeframe} ${x.side.toLowerCase()}`).join(", ")}.</p>` : "";
     const fourH = d.engine && !d.engine.active && d.asset !== "forex" ? `<p class="d-copy c-dim">The 4-hour engine has no trade on ${esc(base(S.coin))} right now.</p>` : "";
-    const untested = a.tested === false ? `<p class="d-copy c-dim"><b>Untested stream.</b> This signal comes from simple rules that have not passed the test on unseen data. Take extra care.</p>` : "";
+    const untested = a.tested === false ? `<p class="d-copy c-dim"><b>Experimental:</b> simple rules that have not passed our test on unseen data.</p>` : "";
     $("sig-body").innerHTML = `
       <div class="d-tiles" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
         <div><span class="c-dim">Entry</span> <b class="tnum">${px(a.entry)}</b></div>
@@ -530,8 +530,8 @@
     const hits = x.hits ? ` · TP${x.hits} ✓` : "";
     return `<button type="button" class="d-mini" data-sym="${esc(x.symbol)}" aria-current="${x.symbol === S.coin}">
       <span class="d-mini-top"><b>${esc(base(x.symbol))}</b><span class="d-pill" style="background:var(--${long ? "long" : "short"}-bg);color:var(--${long ? "long" : "short"})">${esc(x.timeframe)} ${long ? "long" : "short"}</span></span>
-      <span class="d-mini-bar"><i style="left:0;width:${x.grade === "A" ? 100 : x.grade === "B" ? 70 : 40}%;background:var(--${long ? "long" : "short"})"></i></span>
-      <small>Grade ${esc(x.grade || "C")} · started ${ago(x.signal_at)}${hits}</small>
+      <span class="d-mini-bar"><i style="left:0;width:100%;background:var(--${long ? "long" : "short"})"></i></span>
+      <small>Started ${ago(x.signal_at)}${hits}${x.tested === false ? " · experimental" : ""}</small>
     </button>`;
   }
   function renderOthers() {
