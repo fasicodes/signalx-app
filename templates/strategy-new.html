@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Share a strategy | Signals FM</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='strategies.css') }}">
+</head>
+<body class="an-shell in-app">
+{% set active = 'strategies' %}
+{% include '_app_nav.html' %}
+
+<main class="wrap">
+  <p class="crumbs"><a href="/strategies">Strategies</a> › Share a strategy</p>
+  <section class="sd-head">
+    <h1>Share your strategy</h1>
+    <p class="sd-lead">Explain your idea so other traders can follow it. It will be shown with the labels
+      <b>By a user</b> and <b>Not tested</b>, because Signals FM has not checked it.</p>
+  </section>
+
+  <form class="st-form" id="form" novalidate>
+    <div class="pfield">
+      <label for="title">Title <span class="count" id="c-title">0 / 100</span></label>
+      <input class="pinput" id="title" name="title" maxlength="100" required placeholder="e.g. London session breakout with a 50 EMA filter">
+    </div>
+    <div class="pfield">
+      <label for="summary">Short summary <span class="count" id="c-summary">0 / 220</span></label>
+      <input class="pinput" id="summary" name="summary" maxlength="220" required placeholder="One or two sentences shown on the card">
+    </div>
+    <div class="row2">
+      <div class="pfield"><label for="category">Category</label>
+        <select class="pselect" id="category" name="category">{% for c in categories %}<option value="{{ c }}"{% if c == 'Other' %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+      <div class="pfield"><label for="market">Market</label>
+        <select class="pselect" id="market" name="market">
+          <option value="crypto">Crypto</option><option value="forex">Forex</option><option value="both">Crypto and forex</option>
+        </select></div>
+      <div class="pfield"><label for="timeframe">Timeframe</label>
+        <select class="pselect" id="timeframe" name="timeframe">{% for t in timeframes %}<option value="{{ t }}"{% if t == 'any' %} selected{% endif %}>{{ 'Any' if t == 'any' else t }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="pfield">
+      <label for="description">The idea <span class="count" id="c-description">0 / 6000</span></label>
+      <textarea id="description" name="description" maxlength="6000" required
+        placeholder="What the strategy looks for, why you think it works, which markets and sessions suit it, and how you manage risk."></textarea>
+      <p class="hint">At least 80 characters. Plain text only.</p>
+    </div>
+    <div class="pfield">
+      <label for="rules">Rules (optional) <span class="count" id="c-rules">0 / 4000</span></label>
+      <textarea id="rules" name="rules" maxlength="4000" style="min-height:120px"
+        placeholder="Entry long: ...&#10;Entry short: ...&#10;Stop-loss: ...&#10;Take profit / exit: ..."></textarea>
+    </div>
+    <div class="pfield">
+      <label for="author">Display name</label>
+      <input class="pinput" id="author" name="author" maxlength="40" placeholder="Shown as the author (your e-mail is never shown)">
+    </div>
+    <div class="pfield">
+      <label for="image">Chart image (optional)</label>
+      <div class="img-drop">
+        <input type="file" id="image" name="image" accept="image/png,image/jpeg,image/webp">
+        <img id="img-prev" alt="" hidden>
+        <p class="hint">PNG, JPEG or WebP, up to 1.5 MB. Use your own chart screenshot.</p>
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="agree"> This is my own idea. It has no links, e-mail addresses or
+      contact details, and I understand it will be shown as "Not tested".</label>
+    <div class="cta-row" style="margin-top:4px">
+      <button type="submit" class="pbtn primary lg" id="send">Publish strategy</button>
+      <a class="pbtn lg" href="/strategies">Cancel</a>
+    </div>
+    <p class="form-msg" id="msg" role="status"></p>
+  </form>
+</main>
+
+{% include '_public_footer.html' %}
+<script src="{{ url_for('static', filename='strategies.js') }}"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var LINK = /(https?:\/\/|www\.|t\.me\/|wa\.me|discord\.gg|\S+@\S+\.\S+|@[a-z0-9_]{4,})/i;
+  ["title", "summary", "description", "rules"].forEach(function (id) {
+    var max = $(id).getAttribute("maxlength");
+    var upd = function () { $("c-" + id).textContent = $(id).value.length + " / " + max; };
+    $(id).addEventListener("input", upd); upd();
+  });
+  $("image").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    if (!f) { $("img-prev").hidden = true; return; }
+    if (f.size > 1500000) { msg("The image is larger than 1.5 MB.", false); this.value = ""; $("img-prev").hidden = true; return; }
+    $("img-prev").src = URL.createObjectURL(f); $("img-prev").hidden = false;
+  });
+  function msg(t, ok) { $("msg").textContent = t; $("msg").className = "form-msg " + (ok ? "ok" : "err"); }
+  $("form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var t = $("title").value.trim(), s = $("summary").value.trim(), d = $("description").value.trim();
+    if (t.length < 6) return msg("The title needs at least 6 characters.", false);
+    if (s.length < 20) return msg("The short summary needs at least 20 characters.", false);
+    if (d.length < 80) return msg("Explain the idea in at least 80 characters.", false);
+    if ([t, s, d, $("rules").value, $("author").value].some(function (x) { return LINK.test(x); }))
+      return msg("Links, e-mail addresses and @handles are not allowed.", false);
+    if (!$("agree").checked) return msg("Please tick the box to confirm.", false);
+    $("send").disabled = true; msg("Publishing…", true);
+    SF.api("/api/strategies/community", { method: "POST", body: new FormData($("form")) }).then(function (r) {
+      $("send").disabled = false;
+      if (r.status === 401) return SF.toLogin();
+      if (!r.ok) return msg(r.error || "Could not publish.", false);
+      location.href = r.url;
+    });
+  });
+})();
+</script>
+</body>
+</html>
