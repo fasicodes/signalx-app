@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ s.name }}: rules and backtest | Signals FM</title>
+<meta name="description" content="{{ s.summary }} Rules, a daily updated backtest on real crypto and forex candles after costs, and its latest trades.">
+{% set seo_title = s.name ~ " strategy: rules and backtest" %}{% set seo_path = "/strategies/" ~ s.slug %}{% set seo_description = s.summary %}
+{% include '_seo.html' ignore missing %}
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='strategies.css') }}">
+</head>
+<body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
+{% set active = 'strategies' %}
+{% if session.get('user_id') %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
+
+<main class="wrap">
+  <p class="crumbs"><a href="/strategies">Strategies</a> › <a href="/strategies?category={{ s.category | urlencode }}">{{ s.category }}</a></p>
+  <section class="sd-head">
+    <div class="badges">
+      <span class="bdg site">By Signals FM</span>
+      <span class="bdg ok">Backtested</span>
+      <span class="bdg" id="upd">Updated …</span>
+    </div>
+    <h1>{{ s.name }}</h1>
+    <p class="sd-lead">{{ s.summary }}</p>
+    <div class="sd-actions">
+      <button type="button" class="pbtn" id="like" data-target="lib:{{ s.slug }}" data-logged-in="{{ '1' if logged_in else '0' }}" aria-pressed="false">
+        <svg class="hrt" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-9.3-8.6C.9 8 3 4.5 6.4 4.5c2 0 3.4 1.1 4.1 2.3.7-1.2 2.1-2.3 4.1-2.3 3.4 0 5.5 3.5 3.7 6.9C19 15.6 12 20 12 20z"/></svg>
+        Like <b>0</b></button>
+      <a class="pbtn" href="/strategies">All strategies</a>
+    </div>
+  </section>
+
+  <section class="block sd-grid">
+    <div>
+      <h2 class="sec">How it works</h2>
+      <p class="sec-sub">{{ s.description }}</p>
+      <ul class="rules-list">{% for r in s.rules %}<li>{{ r }}</li>{% endfor %}</ul>
+    </div>
+    <div>
+      <h2 class="sec">Test settings</h2>
+      <dl class="kv">
+        <dt>Entry</dt><dd>Close of the candle where the rule fires</dd>
+        <dt>Stop-loss</dt><dd>{{ s.stop_atr }} × ATR(14) from the entry (this distance is 1R)</dd>
+        <dt>Time limit</dt><dd>{{ s.max_bars }} candles</dd>
+        <dt>Opposite signal</dt><dd>{{ "Closes the trade and turns around" if s.reverse else "Ignored while a trade is open" }}</dd>
+        <dt>Costs</dt><dd>Crypto 0.12% of the position per trade, forex the typical spread</dd>
+        <dt>Markets</dt><dd id="cover">Crypto coins and forex pairs, 1h and 4h candles</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2 class="sec">Backtest results</h2>
+    <p class="sec-sub" id="res-sub">Every trade of the last year on every coin, after costs. Choose a market and timeframe.</p>
+    <div class="pseg res-tabs" role="group" aria-label="Market and timeframe" id="res-tabs">
+      <button type="button" data-k="crypto_1h" aria-pressed="false">Crypto 1h</button>
+      <button type="button" data-k="crypto_4h" aria-pressed="true">Crypto 4h</button>
+      <button type="button" data-k="forex_1h" aria-pressed="false">Forex 1h</button>
+      <button type="button" data-k="forex_4h" aria-pressed="false">Forex 4h</button>
+    </div>
+    <div id="res-body">
+      <dl class="figs6" id="figs"></dl>
+      <h3 class="sec" style="font-size:18px;margin:6px 0 8px">Result of every trade added up</h3>
+      <div class="chart-box"><svg id="curve" role="img" aria-label="Cumulative result in R"></svg>
+        <div class="chart-cap"><span id="c-start"></span><span id="c-end"></span></div></div>
+      <h3 class="sec" style="font-size:18px;margin:26px 0 8px">By symbol</h3>
+      <div class="ptable-wrap" id="by-sym"></div>
+    </div>
+    <div class="res-error" id="res-error" hidden></div>
+  </section>
+
+  <section class="block">
+    <h2 class="sec">Latest trades on the chart</h2>
+    <p class="sec-sub" id="pv-sub">The newest candles with the strategy's lines. Triangles mark entries (green long, red short), circles the exits.</p>
+    <div class="legend" id="legend"></div>
+    <div class="chart-box"><svg id="chart" role="img" aria-label="Recent candles with this strategy's entries"></svg>
+      <div class="chart-cap"><span id="p-start"></span><span id="p-end"></span></div></div>
+  </section>
+
+  <section class="block">
+    <h2 class="sec">Read these numbers carefully</h2>
+    <ul class="rules-list">
+      <li><b>R</b> is the risk of one trade: the distance from entry to stop. +0.10R per trade means that, on average, a trade
+        made a tenth of what it risked, after costs.</li>
+      <li><b>Win rate</b> is the share of trades that ended above zero. Trend strategies often win less than half of their trades
+        and still make money with a few big winners; mean-reversion strategies the other way round.</li>
+      <li>This is a plain backtest of public rules over one year. A good year can be luck, so look at the number of trades, the
+        drawdown and how many symbols made money. It is not one of the site's tested signal models and not advice.</li>
+    </ul>
+  </section>
+</main>
+
+{% include '_public_footer.html' %}
+{% if not session.get('user_id') %}<script src="{{ url_for('static', filename='shell.js') }}" defer></script>{% endif %}
+<script src="{{ url_for('static', filename='strategies.js') }}"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = SF.esc;
+  var SLUG = {{ s.slug | tojson }};
+  var DATA = null, KEY = "crypto_4h";
+  var cls = function (v) { return v > 0 ? "pos" : v < 0 ? "neg" : "dim"; };
+
+  function figs(r) {
+    var pf = r.profit_factor == null ? "--" : Number(r.profit_factor).toFixed(2);
+    var items = [
+      ["Trades", r.trades, (r.trades_per_day != null ? r.trades_per_day + " a day" : "") + " · " + (r.symbols || 0) + " symbols"],
+      ["Win rate", SF.pct(r.win_rate), "trades above zero"],
+      ["Average per trade", '<span class="' + cls(r.avg_r) + '">' + SF.fmtR(r.avg_r, 3) + "</span>", "after costs"],
+      ["Total", '<span class="' + cls(r.total_r) + '">' + SF.fmtR(r.total_r, 1) + "</span>", (r.positive_symbols || 0) + " of " + (r.symbols || 0) + " symbols positive"],
+      ["Profit factor", pf, "gains ÷ losses"],
+      ["Worst drawdown", '<span class="neg">' + SF.fmtR(r.max_drawdown_r, 1) + "</span>", "peak to low"]
+    ];
+    return items.map(function (x) { return "<div><dt>" + x[0] + "</dt><dd>" + x[1] + "<small>" + esc(x[2]) + "</small></dd></div>"; }).join("");
+  }
+  function bySym(rows) {
+    if (!rows || !rows.length) return '<p class="dim">No trades.</p>';
+    return '<table class="ptable"><thead><tr><th>Symbol</th><th class="num">Trades</th><th class="num">Win rate</th><th class="num">Avg per trade</th><th class="num">Total</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return "<tr><td>" + esc(r.symbol) + '</td><td class="num">' + r.trades + '</td><td class="num">' + SF.pct(r.win_rate) +
+          '</td><td class="num ' + cls(r.avg_r) + '">' + SF.fmtR(r.avg_r, 3) + '</td><td class="num ' + cls(r.total_r) + '">' + SF.fmtR(r.total_r, 1) + "</td></tr>";
+      }).join("") + "</tbody></table>";
+  }
+  function show() {
+    document.querySelectorAll("#res-tabs button").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-k") === KEY ? "true" : "false"); });
+    var r = (DATA.results || {})[KEY];
+    if (!r || r.error || !r.trades) {
+      $("res-body").hidden = true; $("res-error").hidden = false;
+      $("res-error").textContent = r && r.error ? r.error : (r && r.trades === 0 ? "This strategy made no trades here." : "No result for this market yet.");
+      return;
+    }
+    $("res-body").hidden = false; $("res-error").hidden = true;
+    $("figs").innerHTML = figs(r);
+    SF.curve($("curve"), r.curve);
+    var c = r.curve || [];
+    $("c-start").textContent = c.length ? SF.date(c[0][0]) : "";
+    $("c-end").textContent = c.length ? SF.date(c[c.length - 1][0]) : "";
+    $("by-sym").innerHTML = bySym(r.by_symbol);
+    $("res-sub").textContent = "Every trade on every " + (r.market === "forex" ? "pair" : "coin") + " over " + (r.period || "the last year") +
+      ", " + r.timeframe + " candles, after costs.";
+  }
+  document.querySelectorAll("#res-tabs button").forEach(function (b) {
+    b.addEventListener("click", function () { if (!b.disabled) { KEY = b.getAttribute("data-k"); show(); } });
+  });
+  SF.bindLike($("like"));
+  SF.api("/api/strategies/library/" + encodeURIComponent(SLUG)).then(function (d) {
+    if (!d.ok) { $("res-body").hidden = true; $("res-error").hidden = false; $("res-error").textContent = d.error || "Could not load the results."; return; }
+    DATA = d.strategy;
+    $("upd").textContent = DATA.updated_at ? "Updated " + SF.ago(DATA.updated_at) : "First results coming";
+    $("like").querySelector("b").textContent = DATA.likes || 0;
+    if (DATA.liked) { $("like").classList.add("liked"); $("like").setAttribute("aria-pressed", "true"); }
+    var m = DATA.meta || {};
+    if (m.coins) $("cover").textContent = m.coins + " crypto coins" + (m.forex ? " and " + m.forex + " forex pairs" : "") + ", 1h and 4h candles";
+    var first = null;
+    document.querySelectorAll("#res-tabs button").forEach(function (b) {
+      var r = (DATA.results || {})[b.getAttribute("data-k")];
+      b.disabled = !r || !!r.error;
+      b.title = r && r.error ? r.error : "";
+      if (!b.disabled && !first) first = b.getAttribute("data-k");
+    });
+    var cur = (DATA.results || {})[KEY];
+    if ((!cur || cur.error) && first) KEY = first;
+    show();
+    var pv = DATA.preview;
+    if (pv) {
+      var legend = SF.candles($("chart"), pv);
+      $("legend").innerHTML = legend.map(function (x) { return '<span><i style="background:' + x.color + '"></i>' + esc(x.name) + "</span>"; }).join("");
+      $("pv-sub").textContent = "The newest " + pv.c.length + " candles of " + pv.symbol + " (" + pv.timeframe + ") with the strategy's lines. Triangles mark entries (green long, red short), circles the exits.";
+      $("p-start").textContent = SF.date(pv.start); $("p-end").textContent = SF.date(pv.end);
+    } else {
+      $("pv-sub").textContent = "The chart appears after the first daily update.";
+    }
+  });
+})();
+</script>
+</body>
+</html>
