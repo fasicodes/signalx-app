@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ p.title }} | Community strategy | Signals FM</title>
+<meta name="description" content="{{ p.summary }}">
+<meta name="robots" content="noindex">
+{% set seo_title = p.title %}{% set seo_path = "/strategies/community/" ~ p.id %}{% set seo_description = p.summary %}
+{% include '_seo.html' ignore missing %}
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='strategies.css') }}">
+</head>
+<body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
+{% set active = 'strategies' %}
+{% if session.get('user_id') %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
+
+<main class="wrap">
+  <p class="crumbs"><a href="/strategies">Strategies</a> › <a href="/strategies?tab=community">Community</a></p>
+  <section class="sd-head">
+    <div class="badges">
+      <span class="bdg">By a user</span>
+      <span class="bdg warn">Not tested</span>
+      {% if p.status == 'hidden' %}<span class="bdg warn">Hidden after reports: only you{% if admin %} and admins{% endif %} can see it</span>{% endif %}
+    </div>
+    <h1>{{ p.title }}</h1>
+    <p class="sd-lead">{{ p.summary }}</p>
+    <p class="meta-line">Shared by <b>{{ p.author }}</b> · {{ p.category }} ·
+      {% if p.market == 'both' %}Crypto and forex{% elif p.market == 'crypto' %}Crypto{% else %}Forex{% endif %}
+      {% if p.timeframe != 'any' %} · {{ p.timeframe }}{% endif %} · <span id="when" data-iso="{{ p.created_at }}">{{ p.created_at[:10] if p.created_at else '' }}</span></p>
+    <div class="sd-actions">
+      <button type="button" class="pbtn{% if p.liked %} liked{% endif %}" id="like" data-target="{{ p.target }}" data-logged-in="{{ '1' if logged_in else '0' }}" aria-pressed="{{ 'true' if p.liked else 'false' }}">
+        <svg class="hrt" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-9.3-8.6C.9 8 3 4.5 6.4 4.5c2 0 3.4 1.1 4.1 2.3.7-1.2 2.1-2.3 4.1-2.3 3.4 0 5.5 3.5 3.7 6.9C19 15.6 12 20 12 20z"/></svg>
+        Like <b>{{ p.likes }}</b></button>
+      {% if not mine %}<button type="button" class="pbtn" id="report" data-logged-in="{{ '1' if logged_in else '0' }}">Report</button>{% endif %}
+      {% if mine or admin %}<button type="button" class="pbtn" id="delete">Delete</button>{% endif %}
+      <a class="pbtn" href="/strategies?tab=community">More community strategies</a>
+    </div>
+    <p class="form-msg" id="msg" role="status"></p>
+  </section>
+
+  <div class="note-box"><b>Shared by a user, not tested by Signals FM.</b> Nobody has checked whether this strategy makes money.
+    Read the rules critically and try it on a demo account before you risk real money.</div>
+
+  {% if p.image_url %}<figure class="post-img"><img src="{{ p.image_url }}" alt="Chart shared with this strategy"></figure>{% endif %}
+
+  <section class="block" style="border-top:none;padding-top:0">
+    <h2 class="sec">The idea</h2>
+    <div class="post-text">{{ p.description }}</div>
+    {% if p.rules %}
+    <h2 class="sec" style="margin-top:26px">Rules</h2>
+    <div class="rules-box">{{ p.rules }}</div>
+    {% endif %}
+  </section>
+
+  {% if admin %}
+  <div class="admin-box">Admin: this post is <b>{{ p.status }}</b>.
+    {% if p.status == 'visible' %}<button type="button" class="pbtn" data-mod="hide">Hide</button>{% else %}<button type="button" class="pbtn" data-mod="restore">Restore</button>{% endif %}
+    <button type="button" class="pbtn" data-mod="delete">Delete for good</button></div>
+  {% endif %}
+</main>
+
+{% include '_public_footer.html' %}
+{% if not session.get('user_id') %}<script src="{{ url_for('static', filename='shell.js') }}" defer></script>{% endif %}
+<script src="{{ url_for('static', filename='strategies.js') }}"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var PID = {{ p.id | tojson }};
+  var msg = function (t, ok) { $("msg").textContent = t; $("msg").className = "form-msg " + (ok ? "ok" : "err"); };
+  var w = $("when"); if (w && w.getAttribute("data-iso")) w.textContent = SF.date(w.getAttribute("data-iso"));
+  SF.bindLike($("like"));
+  if ($("report")) $("report").addEventListener("click", function () {
+    if (this.getAttribute("data-logged-in") !== "1") return SF.toLogin();
+    if (!confirm("Report this strategy to the admins (spam, a scam, someone else's work or offensive)?")) return;
+    SF.postJSON("/api/strategies/community/" + PID + "/report", {}).then(function (d) {
+      if (d.status === 401) return SF.toLogin();
+      msg(d.ok ? (d.message || "Thank you.") : (d.error || "Could not send the report."), d.ok);
+    });
+  });
+  if ($("delete")) $("delete").addEventListener("click", function () {
+    if (!confirm("Delete this strategy? This cannot be undone.")) return;
+    SF.postJSON("/api/strategies/community/" + PID + "/delete", {}).then(function (d) {
+      if (d.ok) location.href = "/strategies?tab=community"; else msg(d.error || "Could not delete.", false);
+    });
+  });
+  document.querySelectorAll("[data-mod]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var a = b.getAttribute("data-mod");
+      if (a === "delete" && !confirm("Delete this strategy for good?")) return;
+      SF.postJSON("/api/strategies/community/" + PID + "/moderate", { action: a }).then(function (d) {
+        if (!d.ok) return msg(d.error || "Could not change it.", false);
+        if (a === "delete") location.href = "/strategies?tab=community"; else location.reload();
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
