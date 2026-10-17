@@ -244,12 +244,13 @@
     const now = a.price != null ? `<p class="d-copy">Now ${px(a.price)}${a.r_now != null ? ` (${a.r_now > 0 ? "+" : ""}${a.r_now}R)` : ""}.</p>` : "";
     const more = list.length > 1 ? `<p class="d-copy">Also active: ${list.slice(1).map((x) => `${x.timeframe} ${x.side.toLowerCase()}`).join(", ")}.</p>` : "";
     const fourH = d.engine && !d.engine.active && d.asset !== "forex" ? `<p class="d-copy c-dim">The 4-hour engine has no trade on ${esc(base(S.coin))} right now.</p>` : "";
+    const untested = a.tested === false ? `<p class="d-copy c-dim"><b>Untested stream.</b> This signal comes from simple rules that have not passed the test on unseen data. Take extra care.</p>` : "";
     $("sig-body").innerHTML = `
       <div class="d-tiles" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
         <div><span class="c-dim">Entry</span> <b class="tnum">${px(a.entry)}</b></div>
         <div><span class="c-dim">Stop</span> <b class="tnum c-short">${px(a.stop_now != null ? a.stop_now : a.stop_loss)}</b></div>${tps}
       </div>
-      ${now}${more}${fourH}
+      ${now}${more}${fourH}${untested}
       <p class="d-copy">Close a third at each target; after TP1 move the stop to the entry, after TP2 to TP1.</p>
       <div class="d-actions"><a class="d-btn primary" href="/signals?market=${esc(a.market)}&timeframe=${esc(a.timeframe)}">Open on the signals page</a></div>`;
   }
