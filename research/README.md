@@ -106,3 +106,12 @@ signal counts suggest. The research 4h model is used as the gate of the 1h strea
 from the validation years only): validation 73.3 % / +0.073 R (9.1 / day; 74.4 %, 71.8 %, 72.8 % per year),
 holdout **72.6 % / +0.083 R, 1,691 signals (4.5 / day)** -> passes the live bar. The same model without the gate
 fails (holdout 68.1 % / -0.004 R).
+
+**6. Crypto 15m model** (same protocol; 53 coins, 2023-01 to 2025-09 walk-forward; the holdout was not opened because no
+version passed validation). Four versions: stop 3 ATR and stop 2 ATR, each alone and with the 1h model agreeing
+(`python lab.py wf crypto_15m s3`, `eval crypto_15m s3`, `mtf crypto_15m s3 crypto_1h s2`, the same for `s2`).
+Closest level of each (at least 100 signals, best average result): s3 alone 71.1 % wins / +0.026 R at 6.2 signals a day;
+s3 with the 1h model 71.4 % / +0.029 R at 6.9 a day; s2 alone 71.3 % / -0.033 R; s2 with the 1h model 71.6 % / -0.034 R.
+The target was 73 % and +0.03 R with every year above 70 % and positive. In the best version 2023 and 2024 were about 72 %
+and +0.04 R, and 2025 fell to 62-64 % and -0.1 R, so the edge is small and shrinking. Not used; the stream runs rules R1
+and is labelled untested.
