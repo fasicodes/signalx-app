@@ -198,15 +198,13 @@ def _untested(e):
 
 def event_text(e):
     msg = f"Entry {_fmt(e['entry'], e['symbol'])} · stop {_fmt(e['stop_loss'], e['symbol'])} · {_targets_txt(e)}"
-    if e.get("grade"):
-        msg += f" · grade {e['grade']}"
     if (e.get("timeframe") or "4h") == "4h" and (e.get("market") or "crypto") == "crypto" and e.get("confidence") is not None:
         msg += f" · chance of TP1 {float(e['confidence']):.0f}%"
     news = e.get("news")
     if isinstance(news, dict) and news.get("title"):
         msg += f" · high-impact news soon: {news['title']}"
     if _untested(e):
-        msg += " · untested stream: its rules have not passed the test on unseen data, take extra care"
+        msg += " · experimental: simple rules that have not passed our test on unseen data"
     return msg
 
 
@@ -282,7 +280,7 @@ def _email_html(events, user_id=None):
         f"<td style='padding:6px 10px'>{_fmt(e['entry'], e['symbol'])}</td>"
         f"<td style='padding:6px 10px'>{_fmt(e['stop_loss'], e['symbol'])}</td>"
         + "".join(f"<td style='padding:6px 10px'>{_fmt(v, e['symbol'])}</td>" for v in tps(e))
-        + f"<td style='padding:6px 10px'>{e.get('grade') or '-'}</td></tr>"
+        + "</tr>"
         for e in events)
     link = f"{base}/signals" if base else "/signals"
     if user_id is not None:
@@ -298,8 +296,7 @@ def _email_html(events, user_id=None):
       <table style="border-collapse:collapse;font-size:14px;border:1px solid #dbe6e0">
         <tr style="background:#eef4f1;text-align:left"><th style="padding:6px 10px">Symbol</th><th style="padding:6px 10px">Timeframe</th><th style="padding:6px 10px">Side</th>
         <th style="padding:6px 10px">Entry</th><th style="padding:6px 10px">Stop</th><th style="padding:6px 10px">TP1</th>
-        <th style="padding:6px 10px">TP2</th><th style="padding:6px 10px">TP3</th>
-        <th style="padding:6px 10px">Grade</th></tr>{rows}
+        <th style="padding:6px 10px">TP2</th><th style="padding:6px 10px">TP3</th></tr>{rows}
       </table>
       <p style="margin:16px 0"><a href="{link}" style="background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open the signals board</a></p>
       <p style="color:#6f8279;font-size:12px;line-height:1.6">Not financial advice. Signals can and do lose; past results do not guarantee future results.
