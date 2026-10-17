@@ -1957,8 +1957,12 @@ def _sig_for_order(row):
             "confidence": _f(row.get("confidence")), "grade": row.get("grade"), "entry": entry, "stop_loss": stop}
 
 
-def signal_wanted(settings, row):
-    """Does this bot account want this site signal? -> (True, None) or (False, reason)."""
+def signal_wanted(settings, row, mode=None):
+    """Does this bot account want this site signal? -> (True, None) or (False, reason).
+    Real-money accounts copy only streams that passed their test on unseen data; demo accounts copy every
+    stream that is switched on, so an untested stream can be watched without risking money."""
+    if mode in LIVE_MODES and row.get("tested") is False:
+        return False, "untested stream: live accounts copy only tested streams"
     if row.get("market") not in (settings.get("markets") or ["crypto"]):
         return False, "market not selected"
     if row.get("timeframe") not in (settings.get("timeframes") or ["4h"]):
@@ -2088,7 +2092,7 @@ def bridge_step(now=None):
         guard_checked = False
         res = []
         for row in signals:
-            ok, _ = signal_wanted(settings, row)
+            ok, _ = signal_wanted(settings, row, mode)
             if not ok:
                 continue
             sid = int(row["id"])
@@ -2461,17 +2465,27 @@ def status():
                     "max_coins": MAX_COINS, "confidence": _confidence_levels(), "markets": list(MARKETS),
                     "signal_timeframes": list(SIGNAL_TIMEFRAMES), "grades": list(GRADES),
                     "live_modes": list(LIVE_MODES), "fx_modes": list(FX_MODES),
-                    "signal_feed": bool(_hooks.get("signal_feed")), "streams_live": _streams_live()},
+                    "signal_feed": bool(_hooks.get("signal_feed")), "streams_live": _streams_live(),
+                    "streams_tested": _streams_tested()},
         "signal_orders": _recent_signal_orders(uid, mode),
         "server_time": _iso(_utcnow()),
     })
 
 
 def _streams_live():
-    """Signal streams that are running on the site (the ones whose model passed its test on unseen data)."""
+    """Signal streams that are running on the site."""
     try:
         import signal_hub
         return signal_hub.enabled_streams()
+    except Exception:
+        return []
+
+
+def _streams_tested():
+    """The running streams that passed their test on unseen data (the only ones live accounts copy)."""
+    try:
+        import signal_hub
+        return [k for k in signal_hub.enabled_streams() if signal_hub.stream_tested(*k.split("_"))]
     except Exception:
         return []
 
