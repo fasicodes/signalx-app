@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading strategies tested on real data | Signals FM</title>
+<meta name="description" content="Thirty well-known trading strategies (EMA cross, RSI, MACD, Bollinger Bands, Supertrend, breakouts and more) backtested on real crypto and forex candles after costs, updated every day, plus strategies shared by traders.">
+{% set seo_title = "Trading strategies tested on real data" %}{% set seo_path = "/strategies" %}{% set seo_description = "Well-known trading strategies backtested on real candles after costs, updated every day, plus strategies shared by traders." %}
+{% include '_seo.html' ignore missing %}
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='strategies.css') }}">
+</head>
+<body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
+{% set active = 'strategies' %}
+{% if session.get('user_id') %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
+
+<main class="wrap">
+  <section class="st-head">
+    <p class="eyebrow">Strategy library</p>
+    <h1>Trading strategies, tested on real data</h1>
+    <p>Well-known strategies backtested by Signals FM on real candles, after costs, and strategies shared by traders.
+      The backtest results update automatically every day.</p>
+    <p class="meta-line" id="meta-line">Loading…</p>
+  </section>
+
+  <div class="st-bar">
+    <div class="pseg" role="group" aria-label="Which strategies">
+      <button type="button" data-tab="all" aria-pressed="true">All</button>
+      <button type="button" data-tab="library" aria-pressed="false">By Signals FM</button>
+      <button type="button" data-tab="community" aria-pressed="false">Community</button>
+    </div>
+    <span class="grow"></span>
+    <a class="pbtn primary" href="{% if logged_in %}/strategies/new{% else %}/login?next=/strategies/new{% endif %}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Share a strategy</a>
+  </div>
+
+  <div class="st-filters">
+    <input class="pinput" id="f-q" type="search" placeholder="Search strategies" aria-label="Search strategies" maxlength="80">
+    <select class="pselect" id="f-cat" aria-label="Category">
+      <option value="">All categories</option>
+      {% for c in community_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+    </select>
+    <select class="pselect" id="f-market" aria-label="Market">
+      <option value="">Crypto and forex</option>
+      <option value="crypto">Crypto</option>
+      <option value="forex">Forex</option>
+    </select>
+    <select class="pselect" id="f-tf" aria-label="Timeframe">
+      <option value="">All timeframes</option>
+      <option value="15m">15m</option>
+      <option value="1h">1h</option>
+      <option value="4h">4h</option>
+      <option value="1d">1d</option>
+    </select>
+    <select class="pselect" id="f-sort" aria-label="Sort">
+      <option value="popular">Popular</option>
+      <option value="best">Best backtest result</option>
+      <option value="newest">Newest</option>
+    </select>
+  </div>
+  <p class="st-note">Backtests show how a strategy's plain rules did over the last year, after trading costs. They are not the
+    site's tested signals and not a promise of future results. Community strategies are shared by users and are not tested by Signals FM.</p>
+
+  <div class="sgrid" id="grid" aria-live="polite"></div>
+  <div class="st-empty" id="empty" hidden>No strategies match these filters.</div>
+  <div class="st-pager" id="pager" hidden>
+    <button type="button" class="pbtn" id="prev">Previous</button>
+    <span id="pinfo"></span>
+    <button type="button" class="pbtn" id="next">Next</button>
+  </div>
+</main>
+
+{% include '_public_footer.html' %}
+{% if not session.get('user_id') %}<script src="{{ url_for('static', filename='shell.js') }}" defer></script>{% endif %}
+<script src="{{ url_for('static', filename='strategies.js') }}"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = SF.esc;
+  var state = { tab: "all", page: 1 };
+  try {
+    var u = new URL(location.href);
+    ["tab", "q", "category", "market", "timeframe", "sort"].forEach(function (k) { if (u.searchParams.get(k)) state[k] = u.searchParams.get(k); });
+  } catch (e) {}
+  if (state.q) $("f-q").value = state.q;
+  if (state.category) $("f-cat").value = state.category;
+  if (state.market) $("f-market").value = state.market;
+  if (state.timeframe) $("f-tf").value = state.timeframe;
+  if (state.sort) $("f-sort").value = state.sort;
+  document.querySelectorAll("[data-tab]").forEach(function (b) {
+    b.setAttribute("aria-pressed", b.getAttribute("data-tab") === state.tab ? "true" : "false");
+    b.addEventListener("click", function () { state.tab = b.getAttribute("data-tab"); state.page = 1; sync(); load(); });
+  });
+
+  function sync() {
+    document.querySelectorAll("[data-tab]").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-tab") === state.tab ? "true" : "false"); });
+    state.q = $("f-q").value.trim(); state.category = $("f-cat").value; state.market = $("f-market").value;
+    state.timeframe = $("f-tf").value; state.sort = $("f-sort").value;
+    try {
+      var u = new URL(location.href);
+      ["tab", "q", "category", "market", "timeframe", "sort"].forEach(function (k) {
+        if (state[k] && !(k === "tab" && state[k] === "all") && !(k === "sort" && state[k] === "popular")) u.searchParams.set(k, state[k]);
+        else u.searchParams.delete(k);
+      });
+      history.replaceState(null, "", u);
+    } catch (e) {}
+  }
+
+  function resLine(h) {
+    if (!h || h.avg_r == null) return '<div class="resline"><span class="res na">No result yet</span></div>';
+    var cls = h.avg_r > 0 ? "pos" : h.avg_r < 0 ? "neg" : "na";
+    return '<div class="resline" title="Crypto 4h backtest, ' + h.trades + ' trades, after costs"><span class="res ' + cls + '">' +
+      SF.fmtR(h.avg_r, 3) + "</span> a trade · " + SF.pct(h.win_rate) + " wins · crypto 4h</div>";
+  }
+  var HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-9.3-8.6C.9 8 3 4.5 6.4 4.5c2 0 3.4 1.1 4.1 2.3.7-1.2 2.1-2.3 4.1-2.3 3.4 0 5.5 3.5 3.7 6.9C19 15.6 12 20 12 20z"/></svg>';
+
+  function card(x) {
+    var lib = x.kind === "library";
+    var flag = lib ? '<span class="flag ok">Backtested</span>'
+                   : '<span class="flag warn">Not tested' + (x.status === "hidden" ? " · hidden" : "") + "</span>";
+    var thumb = lib
+      ? '<svg role="img" aria-label="Recent ' + esc((x.preview || {}).symbol || "") + ' chart with this strategy"></svg>'
+      : (x.image_url ? '<img src="' + esc(x.image_url) + '" alt="" loading="lazy">'
+                     : '<div class="ph">' + esc(x.category) + " · " + esc(x.market === "both" ? "Crypto and forex" : x.market) + "</div>");
+    var by = lib
+      ? '<span class="by"><span class="av site">S</span><span>By Signals FM</span></span>'
+      : '<span class="by"><span class="av">' + esc((x.author || "?").slice(0, 1).toUpperCase()) + '</span><span>By ' + esc(x.author) + "</span></span>";
+    var likes = '<span class="likes" title="Likes">' + HEART + (x.likes || 0) + "</span>";
+    var meta = lib ? esc(x.category)
+                   : esc(x.category) + " · " + esc(x.market === "both" ? "Crypto and forex" : (x.market === "crypto" ? "Crypto" : "Forex")) +
+                     (x.timeframe && x.timeframe !== "any" ? " · " + esc(x.timeframe) : "");
+    return '<a class="scard" href="' + esc(x.url) + '"><div class="thumb">' + thumb + flag + '</div><div class="body">' +
+      '<span class="cat">' + meta + "</span><h3>" + esc(x.title) + "</h3><p>" + esc(x.summary) + "</p>" +
+      (lib ? resLine(x.headline) : "") + '<div class="foot">' + by + likes + "</div></div></a>";
+  }
+
+  var seq = 0;
+  function load() {
+    var my = ++seq;
+    var p = new URLSearchParams({ tab: state.tab, page: state.page, sort: state.sort || "popular" });
+    ["q", "category", "market", "timeframe"].forEach(function (k) { if (state[k]) p.set(k, state[k]); });
+    SF.api("/api/strategies?" + p).then(function (d) {
+      if (my !== seq) return;
+      if (!d.ok) { $("grid").innerHTML = ""; $("empty").hidden = false; $("empty").textContent = d.error || "Could not load the strategies."; return; }
+      var m = d.meta || {};
+      var src = m.source === "live" ? "Backtests updated " + SF.ago(m.updated_at) + " (every " + Math.round(m.refresh_hours || 24) + " hours)"
+              : m.source === "seed" ? "Backtests over " + (m.period || "the last year") + " (the daily update starts after launch)"
+              : "The first backtests are being calculated";
+      var cover = [];
+      if (m.coins) cover.push(m.coins + " crypto coins");
+      if (m.forex) cover.push(m.forex + " forex pairs");
+      $("meta-line").textContent = src + (cover.length ? " · " + cover.join(" and ") : "") + " · results in R after costs";
+      $("grid").innerHTML = d.items.map(card).join("");
+      $("empty").hidden = d.items.length > 0;
+      $("empty").textContent = "No strategies match these filters.";
+      var svgs = $("grid").querySelectorAll(".scard svg[role=img]");
+      var libs = d.items.filter(function (x) { return x.kind === "library"; });
+      svgs.forEach(function (svg, i) { SF.mini(svg, (libs[i] || {}).preview); });
+      $("pager").hidden = d.pages <= 1;
+      $("pinfo").textContent = "Page " + d.page + " of " + d.pages + " · " + d.total + " strategies";
+      $("prev").disabled = d.page <= 1; $("next").disabled = d.page >= d.pages;
+    });
+  }
+  var timer = null;
+  $("f-q").addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(function () { state.page = 1; sync(); load(); }, 250); });
+  ["f-cat", "f-market", "f-tf", "f-sort"].forEach(function (id) { $(id).addEventListener("change", function () { state.page = 1; sync(); load(); }); });
+  $("prev").addEventListener("click", function () { state.page = Math.max(1, state.page - 1); load(); window.scrollTo(0, 0); });
+  $("next").addEventListener("click", function () { state.page += 1; load(); window.scrollTo(0, 0); });
+  load();
+})();
+</script>
+</body>
+</html>
