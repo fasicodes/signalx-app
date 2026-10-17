@@ -1,12 +1,177 @@
 {
- "generated": "2026-10-15",
+ "generated": "2026-10-17",
  "rule": "A stream goes live only when the model version picked on the validation years also reaches at least 70% wins (TP1 or better) and a positive average result after costs on later data it never saw.",
  "streams": {
   "crypto_15m": {
    "live": false,
    "chosen": null,
-   "reason": "No model has been trained for this stream yet, so it runs the site's simple rules (R1).",
-   "variants": [],
+   "reason": "A 15-minute model was trained and tested (stop 2 and 3 ATR, alone and with the 1-hour model agreeing). None reached the target on the validation years: the closest level had 71.4% wins but only +0.029R on average, and its 2025 results fell to about 64% wins and a loss, so none was tried on the unseen data. Until one passes, this stream runs the site's simple rules (R1).",
+   "variants": [
+    {
+     "variant": "s3",
+     "label": "15-minute model alone, stop 3 ATR",
+     "mtf": false,
+     "passed_validation": false,
+     "validation_period": "2023-01-01 to 2025-10-01",
+     "validation": null,
+     "holdout": null,
+     "closest": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 6224,
+      "signals_per_day": 6.2,
+      "win_rate": 71.1,
+      "avg_net_r": 0.026,
+      "profit_factor": 1.09,
+      "stop_rate": 25.0,
+      "tp2_rate": 35.7,
+      "tp3_rate": 12.2,
+      "max_drawdown_r": -46.1,
+      "years": {
+       "2023": {
+        "signals": 4035,
+        "win_rate": 71.7,
+        "avg_net_r": 0.04
+       },
+       "2024": {
+        "signals": 1633,
+        "win_rate": 72.4,
+        "avg_net_r": 0.035
+       },
+       "2025": {
+        "signals": 556,
+        "win_rate": 62.4,
+        "avg_net_r": -0.098
+       }
+      }
+     },
+     "rule": "v2: validation win rate >= 73.0%, average >= 0.03R after costs, every validation year >= 70.0% with a positive average, >= 100 signals",
+     "chosen": false,
+     "passed": false
+    },
+    {
+     "variant": "s3_mtf",
+     "label": "15-minute model with the 1-hour model agreeing, stop 3 ATR",
+     "mtf": true,
+     "passed_validation": false,
+     "validation_period": "2023-01-01 to 2025-10-01",
+     "validation": null,
+     "holdout": null,
+     "closest": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 6961,
+      "signals_per_day": 6.93,
+      "win_rate": 71.4,
+      "avg_net_r": 0.029,
+      "profit_factor": 1.1,
+      "stop_rate": 25.5,
+      "tp2_rate": 36.5,
+      "tp3_rate": 11.9,
+      "max_drawdown_r": -46.4,
+      "years": {
+       "2023": {
+        "signals": 4363,
+        "win_rate": 72.3,
+        "avg_net_r": 0.042
+       },
+       "2024": {
+        "signals": 1967,
+        "win_rate": 71.8,
+        "avg_net_r": 0.046
+       },
+       "2025": {
+        "signals": 631,
+        "win_rate": 63.9,
+        "avg_net_r": -0.114
+       }
+      }
+     },
+     "rule": "v2: validation win rate >= 73.0%, average >= 0.03R after costs, every validation year >= 70.0% with a positive average, >= 100 signals",
+     "chosen": false,
+     "passed": false
+    },
+    {
+     "variant": "s2",
+     "label": "15-minute model alone, stop 2 ATR",
+     "mtf": false,
+     "passed_validation": false,
+     "validation_period": "2023-01-01 to 2025-10-01",
+     "validation": null,
+     "holdout": null,
+     "closest": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 14586,
+      "signals_per_day": 14.53,
+      "win_rate": 71.3,
+      "avg_net_r": -0.033,
+      "profit_factor": 0.9,
+      "stop_rate": 28.2,
+      "tp2_rate": 36.1,
+      "tp3_rate": 12.3,
+      "max_drawdown_r": -517.0,
+      "years": {
+       "2023": {
+        "signals": 8555,
+        "win_rate": 71.3,
+        "avg_net_r": -0.038
+       },
+       "2024": {
+        "signals": 4198,
+        "win_rate": 72.7,
+        "avg_net_r": -0.006
+       },
+       "2025": {
+        "signals": 1833,
+        "win_rate": 68.2,
+        "avg_net_r": -0.068
+       }
+      }
+     },
+     "rule": "v2: validation win rate >= 73.0%, average >= 0.03R after costs, every validation year >= 70.0% with a positive average, >= 100 signals",
+     "chosen": false,
+     "passed": false
+    },
+    {
+     "variant": "s2_mtf",
+     "label": "15-minute model with the 1-hour model agreeing, stop 2 ATR",
+     "mtf": true,
+     "passed_validation": false,
+     "validation_period": "2023-01-01 to 2025-10-01",
+     "validation": null,
+     "holdout": null,
+     "closest": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 12641,
+      "signals_per_day": 12.59,
+      "win_rate": 71.6,
+      "avg_net_r": -0.034,
+      "profit_factor": 0.89,
+      "stop_rate": 27.9,
+      "tp2_rate": 35.7,
+      "tp3_rate": 11.9,
+      "max_drawdown_r": -440.9,
+      "years": {
+       "2023": {
+        "signals": 7432,
+        "win_rate": 72.6,
+        "avg_net_r": -0.02
+       },
+       "2024": {
+        "signals": 3669,
+        "win_rate": 71.5,
+        "avg_net_r": -0.027
+       },
+       "2025": {
+        "signals": 1540,
+        "win_rate": 67.2,
+        "avg_net_r": -0.12
+       }
+      }
+     },
+     "rule": "v2: validation win rate >= 73.0%, average >= 0.03R after costs, every validation year >= 70.0% with a positive average, >= 100 signals",
+     "chosen": false,
+     "passed": false
+    }
+   ],
    "rules_replay": {
     "engine": "Rules R1 (the simple rules this stream runs now)",
     "period": "2023-01-01 to 2025-10-01",
