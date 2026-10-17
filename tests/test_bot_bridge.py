@@ -517,6 +517,21 @@ check(st["ok"] and st["settings"]["markets"] == ["forex"] and st["accounts"]["oa
       "OANDA account defaults to forex signals")
 check("tok-" not in json.dumps(st), "the token never reaches the browser")
 
+print("\n[untested streams] live accounts copy only tested streams")
+base_set = dict(at.DEFAULT_SETTINGS)
+base_set.update(markets=["crypto", "forex"], timeframes=["15m", "1h", "4h"], min_grade="C", symbols_mode="all", min_confidence=65.0)
+untested_row = {"id": 1, "symbol": "EUR/USD", "market": "forex", "timeframe": "1h", "grade": "B", "tested": False}
+tested_row = dict(untested_row, symbol="BTC/USDT", market="crypto", timeframe="4h", tested=True)
+check(at.signal_wanted(base_set, untested_row, "live") == (False, "untested stream: live accounts copy only tested streams"),
+      "Binance live: an untested stream is not copied")
+check(not at.signal_wanted(base_set, untested_row, "oanda_live")[0], "OANDA live: an untested stream is not copied")
+check(at.signal_wanted(base_set, untested_row, "demo")[0] and at.signal_wanted(base_set, untested_row, "oanda_demo")[0]
+      and at.signal_wanted(base_set, untested_row, "paper")[0], "demo accounts copy the untested stream (to watch it risk-free)")
+check(at.signal_wanted(base_set, tested_row, "live")[0], "Binance live: a tested stream is copied as before")
+check(at.signal_wanted(base_set, {k: v for k, v in untested_row.items() if k != "tested"}, "live")[0],
+      "a signal row without the flag (older data) behaves as before")
+check(at.signal_wanted(base_set, untested_row)[0], "no account mode given: unchanged behaviour")
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
