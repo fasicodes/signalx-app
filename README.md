@@ -92,7 +92,7 @@ Crypto costs 0.12 % per round trip; the holdout was scored once per picked versi
 | Crypto 4h (engine v3.1) | **on** | 73.6 % wins, +0.105 R per signal, 735 signals (about 2 a day) |
 | Crypto 1h, with the 4h model agreeing | **on** | 72.6 % wins, +0.083 R per signal, 1,691 signals (about 4.5 a day) |
 | Crypto 1h alone | off | 68.1 %, -0.004 R |
-| Crypto 15m | on, **untested** (no model yet; simple rules R1) | rules replay 2023-2025: ~84 signals a day, 48.1 % reach TP1, **-0.139 R** per signal |
+| Crypto 15m | on, **untested** (simple rules R1) | a 15m model was trained (stop 2 and 3 ATR, alone and with the 1h model agreeing) and none reached the validation target: closest 71.4 % wins but only +0.029 R, and 2025 fell to about 64 % and a loss. Rules replay 2023-2025: ~84 signals a day, 48.1 % reach TP1, **-0.139 R** per signal |
 | Forex 15m / 1h / 4h and gold | on, **untested** (simple rules R1) | no model version reached the validation target, or lost money on unseen data (best: 1h, 70.8 % but -0.072 R). Rules replay 2017-2020: 15m ~9 a day **-0.218 R**, 1h ~2.9 a day **-0.112 R**, 4h ~1 a day **-0.082 R** |
 
 Things the numbers say, plainly:
