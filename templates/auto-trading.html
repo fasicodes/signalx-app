@@ -302,7 +302,7 @@
             <div class="chipset" id="s-tfs" style="margin-top:6px"><label><input type="checkbox" value="15m"> 15m</label><label><input type="checkbox" value="1h"> 1h</label><label><input type="checkbox" value="4h"> 4h</label></div>
             <span class="hint">Every new signal of these markets and timeframes goes to the bot at once (forex needs the Site demo or an OANDA account).
               <span id="s-live"></span></span></div>
-          <div class="field"><label for="s-grade">Minimum grade</label><select class="sel" id="s-grade"><option value="A">Grade A only</option><option value="B">Grades A and B</option><option value="C">All grades</option></select></div>
+          <div class="field"><label for="s-grade">Signal strength</label><select class="sel" id="s-grade"><option value="A">Strongest signals only</option><option value="B">Strong signals and above</option><option value="C">All signals</option></select></div>
           <div class="field"><label for="s-symbols">Symbols</label><select class="sel" id="s-symbols"><option value="all">All signal symbols</option><option value="list">Only the ticked coins</option></select></div>
           <select class="sel" id="s-timeframe" hidden aria-hidden="true"></select>
           <div class="field"><label for="s-risk">Risk per trade (% of balance)</label><input class="inp" type="number" id="s-risk" min="0.1" max="3" step="0.1">
@@ -920,7 +920,7 @@
     const det = [];
     const ss = st.settings;
     det.push(`${IS_FX(S.mode) ? "Forex" : ss.market_type === "futures" ? "Futures " + ss.leverage + "x" : "Spot"} · risk ${ss.risk_pct}% · max ${ss.max_open_positions} open · daily loss limit ${ss.daily_loss_limit_pct}%`);
-    det.push(`${(ss.markets || []).join(" + ")} · ${(ss.timeframes || []).join(", ")} · grade ${ss.min_grade === "A" ? "A" : ss.min_grade === "B" ? "A/B" : "any"} · ${ss.symbols_mode === "list" ? ss.coins.length + " chosen symbols" : "all symbols"}`);
+    det.push(`${(ss.markets || []).join(" + ")} · ${(ss.timeframes || []).join(", ")} · ${ss.min_grade === "A" ? "strongest signals" : ss.min_grade === "B" ? "strong signals" : "all signals"} · ${ss.symbols_mode === "list" ? ss.coins.length + " chosen symbols" : "all symbols"}`);
     if (!IS_FX(S.mode) && ss.market_type === "spot") det.push(`<span class="neg">Spot cannot short: SHORT signals are skipped. Choose Futures to take them.</span>`);
     if (!IS_FX(S.mode) && !paper && ss.market_type === "spot") det.push(`Spot stop-losses are watched by this bot and are not placed on Binance, so a spot position has no stop while the server is offline. Futures adds a backup stop on Binance.`);
     det.push(`Last scan: ${ago(bot.last_scan_at)}`);
@@ -1022,7 +1022,7 @@
       const nm = (k) => k.replace("_", " ");
       $("s-live").textContent = live.length
         ? `Streams sending signals now: ${live.map(nm).join(", ")}.`
-          + (untested.length ? ` Untested (their rules have not passed the test on unseen data): ${untested.map(nm).join(", ")}. Demo accounts copy them; live accounts copy only the tested streams.` : "")
+          + (untested.length ? ` Experimental (not passed our test yet): ${untested.map(nm).join(", ")}. Demo accounts copy them; live accounts copy only the tested streams.` : "")
         : "";
       const cl = d.options.confidence;
       if (cl) $("s-conf-hint").textContent = `Signals show about ${Math.floor(cl.standard)}–${Math.floor(cl.max)}%. ${Math.floor(cl.standard)}% or lower takes every signal; ${Math.floor(cl.strong)}% takes strong signals only.`;
