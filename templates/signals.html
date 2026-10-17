@@ -316,13 +316,14 @@
     const off = $("off-note"), r = s.research;
     if (s.enabled === false) {
       off.hidden = false;
-      off.innerHTML = `<b>This stream is switched off.</b> ${r && r.reason ? esc(r.reason) + " " : "No model for it has passed the test on data it never saw yet. "}`
+      off.innerHTML = `<b>This stream is switched off.</b> ${r && r.reason ? esc(r.reason) + " " : "No model for it has passed the test on data it never saw yet. "}${replayLine(r)}`
         + "Signals start here only when a model reaches at least 70% wins (TP1 or better) with a positive average result after costs on data it never saw."
         + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "");
     } else if (s.validated === false) {
       off.hidden = false;
       off.innerHTML = "<b>Untested stream.</b> These signals come from simple rules that have not passed the test on data they never saw. "
         + (r && r.reason ? esc(r.reason) + " " : "")
+        + replayLine(r)
         + "Their real results are tracked below like every other signal. Live auto-trading accounts do not copy this stream; demo accounts do. Treat these signals with extra care."
         + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "");
     } else off.hidden = true;
@@ -336,6 +337,15 @@
   function researchPart(x) {
     if (!x || !x.signals) return "no score level reached the target";
     return `${x.signals} signals (${x.signals_per_day}/day), win rate ${x.win_rate}%, average ${x.avg_net_r > 0 ? "+" : ""}${x.avg_net_r}R`;
+  }
+  function replayLine(r) {
+    const x = r && r.rules_replay;
+    if (!x) return "";
+    const sg = (v) => (v > 0 ? "+" : "") + v;
+    const yrs = Object.entries(x.years || {}).map(([y, v]) => `${esc(y)} ${sg(v.avg_net_r)}R`).join(", ");
+    return `<br><b>What these simple rules did when replayed on history</b> (${esc(x.period)}, ${esc(x.symbols)}): about ${x.signals_per_day} signals a day, `
+      + `${x.win_rate}% reached TP1, average ${sg(x.avg_net_r)}R per signal after costs${x.avg_net_r < 0 ? " (a loss on average)" : ""}. `
+      + `By year: ${yrs}. ${x.avg_net_r < 0 ? "Grades A, B and C all lost on average, so the grade does not tell you which signals are better. " : ""}`;
   }
   function researchList(r) {
     return (r.variants || []).map((v) => `<li><b>${esc(v.label)}</b>: walk-forward ${esc(v.validation_period || "")} ${researchPart(v.validation)}`
