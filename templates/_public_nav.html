@@ -6,6 +6,7 @@
       <a href="/"{% if active == 'home' %} aria-current="page"{% endif %}>Home</a>
       {% if track_record_public or session.get('user_id') %}<a href="/track-record"{% if active == 'track' %} aria-current="page"{% endif %}>Track record</a>{% endif %}
       {% if session.get('user_id') %}<a href="/signals"{% if active == 'signals' %} aria-current="page"{% endif %}>Signals</a>{% endif %}
+      <a href="/strategies"{% if active == 'strategies' %} aria-current="page"{% endif %}>Strategies</a>
       <a href="/news"{% if active == 'news' %} aria-current="page"{% endif %}>News</a>
       <a href="/tools"{% if active == 'tools' %} aria-current="page"{% endif %}>Trading tools</a>
       <a href="/pricing"{% if active == 'pricing' %} aria-current="page"{% endif %}>Pricing</a>
@@ -29,6 +30,7 @@
         <nav class="pmenu-panel" aria-label="Menu">
           <a href="/"{% if active == 'home' %} aria-current="page"{% endif %}>Home</a>
           {% if track_record_public or session.get('user_id') %}<a href="/track-record"{% if active == 'track' %} aria-current="page"{% endif %}>Track record</a>{% endif %}
+          <a href="/strategies"{% if active == 'strategies' %} aria-current="page"{% endif %}>Strategies</a>
           <a href="/news"{% if active == 'news' %} aria-current="page"{% endif %}>News and calendar</a>
           <a href="/tools"{% if active == 'tools' %} aria-current="page"{% endif %}>Trading tools</a>
           <a href="/pricing"{% if active == 'pricing' %} aria-current="page"{% endif %}>Pricing</a>
