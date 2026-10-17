@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Every coin, right now | Signals FM</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<style>
+  .ch-head { padding: 44px 0 10px; }
+  .ch-head h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 4.6vw, 44px); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .ch-head p { color: var(--text-dim); font-size: 16.5px; max-width: 64ch; margin: 0; }
+  .ch-meta { color: var(--text-faint); font-size: 13.5px; margin-top: 12px; }
+  .ch-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 22px 0 18px; }
+  .ch-bar .pinput { width: auto; flex: 1 1 200px; max-width: 280px; font-family: var(--body); font-size: 14px; padding: 8px 12px; }
+  .pseg button b { font-family: var(--mono); font-weight: 600; margin-left: 4px; color: var(--text-faint); }
+  .ch-sec { margin: 26px 0 10px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .ch-sec h2 { font-family: var(--display); font-size: 21px; margin: 0; }
+  .ch-sec span { color: var(--text-faint); font-size: 13.5px; }
+  .cgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1080px) { .cgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 600px) { .cgrid { grid-template-columns: minmax(0, 1fr); } }
+  .cc { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .cc.buy { border-color: color-mix(in srgb, var(--long) 45%, var(--line)); }
+  .cc.sell { border-color: color-mix(in srgb, var(--short) 45%, var(--line)); }
+  .cc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .cc-coin { font-family: var(--display); font-weight: 700; font-size: 20px; }
+  .cc-coin small { font: 500 12.5px var(--body); color: var(--text-faint); margin-left: 6px; }
+  .act { font: 700 13px var(--body); letter-spacing: .04em; padding: 5px 12px; border-radius: 999px; }
+  .act.buy { background: var(--long-dim); color: var(--long); }
+  .act.sell { background: var(--short-dim); color: var(--short); }
+  .act.forming { background: var(--wait-dim); color: var(--wait); }
+  .cplan { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; font-size: 14.5px; }
+  .cplan div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; }
+  .cplan dt { color: var(--text-dim); } .cplan dd { margin: 0; font-family: var(--mono); font-weight: 600; text-align: right; white-space: nowrap; }
+  .cplan small { display: block; font: 400 12px var(--body); color: var(--text-faint); }
+  .cc-now { font-size: 13.5px; color: var(--text-dim); }
+  .cc-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+  .cc-btns .pbtn { font-size: 13.5px; padding: 8px 12px; }
+  .cc p { margin: 0; color: var(--text-dim); font-size: 14px; }
+  .meter { height: 6px; border-radius: 4px; background: var(--panel-raised); overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--wait); border-radius: 4px; }
+  .wait-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .wc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; justify-content: space-between;
+    align-items: center; gap: 6px; font-size: 14px; }
+  .wc b { font-family: var(--display); } .wc span { color: var(--text-faint); font-size: 12px; }
+  .empty-sig { border: 1px dashed var(--line); border-radius: 14px; padding: 22px; color: var(--text-dim); }
+  .rules-box { margin: 34px 0 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .rules-box h3 { margin: 0 0 8px; font-size: 16px; }
+  .rules-box ul { margin: 0; padding-left: 20px; color: var(--text-dim); }
+  .rules-box li { margin-bottom: 6px; }
+</style>
+</head>
+<body class="an-shell in-app">
+{% set active = 'coins' %}
+{% include '_app_nav.html' %}
+
+<main class="wrap">
+  <section class="ch-head">
+    <p class="eyebrow">Every coin, right now</p>
+    <h1>What to do on each coin</h1>
+    <p>For every coin you see one clear answer: a <b>signal</b> when our tested models find a good trade, <b>getting close</b> when one
+      may come soon, or <b>wait</b> when there is no good trade. Waiting is also a good decision: it keeps your money safe.</p>
+    <p class="ch-meta" id="meta">Loading…</p>
+  </section>
+
+  <div class="ch-bar">
+    <div class="pseg" role="group" aria-label="Show">
+      <button type="button" data-f="all" aria-pressed="true">All<b id="n-all"></b></button>
+      <button type="button" data-f="sig" aria-pressed="false">Signals<b id="n-sig"></b></button>
+      <button type="button" data-f="forming" aria-pressed="false">Getting close<b id="n-forming"></b></button>
+      <button type="button" data-f="wait" aria-pressed="false">Wait<b id="n-wait"></b></button>
+    </div>
+    <input class="pinput" id="q" type="search" placeholder="Find a coin, e.g. BTC" aria-label="Find a coin" maxlength="12">
+  </div>
+
+  <div id="sec-sig">
+    <div class="ch-sec"><h2>Signals now</h2><span>Trade plans from the tested crypto models</span></div>
+    <div class="cgrid" id="g-sig"></div>
+  </div>
+  <div id="sec-forming">
+    <div class="ch-sec"><h2>Getting close</h2><span>A signal may start at a coming candle close. Do not trade yet.</span></div>
+    <div class="cgrid" id="g-forming"></div>
+  </div>
+  <div id="sec-wait">
+    <div class="ch-sec"><h2>Wait</h2><span>No good trade right now</span></div>
+    <div class="wait-grid" id="g-wait"></div>
+  </div>
+
+  <section class="rules-box">
+    <h3>Three rules for beginners</h3>
+    <ul>
+      <li><b>Risk only 1% of your account on one trade.</b> The <a class="link" href="/advanced#risk-calc">risk calculator</a> works out the size for you.</li>
+      <li><b>Always set the stop-loss.</b> It is the price where the idea was wrong. Close a third of the trade at each target.</li>
+      <li><b>No signal wins every time.</b> Practise in <a class="link" href="/demo-trading">demo trading</a> first, and see every win and loss on the
+        <a class="link" href="/track-record">track record</a>.</li>
+    </ul>
+  </section>
+</main>
+
+{% include '_public_footer.html' %}
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var base = function (s) { return String(s || "").replace("/USDT", ""); };
+  function price(v, d) {
+    if (v == null || !isFinite(v)) return "--";
+    var a = Math.abs(v), dd = d != null ? d : (a >= 1000 ? 2 : a >= 1 ? 4 : a >= 0.01 ? 5 : 8);
+    return Number(v).toLocaleString("en-US", { minimumFractionDigits: Math.min(dd, 2), maximumFractionDigits: dd });
+  }
+  function ago(iso) {
+    var t = new Date(iso); if (isNaN(t)) return "";
+    var m = Math.round((Date.now() - t.getTime()) / 60000);
+    if (m < 2) return "just now"; if (m < 60) return m + " min ago";
+    var h = Math.round(m / 60); return h < 48 ? h + " hours ago" : Math.round(h / 24) + " days ago";
+  }
+  var hhmm = function (iso) { var t = new Date(iso); return isNaN(t) ? "--" : t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
+  var DATA = null, FILTER = "all";
+  try {
+    var f0 = new URLSearchParams(location.search).get("f");
+    if (["sig", "forming", "wait"].indexOf(f0) >= 0) FILTER = f0;
+  } catch (e) {}
+
+  function sigCard(x) {
+    var s = x.signal || {}, buy = x.status === "buy", d = s.decimals;
+    var stop = s.stop_now != null && s.stop_now !== s.stop_loss ? s.stop_now : s.stop_loss;
+    var t = (s.targets || []).map(function (v, k) {
+      return "<div><dt>Target " + (k + 1) + (k === 0 ? "<small>close a third at each target</small>" : "") + "</dt><dd>" + price(v, d) +
+        (k < (s.hits || 0) ? " ✓" : "") + "</dd></div>";
+    }).join("");
+    var now = s.price != null ? '<div class="cc-now">Now ' + price(s.price, d) + (s.r_now != null ? " · " + (s.r_now >= 0 ? '<span class="pos">' : '<span class="neg">') +
+      (s.r_now > 0 ? "+" : "") + s.r_now + "R</span>" : "") + (s.hits ? " · target " + s.hits + " reached" : "") + "</div>" : "";
+    return '<article class="cc ' + x.status + '"><div class="cc-top"><span class="cc-coin">' + esc(base(x.symbol)) + "<small>" + esc(x.timeframe) +
+      " signal · " + ago(s.signal_at) + '</small></span><span class="act ' + x.status + '">' + (buy ? "BUY" : "SELL") + "</span></div>" +
+      '<dl class="cplan"><div><dt>' + (buy ? "Buy near" : "Sell near") + "</dt><dd>" + price(s.entry, d) + "</dd></div>" +
+      "<div><dt>Stop-loss<small>exit here if it goes wrong</small></dt><dd>" + price(stop, d) + "</dd></div>" + t + "</dl>" + now +
+      '<div class="cc-btns"><a class="pbtn primary" href="/signals?market=crypto&timeframe=' + encodeURIComponent(x.timeframe) + '">See the signal</a>' +
+      '<a class="pbtn" href="/demo-trading">Practise in demo</a></div></article>';
+  }
+  function formCard(x) {
+    return '<article class="cc"><div class="cc-top"><span class="cc-coin">' + esc(base(x.symbol)) + "<small>" + esc(x.timeframe) +
+      ' model</small></span><span class="act forming">GETTING CLOSE</span></div><p>The model is close to a <b>' + (x.lean === "up" ? "buy" : "sell") +
+      "</b> signal on this coin. Wait: a signal starts only when it is confirmed at a candle close.</p>" +
+      '<div class="meter" title="How close the model is to a signal"><i style="width:' + Math.max(8, Math.min(99, x.strength || 0)) + '%"></i></div></article>';
+  }
+  function render() {
+    if (!DATA) return;
+    var q = $("q").value.trim().toUpperCase();
+    var list = DATA.coins.filter(function (x) { return !q || base(x.symbol).indexOf(q) === 0; });
+    var sig = list.filter(function (x) { return x.status === "buy" || x.status === "sell"; });
+    var fm = list.filter(function (x) { return x.status === "forming"; });
+    var wt = list.filter(function (x) { return x.status === "wait"; });
+    $("g-sig").innerHTML = sig.length ? sig.map(sigCard).join("") : '<div class="empty-sig">No signal right now' + (q ? " for this coin" : "") +
+      ". The models check every coin again at " + hhmm(DATA.next_check) + ". Good trades do not come every hour; waiting is part of trading.</div>";
+    $("g-forming").innerHTML = fm.map(formCard).join("");
+    $("g-wait").innerHTML = wt.map(function (x) { return '<div class="wc"><b>' + esc(base(x.symbol)) + "</b><span>wait</span></div>"; }).join("");
+    $("sec-sig").hidden = FILTER !== "all" && FILTER !== "sig";
+    $("sec-forming").hidden = !fm.length || (FILTER !== "all" && FILTER !== "forming");
+    $("sec-wait").hidden = !wt.length || (FILTER !== "all" && FILTER !== "wait");
+  }
+  function load() {
+    fetch("/api/coins/status", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) { $("meta").textContent = d.error || "Could not load the coins."; return; }
+      DATA = d;
+      var c = d.counts || {};
+      $("n-all").textContent = d.coins.length; $("n-sig").textContent = (c.buy || 0) + (c.sell || 0);
+      $("n-forming").textContent = c.forming || 0; $("n-wait").textContent = c.wait || 0;
+      $("meta").textContent = d.coins.length + " coins · signals from the tested " + (d.timeframes || []).join(" and ") +
+        " crypto models · next check " + hhmm(d.next_check);
+      render();
+    }).catch(function () { $("meta").textContent = "Could not reach the server. It tries again in a minute."; });
+  }
+  document.querySelectorAll("[data-f]").forEach(function (b) {
+    b.setAttribute("aria-pressed", b.getAttribute("data-f") === FILTER ? "true" : "false");
+    b.addEventListener("click", function () {
+      FILTER = b.getAttribute("data-f");
+      document.querySelectorAll("[data-f]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      render();
+    });
+  });
+  $("q").addEventListener("input", render);
+  load();
+  setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>
