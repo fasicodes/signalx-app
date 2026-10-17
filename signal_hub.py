@@ -30,7 +30,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, redirect, render_template, request, session
 
 import markets
 import streams
@@ -790,15 +790,25 @@ def active_for(symbol):
         return cur.fetchall() or []
 
 
+def _tested_keys():
+    """Switched-on streams that passed the test on data the model never saw (what the landing page talks about)."""
+    return [k for k in enabled_streams() if stream_tested(*k.split("_", 1))]
+
+
 def public_summary(limit=3, now=None):
-    """Landing page: active signal count and the newest few (symbol, side, timeframe) - no levels."""
+    """Landing page: active signals of the tested streams (count + newest few: symbol, side, timeframe) - no levels."""
     now = now or _utcnow()
+    keys = _tested_keys()
+    if not keys:
+        return {"ok": False}
+    cond = " OR ".join(["(market=%s AND timeframe=%s)"] * len(keys))
+    args = [x for k in keys for x in k.split("_", 1)]
     try:
         with _Cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS n FROM signal_events WHERE status='ACTIVE'")
+            cur.execute(f"SELECT COUNT(*) AS n FROM signal_events WHERE status='ACTIVE' AND ({cond})", tuple(args))
             n = int((cur.fetchone() or {}).get("n") or 0)
-            cur.execute("""SELECT symbol, side, timeframe, bar_time FROM signal_events WHERE status='ACTIVE'
-                           ORDER BY bar_time DESC LIMIT %s""", (limit,))
+            cur.execute(f"""SELECT symbol, side, timeframe, bar_time FROM signal_events WHERE status='ACTIVE' AND ({cond})
+                           ORDER BY bar_time DESC LIMIT %s""", tuple(args) + (int(limit),))
             rows = cur.fetchall() or []
     except Exception:
         return {"ok": False}
@@ -809,8 +819,53 @@ def public_summary(limit=3, now=None):
         ago = f"{mins} min ago" if mins < 60 else (f"{mins // 60} h ago" if mins < 2880 else f"{mins // 1440} days ago")
         recent.append({"coin": r["symbol"].split("/")[0] if r["symbol"].endswith("/USDT") else r["symbol"],
                        "side": r["side"], "timeframe": r.get("timeframe"), "ago": ago})
-    return {"ok": True, "active": n, "coins": len(markets.CRYPTO_COINS) + len(markets.forex_signal_pairs()),
-            "recent": recent}
+    mkts = sorted({k.split("_", 1)[0] for k in keys})
+    return {"ok": True, "active": n, "coins": sum(len(symbols_for(m)) for m in mkts), "recent": recent,
+            "timeframes": [k.split("_", 1)[1] for k in keys]}
+
+
+_MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+
+
+def _period_label(period):
+    """'2025-10-01 to 2026-10-11' -> 'Oct 2025 to Oct 2026'."""
+    try:
+        a, b = [x.strip() for x in str(period).split(" to ")]
+        f = lambda d: f"{_MONTHS[int(d[5:7]) - 1]} {d[:4]}"
+        return f"{f(a)} to {f(b)}"
+    except Exception:
+        return str(period or "")
+
+
+def tested_summary():
+    """Landing page: the test on data the model never saw, for every switched-on tested crypto stream, plus the
+    signal-weighted total. Numbers come straight from the model files; nothing is estimated here."""
+    out = []
+    for key in ("crypto_1h", "crypto_4h"):
+        if key not in _tested_keys():
+            continue
+        try:
+            if key == "crypto_4h":
+                import signal_engine as se
+                t = se.test_stats() or {}
+            else:
+                m = streams.load_model(key)
+                t = (m.meta.get("test") if m is not None else None) or {}
+        except Exception:
+            t = {}
+        if not t.get("signals") or t.get("win_rate") is None:
+            continue
+        out.append({"key": key, "timeframe": key.split("_", 1)[1], "period": _period_label(t.get("period")),
+                    "signals": int(t["signals"]), "per_day": float(t.get("signals_per_day") or 0),
+                    "win_rate": float(t["win_rate"]), "avg_r": float(t.get("avg_net_r") or 0),
+                    "profit_factor": t.get("profit_factor"), "max_drawdown_r": t.get("max_drawdown_r")})
+    if not out:
+        return {"streams": [], "signals": 0}
+    n = sum(x["signals"] for x in out)
+    return {"streams": out, "signals": n, "coins": len(markets.CRYPTO_COINS),
+            "per_day": round(sum(x["per_day"] for x in out), 1),
+            "win_rate": round(sum(x["signals"] * x["win_rate"] for x in out) / n, 1),
+            "avg_r": round(sum(x["signals"] * x["avg_r"] for x in out) / n, 3)}
 
 
 def stream_info():
@@ -938,3 +993,83 @@ def api_cancel(sid):
     if not n:
         return jsonify({"ok": False, "error": "Only an active signal can be cancelled."}), 400
     return jsonify({"ok": True})
+
+
+
+# ===========================================================================
+# Coins page: every coin, every moment - a signal when there is a good trade, otherwise "getting close" or "wait"
+# ===========================================================================
+_coins_cache = {"at": 0.0, "data": None}
+COINS_CACHE_SEC = 20
+
+
+def coins_status(now=None):
+    """One line per signal coin, from the tested crypto streams only (beginners see the signals that passed the test):
+    an active signal (buy / sell), a setup the 1h model is close to (getting close), or nothing to do (wait).
+    Nothing is computed here: it reads the stored signals and the stream boards made at the last candle close."""
+    now = now or _utcnow()
+    tested = [k for k in enabled_streams() if streams.STREAMS[k]["market"] == "crypto" and streams.validated(k)]
+    tfs = [streams.STREAMS[k]["tf"] for k in tested]
+    coins = list(symbols_for("crypto"))
+    rows = []
+    if tfs:
+        with _Cursor() as cur:
+            marks = ",".join(["%s"] * len(tfs))
+            cur.execute(f"SELECT * FROM signal_events WHERE status='ACTIVE' AND market='crypto' AND timeframe IN ({marks}) "
+                        f"ORDER BY bar_time DESC", tuple(tfs))
+            rows = cur.fetchall() or []
+    prices = live_prices(rows) if rows else {}
+    by = {}
+    for r in rows:
+        by.setdefault(r["symbol"], []).append(r)
+    forming = {}
+    for key in tested:
+        e = _engines.get(key)
+        board = e._board[1] if e is not None and e._board else None
+        for sym, res in (board or {}).items():
+            if not isinstance(res, dict) or res.get("error") or res.get("active") or not res.get("setup_forming"):
+                continue
+            st = float(res.get("strength") or 0)
+            if sym not in forming or st > forming[sym]["strength"]:
+                forming[sym] = {"timeframe": streams.STREAMS[key]["tf"], "strength": round(min(st, 99.0)),
+                                "lean": "up" if res.get("bias") == "LONG" else "down"}
+    out = []
+    for sym in coins:
+        sigs = by.get(sym) or []
+        if sigs:
+            r = sigs[0]
+            j = signal_json(r, prices.get(sym))
+            out.append({"symbol": sym, "status": "buy" if r["side"] == "LONG" else "sell", "timeframe": r["timeframe"],
+                        "signal": {k: j.get(k) for k in ("id", "entry", "stop_loss", "stop_now", "targets", "signal_at",
+                                                         "expires_at", "hits", "r_now", "pct_now", "price", "decimals")},
+                        "more": [x["timeframe"] for x in sigs[1:]]})
+        elif sym in forming:
+            out.append({"symbol": sym, "status": "forming", **forming[sym]})
+        else:
+            out.append({"symbol": sym, "status": "wait"})
+    rank = {"buy": 0, "sell": 0, "forming": 1, "wait": 2}
+    out.sort(key=lambda x: (rank[x["status"]], -(x.get("strength") or 0)))
+    sec = min((markets.TF_SEC[t] for t in tfs), default=3600)
+    nxt = streams.last_closed_bar("1h" if sec <= 3600 else "4h", now) + timedelta(seconds=2 * sec)
+    counts = {k: sum(1 for x in out if x["status"] == k) for k in ("buy", "sell", "forming", "wait")}
+    return {"coins": out, "counts": counts, "timeframes": tfs, "updated_at": _iso(now), "next_check": _iso(nxt)}
+
+
+@hub_bp.route("/coins-now", methods=["GET"])
+def coins_page():
+    if not _uid():
+        return redirect("/login")
+    return render_template("coins.html", active="coins")
+
+
+@hub_bp.route("/api/coins/status", methods=["GET"])
+def api_coins_status():
+    if not _uid():
+        return _need_login()
+    t = time.time()
+    if _coins_cache["data"] is None or t - _coins_cache["at"] > COINS_CACHE_SEC:
+        try:
+            _coins_cache.update(at=t, data=coins_status())
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Coin status is not available right now: {str(e)[:120]}"}), 500
+    return jsonify({"ok": True, **_coins_cache["data"]})
