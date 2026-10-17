@@ -808,13 +808,20 @@ def _ms(dt):
 class CandleStore:
     """Closed candles per (symbol, timeframe), topped up incrementally.
     Forex 4h candles are built from 1h candles (UTC 4-hour buckets), exactly
-    as in the research, so the provider's own 4h alignment does not matter."""
+    as in the research, so the provider's own 4h alignment does not matter.
+
+    One cache is shared by every stream and by the result tracker, and they ask
+    for different lengths (the 1h model needs 3,700 1h candles, the 15m rules
+    only 320 for their 1h trend). The cache keeps the longest history any caller
+    asked for and never cuts it back, and it loads the full history again only
+    when a caller needs more candles than were ever loaded for that symbol."""
 
     def __init__(self, get_candles, history=650, sleep=0.12):
         self.get_candles = get_candles
         self.history = history
         self.sleep = sleep
         self._data = {}
+        self._depth = {}          # (symbol, tf) -> most candles any caller asked for (kept from then on)
         self._lock = threading.Lock()
 
     def _call(self, symbol, tf, limit, since):
@@ -834,10 +841,16 @@ class CandleStore:
             return features.resample_closed(h1, "4h").tail(bars).reset_index(drop=True)
         sec = markets.TF_SEC[tf]
         key = (symbol, tf)
-        old = self._data.get(key)
-        frames = [old] if old is not None and len(old) >= min(bars, 50) else []
-        if frames and len(old) < bars and len(old) < self.history:
-            frames = []      # the cache is too short for this request: load the full history again
+        with self._lock:
+            old = self._data.get(key)
+            depth = self._depth.get(key, 0)
+        # top up the cache only when it was loaded at least this deep; otherwise load the full history again
+        frames = [old] if old is not None and len(old) and bars <= depth else []
+        keep = max(bars, depth, self.history)
+        if frames and pd.Timestamp(old["timestamp"].iloc[-1]) >= pd.Timestamp(last_closed_bar(tf, now)):
+            # no newer candle has closed yet: no exchange call (the filter only matters when replaying the past)
+            cur = old[old["timestamp"] + pd.Timedelta(seconds=sec) <= pd.Timestamp(now)]
+            return cur.tail(max(bars, self.history)).reset_index(drop=True)
         if frames:
             cursor = _ms(old["timestamp"].iloc[-1])
         else:
@@ -849,7 +862,8 @@ class CandleStore:
                 frames.append(df)
         else:
             last_seen = None
-            for _ in range(bars // 300 + 4):
+            gap = int((_ms(now) - cursor) // (sec * 1000)) + 2
+            for _ in range(gap // 100 + 4):        # enough calls even if the exchange sends only 100 candles per call
                 df = self._call(symbol, tf, 300, cursor)
                 if df is None:
                     break
@@ -870,10 +884,11 @@ class CandleStore:
         if markets.is_forex(symbol) and tf != "1d":
             ok = forex_open_mask(df["timestamp"])
             df = df[ok].reset_index(drop=True)
-        df = df.tail(max(bars, self.history)).reset_index(drop=True)
+        df = df.tail(keep).reset_index(drop=True)
         with self._lock:
             self._data[key] = df
-        return df
+            self._depth[key] = max(self._depth.get(key, 0), bars)
+        return df.tail(max(bars, self.history)).reset_index(drop=True)
 
 
 def forex_open_mask(ts):
