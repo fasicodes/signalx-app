@@ -349,6 +349,7 @@
   }
   function researchList(r) {
     return (r.variants || []).map((v) => `<li><b>${esc(v.label)}</b>: walk-forward ${esc(v.validation_period || "")} ${researchPart(v.validation)}`
+      + (!v.validation && v.closest ? `; the closest level reached ${researchPart(v.closest)}` : "")
       + (v.holdout ? `; unseen data ${esc(v.holdout.period || "")} ${researchPart(v.holdout)}` : "")
       + ` - ${v.passed ? "passed" : "did not pass"}</li>`).join("");
   }
