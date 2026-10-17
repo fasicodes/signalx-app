@@ -22,6 +22,81 @@
 
 <main class="d-wrap" id="main">
   <div class="d-col">
+    <section class="d-card" id="todo" aria-live="polite">
+      <div class="d-head"><h2 class="d-h2">What to do right now</h2><a class="d-more-link" href="/coins-now">Every coin</a></div>
+      <div class="td-counts">
+        <a class="td-c sig" href="/coins-now?f=sig"><b id="td-sig">–</b><span>signals now</span></a>
+        <a class="td-c close" href="/coins-now?f=forming"><b id="td-close">–</b><span>getting close</span></a>
+        <a class="td-c wait" href="/coins-now?f=wait"><b id="td-wait">–</b><span>wait</span></a>
+      </div>
+      <div class="td-list" id="td-list"><p class="d-empty">Loading…</p></div>
+    </section>
+    <style>
+      .td-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
+      .td-c { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+        background: var(--surface-2); text-decoration: none; color: var(--text); min-width: 0; }
+      .td-c b { font: 700 24px var(--display); font-variant-numeric: tabular-nums; line-height: 1.15; }
+      .td-c span { color: var(--dim); font-size: 13px; }
+      .td-c.sig b { color: var(--long); } .td-c.close b { color: var(--amber); }
+      .td-c:hover { border-color: var(--faint); }
+      .td-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; column-gap: 10px; row-gap: 1px; padding: 10px 0;
+        border-top: 1px solid var(--line); text-decoration: none; color: var(--text); font-size: 14.5px; }
+      .td-row .td-act { grid-row: span 2; justify-self: start; }
+      .td-act { font: 700 11.5px var(--body); letter-spacing: .05em; padding: 4px 9px; border-radius: 999px; }
+      .td-act.buy { color: var(--long); background: var(--long-bg); } .td-act.sell { color: var(--short); background: var(--short-bg); }
+      .td-txt { min-width: 0; overflow-wrap: anywhere; }
+      .td-row small { color: var(--faint); font-size: 12.5px; min-width: 0; overflow-wrap: anywhere; }
+      .td-row small .neg { color: var(--short); }
+      .td-more { display: block; padding-top: 10px; border-top: 1px solid var(--line); color: var(--long); font-size: 14px; font-weight: 600; text-decoration: none; }
+      #todo .d-empty { margin: 0; }
+    </style>
+    <script>
+    (function () {
+      const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      const price = (v, d) => {
+        if (v == null || !isFinite(v)) return "--";
+        const a = Math.abs(v), dd = d != null ? d : (a >= 1000 ? 2 : a >= 1 ? 4 : a >= 0.01 ? 5 : 8);
+        return Number(v).toLocaleString("en-US", { minimumFractionDigits: Math.min(dd, 2), maximumFractionDigits: dd });
+      };
+      const ago = (iso) => {
+        const t = new Date(iso); if (isNaN(t)) return "";
+        const m = Math.round((Date.now() - t.getTime()) / 60000);
+        if (m < 2) return "just now"; if (m < 60) return m + " min ago";
+        const h = Math.round(m / 60); return h < 48 ? h + " h ago" : Math.round(h / 24) + " days ago";
+      };
+      const hhmm = (iso) => { const t = new Date(iso); return isNaN(t) ? "soon" : t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
+      const $ = (id) => document.getElementById(id);
+      async function load() {
+        try {
+          const r = await fetch("/api/coins/status", { credentials: "same-origin" });
+          const d = await r.json();
+          if (!r.ok || !d.ok) throw new Error(d.error || "failed");
+          const c = d.counts || {};
+          $("td-sig").textContent = (c.buy || 0) + (c.sell || 0);
+          $("td-close").textContent = c.forming || 0;
+          $("td-wait").textContent = c.wait || 0;
+          const sig = (d.coins || []).filter((x) => x.status === "buy" || x.status === "sell");
+          if (!sig.length) {
+            $("td-list").innerHTML = '<p class="d-empty">No signal right now. That is normal: a coin gets a signal only when a tested model sees a good trade. Next check at ' +
+              esc(hhmm(d.next_check)) + ".</p>";
+            return;
+          }
+          $("td-list").innerHTML = sig.slice(0, 3).map((x) => {
+            const s = x.signal || {}, buy = x.status === "buy";
+            const stop = s.stop_now != null ? s.stop_now : s.stop_loss;
+            return `<a class="td-row" href="/signals?market=crypto&timeframe=${encodeURIComponent(x.timeframe)}">
+              <span class="td-act ${x.status}">${buy ? "BUY" : "SELL"}</span>
+              <span class="td-txt"><b>${esc(String(x.symbol).replace("/USDT", ""))}</b> ${buy ? "buy" : "sell"} near <b>${price(s.entry, s.decimals)}</b></span>
+              <small>Stop-loss <span class="neg">${price(stop, s.decimals)}</span> · ${esc(x.timeframe)} signal · ${esc(ago(s.signal_at))}</small></a>`;
+          }).join("") + (sig.length > 3 ? `<a class="td-more" href="/coins-now?f=sig">${sig.length - 3} more on Coins right now</a>` : "");
+        } catch (e) {
+          $("td-list").innerHTML = '<p class="d-empty">Could not load the coins right now. It tries again in a minute.</p>';
+        }
+      }
+      load(); setInterval(load, 60000);
+    })();
+    </script>
+
     <button class="d-coin" id="coin-btn" type="button" aria-haspopup="dialog" aria-controls="coin-sheet">
       <img id="coin-icon" src="" alt="">
       <span><span class="sym" id="coin-sym">BTC/USDT</span><span class="kind" id="coin-kind">Crypto</span></span>
@@ -51,14 +126,14 @@
     </section>
     <style>
       .ls-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin: 0 0 12px; }
-      .ls-tabs button { background: transparent; border: 0; color: var(--text-dim); font: 600 13.5px var(--body); padding: 7px 14px; cursor: pointer; }
-      .ls-tabs button[aria-selected="true"] { background: var(--long-dim); color: var(--text); }
+      .ls-tabs button { background: transparent; border: 0; color: var(--dim); font: 600 13.5px var(--body); padding: 7px 14px; cursor: pointer; }
+      .ls-tabs button[aria-selected="true"] { background: var(--long-bg); color: var(--text); }
       .ls-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
       @media (max-width: 760px) { .ls-grid { grid-template-columns: 1fr; } }
-      .ls-col h3 { font-size: 13.5px; margin: 0 0 6px; color: var(--text-dim); font-weight: 600; }
+      .ls-col h3 { font-size: 13.5px; margin: 0 0 6px; color: var(--dim); font-weight: 600; }
       .ls-row { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; text-decoration: none; color: var(--text); }
       .ls-row .l { color: var(--long); font-weight: 600; } .ls-row .s { color: var(--short); font-weight: 600; }
-      .ls-row small { color: var(--text-faint); }
+      .ls-row small { color: var(--faint); }
     </style>
     <script>
     (function () {
@@ -71,7 +146,7 @@
         g.innerHTML = ["15m", "1h", "4h"].map((tf) => {
           const rows = data[m + "_" + tf] || [];
           const body = rows.length ? rows.map((s) => `<a class="ls-row" href="/signals?market=${m}&timeframe=${tf}">
-              <span><b>${esc(s.symbol.replace("/USDT", ""))}</b> <span class="${s.side === "LONG" ? "l" : "s"}">${s.side === "LONG" ? "Long" : "Short"}</span> <small>grade ${esc(s.grade)}${s.tested === false ? " · untested" : ""}</small></span>
+              <span><b>${esc(s.symbol.replace("/USDT", ""))}</b> <span class="${s.side === "LONG" ? "l" : "s"}">${s.side === "LONG" ? "Long" : "Short"}</span> <small>${esc(s.timeframe || "")}${s.tested === false ? " · experimental" : ""}</small></span>
               <small>${ST[s.status] || esc(s.status)}${s.r != null ? " · " + (s.r > 0 ? "+" : "") + s.r + "R" : ""}</small></a>`).join("")
             : '<p class="d-empty">No signals yet.</p>';
           return `<div class="ls-col"><h3>${tf}</h3>${body}</div>`;
@@ -144,7 +219,7 @@
     </section>
 
     <section class="d-card" id="others">
-      <div class="d-head"><h2 class="d-h2">Signals right now</h2><a class="d-more-link" href="/signals">All coins</a></div>
+      <div class="d-head"><h2 class="d-h2">Signals right now</h2><a class="d-more-link" href="/coins-now">All coins</a></div>
       <div class="d-warn" id="others-warn" hidden></div>
       <div class="d-strip" id="others-list"><p class="d-empty">Loading…</p></div>
     </section>
