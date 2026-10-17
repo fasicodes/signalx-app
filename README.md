@@ -24,6 +24,7 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 | Signal scanner + tracker | `signal_hub.py` | After every 15m / 1h / 4h candle close: runs each stream, stores new signals, sends alerts; follows every active signal to its result (TP1/TP2/TP3, stop, expiry). | `SIGNAL_HUB`, `SIGNAL_STREAMS` |
 | Crypto 4h engine | `signalboard.py` + `signal_engine.py` | Signal engine v3.1 board after each 4h close. | `SIGNAL_BOARD` |
 | Track record | `trackrecord.py` | Live record + backtest of engine v3.1. | `TRACK_RECORD_ENGINE` |
+| Strategy library | `strategies.py` + `strategy_library.py` | Once a day: backtests the 30 library strategies on the last year of 1h / 4h candles (20 crypto coins, 6 forex pairs) and stores the results for the Strategies page. | `STRATEGIES_ENGINE`, `STRATEGIES_REFRESH_HOURS` |
 | News + calendar | `news.py` | News every 10 min, calendar every 30 min (de-duplicated). | `NEWS_JOB` |
 | Auto-trade engine | `autotrade.py` | Hands every new site signal to the bots that want it, places orders, follows stops and targets. | `AUTOTRADE_ENGINE` |
 | Demo trading engine | `papertrade.py` | The site's paper exchange. | `PAPER_ENGINE` |
@@ -41,6 +42,27 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 
 Database: every signal is a row in `signal_events` (market, timeframe, grade, plan, status, result). The
 migration only adds columns/indexes; signals from before it are crypto 4h signals and keep their data.
+
+## Strategies page (`/strategies`)
+
+A TradingView-style library with two kinds of strategies, each clearly labelled:
+
+* **By Signals FM, Backtested** (`strategy_library.py`): 30 well-known public strategies (EMA cross, golden cross,
+  MACD, Supertrend, Turtle breakout, Ichimoku, Parabolic SAR, ADX, RSI, RSI(2), Bollinger, Stochastic, Williams %R,
+  CCI, VWAP, Keltner, squeeze, opening range, NR7, Chandelier, inside bar, engulfing, pin bar, volume breakout ...).
+  Each has its written rules and the same test: entry at the close, stop = k x ATR(14) (1R), the strategy's own
+  exit or time limit, one trade per symbol, results in R after costs (crypto 0.12% round trip, forex spread).
+  `strategies.py` reruns every strategy once a day (`STRATEGIES_REFRESH_HOURS`, default 24) on the last
+  `STRATEGIES_DAYS` (365) days of 1h candles, with 4h candles built from them, for `STRATEGIES_COINS` (20 coins)
+  and `STRATEGIES_FOREX` (6 pairs), and stores the results in `strategy_results`. Until the first run finishes,
+  `models/strategies_seed.json` is shown (made with `research/strategies_seed.py` from Binance candles; its period
+  is shown on the page). The card shows the crypto 4h result; the page shows all four markets / timeframes, the
+  equity curve, every symbol and the latest trades on a BTC chart. These are plain backtests of public rules, not
+  the site's tested signal models; the page says so.
+* **By a user, Not tested**: logged-in members publish a title, summary, description, rules, market, timeframe and
+  an optional chart image (PNG / JPEG / WebP, 1.5 MB, stored in the database). Links, e-mail addresses and @handles
+  are refused; 3 posts a day per member; 3 reports hide a post until an admin (`ADMIN_EMAILS`) restores it; the
+  author or an admin can delete it. Likes work on both kinds.
 
 ## News and economic calendar
 
