@@ -323,6 +323,18 @@ for name in ("/advanced", "/demo-trading", "/auto-trading"):
 check(not _re.search(r'/static/[a-z\-]+\.(?:css|js)\?v=20\d{6}', "".join(member.get(n).get_data(as_text=True) for n in ("/advanced", "/demo-trading", "/auto-trading"))),
       "no hand-written version tags left in the big templates")
 
+print("\n[8] Strategies page (strategies.py) is part of the site")
+r = guest.get("/strategies")
+check(r.status_code == 200 and "Trading strategies, tested on real data" in r.get_data(as_text=True), "/strategies opens for visitors")
+check(guest.get("/strategies/ema-crossover-9-21").status_code == 200, "a library strategy page opens")
+d = guest.get("/api/strategies?tab=library").get_json()
+check(d["ok"] and d["total"] == 30, "the strategies API answers with the 30 library strategies")
+sm = guest.get("/sitemap.xml").get_data(as_text=True)
+check("/strategies</loc>" in sm and "/strategies/rsi-30-70</loc>" in sm, "the sitemap lists the Strategies pages")
+nav = member.get("/signals").get_data(as_text=True)
+check('href="/strategies"' in nav, "the app menu links to Strategies")
+check(guest.post("/api/strategies/community", data={"title": "x"}).status_code == 401, "sharing a strategy needs a login")
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
