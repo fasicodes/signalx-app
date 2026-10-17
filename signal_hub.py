@@ -17,7 +17,8 @@ Signal hub - the 15m / 1h / 4h signal streams for crypto and forex.
 * API (login required): /api/signals, /api/signals/stats, /api/signals/latest,
   /api/signals/streams, /api/signals/<id>, POST /api/signals/<id>/cancel (admin).
 
-Env: SIGNAL_STREAMS (default: the streams whose model passed its test on unseen data; 'all' = all six),
+Env: SIGNAL_STREAMS (default / 'all': all six streams; 'validated': only the streams whose model passed its test on
+unseen data; or a comma-separated list). Streams that have not passed the test are marked 'untested' everywhere.
 SIGNAL_HUB=off to stop the background job.
 """
 import json
@@ -95,16 +96,25 @@ def validated_streams():
     return [k for k in ALL_STREAMS if streams.validated(k)]
 
 
+def stream_tested(market, tf):
+    """True when the stream passed its test on data it never saw (crypto 4h: signal engine v3.1)."""
+    try:
+        return bool(streams.validated(f"{market}_{tf}"))
+    except Exception:
+        return False
+
+
 def enabled_streams():
-    """SIGNAL_STREAMS: empty or 'validated' (default) = only the streams whose model passed its test on unseen
-    data; 'all' = all six (untested streams run rules R1); or a comma-separated list."""
+    """SIGNAL_STREAMS: empty or 'all' (default) = all six streams (the ones that have not passed the test on unseen
+    data run simple rules and are marked 'untested' on the site, in alerts and for live auto-trading);
+    'validated' = only the streams whose model passed that test; or a comma-separated list."""
     raw = (os.environ.get("SIGNAL_STREAMS") or "").strip().lower()
-    if not raw or raw == "validated":
-        return validated_streams()
-    if raw == "all":
+    if not raw or raw == "all":
         return list(ALL_STREAMS)
+    if raw == "validated":
+        return validated_streams()
     out = [s.strip() for s in raw.split(",") if s.strip() in ALL_STREAMS]
-    return out or validated_streams()
+    return out or list(ALL_STREAMS)
 
 
 def symbols_for(market):
@@ -558,6 +568,7 @@ def signal_json(r, price=None):
         "exit_price": streams.price_round(float(r["exit_price"]), sym) if r.get("exit_price") is not None else None,
         "r": r.get("r_multiple"), "pips": r.get("pips"), "pct": r.get("result_pct"),
         "engine": r.get("engine") or "v3", "cancel_reason": r.get("cancel_reason"), "decimals": _dec(sym),
+        "tested": stream_tested(r.get("market") or "crypto", tf),
     }
     if markets.is_forex(sym):
         out["sl_pips"] = round(markets.to_pips(sym, risk), 1)
