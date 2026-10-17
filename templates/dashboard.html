@@ -71,7 +71,7 @@
         g.innerHTML = ["15m", "1h", "4h"].map((tf) => {
           const rows = data[m + "_" + tf] || [];
           const body = rows.length ? rows.map((s) => `<a class="ls-row" href="/signals?market=${m}&timeframe=${tf}">
-              <span><b>${esc(s.symbol.replace("/USDT", ""))}</b> <span class="${s.side === "LONG" ? "l" : "s"}">${s.side === "LONG" ? "Long" : "Short"}</span> <small>grade ${esc(s.grade)}</small></span>
+              <span><b>${esc(s.symbol.replace("/USDT", ""))}</b> <span class="${s.side === "LONG" ? "l" : "s"}">${s.side === "LONG" ? "Long" : "Short"}</span> <small>grade ${esc(s.grade)}${s.tested === false ? " · untested" : ""}</small></span>
               <small>${ST[s.status] || esc(s.status)}${s.r != null ? " · " + (s.r > 0 ? "+" : "") + s.r + "R" : ""}</small></a>`).join("")
             : '<p class="d-empty">No signals yet.</p>';
           return `<div class="ls-col"><h3>${tf}</h3>${body}</div>`;
