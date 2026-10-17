@@ -2874,6 +2874,13 @@ app.register_blueprint(track_bp)
 limiter.limit("60 per minute")(track_bp)
 init_trackrecord(app, get_candles=get_candles, engine=get_signal_engine(), available_coins=AVAILABLE_COINS)
 
+# Strategies page: well-known strategies backtested every day on real candles ("By Signals FM") and
+# strategies shared by users ("By a user", not tested) - strategies.py + strategy_library.py
+from strategies import strategies_bp, init_strategies, sitemap_paths as _strategy_paths
+app.register_blueprint(strategies_bp)
+limiter.limit("60 per minute")(strategies_bp)
+init_strategies(app, get_candles=lambda **kw: _stream_candles(**kw), is_admin=lambda: _is_admin())
+
 
 def _site_globals():
     ga = (os.environ.get("GA_MEASUREMENT_ID") or "").strip()
@@ -2995,6 +3002,11 @@ def sitemap_xml():
     try:      # published articles (news.py)
         for path, mod in news.sitemap_entries():
             urls += f"<url><loc>{base}{path}</loc><lastmod>{mod}</lastmod><priority>0.6</priority></url>"
+    except Exception:
+        pass
+    try:      # strategy library pages (strategies.py)
+        for path in _strategy_paths():
+            urls += f"<url><loc>{base}{path}</loc><lastmod>{today}</lastmod><priority>0.7</priority></url>"
     except Exception:
         pass
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
