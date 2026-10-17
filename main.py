@@ -2232,11 +2232,20 @@ def _landing_live():
         return {"ok": False}
 
 
+def _landing_tested():
+    """Test results of the switched-on tested models (1h and 4h crypto), for the landing page."""
+    try:
+        import signal_hub
+        return signal_hub.tested_summary()
+    except Exception:
+        return {"streams": [], "signals": 0}
+
+
 @app.route("/", methods=["GET"])
 def home():
     # Logged-in users ko trading interface, baaqi sabko public landing page
     if "user_id" not in session:
-        return render_template("landing.html", live=_landing_live(), stats=signal_engine.test_stats())
+        return render_template("landing.html", live=_landing_live(), stats=signal_engine.test_stats(), tested=_landing_tested())
     return render_template(
         "dashboard.html",
         user_email=session.get("email", ""),
