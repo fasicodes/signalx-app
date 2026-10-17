@@ -105,8 +105,9 @@ FAQ = [
          "spreads it did not make money: the best version reached 70.8% wins (TP1 or better) on data it had never seen, but the "
          "average result after costs was slightly below zero (-0.072 R per trade). The forex, gold and 15-minute signals therefore "
          "come from simple rules that have not passed our test, and every one of them carries an \"Untested\" label on the "
-         "Signals page and in alerts. Their real results are tracked like every other signal, and live auto-trading accounts do "
-         "not copy them (demo accounts do). Treat them with extra care.</p>"),
+         "Signals page and in alerts. When we replayed those rules on history (forex 2017 to 2020, crypto 15m 2023 to 2025) they lost "
+         "money on average: about -0.08 to -0.22 R per signal after costs, in every year. Their real results are tracked like every "
+         "other signal, and live auto-trading accounts do not copy them (demo accounts do). Treat them with extra care.</p>"),
     ]),
     ("results", "Results and risk", [
         ("How accurate are the signals?",
