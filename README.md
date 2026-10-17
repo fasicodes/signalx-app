@@ -80,7 +80,9 @@ endpoints, the security headers and the analysis functions that once had bugs.
 
 ## Results: what is live and what is not (tested on data the models never saw)
 
-Rule fixed before the results: a stream is switched on only if the model version picked on the validation years
+All six streams run by default. Streams that have not passed the test are marked **untested** on the Signals page and in alerts, and live auto-trading accounts copy only the tested ones (demo accounts copy all). Set `SIGNAL_STREAMS=validated` to run only the tested streams.
+
+Rule fixed before the results: a stream counts as *tested* only if the model version picked on the validation years
 (2023-01 to 2025-09) also reaches **at least 70 % wins (TP1 or better), a positive average result after costs and
 at least 50 signals** on a later holdout (2025-10-01 to 2026-10-11, crypto; 2021-01 to 2022-03, forex).
 Crypto costs 0.12 % per round trip; the holdout was scored once per picked version.
@@ -90,8 +92,8 @@ Crypto costs 0.12 % per round trip; the holdout was scored once per picked versi
 | Crypto 4h (engine v3.1) | **on** | 73.6 % wins, +0.105 R per signal, 735 signals (about 2 a day) |
 | Crypto 1h, with the 4h model agreeing | **on** | 72.6 % wins, +0.083 R per signal, 1,691 signals (about 4.5 a day) |
 | Crypto 1h alone | off | 68.1 %, -0.004 R |
-| Crypto 15m | off (not tested yet) | - |
-| Forex 15m / 1h / 4h and gold | off | no version reached the validation target, or lost money on unseen data (best: 1h, 70.8 % but -0.072 R) |
+| Crypto 15m | on, **untested** (no model yet) | - |
+| Forex 15m / 1h / 4h and gold | on, **untested** (simple rules) | no version reached the validation target, or lost money on unseen data (best: 1h, 70.8 % but -0.072 R) |
 
 Things the numbers say, plainly:
 
