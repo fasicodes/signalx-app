@@ -158,19 +158,31 @@ os.environ.pop("SITE_URL", None)
 print("\n[landing card]")
 with c.session_transaction() as s_:
     s_.clear()
-LANDING.update(live={"ok": True, "active": 4, "coins": 30, "recent": [{"coin": "ETH", "side": "LONG", "ago": "2 h ago"},
+LANDING.update(live={"ok": True, "active": 4, "coins": 30, "recent": [{"coin": "ETH", "side": "LONG", "ago": "2 h ago", "timeframe": "4h"},
                                                                       {"coin": "BTC", "side": "SHORT", "ago": "9 h ago"}]},
-               stats={"win_rate": 69.8, "signals": 437})
+               stats={"win_rate": 69.8, "signals": 437, "avg_net_r": 0.05})
 html = c.get("/").get_data(as_text=True)
-card = html[html.index('class="dash-mock"'):html.index('id="features"')]
-check("ETH/USDT" in card and "Long" in card and "2 h ago" in card and ">4<" in card and "69.8%" in card and "Live" in card,
-      "landing card: real active signals, coins and tested win rate")
-check("EUR/USD" not in card and "BUY" not in card and "19" not in card and "24" not in card, "landing card: no invented signals or numbers")
+card = html[html.index('class="live"'):html.index('id="how"')]
+check("ETH" in card and "Buy" in card and "BTC" in card and "Sell" in card and "2 h ago" in card and ">4<" in card and "Live" in card,
+      "landing live strip: real active signals, side in plain words")
+check("EUR/USD" not in card and "BUY" not in card and "19" not in card and "24" not in card, "landing live strip: no invented signals or numbers")
+check("69.8%" in html and "437" in html and "+0.05R" in html, "landing: tested numbers of the 4h engine when there is no stream summary")
 check("19-channel" not in html.lower() and "Four independent" not in html and "Day Traders" not in html, "landing copy matches the current engine")
-LANDING.update(live={"ok": False}, stats={})
-card = c.get("/").get_data(as_text=True)
-card = card[card.index('class="dash-mock"'):card.index('id="features"')]
-check("Live" not in card and "checked at every 4-hour close" in card, "landing card: no 'Live' badge when there is no data")
+hero = html[html.index('class="ex"'):html.index('class="live"')]
+check("Example" in hero and "An example of how a signal looks" in hero, "landing: the sample signal is labelled as an example")
+LANDING.update(tested={"signals": 2426, "per_day": 6.5, "win_rate": 72.9, "avg_r": 0.09, "coins": 62,
+                       "streams": [{"timeframe": "1h", "period": "Oct 2025 to Oct 2026", "signals": 1691, "per_day": 4.51, "win_rate": 72.6, "avg_r": 0.083},
+                                   {"timeframe": "4h", "period": "Oct 2025 to Oct 2026", "signals": 735, "per_day": 1.97, "win_rate": 73.6, "avg_r": 0.105}]})
+html = c.get("/").get_data(as_text=True)
+check("72.9%" in html and "1,691" in html and "73.6%" in html and "+0.08R" in html and "2,426" in html and "Both models together" in html,
+      "landing: the numbers of both tested models and their total")
+check("every hour and every 4 hours" in html and "6.5 a day" in html and "About 7 in 10" in html, "landing: check times and signals a day from the models")
+LANDING.update(live={"ok": False}, stats={}, tested={"streams": [], "signals": 0})
+html = c.get("/").get_data(as_text=True)
+card = html[html.index('class="live"'):html.index('id="how"')]
+check("Live" not in card and "Signals are checked every" in card, "landing live strip: no 'Live' badge when there is no data")
+check("%" not in html[html.index('class="facts"'):html.index('class="ex"')] and 'class="res-card' not in html,
+      "landing: no win rate or result cards without test data")
 LANDING.clear()
 
 print("\n[error pages]")
