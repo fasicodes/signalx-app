@@ -112,6 +112,46 @@ def fake_candles(symbol, timeframe, limit, since=None):
     return df.tail(limit)
 
 
+# ---------------------------------------------------------------------------
+# shared candle cache: every stream and the tracker use one cache, with different lengths
+# ---------------------------------------------------------------------------
+def capped(symbol, timeframe, limit, since=None, cap=300):
+    """Like the exchange: at most `cap` candles per call."""
+    return fake_candles(symbol, timeframe, min(int(limit), cap), since)
+
+
+CNOW = datetime(2026, 10, 13, 12, 7)
+cs = streams.CandleStore(capped, sleep=0)
+check(len(cs.frame("BTC/USDT", "1h", CNOW, bars=3000)) == 3000, "candle cache: a long 1h history loads in pages of 300")
+cs.frame("BTC/USDT", "1h", CNOW + timedelta(minutes=16), bars=320)      # the 15m rules: their 1h trend
+cs.frame("BTC/USDT", "1h", CNOW + timedelta(minutes=20))                # the result tracker: default length
+again = cs.frame("BTC/USDT", "1h", CNOW + timedelta(hours=1), bars=3000)
+check(len(again) == 3000 and len(cs._data[("BTC/USDT", "1h")]) >= 3000,
+      "candle cache: shorter requests never cut back the long history (the 1h model and its 4h check need it)")
+check(again["timestamp"].iloc[-1] == pd.Timestamp(CNOW + timedelta(hours=1)).floor("h") - pd.Timedelta(hours=1),
+      "candle cache: the long history is topped up to the last closed candle")
+small = cs.frame("BTC/USDT", "1h", CNOW + timedelta(hours=1, minutes=5), bars=320)
+check(len(small) == max(320, cs.history), "candle cache: short requests still get their usual length")
+cs100 = streams.CandleStore(lambda symbol, timeframe, limit, since=None: capped(symbol, timeframe, limit, since, cap=100),
+                            sleep=0)
+check(len(cs100.frame("ETH/USDT", "1h", CNOW, bars=3000)) == 3000,
+      "candle cache: still loads the full history when the exchange sends only 100 candles per call")
+FXNOW = [CNOW]
+
+
+def fx_candles(symbol, timeframe, limit, since=None):
+    """Like a forex data provider: candles up to now, none while the market is closed."""
+    df = fake_candles(symbol, timeframe, 10 ** 6, since)
+    df = df[(df["timestamp"] <= pd.Timestamp(FXNOW[0])) & streams.forex_open_mask(df["timestamp"])]
+    return df.head(limit) if since is not None else df.tail(limit)
+
+
+fxs = streams.CandleStore(fx_candles, sleep=0)
+fxs.frame("EUR/USD", "1h", CNOW)                                         # the forex 1h stream ran first
+FXNOW[0] = CNOW + timedelta(hours=1)
+h4 = fxs.frame("EUR/USD", "4h", FXNOW[0])
+check(len(h4) > streams.WARMUP + 5, f"candle cache: forex 4h (built from 1h) has enough history after the forex 1h stream ({len(h4)})")
+
 NOW = datetime(2026, 10, 13, 12, 7)
 store = streams.CandleStore(fake_candles, sleep=0)
 eng = streams.StreamEngine("crypto", "1h", store, ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"])
