@@ -84,7 +84,7 @@
   .bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 4px 0 14px; }
   .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .tabs button { background: transparent; border: 0; color: var(--text-dim); font: 600 14px var(--body); padding: 9px 16px; cursor: pointer; min-height: 40px; }
-  .tabs button + button { border-left: 1px solid var(--line); }
+  .tabs button:not([hidden]) ~ button { border-left: 1px solid var(--line); }
   .tabs button[aria-selected="true"] { background: var(--long-dim); color: var(--text); }
   .stream-info { font-size: 13px; color: var(--text-dim); flex: 1 1 260px; }
   .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
@@ -116,6 +116,9 @@
   .box h3 { margin: 0 0 8px; font-size: 15px; }
   .off-note { border: 1px solid var(--amber, #d97706); background: var(--amber-bg, rgba(217,119,6,.08)); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; line-height: 1.6; margin: 0 0 16px; }
   .off-note ul { margin: 8px 0 0; padding-left: 18px; }
+  .plain { font-size: 13.5px; line-height: 1.55; color: var(--text-dim); background: var(--panel-raised); border-radius: 8px; padding: 8px 10px; margin: 6px 0 2px; }
+  .exp-tag { display: inline-block; font: 600 12px var(--body); padding: 2px 9px; border-radius: 999px; margin-right: 6px;
+    color: var(--wait); border: 1px solid color-mix(in srgb, var(--wait) 45%, transparent); background: var(--wait-dim); }
   .off-note details { margin-top: 8px; }
   .off-note summary { cursor: pointer; font-weight: 600; }
   .off-note li { margin: 2px 0; }
@@ -143,7 +146,7 @@
 <main class="wrap">
   <div class="phead">
     <h1>Trading signals</h1>
-    <p>Separate signal streams for 15-minute, 1-hour and 4-hour candles, for crypto and forex. Each stream has its own rules,
+    <p><span id="intro-streams">Separate signal streams for 15-minute, 1-hour and 4-hour candles, for crypto and forex.</span> Each stream has its own rules,
       stop and target distances, holding time and track record, and a signal on one timeframe never changes another.</p>
   </div>
 
@@ -188,14 +191,9 @@
       <select id="f-side" aria-label="Direction">
         <option value="">Long and short</option><option value="LONG">Long only</option><option value="SHORT">Short only</option>
       </select>
-      <span class="chips" role="group" aria-label="Grade">
-        <button type="button" class="chip" data-g="A" aria-pressed="false">Grade A</button>
-        <button type="button" class="chip" data-g="B" aria-pressed="false">Grade B</button>
-        <button type="button" class="chip" data-g="C" aria-pressed="false">Grade C</button>
-      </span>
       <select id="f-sort" aria-label="Sort">
         <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
-        <option value="grade">Best grade</option><option value="result">Best result</option>
+        <option value="result">Best result</option>
         <option value="symbol">Symbol A-Z</option>
       </select>
     </div>
@@ -209,12 +207,9 @@
   </section>
 
   <section class="block">
-    <h2 class="sec">Results by grade</h2>
-    <p class="sec-sub">Grade A signals have the most confirming factors. The sample size is shown with every number; small samples swing a lot.</p>
-    <div class="two">
-      <div class="box"><h3>Live record (closed signals)</h3><div id="by-grade" class="dim">--</div></div>
-      <div class="box"><h3 id="sim-title">Recent replay</h3><div id="sim" class="dim">--</div></div>
-    </div>
+    <h2 class="sec">Tested on history</h2>
+    <p class="sec-sub">How this stream did on past data, after costs. The live record is shown above.</p>
+    <div class="box"><h3 id="sim-title">Backtest</h3><div id="sim" class="dim">--</div></div>
   </section>
 
   <section class="block" id="alerts">
@@ -289,6 +284,25 @@
   const q = new URLSearchParams(location.search);
   let market = ["crypto", "forex"].includes(q.get("market")) ? q.get("market") : "crypto";
   let tf = ["15m", "1h", "4h"].includes(q.get("timeframe")) ? q.get("timeframe") : "4h";
+  // streams switched off in the settings (SIGNAL_STREAMS) are not offered: only the streams that run are shown
+  const ON = STREAMS.filter((x) => x.enabled !== false);
+  const isOn = (m, t) => ON.some((x) => x.market === m && x.timeframe === t);
+  function fixChoice() {
+    if (!ON.length || isOn(market, tf)) return;
+    const pick = ON.find((x) => x.market === market && x.timeframe === "4h") || ON.find((x) => x.market === market)
+      || ON.find((x) => x.timeframe === "4h") || ON[0];
+    market = pick.market; tf = pick.timeframe;
+  }
+  fixChoice();
+  (function () {                     // the intro names only the streams that run
+    if (!ON.length || ON.length === STREAMS.length) return;
+    const NAMES = { "15m": "15-minute", "1h": "1-hour", "4h": "4-hour" };
+    const tfs = ["15m", "1h", "4h"].filter((t) => ON.some((x) => x.timeframe === t)).map((t) => NAMES[t]);
+    const mks = ["crypto", "forex"].filter((m) => ON.some((x) => x.market === m));
+    const list = tfs.length > 1 ? tfs.slice(0, -1).join(", ") + " and " + tfs[tfs.length - 1] : tfs[0];
+    const el = document.getElementById("intro-streams");
+    if (el) el.textContent = "Separate signal streams for " + list + " candles, for " + (mks.length > 1 ? "crypto and forex" : mks[0]) + ".";
+  })();
   let page = 1, grades = new Set(), ALERTS = null, pick = new Set(), mode = "ALL", loadSeq = 0;
 
   function price(v, dec) {
@@ -309,25 +323,25 @@
   const SETUP = { breakout: "Breakout", pullback: "Pullback", trend_continuation: "Trend continuation", reversal: "Reversal at support/resistance" };
 
   function setTabs() {
+    if (ON.length) {
+      document.querySelectorAll("#mk button").forEach((b) => { b.hidden = !ON.some((x) => x.market === b.dataset.v); });
+      document.querySelectorAll("#tf button").forEach((b) => { b.hidden = !isOn(market, b.dataset.v); });
+    }
     document.querySelectorAll("#mk button").forEach((b) => b.setAttribute("aria-selected", b.dataset.v === market));
     document.querySelectorAll("#tf button").forEach((b) => b.setAttribute("aria-selected", b.dataset.v === tf));
     const s = STREAMS.find((x) => x.market === market && x.timeframe === tf) || {};
     const tps = (s.targets_r || []).map((r, k) => `TP${k + 1} ${r}R`).join(" · ");
-    let info = `${market === "forex" ? "Forex" : "Crypto"} ${tf}: ${s.symbols || 0} symbols · expected hold ${esc(s.hold || "--")} · ${tps} · ${esc(s.engine || "")}`;
+    let info = `${market === "forex" ? "Forex" : "Crypto"} ${tf}: ${s.symbols || 0} symbols · expected hold ${esc(s.hold || "--")} · ${tps}`
+      + (s.validated === false ? " · experimental rules" : " · tested model");
     $("stream-info").textContent = info;
     const off = $("off-note"), r = s.research;
     if (s.enabled === false) {
       off.hidden = false;
-      off.innerHTML = `<b>This stream is switched off.</b> ${r && r.reason ? esc(r.reason) + " " : "No model for it has passed the test on data it never saw yet. "}${replayLine(r)}`
-        + "Signals start here only when a model reaches at least 70% wins (TP1 or better) with a positive average result after costs on data it never saw."
-        + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "");
+      off.innerHTML = "<b>This stream is switched off.</b> Signals start here when a model for it passes our test on data it never saw.";
     } else if (s.validated === false) {
       off.hidden = false;
-      off.innerHTML = "<b>Untested stream.</b> These signals come from simple rules that have not passed the test on data they never saw. "
-        + replayLine(r)
-        + "Live auto-trading accounts do not copy this stream; demo accounts do. Treat these signals with extra care."
-        + `<details><summary>Why no model is used here</summary>${r && r.reason ? esc(r.reason) : ""}`
-        + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "") + "</details>";
+      off.innerHTML = '<span class="exp-tag">Experimental</span> Simple rules that have not passed our test on unseen data. '
+        + replayLine(r) + "Live auto-trading does not copy them.";
     } else off.hidden = true;
     const sel = $("f-symbol"), cur = sel.value;
     sel.innerHTML = '<option value="">All symbols</option>' + SYMBOLS[market].map((c) => `<option value="${esc(c)}">${coin(c)}</option>`).join("");
@@ -353,9 +367,7 @@
     const sg = (v) => (v > 0 ? "+" : "") + v;
     const yrs = Object.entries(x.years || {}).map(([y, v]) => `${esc(y)} ${sg(v.avg_net_r)}R`).join(", ");
     const spd = x.signals_per_day >= 10 ? Math.round(x.signals_per_day) : Math.round(x.signals_per_day * 10) / 10;
-    return `<br><b>On past data these rules averaged ${sg(x.avg_net_r)}R per signal after costs</b>${x.avg_net_r < 0 ? " (a loss)" : ""}: `
-      + `about ${spd} signal${spd === 1 ? "" : "s"} a day, ${x.win_rate}% reached TP1 (${esc(x.period)}). By year: ${yrs}. `
-      + `${x.avg_net_r < 0 ? "The grade does not tell you which signals are better. " : ""}`;
+    return `On past data they averaged ${sg(x.avg_net_r)}R per signal after costs (${x.win_rate}% reached TP1). `;
   }
   function researchList(r) {
     return (r.variants || []).map((v) => `<li><b>${esc(v.label)}</b>: walk-forward ${esc(v.validation_period || "")} ${researchPart(v.validation)}`
@@ -376,11 +388,15 @@
   function card(s) {
     const d = s.decimals;
     const pip = (k) => s.tp_pips ? `<small class="dim">${s.tp_pips[k]} pips</small>` : "";
+    const buy = s.side === "LONG";
     const lv = `<div class="lv lv5">
-        <div><span>Entry</span><b>${price(s.entry, d)}</b></div>
-        <div><span>Stop loss</span><b>${price(s.stop_loss, d)}</b>${s.sl_pips ? `<small class="dim">${s.sl_pips} pips</small>` : ""}</div>
-        ${(s.targets || []).map((t, k) => `<div><span>TP${k + 1}</span><b>${price(t, d)}</b>${pip(k)}</div>`).join("")}
+        <div><span>${buy ? "Buy near" : "Sell near"}</span><b>${price(s.entry, d)}</b></div>
+        <div><span>Stop-loss</span><b>${price(s.stop_loss, d)}</b>${s.sl_pips ? `<small class="dim">${s.sl_pips} pips</small>` : ""}</div>
+        ${(s.targets || []).map((t, k) => `<div><span>Target ${k + 1}</span><b>${price(t, d)}</b>${pip(k)}</div>`).join("")}
       </div>`;
+    const plan = s.status === "ACTIVE" ? `<div class="plain">${buy ? "Buy" : "Sell"} ${coin(s.symbol)} near ${price(s.entry, d)}. If the price `
+      + `${buy ? "falls" : "rises"} to ${price(s.stop_now != null ? s.stop_now : s.stop_loss, d)}, close the trade. Take a third off at each target. `
+      + `Risk only 1% of your account.</div>` : "";
     const news = s.news && s.news.title ? `<div class="news-warn">High-impact news: ${esc(s.news.title)}${s.news.at ? " · " + dayTime(s.news.at) : ""}</div>` : "";
     const admin = IS_ADMIN && s.status === "ACTIVE" ? `<button class="pbtn admin-x" type="button" data-cancel="${s.id}">Cancel signal</button>` : "";
     const trade = s.status === "ACTIVE" && !s.hits ? `<button class="pbtn primary" type="button" data-trade="${s.id}">Trade this signal</button>` : "";
@@ -389,14 +405,14 @@
     const closed = s.status !== "ACTIVE" ? `<div class="meta"><span>Closed ${dayTime(s.closed_at)}${s.exit_price != null ? " at " + price(s.exit_price, d) : ""}</span><span>${resultTxt(s)}</span></div>` : "";
     const why = s.cancel_reason ? `<div class="dim" style="font-size:12.5px">Reason: ${esc(s.cancel_reason)}</div>` : "";
     return `<article class="card${s.status === "ACTIVE" ? "" : " done"}">
-      <div class="card-head"><span class="coin">${coin(s.symbol)}</span><span class="side ${s.side}">${s.side === "LONG" ? "Long" : "Short"}</span>
+      <div class="card-head"><span class="coin">${coin(s.symbol)}</span><span class="side ${s.side}" title="${s.side === "LONG" ? "Long" : "Short"}">${s.side === "LONG" ? "Buy" : "Sell"}</span>
         <span class="since">${esc(s.timeframe)} · ${dayTime(s.signal_at)}</span></div>
       <div class="tags"><span class="st ${s.status}">${STATUS[s.status] || esc(s.status)}${s.status === "ACTIVE" && s.hits ? ` · TP${s.hits} reached` : ""}</span>
-        <span class="badge ${esc(s.grade)}">Grade ${esc(s.grade)}</span>
-        ${s.tested === false ? '<span class="badge untested" title="This stream has not passed the test on unseen data">Untested</span>' : ""}
+        ${s.tested === false ? '<span class="badge untested" title="Simple rules that have not passed our test on unseen data">Experimental</span>' : ""}
         ${s.setup ? `<span class="badge">${esc(SETUP[s.setup] || s.setup)}</span>` : ""}
-        <span class="badge">R:R 1:${s.rr != null ? s.rr : "--"}</span></div>
+        </div>
       ${lv}
+      ${plan}
       ${nowTxt(s)}
       ${news}
       <div class="meta"><span>Expected hold ${dur(s.hold_minutes)}</span><span>${s.status === "ACTIVE" ? "Expires " + dayTime(s.expires_at) : ""}</span></div>
@@ -418,7 +434,6 @@
     const p = new URLSearchParams({ market, timeframe: tf, page, per_page: 24, status: $("f-status").value, sort: $("f-sort").value });
     if ($("f-symbol").value) p.set("symbol", $("f-symbol").value);
     if ($("f-side").value) p.set("side", $("f-side").value);
-    if (grades.size) p.set("grade", Array.from(grades).join(","));
     $("list-state").hidden = false; $("list-state").className = "loading"; $("list-state").textContent = "Loading signals…";
     try {
       const d = await getJSON("/api/signals?" + p);
@@ -520,7 +535,6 @@
         + (a.closed && a.closed < 30 ? ` Only ${a.closed} closed so far, which is too few to judge: one or two results can swing these numbers a lot. They start to mean something after about 30 closed signals.` : "");
       $("c-res").textContent = a.total_r != null && a.closed ? `${a.total_r > 0 ? "+" : ""}${a.total_r}R` : "--";
       $("c-res-sub").textContent = a.closed ? (market === "forex" && a.total_pips != null ? `${a.total_pips > 0 ? "+" : ""}${a.total_pips} pips · avg ${a.avg_r}R` : `avg ${a.avg_r}R · PF ${a.profit_factor != null ? a.profit_factor : "--"}`) : "after costs";
-      $("by-grade").innerHTML = gradeTable(d.by_grade || {});
       const sim = d.simulated, mt = d.model_test;
       const H = mt && mt.holdout, WF = mt && mt.walk_forward;
       if (H && H.signals) {
@@ -534,8 +548,11 @@
         $("sim").innerHTML = html;
       } else if ((STREAMS.find((x) => x.market === market && x.timeframe === tf) || {}).research) {
         const r = STREAMS.find((x) => x.market === market && x.timeframe === tf).research;
-        $("sim-title").textContent = "Tested on history, not used";
-        $("sim").innerHTML = `${esc(r.reason || "")}<ul style="margin:8px 0 0;padding-left:18px">${researchList(r)}</ul>`;
+        const x = r.rules_replay;
+        $("sim-title").textContent = "Experimental rules on past data";
+        $("sim").innerHTML = x ? `${esc(x.period || "")}: about ${x.signals_per_day >= 10 ? Math.round(x.signals_per_day) : x.signals_per_day} signals a day, `
+          + `${x.win_rate}% reached TP1, average ${x.avg_net_r > 0 ? "+" : ""}${x.avg_net_r}R per signal after costs. These rules have not passed our test, so treat them as an experiment.`
+          : "These rules have not passed our test on unseen data yet.";
       } else if (sim && sim.signals) {
         $("sim-title").textContent = `Recent replay (last ${sim.window_days} days)`;
         $("sim").innerHTML = `The same rules replayed on real ${tf} candles of ${sim.symbols} symbols: ${sim.signals} signals, win rate ${sim.win_rate}% (${sim.wins} of ${sim.signals}), avg ${sim.avg_r}R, total ${sim.total_r}R after costs. A replay is a simulation, shown separately from the live record.`;
@@ -550,11 +567,11 @@
   }
   function reload() { page = 1; loadList(); loadStats(); }
 
-  $("mk").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; market = b.dataset.v; setTabs(); reload(); });
-  $("tf").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; tf = b.dataset.v; setTabs(); reload(); });
+  $("mk").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; market = b.dataset.v; fixChoice(); setTabs(); reload(); });
+  $("tf").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; tf = b.dataset.v; fixChoice(); setTabs(); reload(); });
   ["f-status", "f-symbol", "f-side", "f-sort"].forEach((id) => $(id).addEventListener("change", () => { page = 1; loadList(); }));
   document.querySelectorAll("#filters .chip[data-g]").forEach((b) => b.addEventListener("click", () => {
-    const g = b.dataset.g; grades.has(g) ? grades.delete(g) : grades.add(g); b.setAttribute("aria-pressed", grades.has(g)); page = 1; loadList();
+    page = 1; loadList();
   }));
   $("p-prev").addEventListener("click", () => { if (page > 1) { page--; loadList(); } });
   $("p-next").addEventListener("click", () => { page++; loadList(); });
