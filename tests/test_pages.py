@@ -249,7 +249,7 @@ login(False)
 st, html = get("/tr")
 check(st == 200 and 'class="pnav"' in html and 'id="an-side"' not in html, "track record: public navigation for visitors")
 st, html = get("/land")
-check(st == 200 and 'href="/pricing"' in html and 'href="/faq"' in html and 'id="lmenu"' in html and "Free while we" in html,
-      "landing: links to the new pages + phone menu")
+check(st == 200 and 'href="/pricing"' in html and 'href="/faq"' in html and 'id="pmenu"' in html and "Free while we" in html
+      and 'href="/strategies"' in html, "landing: shared navigation with the phone menu, links to the new pages")
 
 print(f"\nALL {passed} CHECKS PASSED")
