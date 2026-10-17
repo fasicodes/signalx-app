@@ -76,7 +76,8 @@ FAQ = [
          "<p>All 62 crypto coins in the list, against USDT. The model was trained on 21 of them and then tested on 53 coins over a "
          "year it had never seen, 32 of which it had never seen at all; the results held up on those as well. The newest coins "
          "(such as HYPE, TAO, ONDO and ASTER) have a short history, so check their results on the "
-         "<a href=\"/track-record\">Track record</a>. Forex pairs, gold and silver show the chart and a market brief, but no signal.</p>"),
+         "<a href=\"/track-record\">Track record</a>. Forex pairs and gold have their own signal streams, which are marked untested "
+         "(see the forex question below).</p>"),
         ("How often do new signals come?",
          "<p>In the 12-month test there were 735 signals across 53 coins, about 2 a day, a new signal on 369 of 374 days, and the "
          "longest wait between two new signals was 2.3 days. A signal can only start right after a 4-hour candle closes.</p>"),
@@ -100,10 +101,12 @@ FAQ = [
          "card shows how far the price has moved and how close it is to the next target or the stop. If the price is already near "
          "TP1, little reward is left for the same risk.</p>"),
         ("Are there signals for forex or gold?",
-         "<p>Not yet. We built and tested a separate model for 11 forex pairs and gold on 2016 to 2022 data, and after spreads it "
-         "did not make money (about 66 to 68% reached TP1, but the average result was slightly below zero). We will not publish "
-         "signals that did not pass a test, so forex pairs, gold and silver get the live chart and a plain-language market brief "
-         "only for now.</p>"),
+         "<p>Yes, but they are marked <b>untested</b>. We built and tested a separate model for forex pairs and gold, and after "
+         "spreads it did not make money: the best version reached 70.8% wins (TP1 or better) on data it had never seen, but the "
+         "average result after costs was slightly below zero (-0.072 R per trade). The forex, gold and 15-minute signals therefore "
+         "come from simple rules that have not passed our test, and every one of them carries an \"Untested\" label on the "
+         "Signals page and in alerts. Their real results are tracked like every other signal, and live auto-trading accounts do "
+         "not copy them (demo accounts do). Treat them with extra care.</p>"),
     ]),
     ("results", "Results and risk", [
         ("How accurate are the signals?",
