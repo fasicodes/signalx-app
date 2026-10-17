@@ -116,6 +116,8 @@
   .box h3 { margin: 0 0 8px; font-size: 15px; }
   .off-note { border: 1px solid var(--amber, #d97706); background: var(--amber-bg, rgba(217,119,6,.08)); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; line-height: 1.6; margin: 0 0 16px; }
   .off-note ul { margin: 8px 0 0; padding-left: 18px; }
+  .off-note details { margin-top: 8px; }
+  .off-note summary { cursor: pointer; font-weight: 600; }
   .off-note li { margin: 2px 0; }
   .disclaimer { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: var(--text-dim); font-size: 13px; line-height: 1.6; margin: 18px 0; }
   .admin-x { font-size: 12px; }
@@ -322,10 +324,10 @@
     } else if (s.validated === false) {
       off.hidden = false;
       off.innerHTML = "<b>Untested stream.</b> These signals come from simple rules that have not passed the test on data they never saw. "
-        + (r && r.reason ? esc(r.reason) + " " : "")
         + replayLine(r)
-        + "Their real results are tracked below like every other signal. Live auto-trading accounts do not copy this stream; demo accounts do. Treat these signals with extra care."
-        + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "");
+        + "Live auto-trading accounts do not copy this stream; demo accounts do. Treat these signals with extra care."
+        + `<details><summary>Why no model is used here</summary>${r && r.reason ? esc(r.reason) : ""}`
+        + (r && r.variants && r.variants.length ? `<ul>${researchList(r)}</ul>` : "") + "</details>";
     } else off.hidden = true;
     const sel = $("f-symbol"), cur = sel.value;
     sel.innerHTML = '<option value="">All symbols</option>' + SYMBOLS[market].map((c) => `<option value="${esc(c)}">${coin(c)}</option>`).join("");
@@ -338,14 +340,22 @@
     if (!x || !x.signals) return "no score level reached the target";
     return `${x.signals} signals (${x.signals_per_day}/day), win rate ${x.win_rate}%, average ${x.avg_net_r > 0 ? "+" : ""}${x.avg_net_r}R`;
   }
+  function scanNote() {
+    const s = STREAMS.find((x) => x.market === market && x.timeframe === tf) || {};
+    if (s.error) return ` The scanner reported a problem for this stream: ${s.error}`;
+    const l = s.last_scan;
+    if (!l) return " The scanner has not finished its first run for this stream yet; it loads several months of candles first, which can take a few minutes.";
+    return ` Last scan ${dayTime(l.at)}: ${l.symbols} symbols checked, ${l.errors} could not be read, ${l.new} new signals. A signal appears only when a symbol meets the stream's rules at a candle close.`;
+  }
   function replayLine(r) {
     const x = r && r.rules_replay;
     if (!x) return "";
     const sg = (v) => (v > 0 ? "+" : "") + v;
     const yrs = Object.entries(x.years || {}).map(([y, v]) => `${esc(y)} ${sg(v.avg_net_r)}R`).join(", ");
-    return `<br><b>What these simple rules did when replayed on history</b> (${esc(x.period)}, ${esc(x.symbols)}): about ${x.signals_per_day} signals a day, `
-      + `${x.win_rate}% reached TP1, average ${sg(x.avg_net_r)}R per signal after costs${x.avg_net_r < 0 ? " (a loss on average)" : ""}. `
-      + `By year: ${yrs}. ${x.avg_net_r < 0 ? "Grades A, B and C all lost on average, so the grade does not tell you which signals are better. " : ""}`;
+    const spd = x.signals_per_day >= 10 ? Math.round(x.signals_per_day) : Math.round(x.signals_per_day * 10) / 10;
+    return `<br><b>On past data these rules averaged ${sg(x.avg_net_r)}R per signal after costs</b>${x.avg_net_r < 0 ? " (a loss)" : ""}: `
+      + `about ${spd} signal${spd === 1 ? "" : "s"} a day, ${x.win_rate}% reached TP1 (${esc(x.period)}). By year: ${yrs}. `
+      + `${x.avg_net_r < 0 ? "The grade does not tell you which signals are better. " : ""}`;
   }
   function researchList(r) {
     return (r.variants || []).map((v) => `<li><b>${esc(v.label)}</b>: walk-forward ${esc(v.validation_period || "")} ${researchPart(v.validation)}`
@@ -419,7 +429,7 @@
         $("list-state").className = "empty-box";
         $("list-state").textContent = $("f-status").value === "active"
           ? `No active ${tf} ${market} signals right now. The scanner checks every symbol at each ${tf} candle close.`
-          : "No signals match these filters yet.";
+          : "No signals match these filters yet." + scanNote();
       } else $("list-state").hidden = true;
       loadBotStatus(d.signals.map((x) => x.id));
       $("pager").hidden = d.pages <= 1;
@@ -506,6 +516,8 @@
       $("c-win30").textContent = wr(W["30d"]); $("c-win30-sub").textContent = nTxt(W["30d"]);
       $("c-win7").textContent = wr(W["7d"]); $("c-win7-sub").textContent = nTxt(W["7d"]);
       const a = W.all || {};
+      $("stats-note").textContent = "Live numbers come only from real signals of this stream that have closed. A win is a signal that reached at least TP1."
+        + (a.closed && a.closed < 30 ? ` Only ${a.closed} closed so far, which is too few to judge: one or two results can swing these numbers a lot. They start to mean something after about 30 closed signals.` : "");
       $("c-res").textContent = a.total_r != null && a.closed ? `${a.total_r > 0 ? "+" : ""}${a.total_r}R` : "--";
       $("c-res-sub").textContent = a.closed ? (market === "forex" && a.total_pips != null ? `${a.total_pips > 0 ? "+" : ""}${a.total_pips} pips · avg ${a.avg_r}R` : `avg ${a.avg_r}R · PF ${a.profit_factor != null ? a.profit_factor : "--"}`) : "after costs";
       $("by-grade").innerHTML = gradeTable(d.by_grade || {});
