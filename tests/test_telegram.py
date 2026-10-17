@@ -253,7 +253,7 @@ signal_hub.record("EUR/USD", "forex", "1h", {"side": "SHORT", "entry": 1.08123, 
 hook(update(555, "/signals"))
 txt = sent_to(555)[-1]
 check("Active signals (2)" in txt and "BTC</b> 4h Long" in txt and "EUR/USD</b> 1h Short" in txt and "1.08123" in txt
-      and "grade A" in txt, "/signals lists active signals of every stream from the database")
+      and "grade" not in txt.lower(), "/signals lists active signals of every stream from the database (no grade jargon)")
 check("https://signals.example/signals" in txt, "with a link to the board")
 hook(update(555, "/stop"))
 check("Alerts are paused" in sent_to(555)[-1], "/stop answered in the chat")
