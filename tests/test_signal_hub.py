@@ -388,8 +388,8 @@ title = sb.event_title({"symbol": "EUR/USD", "side": "LONG", "timeframe": "15m"}
 check("15m" in title and "EUR/USD" in title, "alert title names the timeframe")
 txt = sb.event_text({"symbol": "EUR/USD", "side": "LONG", "entry": 1.08123, "stop_loss": 1.0795, "targets": [1.083, 1.085, 1.087],
                      "timeframe": "1h", "market": "forex", "grade": "A"})
-check("1.08123" in txt and "grade A" in txt, "alert text: forex prices with 5 decimals and the grade")
-check("untested stream" in txt, "alert text: a signal from an untested stream says so")
+check("1.08123" in txt and "grade" not in txt.lower(), "alert text: forex prices with 5 decimals, no grade jargon")
+check("experimental" in txt, "alert text: a signal from an untested stream is marked experimental")
 txt4 = sb.event_text({"symbol": "BTC/USDT", "side": "LONG", "entry": 100.0, "stop_loss": 99.0, "targets": [101.0, 102.0, 103.0],
                       "timeframe": "4h", "market": "crypto", "grade": "A"})
 check("untested" not in txt4, "alert text: crypto 4h (tested) carries no warning")
@@ -445,6 +445,54 @@ d = cl.get("/api/signals/alerts").get_json()
 check(d["markets"] == ["forex"] and "EUR/USD" in d["choices"], "alerts read back; forex pairs are choices")
 r = cl.post("/api/signals/alerts", json={"enabled": True, "markets": ["stocks"]})
 check(r.status_code == 400, "alerts: invalid market rejected")
+
+# ---------------------------------------------------------------------------
+# Coins page: every coin, every moment (tested crypto streams only)
+# ---------------------------------------------------------------------------
+os.environ["SIGNAL_STREAMS"] = "all"
+hub.symbols_for = lambda market: (["EUR/USD"] if market == "forex" else ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"])
+with hub._Cursor() as cur:
+    cur.execute("UPDATE signal_events SET status='EXPIRED' WHERE status='ACTIVE'")
+_cb = datetime(2026, 10, 13, 8, 0)
+hub.record("BTC/USDT", "crypto", "4h", {"side": "LONG", "entry": 63120.5, "stop_loss": 60000.0, "take_profit": 69361.5,
+                                       "targets": [64680.75, 66241.0, 69361.5], "confidence": 78, "bar_time": _cb})
+hub.record("SOL/USDT", "crypto", "15m", {"side": "SHORT", "entry": 150.0, "stop_loss": 152.0, "take_profit": 144.0,
+                                        "targets": [148.0, 146.0, 144.0], "bar_time": _cb})
+
+
+class _FakeEngine:
+    _board = (_cb, {"ETH/USDT": {"setup_forming": True, "strength": 91.4, "bias": "SHORT"},
+                    "XRP/USDT": {"setup_forming": False, "strength": 40.0, "bias": "LONG"}})
+
+
+hub._engines["crypto_4h"] = _FakeEngine()
+cs = hub.coins_status(datetime(2026, 10, 13, 9, 30))
+st = {x["symbol"]: x for x in cs["coins"]}
+check(st["BTC/USDT"]["status"] == "buy" and st["BTC/USDT"]["signal"]["entry"] == 63120.5 and st["BTC/USDT"]["timeframe"] == "4h",
+      "coins: an active tested signal shows as buy with its plan")
+check(st["SOL/USDT"]["status"] == "wait", "coins: signals of untested streams are not shown to beginners")
+check(st["ETH/USDT"]["status"] == "forming" and st["ETH/USDT"]["lean"] == "down" and st["ETH/USDT"]["strength"] == 91,
+      "coins: a setup the model is close to shows as getting close")
+check(st["XRP/USDT"]["status"] == "wait", "coins: nothing to do = wait")
+check([x["status"] for x in cs["coins"]] == ["buy", "forming", "wait", "wait"] and cs["counts"]["wait"] == 2,
+      "coins: signals first, then getting close, then wait")
+hub._engines.pop("crypto_4h", None)
+check(client_guest := app.test_client().get("/api/coins/status").status_code == 401, "coins API needs a login")
+d = cl.get("/api/coins/status").get_json()
+check(d["ok"] and len(d["coins"]) == 4 and d["next_check"], "GET /api/coins/status")
+
+# landing page: only the tested streams are counted and described
+ps = hub.public_summary(now=datetime(2026, 10, 13, 9, 30))
+check(ps["ok"] and ps["active"] == 1 and [(r["coin"], r["side"], r["timeframe"]) for r in ps["recent"]] == [("BTC", "LONG", "4h")]
+      and all("entry" not in r for r in ps["recent"]), "landing: active signals of tested streams only, no levels")
+check(ps["coins"] == 4 and "4h" in ps["timeframes"] and "15m" not in ps["timeframes"], "landing: coins and timeframes of the tested streams")
+ts = hub.tested_summary()
+check([x["timeframe"] for x in ts["streams"]] == ["4h"] and ts["signals"] == ts["streams"][0]["signals"] > 0
+      and ts["win_rate"] == ts["streams"][0]["win_rate"], "landing: test numbers of the switched-on tested models")
+check(hub._period_label("2025-10-01 to 2026-10-11") == "Oct 2025 to Oct 2026", "landing: readable test period")
+os.environ["SIGNAL_STREAMS"] = "forex_1h"
+check(hub.public_summary() == {"ok": False} and hub.tested_summary()["signals"] == 0, "landing: no tested stream switched on -> no numbers")
+os.environ.pop("SIGNAL_STREAMS", None)
 
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
