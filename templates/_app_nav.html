@@ -64,6 +64,7 @@
     <p class="an-group">Trade</p>
     {{ item("/", "Home", "home", '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>') }}
     {{ item("/signals", "Signals", "signals", '<path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/>') }}
+    {{ item("/coins-now", "Coins right now", "coins", '<circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.5h-3.2a1.6 1.6 0 000 3.2h1.4a1.6 1.6 0 010 3.2H9.5M12 7.5v1.5M12 15.9v1.6"/>') }}
     {{ item("/news", "News & calendar", "news", '<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M8 3v4M16 3v4M7 13h4M7 16h7"/>') }}
     {{ item("/chart", "Live chart", "chart", '<path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/>') }}
     {{ item("/liquidity-scanner", "Liquidity scanner", "liquidity", '<circle cx="12" cy="12" r="8"/><path d="M12 12l5-3"/><circle cx="12" cy="12" r="2"/>') }}
@@ -109,8 +110,8 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg><span>Home</span></a>
   <a href="/signals"{% if active == 'signals' %} aria-current="page"{% endif %}>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg><span>Signals</span></a>
-  <a href="/advanced"{% if active == 'pro' %} aria-current="page"{% endif %}>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 14l3-3 3 2 4-5M8 21h8"/></svg><span>Pro</span></a>
+  <a href="/coins-now"{% if active == 'coins' %} aria-current="page"{% endif %}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.5h-3.2a1.6 1.6 0 000 3.2h1.4a1.6 1.6 0 010 3.2H9.5M12 7.5v1.5M12 15.9v1.6"/></svg><span>Coins</span></a>
   <a href="/demo-trading"{% if active == 'demo' %} aria-current="page"{% endif %}>
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-3 3 2 4-5"/></svg><span>Demo</span></a>
   <button type="button" id="an-menu-tab" aria-expanded="false" aria-controls="an-side">
@@ -124,10 +125,10 @@
 
     <section data-step>
       <h2 id="an-guide-title">Welcome to Signals FM</h2>
-      <div class="an-guide-art"><div class="an-gpills"><span class="an-gpill l">Long</span><span class="an-gpill s">Short</span><span class="an-gpill w">Wait</span></div></div>
-      <p>Every 4 hours the signal engine checks all 62 crypto coins together. When a coin has a good setup it gives a <b>Long</b> (price likely
-        to rise) or <b>Short</b> (price likely to fall) signal; otherwise that coin says <b>Wait</b>.</p>
-      <p>Across all coins there is rarely a day without a new signal. The <b>Signals</b> page shows every active signal for 15m, 1h and 4h, for crypto and forex.</p>
+      <div class="an-guide-art"><div class="an-gpills"><span class="an-gpill l">Buy</span><span class="an-gpill s">Sell</span><span class="an-gpill w">Wait</span></div></div>
+      <p>Our tested models check all 62 crypto coins every hour and every 4 hours. When a coin has a good setup it gives a <b>Buy</b> (price likely
+        to rise) or <b>Sell</b> (price likely to fall) signal; otherwise that coin says <b>Wait</b>.</p>
+      <p><b>Coins right now</b> shows the answer for every coin on one page, and <b>Signals</b> shows each signal with its stop-loss and targets.</p>
     </section>
 
     <section data-step hidden>
@@ -138,7 +139,7 @@
         <div><i style="background:var(--an-short)"></i><b>Stop loss</b><span>where you exit if it goes wrong</span></div>
       </div>
       <p>The bar on the signal card shows where the live price is between the stop and the targets. After TP1 the stop moves to
-        the entry, so the rest of the trade can no longer lose. A signal ends at TP3, at the (moved) stop, or after 9 days.</p>
+        the entry, so the rest of the trade can no longer lose. A signal ends at TP3, at the (moved) stop, or when its time runs out (at most 1.5 days on 1h signals, 9 days on 4h signals).</p>
     </section>
 
     <section data-step hidden>
@@ -148,7 +149,7 @@
         <div><span>TP1, then stop at entry</span><i style="background:var(--an-long);width:15%"></i><b style="color:var(--an-long)">+0.17R</b></div>
         <div><span>Stop before TP1</span><i style="background:var(--an-short);width:86%"></i><b style="color:var(--an-short)">&minus;1R</b></div>
       </div>
-      <p>In testing about 3 in 4 signals closed in profit, but many wins are small and a full loss is <b>&minus;1R</b>, and some months lost money.</p>
+      <p>In testing about 7 in 10 signals closed in profit, but many wins are small and a full loss is <b>&minus;1R</b>, and some months lost money.</p>
       <p>So risk a small, fixed amount on every signal, for example <b>1% of your account</b>. That amount is called <b>1R</b>.</p>
     </section>
 
