@@ -293,8 +293,7 @@ def signal_block(e):
     icon = "\U0001F7E2" if side == "LONG" else "\U0001F534"
     sym = e["symbol"]
     tf = e.get("timeframe") or "4h"
-    grade = f" · grade {e['grade']}" if e.get("grade") else ""
-    lines = [f"{icon} <b>New {'Long' if side == 'LONG' else 'Short'} signal: {html.escape(sym)} ({tf})</b>{grade}",
+    lines = [f"{icon} <b>New {'Long' if side == 'LONG' else 'Short'} signal: {html.escape(sym)} ({tf})</b>",
              f"Entry: <b>{_fmt(e['entry'], sym)}</b>",
              f"Stop loss: {_fmt(e['stop_loss'], sym)} ({_pct(e['stop_loss'], e['entry'], sym)})"]
     for k, v in enumerate(_targets(e)):
@@ -353,8 +352,6 @@ def _signals_text():
         sym = r["symbol"]
         line = f"{icon} <b>{html.escape(sym.replace('/USDT', ''))}</b> {r.get('timeframe') or '4h'} {side}"
         line += f" · entry {_fmt(r['entry'], sym)}"
-        if r.get("grade"):
-            line += f" · grade {r['grade']}"
         if r.get("hits"):
             line += f" · TP{r['hits']} reached"
         out.append(line)
