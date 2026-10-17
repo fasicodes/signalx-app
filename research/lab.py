@@ -878,7 +878,10 @@ def export_mtf(stream, g):
 #    average after costs and >= 50 signals on the holdout, or the stream stays off. No other variant is promoted
 #    because of its holdout result.
 VARIANTS = {
-    "crypto_15m": [("s3", "15-minute model alone"), ("s3_mtf", "15-minute model with the 1-hour model agreeing")],
+    "crypto_15m": [("s3", "15-minute model alone, stop 3 ATR"),
+                   ("s3_mtf", "15-minute model with the 1-hour model agreeing, stop 3 ATR"),
+                   ("s2", "15-minute model alone, stop 2 ATR"),
+                   ("s2_mtf", "15-minute model with the 1-hour model agreeing, stop 2 ATR")],
     "crypto_1h": [("s2", "1-hour model alone"), ("s2_mtf", "1-hour model with the 4-hour model agreeing")],
     "forex_15m": [("s3", "15-minute model alone"), ("s3_mtf", "15-minute model with the 1-hour model agreeing")],
     "forex_1h": [("s2", "1-hour model alone, stop 2 ATR"), ("s3", "1-hour model alone, stop 3 ATR"),
@@ -892,6 +895,16 @@ _KEEP = ("period", "signals", "signals_per_day", "win_rate", "avg_net_r", "profi
 
 def _short(st):
     return {k: st[k] for k in _KEEP if st and k in st} if st else None
+
+
+def closest(r):
+    """For a version that never reached the target: the validation level with the best average result
+    (at least 100 signals), so the page can show how close it came."""
+    rows = [x for x in (r.get("grid") or []) if (x.get("signals") or 0) >= 100 and x.get("win_rate") is not None]
+    if not rows:
+        return None
+    x = max(rows, key=lambda s: s["avg_net_r"])
+    return _short(x)
 
 
 def hold_ok(t):
@@ -912,6 +925,7 @@ def pick(stream):
                      "passed_validation": bool(ch) and passes(r["walk_forward"]),
                      "validation_period": f"{CFG[stream]['dev'][0]} to {CFG[stream]['dev'][1]}",
                      "validation": _short(val), "holdout": _short(r.get("test")) if ch else None,
+                     "closest": None if ch else closest(r),
                      "rule": r.get("rule") or "v1: validation win rate >= 72%, average >= 0.02R"})
     cands = [x for x in rows if x["passed_validation"]]
     chosen = None
