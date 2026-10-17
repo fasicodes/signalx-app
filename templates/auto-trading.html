@@ -369,7 +369,7 @@
   </div>
 
   <p class="faint" style="font-size:11.5px;line-height:1.6;max-width:900px;">
-    The bot copies the site's signals (every stream that is switched on) with each signal's own stop and three targets: it closes a third
+    The bot copies the site's signals (every stream that is switched on; live accounts only the streams that passed their test on unseen data) with each signal's own stop and three targets: it closes a third
     at each target and moves the stop to the entry after TP1 and to TP1 after TP2. It only enters while the price is still close to the
     signal's entry (within 0.35 of the stop distance, before TP1, at most two candles after the signal). The test results of each stream are
     on the Signals page. Past results do not guarantee future results. Trading, especially with leverage, can lose all of the money in the account.
@@ -1017,7 +1017,13 @@
       }
       if (first || !S.formDirty) { S.form = formFromSettings(d.settings); writeForm(); }
       const live = d.options.streams_live || [];
-      $("s-live").textContent = live.length ? `Streams sending signals now: ${live.map((k) => k.replace("_", " ")).join(", ")}. The others are switched off until their model passes its test on unseen data (see the Signals page).` : "";
+      const tested = d.options.streams_tested || [];
+      const untested = live.filter((k) => !tested.includes(k));
+      const nm = (k) => k.replace("_", " ");
+      $("s-live").textContent = live.length
+        ? `Streams sending signals now: ${live.map(nm).join(", ")}.`
+          + (untested.length ? ` Untested (their rules have not passed the test on unseen data): ${untested.map(nm).join(", ")}. Demo accounts copy them; live accounts copy only the tested streams.` : "")
+        : "";
       const cl = d.options.confidence;
       if (cl) $("s-conf-hint").textContent = `Signals show about ${Math.floor(cl.standard)}–${Math.floor(cl.max)}%. ${Math.floor(cl.standard)}% or lower takes every signal; ${Math.floor(cl.strong)}% takes strong signals only.`;
       renderStatus();
