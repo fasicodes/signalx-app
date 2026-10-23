@@ -2119,6 +2119,11 @@
       return;
     }
     if (!S.coins.length) { $("mk-list").innerHTML = '<div class="empty">No markets available right now.</div>'; return; }
+    try {
+      // "Practise in demo" on a signal card opens the demo on that coin (?coin=SOL/USDT)
+      const qc = String(new URLSearchParams(location.search).get("coin") || "").toUpperCase();
+      if (qc && S.coins.includes(qc)) S.symbol = qc;
+    } catch (e) { /* ignore */ }
     if (!S.coins.includes(S.symbol)) S.symbol = S.coins[0];
     if (!["spot", "futures"].includes(S.market)) S.market = "futures";
     if (!["LIMIT", "MARKET", "STOP", "TRAILING_STOP"].includes(S.otype)) S.otype = "MARKET";
