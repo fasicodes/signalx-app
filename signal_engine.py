@@ -127,8 +127,15 @@ def model():
 
 
 def signal_coins():
-    """Coins that get trade signals (the coins the model was trained and tested on)."""
-    return model().signal_coins
+    """Coins that get trade signals: the coins of the model's own test plus the coins added after the coin test
+    (markets.CRYPTO_4H_ONLY: research/coin_expansion.py replayed this engine on them on a year it had never seen)."""
+    base = list(model().signal_coins)
+    try:
+        import markets
+        extra = [c for c in markets.CRYPTO_4H_ONLY if c not in base]
+    except Exception:
+        extra = []
+    return base + extra
 
 
 # ===========================================================================
