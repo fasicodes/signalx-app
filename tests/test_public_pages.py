@@ -177,10 +177,18 @@ html = c.get("/").get_data(as_text=True)
 check("72.9%" in html and "1,691" in html and "73.6%" in html and "+0.08R" in html and "2,426" in html and "Both models together" in html,
       "landing: the numbers of both tested models and their total")
 check("every hour and every 4 hours" in html and "6.5 a day" in html and "About 7 in 10" in html, "landing: check times and signals a day from the models")
+LANDING.update(tested={"signals": 2426, "per_day": 6.5, "win_rate": 72.9, "avg_r": 0.09, "coins": 102,
+                       "streams": [{"timeframe": "1h", "period": "Oct 2025 to Oct 2026", "signals": 1691, "per_day": 4.51, "win_rate": 72.6, "avg_r": 0.083, "coins": 62},
+                                   {"timeframe": "4h", "period": "Oct 2025 to Oct 2026", "signals": 735, "per_day": 1.97, "win_rate": 73.6, "avg_r": 0.105, "coins": 102,
+                                    "extra_coins": {"coins": 40, "period": "Oct 2025 to Oct 2026", "signals": 325, "per_day": 0.85, "win_rate": 77.8, "avg_r": 0.21}}]})
+html = c.get("/").get_data(as_text=True)
+check("check 102 crypto coins every 4 hours, and 62 of them every hour too" in html,
+      "landing: the 4h model checks more coins than the 1h model, and the page says so")
+check("40 more coins" in html and "77.8%" in html, "landing: the coin test of the added coins is shown with the 4h model")
 LANDING.update(live={"ok": False}, stats={}, tested={"streams": [], "signals": 0})
 html = c.get("/").get_data(as_text=True)
 card = html[html.index('class="live"'):html.index('id="how"')]
-check("Live" not in card and "Signals are checked every" in card, "landing live strip: no 'Live' badge when there is no data")
+check("Live" not in card and "Our models check" in card, "landing live strip: no 'Live' badge when there is no data")
 check("%" not in html[html.index('class="facts"'):html.index('class="ex"')] and 'class="res-card' not in html,
       "landing: no win rate or result cards without test data")
 LANDING.clear()
