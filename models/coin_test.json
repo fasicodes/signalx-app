@@ -1,0 +1,438 @@
+{
+ "generated": "2026-10-23",
+ "script": "research/coin_expansion.py",
+ "data": "Binance spot 1-minute klines from public GitHub repositories, as 1-hour candles (4-hour candles built from them)",
+ "period": "2025-10-01 to 2026-10-18",
+ "question": "Do the two tested crypto streams keep their quality on coins they were never trained on?",
+ "rule": "new coins are added to a stream only if, with all coins replayed together, the new coins' signals reach >= 70% wins, a positive average after costs and >= 50 signals, and the whole stream still reaches >= 70% wins and a positive average",
+ "coins_now": 53,
+ "coins_tested": 63,
+ "skipped": {
+  "HYPE/USDT": "no data",
+  "XMR/USDT": "no data",
+  "GRAM/USDT": "no data",
+  "HBAR/USDT": "no data",
+  "CRO/USDT": "no data",
+  "TAO/USDT": "no data",
+  "ONDO/USDT": "no data",
+  "OKB/USDT": "no data",
+  "ASTER/USDT": "no data",
+  "BAL/USDT": "history ends 2025-04-16",
+  "DENT/USDT": "history ends 2026-04-28",
+  "EOS/USDT": "history ends 2025-05-26",
+  "ICX/USDT": "history ends 2026-09-03",
+  "LRC/USDT": "history ends 2026-04-01",
+  "MKR/USDT": "history ends 2025-09-15",
+  "STORJ/USDT": "history ends 2026-09-03",
+  "SXP/USDT": "history ends 2026-04-01"
+ },
+ "crypto_1h": {
+  "passes": false,
+  "stream_now": {
+   "signals": 1705,
+   "signals_per_day": 4.46,
+   "win_rate": 72.6,
+   "avg_net_r": 0.081,
+   "profit_factor": 1.28,
+   "coins_with_signals": 53,
+   "quarters": {
+    "2025-Q4": {
+     "signals": 478,
+     "win_rate": 73.4,
+     "avg_net_r": 0.094
+    },
+    "2026-Q1": {
+     "signals": 417,
+     "win_rate": 66.7,
+     "avg_net_r": -0.008
+    },
+    "2026-Q2": {
+     "signals": 276,
+     "win_rate": 69.2,
+     "avg_net_r": -0.01
+    },
+    "2026-Q3": {
+     "signals": 511,
+     "win_rate": 79.1,
+     "avg_net_r": 0.205
+    },
+    "2026-Q4": {
+     "signals": 23,
+     "win_rate": 60.9,
+     "avg_net_r": -0.254
+    }
+   }
+  },
+  "stream_with_new": {
+   "signals": 2283,
+   "signals_per_day": 5.98,
+   "win_rate": 71.1,
+   "avg_net_r": 0.046,
+   "profit_factor": 1.15,
+   "coins_with_signals": 116,
+   "quarters": {
+    "2025-Q4": {
+     "signals": 628,
+     "win_rate": 73.7,
+     "avg_net_r": 0.087
+    },
+    "2026-Q1": {
+     "signals": 586,
+     "win_rate": 64.0,
+     "avg_net_r": -0.047
+    },
+    "2026-Q2": {
+     "signals": 383,
+     "win_rate": 69.2,
+     "avg_net_r": -0.022
+    },
+    "2026-Q3": {
+     "signals": 653,
+     "win_rate": 76.1,
+     "avg_net_r": 0.136
+    },
+    "2026-Q4": {
+     "signals": 33,
+     "win_rate": 69.7,
+     "avg_net_r": -0.055
+    }
+   }
+  },
+  "new_coins": {
+   "signals": 1183,
+   "signals_per_day": 3.1,
+   "win_rate": 68.6,
+   "avg_net_r": 0.002,
+   "profit_factor": 1.01,
+   "coins_with_signals": 63,
+   "quarters": {
+    "2025-Q4": {
+     "signals": 324,
+     "win_rate": 71.9,
+     "avg_net_r": 0.048
+    },
+    "2026-Q1": {
+     "signals": 319,
+     "win_rate": 62.7,
+     "avg_net_r": -0.084
+    },
+    "2026-Q2": {
+     "signals": 213,
+     "win_rate": 68.5,
+     "avg_net_r": -0.037
+    },
+    "2026-Q3": {
+     "signals": 312,
+     "win_rate": 70.8,
+     "avg_net_r": 0.064
+    },
+    "2026-Q4": {
+     "signals": 15,
+     "win_rate": 80.0,
+     "avg_net_r": 0.149
+    }
+   }
+  },
+  "decision": "not added: the new coins reached only 68.6% wins and about 0R on average"
+ },
+ "crypto_4h": {
+  "passes": true,
+  "stream_now": {
+   "signals": 753,
+   "signals_per_day": 1.97,
+   "win_rate": 75.0,
+   "avg_net_r": 0.144,
+   "profit_factor": 1.6,
+   "coins_with_signals": 53,
+   "quarters": {
+    "2025-Q4": {
+     "signals": 155,
+     "win_rate": 77.4,
+     "avg_net_r": 0.17
+    },
+    "2026-Q1": {
+     "signals": 167,
+     "win_rate": 77.2,
+     "avg_net_r": 0.163
+    },
+    "2026-Q2": {
+     "signals": 135,
+     "win_rate": 63.0,
+     "avg_net_r": 0.0
+    },
+    "2026-Q3": {
+     "signals": 216,
+     "win_rate": 75.5,
+     "avg_net_r": 0.09
+    },
+    "2026-Q4": {
+     "signals": 80,
+     "win_rate": 85.0,
+     "avg_net_r": 0.44
+    }
+   },
+   "strong": {
+    "signals": 415,
+    "win_rate": 79.3,
+    "avg_net_r": 0.21
+   },
+   "standard": {
+    "signals": 338,
+    "win_rate": 69.8,
+    "avg_net_r": 0.063
+   }
+  },
+  "stream_with_new": {
+   "signals": 830,
+   "signals_per_day": 2.17,
+   "win_rate": 75.3,
+   "avg_net_r": 0.151,
+   "profit_factor": 1.66,
+   "coins_with_signals": 116,
+   "quarters": {
+    "2025-Q4": {
+     "signals": 176,
+     "win_rate": 74.4,
+     "avg_net_r": 0.113
+    },
+    "2026-Q1": {
+     "signals": 182,
+     "win_rate": 73.1,
+     "avg_net_r": 0.081
+    },
+    "2026-Q2": {
+     "signals": 154,
+     "win_rate": 67.5,
+     "avg_net_r": 0.101
+    },
+    "2026-Q3": {
+     "signals": 229,
+     "win_rate": 76.4,
+     "avg_net_r": 0.127
+    },
+    "2026-Q4": {
+     "signals": 89,
+     "win_rate": 92.1,
+     "avg_net_r": 0.518
+    }
+   },
+   "strong": {
+    "signals": 493,
+    "win_rate": 79.9,
+    "avg_net_r": 0.225
+   },
+   "standard": {
+    "signals": 337,
+    "win_rate": 68.5,
+    "avg_net_r": 0.042
+   }
+  },
+  "new_coins": {
+   "signals": 439,
+   "signals_per_day": 1.15,
+   "win_rate": 76.1,
+   "avg_net_r": 0.16,
+   "profit_factor": 1.73,
+   "coins_with_signals": 63,
+   "quarters": {
+    "2025-Q4": {
+     "signals": 107,
+     "win_rate": 72.9,
+     "avg_net_r": 0.062
+    },
+    "2026-Q1": {
+     "signals": 85,
+     "win_rate": 67.1,
+     "avg_net_r": -0.033
+    },
+    "2026-Q2": {
+     "signals": 79,
+     "win_rate": 69.6,
+     "avg_net_r": 0.154
+    },
+    "2026-Q3": {
+     "signals": 123,
+     "win_rate": 82.1,
+     "avg_net_r": 0.245
+    },
+    "2026-Q4": {
+     "signals": 45,
+     "win_rate": 95.6,
+     "avg_net_r": 0.538
+    }
+   },
+   "strong": {
+    "signals": 243,
+    "win_rate": 81.5,
+    "avg_net_r": 0.261
+   },
+   "standard": {
+    "signals": 196,
+    "win_rate": 69.4,
+    "avg_net_r": 0.035
+   }
+  },
+  "decision": "added (the coins OKX lists): markets.CRYPTO_4H_ONLY"
+ },
+ "okx": {
+  "listed": [
+   "1INCH",
+   "BAND",
+   "BAT",
+   "BLUR",
+   "BONK",
+   "CELO",
+   "CELR",
+   "COMP",
+   "DASH",
+   "DGB",
+   "ENA",
+   "ENJ",
+   "ENS",
+   "ETHFI",
+   "FLOKI",
+   "GMT",
+   "GMX",
+   "IOST",
+   "JUP",
+   "KNC",
+   "KSM",
+   "MASK",
+   "METIS",
+   "ONE",
+   "ONT",
+   "ORDI",
+   "PENDLE",
+   "PEPE",
+   "QTUM",
+   "RVN",
+   "SKL",
+   "STRK",
+   "SUSHI",
+   "W",
+   "WLD",
+   "WOO",
+   "YFI",
+   "ZEN",
+   "ZIL",
+   "ZRX"
+  ],
+  "not_listed": [
+   "ALT",
+   "AUDIO",
+   "AXL",
+   "C98",
+   "CHR",
+   "COTI",
+   "CTSI",
+   "DYM",
+   "GLMR",
+   "HOT",
+   "JASMY",
+   "KAVA",
+   "LUNC",
+   "MANTA",
+   "MOVR",
+   "OGN",
+   "QNT",
+   "RLC",
+   "RUNE",
+   "SC",
+   "SUPER",
+   "TWT",
+   "VET"
+  ],
+  "crypto_4h": {
+   "stream_with_new": {
+    "signals": 808,
+    "signals_per_day": 2.12,
+    "win_rate": 76.4,
+    "avg_net_r": 0.177,
+    "profit_factor": 1.8,
+    "coins_with_signals": 93,
+    "quarters": {
+     "2025-Q4": {
+      "signals": 168,
+      "win_rate": 76.8,
+      "avg_net_r": 0.195
+     },
+     "2026-Q1": {
+      "signals": 178,
+      "win_rate": 77.0,
+      "avg_net_r": 0.146
+     },
+     "2026-Q2": {
+      "signals": 150,
+      "win_rate": 64.0,
+      "avg_net_r": 0.053
+     },
+     "2026-Q3": {
+      "signals": 225,
+      "win_rate": 77.8,
+      "avg_net_r": 0.134
+     },
+     "2026-Q4": {
+      "signals": 87,
+      "win_rate": 92.0,
+      "avg_net_r": 0.533
+     }
+    },
+    "strong": {
+     "signals": 468,
+     "win_rate": 78.8,
+     "avg_net_r": 0.216
+    },
+    "standard": {
+     "signals": 340,
+     "win_rate": 72.9,
+     "avg_net_r": 0.123
+    }
+   },
+   "new_coins": {
+    "signals": 325,
+    "signals_per_day": 0.85,
+    "win_rate": 77.8,
+    "avg_net_r": 0.21,
+    "profit_factor": 2.02,
+    "coins_with_signals": 40,
+    "quarters": {
+     "2025-Q4": {
+      "signals": 76,
+      "win_rate": 77.6,
+      "avg_net_r": 0.221
+     },
+     "2026-Q1": {
+      "signals": 63,
+      "win_rate": 71.4,
+      "avg_net_r": 0.035
+     },
+     "2026-Q2": {
+      "signals": 61,
+      "win_rate": 62.3,
+      "avg_net_r": 0.075
+     },
+     "2026-Q3": {
+      "signals": 91,
+      "win_rate": 84.6,
+      "avg_net_r": 0.282
+     },
+     "2026-Q4": {
+      "signals": 34,
+      "win_rate": 100.0,
+      "avg_net_r": 0.561
+     }
+    },
+    "strong": {
+     "signals": 177,
+     "win_rate": 80.2,
+     "avg_net_r": 0.26
+    },
+    "standard": {
+     "signals": 148,
+     "win_rate": 75.0,
+     "avg_net_r": 0.151
+    }
+   }
+  }
+ }
+}
