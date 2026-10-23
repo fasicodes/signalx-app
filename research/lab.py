@@ -511,7 +511,10 @@ def stats(trades, start, end, nsym=None):
     st = [t["status"] for t in trades]
     r = np.array([t["r"] for t in trades], float)
     wins = sum(1 for s in st if s.startswith("TP"))
-    eq = np.cumsum(r)
+    # drawdown of the account that takes every signal: results in the order the trades closed (the list itself is
+    # grouped by symbol; before Oct 2026 the drawdown was computed in that order, which understated it)
+    order = np.argsort([pd.Timestamp(t.get("closed_at") or t["signal_at"]).value for t in trades], kind="stable")
+    eq = np.cumsum(r[order])
     dd = float(np.min(eq - np.maximum.accumulate(np.concatenate([[0], eq]))[1:])) if n else 0.0
     gp, gl = r[r > 0].sum(), -r[r < 0].sum()
     t_sorted = sorted(pd.Timestamp(t["signal_at"]) for t in trades)
