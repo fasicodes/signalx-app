@@ -52,6 +52,15 @@
   .rules-box h3 { margin: 0 0 8px; font-size: 16px; }
   .rules-box ul { margin: 0; padding-left: 20px; color: var(--text-dim); }
   .rules-box li { margin-bottom: 6px; }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); margin-left: auto; }
+  .acct .pinput { width: 110px; flex: 0 0 auto; font-family: var(--mono); font-size: 14px; padding: 8px 10px; text-align: right; }
+  .acct-note { color: var(--text-faint); font-size: 13px; margin: -8px 0 4px; }
+  @media (max-width: 600px) { .acct { margin-left: 0; width: 100%; } .acct .pinput { flex: 1 1 auto; width: auto; } }
+  .cc-size { background: var(--panel-raised); border-radius: 10px; padding: 10px 12px; font-size: 14px; color: var(--text-dim); }
+  .cc-size b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+  .cc-size small { display: block; color: var(--text-faint); font-size: 12.5px; margin-top: 3px; }
+  .cc-size .warn { color: var(--wait); }
+  .cc-late { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; color: var(--text-dim); }
 </style>
 </head>
 <body class="an-shell in-app">
@@ -75,7 +84,10 @@
       <button type="button" data-f="wait" aria-pressed="false">Wait<b id="n-wait"></b></button>
     </div>
     <input class="pinput" id="q" type="search" placeholder="Find a coin, e.g. BTC" aria-label="Find a coin" maxlength="12">
+    <label class="acct" for="acct"><span>Your account</span><input class="pinput" id="acct" type="text" inputmode="decimal"
+      maxlength="12" value="1000" aria-describedby="acct-note"><span>USDT</span></label>
   </div>
+  <p class="acct-note" id="acct-note">Every signal card shows the trade size that risks 1% of this amount. It stays on this device only.</p>
 
   <div id="sec-sig">
     <div class="ch-sec"><h2>Signals now</h2><span>Trade plans from the tested crypto models</span></div>
@@ -91,10 +103,12 @@
   </div>
 
   <section class="rules-box">
-    <h3>Three rules for beginners</h3>
+    <h3>Four rules for beginners</h3>
     <ul>
       <li><b>Risk only 1% of your account on one trade.</b> The <a class="link" href="/advanced#risk-calc">risk calculator</a> works out the size for you.</li>
       <li><b>Always set the stop-loss.</b> It is the price where the idea was wrong. Close a third of the trade at each target.</li>
+      <li><b>Keep only 2 or 3 trades open at once.</b> Signals often come in groups because coins move together, so several open
+        trades can win or lose together.</li>
       <li><b>No signal wins every time.</b> Practise in <a class="link" href="/demo-trading">demo trading</a> first, and see every win and loss on the
         <a class="link" href="/track-record">track record</a>.</li>
     </ul>
@@ -120,11 +134,36 @@
     var h = Math.round(m / 60); return h < 48 ? h + " hours ago" : Math.round(h / 24) + " days ago";
   }
   var hhmm = function (iso) { var t = new Date(iso); return isNaN(t) ? "--" : t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
-  var DATA = null, FILTER = "all";
+  var DATA = null, FILTER = "all", ACCT = 1000, RISK = 0.01;
   try {
     var f0 = new URLSearchParams(location.search).get("f");
     if (["sig", "forming", "wait"].indexOf(f0) >= 0) FILTER = f0;
   } catch (e) {}
+  try {
+    var a0 = Number(localStorage.getItem("sfm-account"));
+    if (a0 > 0 && isFinite(a0)) ACCT = a0;
+  } catch (e) {}
+  function money(v) {
+    return Number(v).toLocaleString("en-US", { maximumFractionDigits: v >= 100 ? 0 : 2 });
+  }
+  function qty(v) {
+    if (v >= 100) return Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
+    if (v >= 1) return Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 });
+    return Number(v.toPrecision(3)).toString();
+  }
+  // trade size that loses RISK of the account at the stop-loss (fees not included)
+  function sizeLine(x, s) {
+    if ((s.hits || 0) >= 1) {
+      return '<div class="cc-late"><b>Too late to join.</b> Target 1 is already reached and the stop is at the entry. ' +
+        "Wait for the next signal instead of chasing this one.</div>";
+    }
+    var dist = Math.abs(Number(s.entry) - Number(s.stop_loss));
+    if (!(ACCT > 0) || !(dist > 0) || !isFinite(dist)) return "";
+    var risk = ACCT * RISK, q = risk / dist, value = q * Number(s.entry);
+    var big = value > ACCT ? '<small class="warn">That is more than your account, so it needs leverage. Beginners should trade a smaller size or skip it.</small>' : "";
+    return '<div class="cc-size">Size for a ' + money(ACCT) + " USDT account: <b>" + qty(q) + " " + esc(base(x.symbol)) + "</b> (about " +
+      money(value) + " USDT)<small>If the stop-loss is hit you lose about " + money(risk) + " USDT (1%) plus fees.</small>" + big + "</div>";
+  }
 
   function sigCard(x) {
     var s = x.signal || {}, buy = x.status === "buy", d = s.decimals;
@@ -138,9 +177,10 @@
     return '<article class="cc ' + x.status + '"><div class="cc-top"><span class="cc-coin">' + esc(base(x.symbol)) + "<small>" + esc(x.timeframe) +
       " signal · " + ago(s.signal_at) + '</small></span><span class="act ' + x.status + '">' + (buy ? "BUY" : "SELL") + "</span></div>" +
       '<dl class="cplan"><div><dt>' + (buy ? "Buy near" : "Sell near") + "</dt><dd>" + price(s.entry, d) + "</dd></div>" +
-      "<div><dt>Stop-loss<small>exit here if it goes wrong</small></dt><dd>" + price(stop, d) + "</dd></div>" + t + "</dl>" + now +
+      "<div><dt>Stop-loss<small>" + (s.stop_now != null && s.stop_now !== s.stop_loss ? "moved to the entry after target 1" : "exit here if it goes wrong") +
+      "</small></dt><dd>" + price(stop, d) + "</dd></div>" + t + "</dl>" + now + sizeLine(x, s) +
       '<div class="cc-btns"><a class="pbtn primary" href="/signals?market=crypto&timeframe=' + encodeURIComponent(x.timeframe) + '">See the signal</a>' +
-      '<a class="pbtn" href="/demo-trading">Practise in demo</a></div></article>';
+      '<a class="pbtn" href="/demo-trading?coin=' + encodeURIComponent(x.symbol) + '">Practise in demo</a></div></article>';
   }
   function formCard(x) {
     return '<article class="cc"><div class="cc-top"><span class="cc-coin">' + esc(base(x.symbol)) + "<small>" + esc(x.timeframe) +
@@ -184,6 +224,16 @@
     });
   });
   $("q").addEventListener("input", render);
+  var acctEl = $("acct");
+  acctEl.value = String(ACCT);
+  acctEl.addEventListener("input", function () {
+    var v = Number(String(acctEl.value).replace(/[^0-9.]/g, ""));
+    if (v > 0 && isFinite(v)) {
+      ACCT = Math.min(v, 1e9);
+      try { localStorage.setItem("sfm-account", String(ACCT)); } catch (e) {}
+    }
+    render();
+  });
   load();
   setInterval(load, 60000);
 })();
