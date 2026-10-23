@@ -131,6 +131,9 @@
   .lp .res-card dt { color: var(--text-faint); font-size: 13.5px; }
   .lp .res-card dd { margin: 2px 0 0; font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
   .lp .res-card dd small { font: 400 13.5px var(--body); color: var(--text-dim); margin-left: 6px; letter-spacing: 0; }
+  .lp .res-card .res-extra { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--text-dim);
+    font-size: 13.5px; line-height: 1.5; }
+  .lp .res-card .res-extra b { color: var(--text); }
   .lp .truth { margin-top: 20px; background: var(--wait-dim); border: 1px solid color-mix(in srgb, var(--wait) 40%, transparent); border-radius: 20px;
     padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 30px; align-items: center; }
   .lp .truth h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
@@ -214,9 +217,13 @@
 {% set NSIG = T.signals if T else S.get('signals') %}
 {% set PERDAY = T.per_day if T else S.get('signals_per_day') %}
 {% set AVGR = T.avg_r if T else S.get('avg_net_r') %}
-{% set COINS = (T.coins if (T and T.coins) else (lv.coins if (lv and lv.coins) else 62)) %}
+{% set COINS = (T.coins if (T and T.coins) else (lv.coins if (lv and lv.coins) else (ncoins or 62))) %}
 {% set TFS = (T.streams | map(attribute='timeframe') | list) if T else ((lv.timeframes or []) if lv else []) %}
 {% if '1h' in TFS and '4h' in TFS %}{% set EVERY = 'every hour and every 4 hours' %}{% elif '1h' in TFS %}{% set EVERY = 'every hour' %}{% else %}{% set EVERY = 'every 4 hours' %}{% endif %}
+{# the 4h model covers more coins than the 1h model (coin test): say how many each one checks #}
+{% set C1 = ((T.streams | selectattr('timeframe', 'equalto', '1h') | map(attribute='coins') | list) or [none])[0] if T else none %}
+{% set C4 = ((T.streams | selectattr('timeframe', 'equalto', '4h') | map(attribute='coins') | list) or [none])[0] if T else none %}
+{% if C1 and C4 and C1 != C4 %}{% set CHECK = COINS ~ ' crypto coins every 4 hours, and ' ~ C1 ~ ' of them every hour too' %}{% else %}{% set CHECK = COINS ~ ' crypto coins ' ~ EVERY %}{% endif %}
 
 <main>
   <section class="hero">
@@ -224,7 +231,7 @@
       <div class="hero-copy">
         <p class="badge"><span class="dot"></span>Free during the beta &middot; no card needed</p>
         <h1>Know what to buy, where to stop and <em>when to take profit.</em></h1>
-        <p class="lead">Our tested models check {{ COINS }} crypto coins {{ EVERY }}. When a coin has a good trade, you get a simple
+        <p class="lead">Our tested models check {{ CHECK }}. When a coin has a good trade, you get a simple
           plan in plain words. When none does, we tell you to wait.</p>
         <div class="ctas">
           <a class="pbtn primary xl" href="/login">Get free signals</a>
@@ -270,7 +277,7 @@
         {% endfor %}
         <a class="live-more" href="/login">Log in to see entry, stop-loss and targets &rarr;</a>
       {% else %}
-        <span class="live-n">Signals are checked {{ EVERY }} on {{ COINS }} coins. Log in to see them as they start.</span>
+        <span class="live-n">Our models check {{ CHECK }}. Log in to see the signals as they start.</span>
       {% endif %}
     </div>
   </section>
@@ -284,7 +291,7 @@
       </div>
       <ol class="steps">
         <li><span class="n">1</span><h3>We check every coin</h3>
-          <p>{{ EVERY | capitalize }} our tested models read {{ COINS }} coins: each coin's trend, Bitcoin and the whole market.</p></li>
+          <p>Our tested models check {{ CHECK }}. They read each coin's trend, Bitcoin and the whole market.</p></li>
         <li><span class="n">2</span><h3>You get one clear plan</h3>
           <p>Buy or sell near a price, a stop-loss where you get out if it goes wrong, and three targets where you take profit.</p></li>
         <li><span class="n">3</span><h3>You keep every loss small</h3>
@@ -341,6 +348,11 @@
             <div><dt>Reached the first target</dt><dd class="pos">{{ s.win_rate }}%</dd></div>
             <div><dt>Average per signal</dt><dd>{{ "%+.2f" | format(s.avg_r) }}R<small>after fees</small></dd></div>
           </dl>
+          {% if s.extra_coins %}
+          <p class="res-extra">Also tested on <b>{{ s.extra_coins.coins }} more coins</b> it was never trained on, in the same year:
+            {{ s.extra_coins.win_rate }}% reached the first target, {{ "%+.2f" | format(s.extra_coins.avg_r) }}R per signal. They now get
+            4-hour signals too.</p>
+          {% endif %}
         </article>
         {% endfor %}
         {% if T.streams | length > 1 %}
@@ -371,7 +383,8 @@
           <h3>Read this before you trade</h3>
           <p>{% if WIN %}About {{ (WIN / 10) | round | int }} in 10 signals reached the first target, but not every signal wins. {% else %}Not every signal wins. {% endif %}A full
             loss (&minus;1R) is twice the size of a first-target win (+0.5R), and some months lose money. That is why every signal has a
-            stop-loss, and why you should risk only a small, fixed amount on each one. R is the amount you risk on one trade.</p>
+            stop-loss, and why you should risk only a small, fixed amount on each one. Signals often come in groups because coins move
+            together, so keep only a few trades open at once. R is the amount you risk on one trade.</p>
         </div>
         <div class="links">
           {% if track_record_public %}<a href="/track-record">See every live result</a>{% endif %}
