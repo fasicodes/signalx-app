@@ -517,10 +517,6 @@
 
   function wr(w) { return w && w.win_rate != null ? `${w.win_rate}%` : "--"; }
   function nTxt(w) { return w ? `${w.wins} of ${w.closed} closed` : "no closed signals"; }
-  function gradeTable(by) {
-    const rows = ["A", "B", "C"].map((g) => { const w = by[g] || {}; return `<tr><td><span class="badge ${g}">Grade ${g}</span></td><td>${w.closed || 0}</td><td>${wr(w)}</td><td>${w.avg_r != null ? w.avg_r + "R" : "--"}</td></tr>`; }).join("");
-    return `<table class="gtable"><thead><tr><th>Grade</th><th>Closed</th><th>Win rate</th><th>Avg result</th></tr></thead><tbody>${rows}</tbody></table>`;
-  }
   async function loadStats() {
     try {
       const d = await getJSON(`/api/signals/stats?market=${market}&timeframe=${tf}`);
@@ -543,6 +539,13 @@
         let html = `<b>${esc(H.period || "")}</b>: ${H.signals} signals${H.signals_per_day != null ? ` (${H.signals_per_day} per day)` : ""}, `
           + `win rate <b>${H.win_rate}%</b> (TP1 or better), average ${H.avg_net_r > 0 ? "+" : ""}${H.avg_net_r}R after costs${pf}.`;
         if (WF && WF.signals) html += `<br>Walk-forward ${esc(WF.period || "")}: ${WF.signals} signals, win rate ${WF.win_rate}%, average ${WF.avg_net_r > 0 ? "+" : ""}${WF.avg_net_r}R.`;
+        const L = mt.limit_test;
+        if (L && L.limit && L.before && L.before.signals) html += `<br>Up to ${L.limit} new signals can start in the same hour (it was ${L.before_limit}); `
+          + `the limit was chosen on the walk-forward years. With the old limit the same unseen year gave ${L.before.signals} signals, `
+          + `${L.before.win_rate}% wins, ${L.before.avg_net_r > 0 ? "+" : ""}${L.before.avg_net_r}R.`;
+        const X = mt.extra_coins;
+        if (X && X.signals) html += `<br>Added coins: this stream also covers ${X.coins} coins the model was never trained on. On the same unseen year `
+          + `(${esc(X.period || "")}) they gave ${X.signals} signals, ${X.win_rate}% reached TP1, average ${X.avg_r > 0 ? "+" : ""}${X.avg_r}R after costs.`;
         if (mt.baseline && mt.baseline.signals) html += `<br>Before (rules R1) on the same data: win rate ${mt.baseline.win_rate}%, average ${mt.baseline.avg_net_r}R.`;
         html += "<br>A backtest is not a promise: live results are shown separately above.";
         $("sim").innerHTML = html;
