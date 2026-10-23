@@ -284,7 +284,7 @@ def engine(key):
         e = _engines.get(key)
         if e is None:
             cfg = streams.STREAMS[key]
-            e = streams.StreamEngine(cfg["market"], cfg["tf"], store(), symbols_for(cfg["market"]),
+            e = streams.StreamEngine(cfg["market"], cfg["tf"], store(), markets.stream_coins(cfg["market"], cfg["tf"]),
                                      blocked=_blocked)
             _engines[key] = e
         return e
@@ -718,14 +718,20 @@ def model_test(market, tf):
     if key == "crypto_4h":
         try:
             import signal_engine as se
-            return {"holdout": se.test_stats(), "walk_forward": se.walk_forward_stats(), "engine": "v" + se.ENGINE_VERSION}
+            return {"holdout": se.test_stats(), "walk_forward": se.walk_forward_stats(), "engine": "v" + se.ENGINE_VERSION,
+                    "extra_coins": coin_test(key)}
         except Exception:
             return None
     m = streams.load_model(key)
     if m is None:
         return None
+    lt = m.meta.get("limit_test") or None
+    if lt:
+        old = (lt.get("holdout") or {}).get(str((lt.get("before") or {}).get("max_per_bar", 4))) or {}
+        lt = {"limit": lt.get("choice"), "before_limit": (lt.get("before") or {}).get("max_per_bar", 4),
+              "before": {k: old.get(k) for k in ("signals", "signals_per_day", "win_rate", "avg_net_r")} if old else None}
     return {"holdout": m.meta.get("test"), "walk_forward": m.meta.get("walk_forward"), "engine": "v" + m.version,
-            "baseline": m.meta.get("baseline_rules")}
+            "baseline": m.meta.get("baseline_rules"), "limit_test": lt}
 
 
 def latest_by_stream(per=3):
@@ -837,6 +843,32 @@ def _period_label(period):
         return str(period or "")
 
 
+_coin_test = {"t": 0.0, "data": None}
+
+
+def coin_test(key):
+    """The coin test of a stream (models/coin_test.json, research/coin_expansion.py) when coins were added to it from
+    it: the added coins' result on the year the model never saw. None for a stream that got no coins."""
+    now = time.time()
+    if _coin_test["data"] is None or now - _coin_test["t"] > 600:
+        try:
+            with open(os.path.join(streams.MODELS_DIR, "coin_test.json"), encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            data = {}
+        _coin_test.update(t=now, data=data)
+    d = _coin_test["data"] or {}
+    s = d.get(key) or {}
+    added = [c for c in markets.CRYPTO_4H_ONLY] if key == "crypto_4h" else []
+    if not s.get("passes") or not added:
+        return None
+    r = ((d.get("okx") or {}).get(key) or {}).get("new_coins") or s.get("new_coins") or {}
+    if not r.get("signals"):
+        return None
+    return {"coins": len(added), "period": _period_label(d.get("period")), "signals": int(r["signals"]),
+            "per_day": r.get("signals_per_day"), "win_rate": r.get("win_rate"), "avg_r": r.get("avg_net_r")}
+
+
 def tested_summary():
     """Landing page: the test on data the model never saw, for every switched-on tested crypto stream, plus the
     signal-weighted total. Numbers come straight from the model files; nothing is estimated here."""
@@ -855,10 +887,16 @@ def tested_summary():
             t = {}
         if not t.get("signals") or t.get("win_rate") is None:
             continue
-        out.append({"key": key, "timeframe": key.split("_", 1)[1], "period": _period_label(t.get("period")),
-                    "signals": int(t["signals"]), "per_day": float(t.get("signals_per_day") or 0),
-                    "win_rate": float(t["win_rate"]), "avg_r": float(t.get("avg_net_r") or 0),
-                    "profit_factor": t.get("profit_factor"), "max_drawdown_r": t.get("max_drawdown_r")})
+        tf = key.split("_", 1)[1]
+        row = {"key": key, "timeframe": tf, "period": _period_label(t.get("period")),
+               "signals": int(t["signals"]), "per_day": float(t.get("signals_per_day") or 0),
+               "win_rate": float(t["win_rate"]), "avg_r": float(t.get("avg_net_r") or 0),
+               "profit_factor": t.get("profit_factor"), "max_drawdown_r": t.get("max_drawdown_r"),
+               "coins": len(markets.stream_coins("crypto", tf))}
+        extra = coin_test(key)
+        if extra:
+            row["extra_coins"] = extra
+        out.append(row)
     if not out:
         return {"streams": [], "signals": 0}
     n = sum(x["signals"] for x in out)
@@ -881,7 +919,7 @@ def stream_info():
         out.append({"key": key, "market": cfg["market"], "timeframe": cfg["tf"], "enabled": key in enabled_streams(),
                     "validated": streams.validated(key), "research": res,
                     "engine": label, "engine_kind": kind, "hold": streams.hold_text(key), "max_bars": plan["max_bars"],
-                    "targets_r": plan["targets_r"], "symbols": len(symbols_for(cfg["market"])),
+                    "targets_r": plan["targets_r"], "symbols": len(markets.stream_coins(cfg["market"], cfg["tf"])),
                     "last_scan": {k: _iso(v) for k, v in last.items()} if last else None,
                     "error": _state["errors"].get(key)})
     return out
@@ -1005,8 +1043,9 @@ COINS_CACHE_SEC = 20
 
 def coins_status(now=None):
     """One line per signal coin, from the tested crypto streams only (beginners see the signals that passed the test):
-    an active signal (buy / sell), a setup the 1h model is close to (getting close), or nothing to do (wait).
-    Nothing is computed here: it reads the stored signals and the stream boards made at the last candle close."""
+    an active signal (buy / sell), a setup a tested model is close to (getting close), or nothing to do (wait).
+    Nothing is computed here: it reads the stored signals and the stream boards made at the last candle close
+    (the 1h board of this hub, the 4h board of signalboard.py). A coin no stream could get candles for is left out."""
     now = now or _utcnow()
     tested = [k for k in enabled_streams() if streams.STREAMS[k]["market"] == "crypto" and streams.validated(k)]
     tfs = [streams.STREAMS[k]["tf"] for k in tested]
@@ -1022,19 +1061,39 @@ def coins_status(now=None):
     by = {}
     for r in rows:
         by.setdefault(r["symbol"], []).append(r)
-    forming = {}
+    forming, seen_ok, seen_err = {}, set(), set()
+    boards = []
     for key in tested:
         e = _engines.get(key)
         board = e._board[1] if e is not None and e._board else None
-        for sym, res in (board or {}).items():
-            if not isinstance(res, dict) or res.get("error") or res.get("active") or not res.get("setup_forming"):
+        if board:
+            boards.append((streams.STREAMS[key]["tf"], board))
+    if "crypto_4h" in tested and _engines.get("crypto_4h") is None:
+        # the 4h stream is engine v3.1, run by signalboard.py: its board has the same fields
+        try:
+            import signalboard
+            with signalboard._board_lock:
+                rows4 = dict(signalboard._board.get("rows") or {})
+            if rows4:
+                boards.append(("4h", rows4))
+        except Exception:
+            pass
+    for tf, board in boards:
+        for sym, res in board.items():
+            if not isinstance(res, dict):
+                continue
+            (seen_err if res.get("error") else seen_ok).add(sym)
+            if res.get("error") or res.get("active") or not res.get("setup_forming") or res.get("covered") is False:
                 continue
             st = float(res.get("strength") or 0)
             if sym not in forming or st > forming[sym]["strength"]:
-                forming[sym] = {"timeframe": streams.STREAMS[key]["tf"], "strength": round(min(st, 99.0)),
+                forming[sym] = {"timeframe": tf, "strength": round(min(st, 99.0)),
                                 "lean": "up" if res.get("bias") == "LONG" else "down"}
+    no_data = seen_err - seen_ok          # every stream failed to get candles for it (e.g. the exchange dropped it)
     out = []
     for sym in coins:
+        if sym in no_data and sym not in by:
+            continue
         sigs = by.get(sym) or []
         if sigs:
             r = sigs[0]
@@ -1047,8 +1106,12 @@ def coins_status(now=None):
             out.append({"symbol": sym, "status": "forming", **forming[sym]})
         else:
             out.append({"symbol": sym, "status": "wait"})
-    rank = {"buy": 0, "sell": 0, "forming": 1, "wait": 2}
-    out.sort(key=lambda x: (rank[x["status"]], -(x.get("strength") or 0)))
+    # signals a beginner can still join first (newest first), then the ones past target 1, then getting close, then wait
+    sigs = sorted([x for x in out if x["status"] in ("buy", "sell")], key=lambda x: x["signal"].get("signal_at") or "", reverse=True)
+    sigs.sort(key=lambda x: 1 if (x["signal"].get("hits") or 0) >= 1 else 0)
+    rest = sorted([x for x in out if x["status"] not in ("buy", "sell")],
+                  key=lambda x: (0 if x["status"] == "forming" else 1, -(x.get("strength") or 0)))
+    out = sigs + rest
     sec = min((markets.TF_SEC[t] for t in tfs), default=3600)
     nxt = streams.last_closed_bar("1h" if sec <= 3600 else "4h", now) + timedelta(seconds=2 * sec)
     counts = {k: sum(1 for x in out if x["status"] == k) for k in ("buy", "sell", "forming", "wait")}
