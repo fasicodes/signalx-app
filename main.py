@@ -2245,7 +2245,8 @@ def _landing_tested():
 def home():
     # Logged-in users ko trading interface, baaqi sabko public landing page
     if "user_id" not in session:
-        return render_template("landing.html", live=_landing_live(), stats=signal_engine.test_stats(), tested=_landing_tested())
+        return render_template("landing.html", live=_landing_live(), stats=signal_engine.test_stats(), tested=_landing_tested(),
+                               ncoins=len(_markets.CRYPTO_COINS))
     return render_template(
         "dashboard.html",
         user_email=session.get("email", ""),
