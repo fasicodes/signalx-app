@@ -620,7 +620,7 @@ def validate_settings(raw, current=None):
     clean["timeframes"] = [t for t in SIGNAL_TIMEFRAMES if t in tfs]
     grade = str(raw.get("min_grade", cur.get("min_grade") or "B")).upper()
     if grade not in GRADES:
-        return None, "Minimum grade must be A, B or C."
+        return None, "Choose a signal strength from the list."
     clean["min_grade"] = grade
     sm = str(raw.get("symbols_mode", cur.get("symbols_mode") or "all")).lower()
     if sm not in ("all", "list"):
