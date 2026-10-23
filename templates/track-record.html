@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Track record: every Signals FM signal and its result</title>
-<meta name="description" content="Every long and short Signals FM gives on 62 crypto coins, recorded automatically with its stop-loss, three targets and result. Live record plus a 365-day backtest, after fees.">
+<meta name="description" content="Every long and short Signals FM gives on 102 crypto coins, recorded automatically with its stop-loss, three targets and result. Live record plus a 365-day backtest, after fees.">
 {% set seo_title = "Signals FM track record" %}{% set seo_path = "/track-record" %}{% set seo_description = "Every long and short Signals FM gives, logged automatically with its stop, targets and result in R." %}
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
@@ -70,7 +70,7 @@
 <main class="wrap">
   <section class="phead">
     <h1>Every signal, recorded. Wins and losses.</h1>
-    <p>At every 4-hour candle close, Signals FM reads the same 62 crypto coins and logs every long or short it gives, with the
+    <p>At every 4-hour candle close, Signals FM reads the same 102 crypto coins and logs every long or short it gives, with the
       stop-loss and the three targets shown on the dashboard. Nothing is picked afterwards. Results are in R after fees: 1R is the distance from entry to stop.</p>
     <div class="src-row">
       <div class="pseg" role="group" aria-label="Which results">
@@ -136,7 +136,7 @@
   <section class="block rules" id="rules">
     <h2 class="sec">How this is measured</h2>
     <ul id="rules-list">
-      <li><b>Same coins, every candle.</b> All 62 crypto coins in the list are read together at every 4-hour candle close by signal engine v3. Every long or short is logged.</li>
+      <li><b>Same coins, every candle.</b> All 102 crypto coins in the list are read together at every 4-hour candle close by signal engine v3. Every long or short is logged.</li>
       <li><b>Which candles become signals.</b> A coin gets a <b>strong</b> signal when the model's score is in its top 3%. If no coin has had a signal for 24 hours, the best coin gets a <b>standard</b> signal when its score is at least the model's median, so there is rarely a long wait. At most 5 new signals start on one candle (the highest scores), because many coins at once usually means one market move.</li>
       <li><b>Entry</b> is the close of the candle that gave the signal.</li>
       <li><b>Stop-loss</b> is 2 &times; ATR(14) away from entry (that distance is 1R). <b>Targets:</b> TP1 at 0.5R, TP2 at 1R (as far as the stop), TP3 at 2R. A third of the position closes at each target. After TP1 the stop moves to the entry, after TP2 to TP1, so a signal that reached TP1 can no longer lose (apart from a gap at a candle's open).</li>
