@@ -494,6 +494,64 @@ os.environ["SIGNAL_STREAMS"] = "forex_1h"
 check(hub.public_summary() == {"ok": False} and hub.tested_summary()["signals"] == 0, "landing: no tested stream switched on -> no numbers")
 os.environ.pop("SIGNAL_STREAMS", None)
 
+# ---------------------------------------------------------------------------
+# more coins for the 4h stream (research/coin_expansion.py) and the 1h per-candle limit (research/cap_test.py)
+# ---------------------------------------------------------------------------
+c4, c1 = markets.stream_coins("crypto", "4h"), markets.stream_coins("crypto", "1h")
+check(set(markets.CRYPTO_4H_ONLY) <= set(c4) and not (set(markets.CRYPTO_4H_ONLY) & set(c1)) and c4 == markets.CRYPTO_COINS
+      and markets.stream_coins("crypto", "15m") == c1 and markets.stream_coins("forex", "1h") == markets.forex_signal_pairs(),
+      "coins per stream: 4h every coin, 1h and 15m without the 4h-only coins, forex the signal pairs")
+check(len(markets.CRYPTO_COINS) == len(set(markets.CRYPTO_COINS)) == 62 + len(markets.CRYPTO_4H_ONLY),
+      "coin list: the 62 coins plus the added 4h coins, none twice")
+_had = hub._hooks.get("get_candles")
+hub._hooks["get_candles"] = _had or (lambda **kw: None)
+hub._engines.pop("crypto_1h", None)
+check(hub.engine("crypto_1h").symbols == c1, "the 1h engine scans only the coins its model passed on")
+hub._engines.pop("crypto_1h", None)
+if _had is None:
+    hub._hooks.pop("get_candles", None)
+shutil.copy(os.path.join(os.path.dirname(HERE), "models", "coin_test.json"), _MD)
+hub._coin_test.update(t=0.0, data=None)
+x4 = hub.coin_test("crypto_4h")
+check(x4 and x4["coins"] == len(markets.CRYPTO_4H_ONLY) and x4["signals"] >= 50 and x4["win_rate"] >= 70 and x4["avg_r"] > 0,
+      "coin test: the added 4h coins passed on the year the model never saw (shown with the 4h numbers)")
+check(hub.coin_test("crypto_1h") is None, "coin test: the 1h stream got no new coins")
+ship = json.load(open(os.path.join(os.path.dirname(HERE), "models", "crypto_1h.json")))
+lt = ship.get("limit_test") or {}
+check(ship["selection"]["max_per_bar"] == lt.get("choice") and lt["validation"][str(lt["choice"])]["passes_v2"]
+      and lt["holdout"][str(lt["choice"])]["passes"] and ship["test"]["win_rate"] >= 70 and ship["test"]["avg_net_r"] > 0,
+      "1h limit per candle: the shipped model uses the limit that passed validation and the unseen year")
+
+# coins page: 4h "getting close" from the signal board, coins without data left out, joinable signals first
+os.environ["SIGNAL_STREAMS"] = "all"
+hub.symbols_for = lambda market: (["EUR/USD"] if market == "forex" else ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "ADA/USDT"])
+with hub._Cursor() as cur:
+    cur.execute("UPDATE signal_events SET status='EXPIRED' WHERE status='ACTIVE'")
+_b2 = datetime(2026, 10, 14, 8, 0)
+hub.record("SOL/USDT", "crypto", "4h", {"side": "LONG", "entry": 150.0, "stop_loss": 144.0, "take_profit": 162.0,
+                                       "targets": [153.0, 156.0, 162.0], "confidence": 75, "bar_time": _b2 - timedelta(hours=8)})
+hub.record("BTC/USDT", "crypto", "4h", {"side": "SHORT", "entry": 63000.0, "stop_loss": 64000.0, "take_profit": 61000.0,
+                                       "targets": [62500.0, 62000.0, 61000.0], "confidence": 74, "bar_time": _b2})
+with hub._Cursor() as cur:
+    cur.execute("UPDATE signal_events SET hits=1, stop_now=entry WHERE symbol='BTC/USDT' AND status='ACTIVE'")
+hub._engines.pop("crypto_4h", None)
+with sb._board_lock:
+    _rows_before = sb._board.get("rows")
+    sb._board["rows"] = {"ETH/USDT": {"setup_forming": True, "strength": 93.0, "bias": "LONG", "covered": True},
+                         "XRP/USDT": {"error": "No 4h candles for XRP/USDT."},
+                         "ADA/USDT": {"setup_forming": False, "strength": 50.0, "bias": "LONG", "covered": True}}
+cs = hub.coins_status(datetime(2026, 10, 14, 13, 0))
+order = [(x["symbol"], x["status"]) for x in cs["coins"]]
+check(order[0] == ("SOL/USDT", "buy") and order[1] == ("BTC/USDT", "sell"),
+      "coins: a signal past target 1 comes after the ones a beginner can still join")
+check(("ETH/USDT", "forming") in order and next(x for x in cs["coins"] if x["symbol"] == "ETH/USDT")["timeframe"] == "4h",
+      "coins: the 4h engine's 'getting close' coins come from the signal board")
+check("XRP/USDT" not in [s for s, _ in order] and ("ADA/USDT", "wait") in order,
+      "coins: a coin no stream could get candles for is left out, the others wait")
+with sb._board_lock:
+    sb._board["rows"] = _rows_before or {}
+os.environ.pop("SIGNAL_STREAMS", None)
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
