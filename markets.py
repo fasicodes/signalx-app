@@ -2,6 +2,8 @@
 Markets, symbols and forex rules for SignalX - the one place to configure them.
 
 * CRYPTO_COINS / FOREX_PAIRS: every symbol the site knows (charts, pickers).
+* CRYPTO_4H_ONLY: the coins added after the coin test, which get 4-hour signals only;
+  stream_coins(market, timeframe) is the list each signal stream scans.
 * FOREX_SIGNAL_PAIRS: the forex symbols that get trade signals. The default is
   the 7 majors, the popular crosses and gold; override it with the env var
   FOREX_SIGNAL_PAIRS="EUR/USD,GBP/USD,..." (only symbols in FOREX_PAIRS count).
@@ -38,6 +40,21 @@ CRYPTO_COINS = [
     "SNX/USDT", "DYDX/USDT", "FLOW/USDT", "NEO/USDT", "IOTA/USDT",
     "CFX/USDT", "MINA/USDT",
 ]
+
+# 63-102: coins added for the 4-hour signals after the coin test (research/coin_expansion.py, models/coin_test.json).
+# On a year neither model had seen (Oct 2025 - Oct 2026) the 4h engine kept its quality on these coins it was never
+# trained on; the 1h model did not (68.6% wins, about 0R), so these coins get 4h signals only. All on OKX spot.
+CRYPTO_4H_ONLY = [
+    "PEPE/USDT", "ENA/USDT", "WLD/USDT", "JUP/USDT", "BONK/USDT",
+    "FLOKI/USDT", "ORDI/USDT", "PENDLE/USDT", "ENS/USDT", "ETHFI/USDT",
+    "STRK/USDT", "W/USDT", "COMP/USDT", "YFI/USDT", "DASH/USDT",
+    "ZEN/USDT", "GMX/USDT", "SUSHI/USDT", "1INCH/USDT", "BAT/USDT",
+    "MASK/USDT", "METIS/USDT", "QTUM/USDT", "KSM/USDT", "BLUR/USDT",
+    "CELO/USDT", "ZIL/USDT", "ZRX/USDT", "KNC/USDT", "ENJ/USDT",
+    "BAND/USDT", "ONE/USDT", "ONT/USDT", "IOST/USDT", "GMT/USDT",
+    "RVN/USDT", "SKL/USDT", "CELR/USDT", "WOO/USDT", "DGB/USDT",
+]
+CRYPTO_COINS += [c for c in CRYPTO_4H_ONLY if c not in CRYPTO_COINS]
 
 FOREX_MAJORS = ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD", "USD/CAD", "NZD/USD"]
 FOREX_CROSSES = ["EUR/JPY", "GBP/JPY", "EUR/GBP", "AUD/JPY", "EUR/AUD", "EUR/CHF", "GBP/CHF", "CAD/JPY"]
@@ -88,6 +105,16 @@ def forex_signal_pairs():
         if s in FOREX_PAIRS and s not in out:
             out.append(s)
     return out or list(DEFAULT_FOREX_SIGNAL_PAIRS)
+
+
+def stream_coins(market, tf):
+    """Symbols a signal stream scans. Forex: the forex signal pairs. Crypto 4h: every coin. Crypto 15m and 1h: every
+    coin except CRYPTO_4H_ONLY (the 1h model did not pass the coin test on them; 15m runs experimental rules)."""
+    if market == "forex":
+        return forex_signal_pairs()
+    if tf == "4h":
+        return list(CRYPTO_COINS)
+    return [c for c in CRYPTO_COINS if c not in CRYPTO_4H_ONLY]
 
 
 def is_forex(symbol):
