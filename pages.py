@@ -36,7 +36,7 @@ _hooks = {"send_email": None}
 
 # Every feature, as shown on the pricing page. Edit here when plans change.
 PLAN_FEATURES = [
-    ("Signals on 62 coins", "Long or Short with entry, stop loss and target, every 4 hours"),
+    ("Signals on 102 coins", "Long or Short with entry, stop loss and targets: every 4 hours on 102 coins, every hour on 62"),
     ("Live signals board", "Every coin at a glance, active signals with live progress"),
     ("Signal alerts", "In the app, by email and by Telegram"),
     ("Pro terminal", "Advanced chart, liquidity scanner and 27-channel analysis"),
@@ -68,13 +68,16 @@ FAQ = [
         ("How are signals made?",
          "<p>The signal engine reads <b>closed 4-hour candles</b>. For each coin it looks at the coin's own price action, its daily "
          "trend, Bitcoin and the market of 16 large coins (82 measurements in all), and a machine-learning model estimates the chance "
-         "that a trade reaches its first target before its stop. All 62 crypto coins are read together at every close: setups in the "
+         "that a trade reaches its first target before its stop. All 102 crypto coins are read together at every close: setups in the "
          "model's top 3% become <b>strong</b> signals, and if no coin has had a signal for 24 hours, the best setup (with at least an "
          "average score) becomes a <b>standard</b> signal. At most 5 new signals start on one candle (the highest scores), because "
          "many coins at once usually means one market move.</p>"),
         ("Which coins have signals?",
-         "<p>All 62 crypto coins in the list, against USDT. The model was trained on 21 of them and then tested on 53 coins over a "
-         "year it had never seen, 32 of which it had never seen at all; the results held up on those as well. The newest coins "
+         "<p>All 102 crypto coins in the list, against USDT. The 4-hour model was trained on 21 of them and then tested on 53 coins over a "
+         "year it had never seen, 32 of which it had never seen at all; the results held up on those as well. In October 2026 we "
+         "tested it the same way on 63 more coins and kept the 40 that OKX lists: on that year 77.8% of their signals reached the "
+         "first target (+0.21R on average after costs), so they get 4-hour signals too. The 1-hour model did not pass that test "
+         "(68.6% wins, about 0R), so it stays on the first 62 coins. The newest coins "
          "(such as HYPE, TAO, ONDO and ASTER) have a short history, so check their results on the "
          "<a href=\"/track-record\">Track record</a>. Forex pairs and gold have their own signal streams, which are marked untested "
          "(see the forex question below).</p>"),
@@ -101,10 +104,10 @@ FAQ = [
          "card shows how far the price has moved and how close it is to the next target or the stop. If the price is already near "
          "TP1, little reward is left for the same risk.</p>"),
         ("Are there signals for forex or gold?",
-         "<p>Yes, but they are marked <b>untested</b>. We built and tested a separate model for forex pairs and gold, and after "
+         "<p>Yes, but they are marked <b>experimental</b>. We built and tested a separate model for forex pairs and gold, and after "
          "spreads it did not make money: the best version reached 70.8% wins (TP1 or better) on data it had never seen, but the "
          "average result after costs was slightly below zero (-0.072 R per trade). The forex, gold and 15-minute signals therefore "
-         "come from simple rules that have not passed our test, and every one of them carries an \"Untested\" label on the "
+         "come from simple rules that have not passed our test, and every one of them carries an \"Experimental\" label on the "
          "Signals page and in alerts. When we replayed those rules on history (forex 2017 to 2020, crypto 15m 2023 to 2025) they lost "
          "money on average: about -0.08 to -0.22 R per signal after costs, in every year. Their real results are tracked like every "
          "other signal, and live auto-trading accounts do not copy them (demo accounts do). Treat them with extra care.</p>"),
