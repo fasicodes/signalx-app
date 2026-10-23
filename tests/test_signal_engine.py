@@ -44,7 +44,7 @@ def synth(seed, drift=0.0003):
 
 COINS = sorted(set(se.UNIVERSE) | set(se.signal_coins()))
 DATA = {sym: synth(k) for k, sym in enumerate(COINS)}
-DATA["PEPE/USDT"] = synth(99, drift=0.001)  # a coin outside the signal list
+DATA["WIF/USDT"] = synth(99, drift=0.001)  # a coin outside the signal list
 
 print("\n[1] model file")
 m = se.model()
@@ -54,7 +54,10 @@ check(m.sl_atr == 2.0 and m.targets_r == [0.5, 1.0, 2.0] and m.max_bars == 54 an
 check(abs(sum(m.fractions) - 1) < 1e-9 and len(set(round(x, 9) for x in m.fractions)) == 1, "a third closes at each target")
 check(0.5 < m.floor < m.watch_threshold < m.threshold < 0.95 and m.gap_hours == 24,
       f"levels: standard {m.floor:.3f} < forming {m.watch_threshold:.3f} < strong {m.threshold:.3f}, 24h rule")
-check(len(se.signal_coins()) == 62 and set(se.UNIVERSE) <= set(se.signal_coins()), "62 signal coins incl. the 16-coin universe")
+check(len(m.signal_coins) == 62 and set(se.UNIVERSE) <= set(se.signal_coins()), "62 signal coins of the test incl. the 16-coin universe")
+import markets  # noqa: E402
+check(se.signal_coins() == m.signal_coins + markets.CRYPTO_4H_ONLY and len(se.signal_coins()) == len(set(se.signal_coins())),
+      "plus the coins added after the coin test (4h only), no duplicates")
 check(m.max_per_bar == 5, "at most 5 new signals per candle")
 t = se.test_stats()
 check(t["signals"] > 300 and 60 < t["win_rate"] < 90 and t["avg_net_r"] > 0 and t["period"].startswith("2025-10"),
@@ -228,7 +231,7 @@ res2 = eng.signal("ETH/USDT", CLOCK["now"] + timedelta(minutes=50))
 check(len(calls) == n_calls and res2 is res, "cached until the next candle closes")
 res_sol = eng.signal("SOL/USDT", CLOCK["now"])
 check(len(calls) == n_calls and res_sol["covered"], "other signal coins come from the same pass")
-res_tao = eng.signal("PEPE/USDT", CLOCK["now"])
+res_tao = eng.signal("WIF/USDT", CLOCK["now"])
 check(len(calls) > n_calls and res_tao["verdict"] == "WAIT" and not res_tao["covered"] and res_tao["brief"],
       "coin outside the signal list: brief and lean, never a trade")
 frames = {s: se.coin_features(DATA[s].iloc[:900]) for s in COINS}
