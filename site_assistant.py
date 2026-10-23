@@ -217,7 +217,7 @@ def builtin_answer(question, ctx):
     if re.search(r"\b(this|the) signal\b|explain (it|this)", q) and ctx.get("viewing_signal"):
         s = ctx["viewing_signal"]
         return ("This signal: " + _sig_line(s) + ". Follow the plan: a third closes at each target, after TP1 the stop moves to "
-                "the entry. Grade " + str(s.get("grade")) + " (A is the strongest). This is information, not advice.")
+                "the entry. This is information, not advice.")
     if re.search(r"\b(latest|active|current|new|today'?s?)\b.*\bsignals?\b", q) and ctx.get("active_signals"):
         return "Newest active signals:\n" + "\n".join("- " + _sig_line(s) for s in ctx["active_signals"][:5])
     if re.search(r"\b(next|upcoming)\b.*\b(news|event|release|calendar)\b", q) and ctx.get("next_events"):
