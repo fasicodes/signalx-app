@@ -17,7 +17,7 @@ Signal hub - the 15m / 1h / 4h signal streams for crypto and forex.
 * API (login required): /api/signals, /api/signals/stats, /api/signals/latest,
   /api/signals/streams, /api/signals/<id>, POST /api/signals/<id>/cancel (admin).
 
-Env: SIGNAL_STREAMS (default / 'all': all six streams; 'validated': only the streams whose model passed its test on
+Env: SIGNAL_STREAMS (default: crypto 4h only; 'all': all six streams; 'validated': only the streams whose model passed its test on
 unseen data; or a comma-separated list). Streams that have not passed the test are marked 'untested' everywhere.
 SIGNAL_HUB=off to stop the background job.
 """
@@ -39,6 +39,10 @@ from db import get_db_connection
 hub_bp = Blueprint("signal_hub", __name__)
 
 ALL_STREAMS = ["crypto_15m", "crypto_1h", "crypto_4h", "forex_15m", "forex_1h", "forex_4h"]
+# Default: only crypto 4h. It is the one stream that stays in profit on data the model never saw (about 76% of
+# signals reach TP1, average about +0.17R per signal after fees). The 15m and forex streams run simple rules that
+# lose money after fees, and crypto 1h passed its test but swings a lot week to week.
+DEFAULT_STREAMS = ["crypto_4h"]
 DELAY_SEC = {"crypto": 45, "forex": 90}
 LOOP_SEC = 20
 CLOSED = ("TP1", "TP2", "TP3", "SL", "EXPIRED")
@@ -105,16 +109,18 @@ def stream_tested(market, tf):
 
 
 def enabled_streams():
-    """SIGNAL_STREAMS: empty or 'all' (default) = all six streams (the ones that have not passed the test on unseen
-    data run simple rules and are marked 'untested' on the site, in alerts and for live auto-trading);
+    """SIGNAL_STREAMS: empty (default) = DEFAULT_STREAMS (crypto 4h only); 'all' = all six streams (the ones that
+    have not passed the test on unseen data run simple rules and are marked 'untested' everywhere);
     'validated' = only the streams whose model passed that test; or a comma-separated list."""
     raw = (os.environ.get("SIGNAL_STREAMS") or "").strip().lower()
-    if not raw or raw == "all":
+    if not raw:
+        return list(DEFAULT_STREAMS)
+    if raw == "all":
         return list(ALL_STREAMS)
     if raw == "validated":
         return validated_streams()
     out = [s.strip() for s in raw.split(",") if s.strip() in ALL_STREAMS]
-    return out or list(ALL_STREAMS)
+    return out or list(DEFAULT_STREAMS)
 
 
 def symbols_for(market):
