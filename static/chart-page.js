@@ -1,7 +1,7 @@
 /* Signals FM Live chart (templates/chart.html).
    Its own page with a coin switcher; it never runs the Pro terminal's analysis.
    Data: /coins, /candles, /api/market/tickers, /api/engine, /api/chart/drawings, /api/alerts, /api/watchlist, /api/signals/board.
-   Chart: TradingView lightweight-charts 5 (chart, panes, series, markers); drawings and SVG indicators on overlays. */
+   Chart: the lightweight-charts 5 library (chart, panes, series, markers); drawings and SVG indicators on overlays. */
 (function () {
   "use strict";
   const F = window.SFM;
@@ -123,7 +123,11 @@
   function mainPoints() {
     if (S.type === "line" || S.type === "area") return S.bars.map((b) => ({ time: b.time, value: b.close }));
     const src = S.type === "heikin" ? heikin(S.bars) : S.bars;
-    return src.map((b) => ({ time: b.time, open: b.open, high: b.high, low: b.low, close: b.close }));
+    // a crypto minute with no trades comes back as open = high = low = close and volume 0: draw it as an empty slot,
+    // not as a flat dash (quiet coins on 1m looked broken). Forex feeds often report no volume, so they keep every candle.
+    const fx = F.isForex(S.coin);
+    return src.map((b, i) => (!fx && S.type !== "heikin" && !S.bars[i].volume && b.open === b.close && b.high === b.low && b.open === b.high)
+      ? { time: b.time } : ({ time: b.time, open: b.open, high: b.high, low: b.low, close: b.close }));
   }
   function volPoints() {
     const up = alpha(css("--long"), 0.42), down = alpha(css("--short"), 0.42);
@@ -2132,8 +2136,44 @@
   }
 
   // ================================================================== popovers, settings, full screen, screenshot, keys
-  const POPS = [["type-btn", "type-pop"], ["ind-btn", "ind-pop"], ["alert-btn", "alert-pop"], ["more-btn", "more-pop"]];
+  const POPS = [["type-btn", "type-pop"], ["ind-btn", "ind-pop"], ["vol-btn", "vol-pop"], ["alert-btn", "alert-pop"], ["more-btn", "more-pop"]];
   let backdrop = null;
+  // ---- volatility (moved here from the Pro terminal): ATR(14) now vs the candles on the chart
+  function volatilityStats(bars, n = 14) {
+    if (!bars || bars.length < n + 10) return null;
+    const atr = new Array(bars.length).fill(null);
+    let prev = null;
+    for (let i = 1; i < bars.length; i++) {
+      const b = bars[i], pc = bars[i - 1].close;
+      const tr = Math.max(b.high - b.low, Math.abs(b.high - pc), Math.abs(b.low - pc));
+      if (i < n) { prev = (prev || 0) + tr; if (i === n - 1) { prev /= n - 1; } continue; }
+      prev = prev == null ? tr : (prev * (n - 1) + tr) / n;
+      atr[i] = prev;
+    }
+    const pcts = [];
+    for (let i = 0; i < bars.length; i++) if (atr[i] != null && bars[i].close) pcts.push((atr[i] / bars[i].close) * 100);
+    if (pcts.length < 10) return null;
+    const now = pcts[pcts.length - 1];
+    const sorted = pcts.slice().sort((x, y) => x - y);
+    const pctile = Math.round((sorted.filter((v) => v <= now).length / sorted.length) * 100);
+    const status = pctile < 25 ? "Low" : pctile < 70 ? "Normal" : pctile < 90 ? "High" : "Extreme";
+    const avg = (xs) => xs.reduce((x, y) => x + y, 0) / xs.length;
+    const recent = avg(pcts.slice(-5)), prior = avg(pcts.slice(-10, -5));
+    const ch = prior ? (recent - prior) / prior : 0;
+    const trend = ch > 0.08 ? "up" : ch < -0.08 ? "down" : "flat";
+    return { atr: atr[atr.length - 1], pct: now, pctile, status, trend };
+  }
+  function renderVolatility() {
+    const v = volatilityStats(S.bars);
+    $("vol-tf").textContent = TF_LABEL[S.tf] ? `· ${TF_LABEL[S.tf]}` : "";
+    if (!v) { ["vol-atr", "vol-atr-pct", "vol-status", "vol-trend", "vol-pct"].forEach((id) => { $(id).textContent = "--"; }); return; }
+    $("vol-atr").textContent = F.price(v.atr, S.coin);
+    $("vol-atr-pct").textContent = v.pct.toFixed(2) + "%";
+    $("vol-status").textContent = v.status;
+    $("vol-status").className = v.status === "Extreme" || v.status === "High" ? "c-short" : v.status === "Low" ? "c-dim" : "";
+    $("vol-trend").textContent = v.trend === "up" ? "↑ Rising" : v.trend === "down" ? "↓ Falling" : "→ Stable";
+    $("vol-pct").textContent = v.pctile + "%";
+  }
   function closePops(except) {
     POPS.forEach(([b, p]) => { if (p !== except) { $(p).hidden = true; $(b).setAttribute("aria-expanded", "false"); } });
     S.pickPrice = except === "alert-pop";
@@ -2150,6 +2190,7 @@
     } else if (backdrop) backdrop.hidden = true;
     if (open && popId === "ind-pop") { renderIndPanel(); if (!phone()) setTimeout(() => $("ind-search").focus(), 20); }
     if (open && popId === "alert-pop") { const p = currentPrice(); if (p != null && !$("alert-price").value) $("alert-price").value = Number(p.toFixed(F.decimals(p, S.coin))); updateAlertHint(); $("alert-msg").textContent = ""; }
+    if (open && popId === "vol-pop") renderVolatility();
     if (open && popId === "type-pop") $("type-pop").querySelectorAll("[data-type]").forEach((b) => b.setAttribute("aria-checked", b.dataset.type === S.type ? "true" : "false"));
   }
   POPS.forEach(([b, p]) => {
