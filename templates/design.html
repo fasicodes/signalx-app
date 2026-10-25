@@ -10,7 +10,6 @@
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
 
 <link rel="stylesheet" href="{{ url_for('static', filename='premium-ui.css') }}?v=20260814-premium-2">
 {% include '_analytics.html' ignore missing %}
@@ -346,14 +345,14 @@
           <span class="panel-tab-num">02</span>
           <span class="panel-tab-text">EXTENDED SIGNALS</span>
         </button>
-        <button class="panel-tab" data-panel="liquidity" type="button">
+        <a class="panel-tab panel-tab-link" href="/liquidity-scanner" data-goto="/liquidity-scanner" title="Opens the full Liquidity scanner for this coin">
           <span class="panel-tab-num">03</span>
-          <span class="panel-tab-text">LIQUIDITY SCANNER</span>
-        </button>
-        <button class="panel-tab" data-panel="livechart" type="button">
+          <span class="panel-tab-text">LIQUIDITY SCANNER &#8599;</span>
+        </a>
+        <a class="panel-tab panel-tab-link" href="/chart" data-goto="/chart" title="Opens the full Live chart for this coin">
           <span class="panel-tab-num">04</span>
-          <span class="panel-tab-text">LIVE CHART</span>
-        </button>
+          <span class="panel-tab-text">LIVE CHART &#8599;</span>
+        </a>
       </div>
 
       <div class="tab-content-area">
@@ -366,113 +365,6 @@
         <div id="panel-extended" class="tab-panel">
           <p class="tier-note">Ch.11–18 — cross-asset, entropy, wavelet &amp; risk-agent panels. Display-only, exploratory.</p>
           <div id="tier-3" class="channel-grid"></div>
-        </div>
-
-        <div id="panel-liquidity" class="tab-panel">
-          <div id="liquidity-scanner"></div>
-        </div>
-
-        <div id="panel-livechart" class="tab-panel">
-          <div class="chart-panel" id="chart-panel">
-
-            <div class="chart-header">
-              <div class="chart-header-left">
-                <button type="button" id="chart-back-btn" class="chart-back-btn" title="Exit fullscreen">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span>BACK</span>
-                </button>
-                <img id="chart-coin-icon" class="chart-coin-logo" alt="" src="" />
-                <div>
-                  <div class="chart-title" id="chart-title">BTC / USDT · 1H</div>
-                  <div class="chart-subtitle">live candlestick feed — polled from the exchange</div>
-                </div>
-              </div>
-              <div class="chart-price-block">
-                <span id="chart-live-dot" class="live-clock-dot"></span>
-                <span id="chart-price" class="chart-price">--</span>
-                <span id="chart-change" class="chart-change">--</span>
-                <button type="button" id="indicator-btn" class="indicator-btn" title="Indicators">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" fill="currentColor"/></svg>
-                  <span>INDICATORS</span>
-                  <span id="indicator-btn-count" class="indicator-btn-count">0</span>
-                </button>
-                <button type="button" id="volatility-btn" class="indicator-btn" title="Volatility">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 17l4-9 4 6 3-5 4 3 3-7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-                  <span>VOLATILITY</span>
-                </button>
-                <button type="button" id="chart-fullscreen-btn" class="chart-icon-btn" title="Fullscreen">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="volatility-panel" id="volatility-panel" hidden>
-              <div class="volatility-panel-head">
-                <span>VOLATILITY</span>
-                <span id="volatility-tf-label" class="volatility-tf-label"></span>
-              </div>
-              <div class="volatility-panel-body" id="volatility-panel-body">
-                <div class="volatility-unavailable" id="volatility-unavailable" hidden>Volatility data unavailable</div>
-                <div class="volatility-rows" id="volatility-rows">
-                  <div class="volatility-row"><span class="volatility-label">ATR</span><span id="vol-atr" class="volatility-value">--</span></div>
-                  <div class="volatility-row"><span class="volatility-label">ATR %</span><span id="vol-atr-pct" class="volatility-value">--</span></div>
-                  <div class="volatility-row"><span class="volatility-label">STATUS</span><span id="vol-status" class="volatility-value">--</span></div>
-                  <div class="volatility-row"><span class="volatility-label">TREND</span><span id="vol-trend" class="volatility-value">--</span></div>
-                  <div class="volatility-row"><span class="volatility-label">PERCENTILE</span><span id="vol-percentile" class="volatility-value">--</span></div>
-                </div>
-              </div>
-              <div class="volatility-panel-foot">based on actual OHLCV for the current symbol &amp; timeframe</div>
-            </div>
-
-            <div class="indicator-panel" id="indicator-panel" hidden>
-              <div class="indicator-panel-head">
-                <div class="indicator-search-box">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                  <input type="text" id="indicator-search" class="indicator-search" placeholder="Search indicators…" autocomplete="off" spellcheck="false" />
-                  <kbd class="indicator-search-key">/</kbd>
-                </div>
-                <button type="button" id="indicator-clear-all" class="indicator-clear-all" title="Remove all indicators">CLEAR ALL</button>
-              </div>
-              <div class="indicator-active-bar">
-                <span class="indicator-active-label">ACTIVE</span>
-                <span id="indicator-active-count" class="indicator-active-count">0</span>
-                <span class="indicator-active-hint">click to toggle</span>
-              </div>
-              <div class="indicator-list" id="indicator-list"></div>
-              <div class="indicator-panel-foot">
-                <span id="indicator-list-count">20 indicators</span>
-                <span class="indicator-panel-hint">indicators apply to the current chart &amp; timeframe</span>
-              </div>
-            </div>
-            <div class="chart-tf-row" id="chart-tf-row">
-              <button class="chart-tf-btn" data-tf="1m">1m</button>
-              <button class="chart-tf-btn" data-tf="5m">5m</button>
-              <button class="chart-tf-btn" data-tf="15m">15m</button>
-              <button class="chart-tf-btn active" data-tf="1h">1h</button>
-              <button class="chart-tf-btn" data-tf="4h">4h</button>
-              <button class="chart-tf-btn" data-tf="1d">1d</button>
-              <span class="chart-tf-sep"></span>
-              <button class="chart-range-btn" data-range="1D">1D</button>
-              <button class="chart-range-btn" data-range="1M">1M</button>
-              <button class="chart-range-btn" data-range="3M">3M</button>
-              <button class="chart-range-btn" data-range="6M">6M</button>
-              <button class="chart-range-btn" data-range="1Y">1Y</button>
-              <button class="chart-range-btn" data-range="5Y">5Y</button>
-            </div>
-
-            <div class="chart-body">
-              <div class="chart-tools" id="chart-tools"><!-- populated by script.js: renderToolbar() --></div>
-              <div class="chart-canvas-wrap">
-                <div id="candle-chart" class="candle-chart"></div>
-                <svg id="indicator-overlay" class="indicator-overlay"></svg>
-                <svg id="draw-overlay" class="draw-overlay"></svg>
-              </div>
-            </div>
-
-            <div class="chart-footer">
-              <span id="chart-status">connecting…</span>
-            </div>
-          </div>
         </div>
 
       </div><!-- /.tab-content-area -->
@@ -1193,6 +1085,16 @@
 </div>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
+<style>.panel-tab-link { text-decoration: none; color: inherit; }</style>
+<script>
+// The liquidity scanner and the live chart have their own full pages: these tabs open them on the coin chosen here.
+document.querySelectorAll(".panel-tab-link").forEach(function (a) {
+  a.addEventListener("click", function () {
+    var sel = document.getElementById("coin-select");
+    if (sel && sel.value) a.href = a.getAttribute("data-goto") + "?coin=" + encodeURIComponent(sel.value);
+  });
+});
+</script>
 <script>
 // Standalone controller for the homepage info sidebar (Contact/About/
 // Privacy/Terms/Disclaimer). Fully independent of script.js and the
