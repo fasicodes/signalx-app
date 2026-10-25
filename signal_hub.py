@@ -1099,8 +1099,9 @@ def coins_status(now=None):
             r = sigs[0]
             j = signal_json(r, prices.get(sym))
             out.append({"symbol": sym, "status": "buy" if r["side"] == "LONG" else "sell", "timeframe": r["timeframe"],
-                        "signal": {k: j.get(k) for k in ("id", "entry", "stop_loss", "stop_now", "targets", "signal_at",
-                                                         "expires_at", "hits", "r_now", "pct_now", "price", "decimals")},
+                        "signal": dict({k: j.get(k) for k in ("id", "entry", "stop_loss", "stop_now", "targets", "signal_at",
+                                                              "expires_at", "hits", "r_now", "pct_now", "price", "decimals")},
+                                       strong=is_strong(r)),
                         "more": [x["timeframe"] for x in sigs[1:]]})
         elif sym in forming:
             out.append({"symbol": sym, "status": "forming", **forming[sym]})
@@ -1115,7 +1116,57 @@ def coins_status(now=None):
     sec = min((markets.TF_SEC[t] for t in tfs), default=3600)
     nxt = streams.last_closed_bar("1h" if sec <= 3600 else "4h", now) + timedelta(seconds=2 * sec)
     counts = {k: sum(1 for x in out if x["status"] == k) for k in ("buy", "sell", "forming", "wait")}
-    return {"coins": out, "counts": counts, "timeframes": tfs, "updated_at": _iso(now), "next_check": _iso(nxt)}
+    counts["strong"] = sum(1 for x in out if x["status"] in ("buy", "sell") and x["signal"].get("strong"))
+    return {"coins": out, "counts": counts, "timeframes": tfs, "updated_at": _iso(now), "next_check": _iso(nxt),
+            "strong_test": strong_summary(tfs)}
+
+
+def is_strong(row):
+    """The strongest signals, by levels fixed before the unseen-data test and better on BOTH the walk-forward years and
+    the unseen year: crypto 4h = the engine's 'strong' tier (its top 3% of scores), crypto 1h = the model's top grade."""
+    if (row.get("market") or "crypto") != "crypto":
+        return False
+    tf = row.get("timeframe")
+    if tf == "4h":
+        return row.get("tier") == "strong"
+    if tf == "1h":
+        return row.get("grade") == "A"
+    return False
+
+
+def strong_summary(tfs=("1h", "4h")):
+    """Test results (unseen data, after costs) of the strongest signals and of all signals of the tested crypto streams."""
+    parts, alls = [], []
+    try:
+        if "4h" in tfs:
+            import signal_engine as se
+            t = se.test_stats() or {}
+            days = max(1.0, (t.get("signals") or 0) / max(float(t.get("signals_per_day") or 1), 1e-9))
+            if (t.get("strong") or {}).get("signals"):
+                parts.append((t["strong"], days))
+            if t.get("signals"):
+                alls.append((t, days))
+        if "1h" in tfs:
+            m = streams.load_model("crypto_1h")
+            t = (m.meta.get("test") if m is not None else None) or {}
+            days = max(1.0, (t.get("signals") or 0) / max(float(t.get("signals_per_day") or 1), 1e-9))
+            a = (t.get("by_grade") or {}).get("A") or {}
+            if a.get("signals"):
+                parts.append((a, days))
+            if t.get("signals"):
+                alls.append((t, days))
+    except Exception:
+        return None
+
+    def mix(xs):
+        n = sum(x["signals"] for x, _ in xs)
+        if not n:
+            return None
+        return {"signals": n, "per_day": round(sum(x["signals"] / d for x, d in xs), 1),
+                "win_rate": round(sum(x["signals"] * x["win_rate"] for x, _ in xs) / n, 1),
+                "avg_r": round(sum(x["signals"] * x.get("avg_net_r", 0) for x, _ in xs) / n, 3)}
+    st, al = mix(parts), mix(alls)
+    return {"strong": st, "all": al} if st and al else None
 
 
 @hub_bp.route("/coins-now", methods=["GET"])
