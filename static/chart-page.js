@@ -311,6 +311,7 @@
     return (last.close / S.bars[i].close - 1) * 100;
   }
   function updateHeader() {
+    try { fsSym(); } catch (e) {}
     const t = S.tickers[S.coin];
     const last = S.bars.length ? S.bars[S.bars.length - 1].close : null;
     const px = last != null ? last : t && t.last;
@@ -2239,8 +2240,27 @@
     document.body.classList.toggle("an-lock", on);
     $("fs-btn").setAttribute("aria-pressed", on ? "true" : "false");
     $("fs-btn").title = on ? "Exit full screen (Esc)" : "Full screen (F)";
-    setTimeout(() => { renderDrawings(); renderIndicatorOverlay(); }, 60);
+    if (on) fsSym();
+    // also hide the browser's own bars, like a full-screen chart elsewhere (the page itself, so pop-ups still show)
+    const de = document.documentElement;
+    try {
+      if (on && !document.fullscreenElement && de.requestFullscreen) de.requestFullscreen().catch(() => {});
+      else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    } catch (e) { /* not allowed here: the in-page full view still works */ }
+    setTimeout(() => { renderDrawings(); renderIndicatorOverlay(); }, 120);
   }
+  // the coin and price on the thin full-screen toolbar (the top row is hidden there)
+  function fsSym() {
+    if (!S.fs) return;
+    $("fs-name").textContent = S.coin;
+    const t = S.tickers && S.tickers[S.coin];
+    const p = t && t.last != null ? t.last : (S.bars.length ? S.bars[S.bars.length - 1].close : null);
+    $("fs-price").textContent = p != null ? F.price(p, S.coin) : "";
+    const ic = $("coin-icon");
+    if (ic && ic.src) $("fs-icon").src = ic.src;
+  }
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && S.fs) setFullscreen(false); });
+  $("fs-sym").addEventListener("click", () => { setFullscreen(false); setTimeout(() => $("coin-btn").click(), 80); });
   $("fs-btn").addEventListener("click", () => setFullscreen(!S.fs));
   $("latest-btn").addEventListener("click", () => { if (S.chart) S.chart.timeScale().scrollToRealTime(); });
   function setDraw(on) {
