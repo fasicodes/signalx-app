@@ -270,10 +270,24 @@ kbd { display: inline-block; min-width: 20px; padding: 1px 5px; border-radius: 5
 .eng-hist i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
 .eng-copy { color: var(--dim); font-size: 13.5px; margin: 6px 0 0; }
 
-/* full screen */
+/* full screen: almost all of the screen is chart (one thin toolbar on top, the quick ranges at the bottom) */
 .ch-card.is-fs { position: fixed; inset: 0; z-index: 1100; border-radius: 0; border: none; height: 100vh; height: 100dvh; }
 .ch-card.is-fs .ch-canvas { height: auto; flex: 1 1 auto; }
-.ch-card.is-fs .mk-stats { display: none; }
+.ch-card.is-fs .mk-top { display: none; }
+.ch-card.is-fs .ch-bar { padding: 3px 8px; gap: 2px; border-top: none; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.ch-card.is-fs .ch-bar::-webkit-scrollbar { display: none; }
+.ch-card.is-fs .ch-bar .mk-btn { height: 30px; padding: 0 8px; }
+.ch-card.is-fs .ch-bar .mk-btn.mk-icon-only { width: 30px; padding: 0; }
+.ch-card.is-fs .ch-bar .mk-btn > span:not(.mk-count):not(.mk-sr):not(.mk-txt-ico) { display: none; }
+.ch-card.is-fs .ch-bar .mk-seg { padding: 2px; }
+.ch-card.is-fs .ch-bar .mk-seg button { padding: 4px 8px; font-size: 12.5px; }
+.ch-card.is-fs .ch-fs-sym { display: inline-flex; }
+.ch-card.is-fs .ch-foot { padding: 3px 10px; }
+.ch-card.is-fs .ch-foot .mk-seg button { padding: 3px 8px; }
+.ch-fs-sym { display: none; align-items: center; gap: 6px; padding: 0 8px 0 4px; font-weight: 700; font-size: 13.5px; white-space: nowrap; color: var(--text);
+  background: none; border: none; cursor: pointer; font-family: inherit; }
+.ch-fs-sym img { width: 18px; height: 18px; border-radius: 50%; }
+.ch-fs-sym .tnum { font-weight: 600; color: var(--dim); }
 
 /* wide screens: the chart fills the screen height, drawing tools down the left side */
 @media (min-width: 1024px) {
