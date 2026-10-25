@@ -1247,7 +1247,7 @@ body.chart-fullscreen-lock { overflow: hidden; }
 .chart-tool-sep { width: 20px; height: 1px; background: var(--line); margin: 3px 0; }
 
 /* Tool group: main button + tiny expand arrow + flyout submenu, in the
-   style of TradingView's grouped drawing-tool icons. */
+   style of the grouped drawing-tool icons. */
 .chart-tool-group { position: relative; }
 .chart-tool-arrow {
     position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px;
