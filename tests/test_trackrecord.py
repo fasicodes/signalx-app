@@ -361,12 +361,20 @@ check(cl.get("/api/track-record").status_code == 401 and cl.get("/track-record")
 os.environ["TRACK_RECORD_PUBLIC"] = "on"
 tr._cache.clear()
 d = cl.get("/api/track-record").get_json()
-check(d["ok"] and d["public"] and d["sources"]["BACKTEST"]["stats"]["signals"] == n and
-      d["sources"]["LIVE"]["stats"]["signals"] == 1, "public API returns live + backtest stats")
+check(d["ok"] and d["public"] and d["sources"]["BACKTEST"]["stats"]["signals"] == n and "LIVE" not in d["sources"]
+      and d["live_visible"] is False, "visitors and members see the backtest only, not the live record")
+page = cl.get("/track-record")
+check(b'data-src="LIVE"' not in page.data, "no live-record button for them")
+tr._hooks["is_admin"] = lambda: True
+d = cl.get("/api/track-record").get_json()
+check(d["ok"] and d["live_visible"] and d["sources"]["BACKTEST"]["stats"]["signals"] == n and
+      d["sources"]["LIVE"]["stats"]["signals"] == 1, "the site owner (ADMIN_EMAILS) gets live + backtest stats")
+check(b'data-src="LIVE"' in cl.get("/track-record").data, "the owner gets the live / backtest switch")
 check(isinstance(d["sources"]["LIVE"]["open"], list) and d["rules"]["max_bars"] == 54 and d["rules"]["targets_r"] == [0.5, 1.0, 2.0] and d["rules"]["model_test"]["signals"] > 0,
       "open signals, rules and model test stats exposed")
 page = cl.get("/track-record")
 check(page.status_code == 200 and b"Track record" in page.data, "public page renders")
+tr._hooks.pop("is_admin", None)
 os.environ.pop("TRACK_RECORD_PUBLIC", None)
 
 print(f"\nALL {passed} CHECKS PASSED")
