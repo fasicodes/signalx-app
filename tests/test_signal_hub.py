@@ -548,6 +548,20 @@ check(("ETH/USDT", "forming") in order and next(x for x in cs["coins"] if x["sym
       "coins: the 4h engine's 'getting close' coins come from the signal board")
 check("XRP/USDT" not in [s for s, _ in order] and ("ADA/USDT", "wait") in order,
       "coins: a coin no stream could get candles for is left out, the others wait")
+check(all(x["signal"]["strong"] is False for x in cs["coins"] if x["status"] in ("buy", "sell")) and cs["counts"]["strong"] == 0,
+      "coins: 4h signals without the strong tier are not marked strong")
+check(hub.is_strong({"market": "crypto", "timeframe": "4h", "tier": "strong"}) and not hub.is_strong({"market": "crypto", "timeframe": "4h", "tier": "standard"})
+      and hub.is_strong({"market": "crypto", "timeframe": "1h", "grade": "A"}) and not hub.is_strong({"market": "crypto", "timeframe": "1h", "grade": "B"})
+      and not hub.is_strong({"market": "forex", "timeframe": "1h", "grade": "A"}) and not hub.is_strong({"market": "crypto", "timeframe": "15m", "grade": "A"}),
+      "strongest signals: 4h strong tier, 1h top grade, nothing else")
+_md_before = streams.MODELS_DIR
+streams.MODELS_DIR = os.path.join(os.path.dirname(HERE), "models")
+streams.reset_models()
+ss = hub.strong_summary(["1h", "4h"])
+check(ss and ss["strong"]["win_rate"] > ss["all"]["win_rate"] and ss["strong"]["avg_r"] > ss["all"]["avg_r"] and ss["strong"]["per_day"] < ss["all"]["per_day"],
+      "strongest signals: better and rarer than all signals in the shipped tests")
+streams.MODELS_DIR = _md_before
+streams.reset_models()
 with sb._board_lock:
     sb._board["rows"] = _rows_before or {}
 os.environ.pop("SIGNAL_STREAMS", None)
