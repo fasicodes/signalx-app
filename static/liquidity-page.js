@@ -323,7 +323,14 @@
     if (!sw || !sw.available) { box.innerHTML = `<div class="lq-unavail">Not enough candles.</div>`; $("pools").innerHTML = ""; return; }
     const pos = Math.max(2, Math.min(98, sw.position_pct));
     const ev = sw.sweeps || [];
-    box.innerHTML = `<div class="lq-range" aria-label="Price inside the recent range">
+    // status + the four swing numbers (moved here from the Pro terminal's old liquidity tab)
+    const last = ev[0];
+    const status = last ? `<span class="lq-sw-badge ${last.side === "HIGH" ? "c-short" : "c-long"}">${last.forming ? "Sweep forming" : "Sweep"} of the ${last.side === "HIGH" ? "high" : "low"}</span>`
+      : `<span class="lq-sw-badge">No sweep detected</span>`;
+    const tile = (label, val, cls) => `<div class="mk-tile"><dt>${label}</dt><dd class="tnum ${cls || ""}">${val}</dd></div>`;
+    const stats = `<div class="lq-sw-head">${status}</div><dl class="lq-kpis lq-sw-stats">${tile("Swing high", fmt(sw.swing_high))}${tile("Swing low", fmt(sw.swing_low))}`
+      + `${tile("Distance to high", "+" + sw.to_high_pct.toFixed(2) + "%", "c-long")}${tile("Distance to low", "−" + sw.to_low_pct.toFixed(2) + "%", "c-short")}</dl>`;
+    box.innerHTML = stats + `<div class="lq-range" aria-label="Price inside the recent range">
         <span class="track"></span><span class="mark" style="left:${pos}%"></span>
         <span class="lab now" style="left:${pos}%">${fmt(sw.price)}</span>
         <span class="lab l" style="left:0">${fmt(sw.swing_low)} (−${sw.to_low_pct.toFixed(2)}%)</span><span class="lab r">${fmt(sw.swing_high)} (+${sw.to_high_pct.toFixed(2)}%)</span>
