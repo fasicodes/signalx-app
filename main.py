@@ -2482,6 +2482,12 @@ def ticker_strip():
 # Note: ye ek naya display-only endpoint hai, /signal ke verdict
 # logic ko bilkul touch nahi karta.
 # ============================================================
+def _sig(x, digits=10):
+    """A price rounded to `digits` significant digits (not a fixed number of decimals)."""
+    x = float(x)
+    return float(f"{x:.{digits}g}") if x else 0.0
+
+
 @app.route("/candles", methods=["GET"])
 @limiter.limit("240 per minute", key_func=_rate_key)
 def candles_endpoint():
@@ -2534,13 +2540,15 @@ def candles_endpoint():
                 "server_time": int(time.time()),
             })
 
+        # prices keep 10 significant digits: a fixed 8 decimals flattened the candles of very cheap coins
+        # (PEPE, BONK, SHIB ~0.00001) into blocks and dashes
         candles = [
             {
                 "time": int(row.timestamp.timestamp()),
-                "open": round(float(row.open), 8),
-                "high": round(float(row.high), 8),
-                "low": round(float(row.low), 8),
-                "close": round(float(row.close), 8),
+                "open": _sig(row.open),
+                "high": _sig(row.high),
+                "low": _sig(row.low),
+                "close": _sig(row.close),
                 "volume": round(float(row.volume), 8),
             }
             for row in df.itertuples()
@@ -2553,7 +2561,7 @@ def candles_endpoint():
             "coin": coin,
             "timeframe": timeframe,
             "candles": candles,
-            "last_price": round(last_price, 8),
+            "last_price": _sig(last_price),
             "change_pct": change_pct,
             "server_time": int(time.time()),
         })
