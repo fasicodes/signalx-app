@@ -291,14 +291,14 @@ again = hub.scan_stream("crypto_1h", NOW)
 fresh = [k for k, v in hub.engine("crypto_1h").board(NOW).items() if v.get("fresh")]
 check(len(evs) == len(fresh) and again == [], f"scanner stores each fresh signal once ({len(evs)} new)")
 os.environ.pop("SIGNAL_STREAMS")
-check(len(hub.enabled_streams()) == 6 and hub.enabled_streams() == hub.ALL_STREAMS,
-      "default: all six streams run (the ones that have not passed the test are marked untested)")
+check(hub.enabled_streams() == ["crypto_4h"],
+      "default: only crypto 4h runs (the losing untested streams stay off unless SIGNAL_STREAMS turns them on)")
 os.environ["SIGNAL_STREAMS"] = "validated"
 check(hub.enabled_streams() == hub.validated_streams() and "crypto_4h" in hub.enabled_streams(),
       "SIGNAL_STREAMS=validated: only the streams whose model passed its test on unseen data (crypto 4h always)")
 check(hub.validated_streams() == ["crypto_4h"], "no model file -> only crypto 4h counts as tested")
 os.environ["SIGNAL_STREAMS"] = "bogus"
-check(len(hub.enabled_streams()) == 6, "SIGNAL_STREAMS with only unknown names falls back to all six")
+check(hub.enabled_streams() == ["crypto_4h"], "SIGNAL_STREAMS with only unknown names falls back to crypto 4h")
 os.environ.pop("SIGNAL_STREAMS")
 check(hub.stream_tested("crypto", "4h") and not hub.stream_tested("crypto", "15m") and not hub.stream_tested("forex", "1h")
       and not hub.stream_tested("forex", "15m") and not hub.stream_tested("forex", "4h"),
@@ -343,6 +343,7 @@ with hub._Cursor() as cur:
     cur.execute("SELECT COALESCE(MAX(id), 0) AS m FROM signal_events")
     keep_id = cur.fetchone()["m"]
 made, scan_errors = {}, []
+os.environ["SIGNAL_STREAMS"] = "all"
 for key in hub.enabled_streams():
     if key == "crypto_4h":
         continue                      # produced by signalboard.py (signal engine v3.1), tested elsewhere
