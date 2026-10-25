@@ -547,6 +547,9 @@
         if (X && X.signals) html += `<br>Added coins: this stream also covers ${X.coins} coins the model was never trained on. On the same unseen year `
           + `(${esc(X.period || "")}) they gave ${X.signals} signals, ${X.win_rate}% reached TP1, average ${X.avg_r > 0 ? "+" : ""}${X.avg_r}R after costs.`;
         if (mt.baseline && mt.baseline.signals) html += `<br>Before (rules R1) on the same data: win rate ${mt.baseline.win_rate}%, average ${mt.baseline.avg_net_r}R.`;
+        if (market === "crypto" && tf === "1h") html += "<br><b>This stream swings a lot.</b> Its signals come in groups (many coins in the same hour), so they often win or lose together: "
+          + "in the test year about half of the weeks lost money, even though the year as a whole made money. The 4-hour stream was much steadier "
+          + "(about 85% of its months in profit). For steadier results use the 4-hour signals or only the strongest ones on the Coins page.";
         html += "<br>A backtest is not a promise: live results are shown separately above.";
         $("sim").innerHTML = html;
       } else if ((STREAMS.find((x) => x.market === market && x.timeframe === tf) || {}).research) {
