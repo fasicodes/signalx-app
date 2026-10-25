@@ -52,6 +52,11 @@
   .rules-box h3 { margin: 0 0 8px; font-size: 16px; }
   .rules-box ul { margin: 0; padding-left: 20px; color: var(--text-dim); }
   .rules-box li { margin-bottom: 6px; }
+  .strong-tg { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; color: var(--text); cursor: pointer; white-space: nowrap; }
+  .strong-tg input { width: 16px; height: 16px; accent-color: var(--long); }
+  .strong-note { margin: -4px 0 12px; color: var(--text-dim); font-size: 14px; }
+  .strong-note button { background: none; border: none; padding: 0; color: var(--long); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+  .act.strong { background: color-mix(in srgb, var(--long) 16%, transparent); color: var(--long); margin-right: 6px; }
   .acct { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); margin-left: auto; }
   .acct .pinput { width: 110px; flex: 0 0 auto; font-family: var(--mono); font-size: 14px; padding: 8px 10px; text-align: right; }
   .acct-note { color: var(--text-faint); font-size: 13px; margin: -8px 0 4px; }
@@ -84,6 +89,7 @@
       <button type="button" data-f="wait" aria-pressed="false">Wait<b id="n-wait"></b></button>
     </div>
     <input class="pinput" id="q" type="search" placeholder="Find a coin, e.g. BTC" aria-label="Find a coin" maxlength="12">
+    <label class="strong-tg" for="strong-only"><input type="checkbox" id="strong-only" checked> Strongest signals only</label>
     <label class="acct" for="acct"><span>Your account</span><input class="pinput" id="acct" type="text" inputmode="decimal"
       maxlength="12" value="1000" aria-describedby="acct-note"><span>USDT</span></label>
   </div>
@@ -91,6 +97,7 @@
 
   <div id="sec-sig">
     <div class="ch-sec"><h2>Signals now</h2><span>Trade plans from the tested crypto models</span></div>
+    <p class="strong-note" id="strong-note" hidden></p>
     <div class="cgrid" id="g-sig"></div>
   </div>
   <div id="sec-forming">
@@ -134,7 +141,8 @@
     var h = Math.round(m / 60); return h < 48 ? h + " hours ago" : Math.round(h / 24) + " days ago";
   }
   var hhmm = function (iso) { var t = new Date(iso); return isNaN(t) ? "--" : t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
-  var DATA = null, FILTER = "all", ACCT = 1000, RISK = 0.01;
+  var DATA = null, FILTER = "all", ACCT = 1000, RISK = 0.01, STRONG = true;
+  try { STRONG = localStorage.getItem("sfm-strong-only") !== "off"; } catch (e) {}
   try {
     var f0 = new URLSearchParams(location.search).get("f");
     if (["sig", "forming", "wait"].indexOf(f0) >= 0) FILTER = f0;
@@ -175,7 +183,8 @@
     var now = s.price != null ? '<div class="cc-now">Now ' + price(s.price, d) + (s.r_now != null ? " · " + (s.r_now >= 0 ? '<span class="pos">' : '<span class="neg">') +
       (s.r_now > 0 ? "+" : "") + s.r_now + "R</span>" : "") + (s.hits ? " · target " + s.hits + " reached" : "") + "</div>" : "";
     return '<article class="cc ' + x.status + '"><div class="cc-top"><span class="cc-coin">' + esc(base(x.symbol)) + "<small>" + esc(x.timeframe) +
-      " signal · " + ago(s.signal_at) + '</small></span><span class="act ' + x.status + '">' + (buy ? "BUY" : "SELL") + "</span></div>" +
+      " signal · " + ago(s.signal_at) + '</small></span><span>' + (s.strong ? '<span class="act strong" title="One of the strongest signals">STRONG</span>' : "") +
+      '<span class="act ' + x.status + '">' + (buy ? "BUY" : "SELL") + "</span></span></div>" +
       '<dl class="cplan"><div><dt>' + (buy ? "Buy near" : "Sell near") + "</dt><dd>" + price(s.entry, d) + "</dd></div>" +
       "<div><dt>Stop-loss<small>" + (s.stop_now != null && s.stop_now !== s.stop_loss ? "moved to the entry after target 1" : "exit here if it goes wrong") +
       "</small></dt><dd>" + price(stop, d) + "</dd></div>" + t + "</dl>" + now + sizeLine(x, s) +
@@ -192,11 +201,22 @@
     if (!DATA) return;
     var q = $("q").value.trim().toUpperCase();
     var list = DATA.coins.filter(function (x) { return !q || base(x.symbol).indexOf(q) === 0; });
-    var sig = list.filter(function (x) { return x.status === "buy" || x.status === "sell"; });
+    var sigAll = list.filter(function (x) { return x.status === "buy" || x.status === "sell"; });
+    var sig = STRONG ? sigAll.filter(function (x) { return x.signal && x.signal.strong; }) : sigAll;
+    var hidden = sigAll.length - sig.length, st = DATA.strong_test, note = $("strong-note");
+    if (!q) $("n-sig").textContent = sig.length;
+    var testTxt = st && st.strong && st.all ? " In the tests on unseen data " + st.strong.win_rate + "% of the strongest signals reached target 1 (" +
+      (st.strong.avg_r >= 0 ? "+" : "") + st.strong.avg_r + "R each on average), against " + st.all.win_rate + "% (" + (st.all.avg_r >= 0 ? "+" : "") +
+      st.all.avg_r + "R) for all signals. They are rarer: about " + st.strong.per_day + " a day instead of " + st.all.per_day + "." : "";
+    note.hidden = !(STRONG || testTxt);
+    note.innerHTML = STRONG ? "Showing only the strongest signals." + testTxt + (hidden ? ' <button type="button" data-showall>Show the ' + hidden +
+      " other signal" + (hidden === 1 ? "" : "s") + "</button>" : "") : "Showing all signals." + (testTxt ? testTxt.replace(" In the tests", " Tip: in the tests") : "");
     var fm = list.filter(function (x) { return x.status === "forming"; });
     var wt = list.filter(function (x) { return x.status === "wait"; });
     $("g-sig").innerHTML = sig.length ? sig.map(sigCard).join("") : '<div class="empty-sig">No signal right now' + (q ? " for this coin" : "") +
       ". The models check every coin again at " + hhmm(DATA.next_check) + ". Good trades do not come every hour; waiting is part of trading.</div>";
+    if (!sig.length && hidden) $("g-sig").innerHTML = '<div class="empty-sig">No strongest signal right now. ' + hidden + " signal" + (hidden === 1 ? " of normal strength is" : "s of normal strength are") +
+      ' open: <button type="button" class="mk-link" data-showall>show them</button>, or wait for a strong one.</div>';
     $("g-forming").innerHTML = fm.map(formCard).join("");
     $("g-wait").innerHTML = wt.map(function (x) { return '<div class="wc"><b>' + esc(base(x.symbol)) + "</b><span>wait</span></div>"; }).join("");
     $("sec-sig").hidden = FILTER !== "all" && FILTER !== "sig";
@@ -224,6 +244,15 @@
     });
   });
   $("q").addEventListener("input", render);
+  var strongEl = $("strong-only");
+  strongEl.checked = STRONG;
+  function setStrong(on) {
+    STRONG = on; strongEl.checked = on;
+    try { localStorage.setItem("sfm-strong-only", on ? "on" : "off"); } catch (e) {}
+    render();
+  }
+  strongEl.addEventListener("change", function () { setStrong(strongEl.checked); });
+  document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-showall]")) setStrong(false); });
   var acctEl = $("acct");
   acctEl.value = String(ACCT);
   acctEl.addEventListener("input", function () {
