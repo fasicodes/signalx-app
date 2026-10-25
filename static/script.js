@@ -76,7 +76,7 @@ const LIQUIDITY_POLL_MS = 15000;
    make sure both files were replaced together and the browser isn't serving
    a cached copy. */
 {
-  const required = { coinSelect, runBtn, errorText, resultBox, alertStack, emptyState, clockText, tier1El, tier2El, tier3El, liqScannerEl };
+  const required = { coinSelect, runBtn, errorText, resultBox, alertStack, emptyState, clockText, tier1El, tier2El, tier3El };
   const missing = Object.keys(required).filter((k) => !required[k]);
   if (missing.length) {
     console.error("SIGNAL/FM: design.html is missing element(s) for:", missing.join(", "), "— check that templates/design.html matches this static/script.js and clear the browser cache.");
@@ -1113,7 +1113,8 @@ function renderLiquidityScanner(data) {
 }
 
 async function fetchAndRenderLiquidity(coin) {
-  if (!coin || liquidityFetchInFlight) return;
+  // the liquidity scanner moved to its own page (/liquidity-scanner): nothing to fetch when it is not on this page
+  if (!liqScannerEl || !coin || liquidityFetchInFlight) return;
   // NOTE: forex used to be hard-blocked here before the backend's
   // /liquidity route learned to degrade gracefully for forex (empty
   // order book, but the price-action panels - sweep detector, CVD,
@@ -1136,7 +1137,7 @@ async function fetchAndRenderLiquidity(coin) {
 }
 
 function startLiquidityPolling() {
-  if (isForexValue(currentCoin)) return;
+  if (!liqScannerEl || isForexValue(currentCoin)) return;
   if (liquidityPollTimer) return;
   liquidityPollTimer = setInterval(() => {
     if (currentCoin && !isForexValue(currentCoin)) fetchAndRenderLiquidity(currentCoin);
@@ -1144,7 +1145,7 @@ function startLiquidityPolling() {
 }
 
 /* ==========================================================================
-   LIVE CHART TAB — real candlesticks via TradingView's lightweight-charts,
+   LIVE CHART TAB — real candlesticks via the lightweight-charts library,
    fed from the /candles endpoint and polled every few seconds for live
    price + last-candle updates.
    ========================================================================== */
@@ -1253,7 +1254,7 @@ document.addEventListener("keydown", (e) => {
    ========================================================================== */
 
 /* ==========================================================================
-   CHART DRAWING TOOLS — a TradingView-style grouped tool palette. Each
+   CHART DRAWING TOOLS — a grouped tool palette. Each
    group button shows the last-used tool in that group; hovering or
    clicking the small arrow opens a flyout to pick a different tool from
    the group. Coordinates are converted through the chart's own time/price
@@ -1504,7 +1505,7 @@ const TOOL_ICONS = {
 
 // Groups drive both the toolbar UI and which tools live together in a
 // flyout. `sections` lets a group show a divider + label partway through
-// its list (used for the GANN block under the Fib flyout, like TradingView).
+// its list (used for the GANN block under the Fib flyout).
 const TOOL_GROUPS = [
   { id: "cursor", tools: [{ id: "cursor", label: "Cursor" }] },
   { id: "lines", tools: [
