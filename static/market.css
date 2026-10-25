@@ -477,3 +477,17 @@ html[data-theme="light"] .lq-tag.mag { color: #1d4ed8; }
   .lq-say { font-size: 14.5px; }
   .lq-meter { grid-template-columns: 96px minmax(0, 1fr) 30px; }
 }
+
+/* liquidity sweep status + swing numbers */
+.lq-sw-head { margin: 2px 0 10px; }
+.lq-sw-badge { display: inline-block; font-size: 12.5px; font-weight: 600; letter-spacing: .02em; padding: 4px 10px; border-radius: 999px;
+  background: var(--surface-2); color: var(--dim); }
+.lq-sw-badge.c-long { background: var(--long-bg); color: var(--long); } .lq-sw-badge.c-short { background: var(--short-bg); color: var(--short); }
+@media (min-width: 1200px) { .lq-kpis.lq-sw-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.lq-sw-stats { margin-bottom: 12px; }
+
+/* volatility popup on the live chart */
+.ch-vol { width: min(300px, calc(100vw - 32px)); }
+.ch-vol-rows { display: grid; gap: 8px; margin: 4px 0 10px; }
+.ch-vol-rows div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; }
+.ch-vol-rows dt { color: var(--dim); font-size: 13.5px; } .ch-vol-rows dd { margin: 0; font-weight: 600; font-size: 14px; }
