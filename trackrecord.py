@@ -690,8 +690,10 @@ _started = False
 _start_lock = threading.Lock()
 
 
-def init_trackrecord(app=None, *, get_candles=None, engine=None, available_coins=None, start=True, signal_core=None):
+def init_trackrecord(app=None, *, get_candles=None, engine=None, available_coins=None, start=True, signal_core=None, is_admin=None):
     global _started
+    if is_admin is not None:
+        _hooks["is_admin"] = is_admin
     if get_candles:
         _hooks["get_candles"] = get_candles
     if engine is not None:
@@ -775,11 +777,19 @@ def _allowed():
     return is_public() or bool(session.get("user_id"))
 
 
+def _admin():
+    fn = _hooks.get("is_admin")
+    try:
+        return bool(fn and fn())
+    except Exception:
+        return False
+
+
 @track_bp.route("/track-record", methods=["GET"])
 def track_record_page():
     if not _allowed():
         return redirect(url_for("login_page"))
-    return render_template("track-record.html", public=is_public(), logged_in=bool(session.get("user_id")))
+    return render_template("track-record.html", public=is_public(), logged_in=bool(session.get("user_id")), live_visible=_admin())
 
 
 @track_bp.route("/api/track-record", methods=["GET"])
@@ -787,6 +797,12 @@ def track_record_api():
     if not _allowed():
         return jsonify({"ok": False, "error": "Login required."}), 401
     try:
-        return jsonify({"ok": True, **build_summary()})
+        data = build_summary()
+        if not _admin():
+            # the live record is for the site owner (ADMIN_EMAILS) only; everyone else sees the backtest
+            data = dict(data, sources={"BACKTEST": data["sources"]["BACKTEST"]}, live_visible=False)
+        else:
+            data = dict(data, live_visible=True)
+        return jsonify({"ok": True, **data})
     except Exception as e:
         return jsonify({"ok": False, "error": f"Track record unavailable: {str(e)[:120]}"}), 500
