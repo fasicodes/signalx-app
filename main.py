@@ -2890,7 +2890,8 @@ from datetime import datetime as _dt
 from trackrecord import track_bp, init_trackrecord, is_public as _track_public
 app.register_blueprint(track_bp)
 limiter.limit("60 per minute")(track_bp)
-init_trackrecord(app, get_candles=get_candles, engine=get_signal_engine(), available_coins=AVAILABLE_COINS)
+init_trackrecord(app, get_candles=get_candles, engine=get_signal_engine(), available_coins=AVAILABLE_COINS,
+                 is_admin=lambda: _is_admin())
 
 # Strategies page: well-known strategies backtested every day on real candles ("By Signals FM") and
 # strategies shared by users ("By a user", not tested) - strategies.py + strategy_library.py
