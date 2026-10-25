@@ -28,7 +28,7 @@
     if (a >= 1) return 4;
     if (a >= 0.01) return 5;
     if (a >= 0.0001) return 7;
-    return 9;
+    return Math.min(12, Math.ceil(-Math.log10(a)) + 4);
   }
   function price(v, sym) {
     if (v == null || isNaN(v)) return "--";
