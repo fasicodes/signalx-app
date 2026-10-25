@@ -74,10 +74,12 @@
     <p>At every 4-hour candle close, Signals FM reads the same 102 crypto coins and logs every long or short it gives, with the
       stop-loss and the three targets shown on the dashboard. Nothing is picked afterwards. Results are in R after fees: 1R is the distance from entry to stop.</p>
     <div class="src-row">
+      {% if live_visible %}
       <div class="pseg" role="group" aria-label="Which results">
         <button type="button" data-src="LIVE" aria-pressed="true">Live record</button>
         <button type="button" data-src="BACKTEST" aria-pressed="false">Backtest</button>
       </div>
+      {% endif %}
       <span class="src-note" id="src-note">Loading…</span>
     </div>
     {% if not public and is_admin %}
@@ -185,9 +187,9 @@
   }
 
   function note() {
-    const live = DATA.sources.LIVE.stats, bt = DATA.backtest_status || {};
+    const L = DATA.sources.LIVE || { stats: { signals: 0 }, open: [] }, live = L.stats, bt = DATA.backtest_status || {};
     if (SRC === "LIVE") {
-      return DATA.live_since ? `Recording live since ${day(DATA.live_since)}. ${live.signals} closed, ${DATA.sources.LIVE.open.length} open.` : "Live recording starts with the next candle close.";
+      return DATA.live_since ? `Recording live since ${day(DATA.live_since)}. ${live.signals} closed, ${L.open.length} open.` : "Live recording starts with the next candle close.";
     }
     const days = DATA.rules.backtest_days;
     if (bt.state === "running") return "Backtest running (about 2 minutes). Refresh shortly.";
@@ -357,14 +359,19 @@
       const d = await r.json();
       if (!r.ok || !d.ok) throw new Error(d.error || "Could not load the track record.");
       DATA = d;
-      const live = d.sources.LIVE.stats.signals, bt = d.sources.BACKTEST.stats.signals;
-      if (!sessionStorage.getItem("tr-src")) SRC = live >= 20 || !bt ? "LIVE" : "BACKTEST";
+      if (!d.live_visible || !d.sources.LIVE) {
+        SRC = "BACKTEST";                       // only the site owner sees the live record
+      } else {
+        const live = d.sources.LIVE.stats.signals, bt = d.sources.BACKTEST.stats.signals;
+        if (!sessionStorage.getItem("tr-src")) SRC = live >= 20 || !bt ? "LIVE" : "BACKTEST";
+        else SRC = sessionStorage.getItem("tr-src");
+      }
       render();
     } catch (e) {
       $("src-note").textContent = e.message;
     }
   }
-  try { SRC = sessionStorage.getItem("tr-src") || SRC; } catch (e) { /* ignore */ }
+  try { if ({{ 'true' if live_visible else 'false' }}) SRC = sessionStorage.getItem("tr-src") || SRC; else SRC = "BACKTEST"; } catch (e) { /* ignore */ }
   document.querySelectorAll("[data-src]").forEach((b) => b.addEventListener("click", () => {
     SRC = b.dataset.src;
     try { sessionStorage.setItem("tr-src", SRC); } catch (e) { /* ignore */ }
