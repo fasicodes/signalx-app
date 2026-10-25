@@ -86,6 +86,23 @@
         </div>
       </div>
       <div class="mk-pop-wrap">
+        <button class="mk-btn" id="vol-btn" type="button" aria-expanded="false" aria-controls="vol-pop" title="Volatility">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l4-9 4 6 3-5 4 3 3-7"/></svg>
+          <span>Volatility</span>
+        </button>
+        <div class="mk-pop ch-vol" id="vol-pop" hidden>
+          <div class="mk-pop-head"><b>Volatility <span id="vol-tf"></span></b><button type="button" class="mk-x" data-close aria-label="Close">&times;</button></div>
+          <dl class="ch-vol-rows" id="vol-rows">
+            <div><dt>ATR (14), average candle size</dt><dd class="tnum" id="vol-atr">--</dd></div>
+            <div><dt>ATR % of price</dt><dd class="tnum" id="vol-atr-pct">--</dd></div>
+            <div><dt>Level</dt><dd id="vol-status">--</dd></div>
+            <div><dt>Trend</dt><dd id="vol-trend">--</dd></div>
+            <div><dt>Percentile</dt><dd class="tnum" id="vol-pct">--</dd></div>
+          </dl>
+          <p class="mk-note" id="vol-note">From the real candles of this coin and timeframe: how big the average candle is now, compared with the candles on the chart.</p>
+        </div>
+      </div>
+      <div class="mk-pop-wrap">
         <button class="mk-btn" id="alert-btn" type="button" aria-expanded="false" aria-controls="alert-pop" title="Price alerts">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
           <span>Alert</span><span class="mk-count" id="alert-count" hidden>0</span>
@@ -171,7 +188,6 @@
         <button type="button" data-range="5Y">5Y</button>
       </div>
       <p class="ch-status" id="ch-status" role="status"><span class="mk-live" id="live-dot"></span><span id="status-text">Connecting…</span></p>
-      <p class="ch-credit">Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a></p>
     </div>
   </section>
 
