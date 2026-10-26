@@ -210,18 +210,22 @@ def reset_models():
         _models.clear()
 
 
-# A stream goes live by default only when its model passed the test on data it never saw (the holdout):
-# win rate (TP1 or better) of at least PASS_WIN_RATE and a positive average result after costs.
-PASS_WIN_RATE = 70.0
+# A stream goes live by default only when its model passed the test on data it never saw (the holdout): at least
+# PASS_MIN_SIGNALS signals, an average result of at least PASS_MIN_AVG_R after costs and a profit factor of at least
+# PASS_MIN_PF. The win rate is not part of the rule: it mostly follows from where the first target sits (with TP1 at
+# half the stop a random entry reaches it about 2 times in 3, with TP1 at 1R about 1 time in 2).
 PASS_MIN_SIGNALS = 50
+PASS_MIN_AVG_R = 0.05
+PASS_MIN_PF = 1.1
 _research = {"t": 0.0, "data": None}
 
 
 def passed_test(test):
     if not test:
         return False
-    return ((test.get("signals") or 0) >= PASS_MIN_SIGNALS and (test.get("win_rate") or 0) >= PASS_WIN_RATE
-            and (test.get("avg_net_r") or 0) > 0)
+    pf = test.get("profit_factor")
+    return ((test.get("signals") or 0) >= PASS_MIN_SIGNALS and (test.get("avg_net_r") or 0) >= PASS_MIN_AVG_R
+            and (pf is None or pf >= PASS_MIN_PF))
 
 
 def validated(key):
@@ -512,10 +516,15 @@ def follow(side, entry, sl, o, h, l, c, start, plan, exit_mask=None):
     hits, r_gross, stop_now); status None while still running."""
     tr, fr = plan["targets_r"], plan["fractions"]
     be_after, max_bars = int(plan.get("be_after") or 0), int(plan["max_bars"])
+    # optional trailing stop (research plans): once `trail_after` targets are hit, the stop follows the best
+    # price reached so far at `trail_r` R behind it (moves apply from the next candle, like every stop move)
+    trail = float(plan.get("trail_r") or 0.0)
+    trail_after = int(plan.get("trail_after", 1) or 0)
     risk = abs(entry - sl)
     sgn = 1 if side == "LONG" else -1
     n = len(c)
     stop_r, done, realized, hits = -1.0, 0.0, 0.0, 0
+    best = 0.0
 
     def out(status, px, k):
         return {"status": status, "exit_price": float(px) if px is not None else None, "bars": k, "hits": hits,
@@ -547,6 +556,9 @@ def follow(side, entry, sl, o, h, l, c, start, plan, exit_mask=None):
                 new_stop = max(new_stop, tr[hits - 2])
         if hits == len(tr) or done >= 1 - 1e-9:
             return out(f"TP{hits}", entry + sgn * tr[hits - 1] * risk, k + 1)
+        best = max(best, rh)
+        if trail > 0 and hits >= trail_after:
+            new_stop = max(new_stop, best - trail)
         stop_r = new_stop
         if k + 1 == max_bars or (exit_mask is not None and exit_mask[j]):
             realized += (1 - done) * sgn * (c[j] - entry) / risk
