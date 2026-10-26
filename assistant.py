@@ -178,8 +178,9 @@ def _how_bot(ctx):
             f"{' (no shorts on spot)' if st.get('market_type') == 'spot' else ''}.\n"
             f"3. The size is set so that hitting the stop-loss loses about {st.get('risk_pct', 1)}% of the balance, "
             f"capped at {st.get('max_position_usdt', 100)} USDT.\n"
-            "4. Every trade gets a stop-loss and three targets. The bot closes a third at each target, moves the stop to the entry "
-            "after TP1 and to TP1 after TP2, and watches the levels all the time.\n"
+            "4. Every trade gets the signal's stop-loss and targets. One-target trades close fully at the target; on three-target "
+            "trades the bot closes a third at each, moves the stop to the entry after TP1 and to TP1 after TP2. It watches the "
+            "levels all the time.\n"
             f"5. It pauses for the day after a {st.get('daily_loss_limit_pct', 5)}% daily loss, and keeps at most "
             f"{st.get('max_open_positions', 2)} trades open.\n"
             "Results are never guaranteed: signals lose regularly, and a full loss is bigger than most wins.")
@@ -212,7 +213,7 @@ def _positions(ctx):
         hits = f" ({p['hits']} target{'s' if p['hits'] != 1 else ''} reached)" if p.get("hits") else ""
         out.append(f"{p['side']} {p['symbol']}: entry {_price(p.get('entry_price'))}, now {_price(p.get('last_price'))}, "
                    f"stop {_price(p.get('stop_loss'))}, targets {tp_txt}{hits}, open PnL {_money(p.get('unrealized_pnl'), True)}.")
-    return "\n".join(out) + ("\nThe bot closes a third at each target and the rest at the stop or the last target. "
+    return "\n".join(out) + ("\nThe bot closes the position at the target or the stop (on three-target trades a third at each target). "
                              "You can also close a position by hand with its Close button.")
 
 
