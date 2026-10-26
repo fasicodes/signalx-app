@@ -134,12 +134,14 @@
     <section data-step hidden>
       <h2>How to read a signal</h2>
       <div class="an-guide-art an-gladder">
-        <div><i style="background:var(--an-long)"></i><b>TP1, TP2, TP3</b><span>where you take profit, a third at each</span></div>
+        <div><i style="background:var(--an-long)"></i><b>Target</b><span>where you take profit</span></div>
         <div><i style="background:var(--an-text)"></i><b>Entry</b><span>where the signal starts</span></div>
         <div><i style="background:var(--an-short)"></i><b>Stop loss</b><span>where you exit if it goes wrong</span></div>
       </div>
-      <p>The bar on the signal card shows where the live price is between the stop and the targets. After TP1 the stop moves to
-        the entry, so the rest of the trade can no longer lose. A signal ends at TP3, at the (moved) stop, or when its time runs out (at most 1.5 days on 1h signals, 9 days on 4h signals).</p>
+      <p>The bar on the signal card shows where the live price is between the stop and the target. The 1h and 4h signals have one
+        target, as far from the entry as the stop: close the whole trade there. A signal ends at the target, at the stop, or when
+        its time runs out (at most 2 days on 1h signals, 9 days on 4h signals). Experimental signals have three targets: close a
+        third at each, and move the stop to the entry after the first.</p>
     </section>
 
     <section data-step hidden>
