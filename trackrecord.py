@@ -17,9 +17,9 @@ Measures how the Signals FM signal (signal_engine.py, v3) actually performs:
 
 Rules (same for both, shown on the page):
   * Entry   = close of the signal candle.
-  * Stop    = 2 x ATR(14) from entry (1R). Targets TP1 = 0.5R, TP2 = 1R,
-              TP3 = 2R. A third of the position closes at each target;
-              after TP1 the stop moves to the entry, after TP2 to TP1.
+  * Stop    = 2 x ATR(14) from entry (1R). Targets from the model file
+              (since Oct 2026 one target at 1R, the whole position, the
+              stop never moves).
   * At most 5 new signals per candle (highest scores first).
   * One open signal per coin; new signals are ignored until it closes.
   * If one candle touches the stop and a target, the stop counts first.
@@ -479,8 +479,15 @@ def backtest_frames(frames, symbols, start_time, counts=None):
     return out
 
 
+def _plan_sig():
+    """The engine's trade plan: a change (e.g. the Oct 2026 move to one target at 1R) re-runs the backtest, while the
+    LIVE record is kept (only a new engine version resets it)."""
+    m = se.model()
+    return json.dumps([list(m.targets_r), list(m.fractions), m.be_after, m.max_bars, m.sl_atr])
+
+
 def _backtest_due(status, now):
-    if status.get("version") != se.ENGINE_VERSION:
+    if status.get("version") != se.ENGINE_VERSION or status.get("plan") != _plan_sig():
         return True
     fin = _to_dt(status.get("finished_at"))
     if status.get("state") == "done":
@@ -499,7 +506,7 @@ def run_backtests(now=None, force=False):
     tf_sec = TIMEFRAMES[tf]
     start_time = now - timedelta(days=BACKTEST_DAYS[tf])
     fetch_from = start_time - timedelta(seconds=tf_sec * (se.HISTORY_BARS + 5))
-    status = {"state": "running", "version": se.ENGINE_VERSION, "started_at": _iso(now), "errors": {}}
+    status = {"state": "running", "version": se.ENGINE_VERSION, "plan": _plan_sig(), "started_at": _iso(now), "errors": {}}
     meta_set("bt_status", status)
     frames = {}
     for sym in sorted(set(se.UNIVERSE) | set(tracked_coins())):
