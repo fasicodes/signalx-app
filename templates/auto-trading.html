@@ -369,8 +369,9 @@
   </div>
 
   <p class="faint" style="font-size:11.5px;line-height:1.6;max-width:900px;">
-    The bot copies the site's signals (every stream that is switched on; live accounts only the streams that passed their test on unseen data) with each signal's own stop and three targets: it closes a third
-    at each target and moves the stop to the entry after TP1 and to TP1 after TP2. It only enters while the price is still close to the
+    The bot copies the site's signals (every stream that is switched on; live accounts only the streams that passed their test on unseen data) with each signal's own stop and targets: on a one-target signal it closes
+    the whole position at the target; on a three-target signal it closes a third at each and moves the stop to the entry after TP1
+    and to TP1 after TP2. It only enters while the price is still close to the
     signal's entry (within 0.35 of the stop distance, before TP1, at most two candles after the signal). The test results of each stream are
     on the Signals page. Past results do not guarantee future results. Trading, especially with leverage, can lose all of the money in the account.
     Test on a demo account first. This is not financial advice.
@@ -966,7 +967,7 @@
     }
     ob.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => selectCoin(tr.dataset.sym)));
     ob.querySelectorAll("[data-close-id]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); closePosition(+b.dataset.closeId, b); }));
-    $("pos-note").textContent = st.positions.length ? "Stop and targets watched by the bot: a third closes at each target, the stop moves up after TP1 and TP2" : "";
+    $("pos-note").textContent = st.positions.length ? "Stop and targets watched by the bot (on three-target trades a third closes at each target and the stop moves up after TP1 and TP2)" : "";
 
     const hb = $("history-body");
     if (!st.history.length) hb.innerHTML = `<tr><td colspan="5" class="empty">No closed trades yet</td></tr>`;
