@@ -58,8 +58,8 @@
     <div><dt>Average per signal{{ tip('avg_r', 'average result') }}</dt><dd>{{ '%+.3f' % stats.avg_net_r }}R<small>after 0.12% fees</small></dd></div>
     <div><dt>Worst drawdown{{ tip('drawdown', 'drawdown') }}</dt><dd>{{ stats.max_drawdown_r }}R<small>the deepest losing streak</small></dd></div>
   </dl>
-  <p class="meta-line">A full loss (&minus;1R) is bigger than a TP1 win (+0.5R), so the profit depends on the signals that reach TP2 and
-    TP3, and some months lose. Past results do not guarantee future results.</p>
+  <p class="meta-line">A win (+1R) and a full loss (&minus;1R) are the same size, so a stream makes money only if clearly more than half
+    of its signals win; about 4 in 10 lose, and some months lose. Past results do not guarantee future results.</p>
   {% endif %}
 </section>
 
