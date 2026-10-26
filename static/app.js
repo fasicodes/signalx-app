@@ -239,7 +239,7 @@
     pill.hidden = a.tested !== false; pill.className = "d-pill";
     pill.textContent = "Experimental";
     $("sig-prob").hidden = a.confidence == null;
-    if (a.confidence != null) { $("sig-prob-v").textContent = `${Math.round(a.confidence)}%`; $("sig-prob-l").textContent = "chance of TP1"; }
+    if (a.confidence != null) { $("sig-prob-v").textContent = `${Math.round(a.confidence)}%`; $("sig-prob-l").textContent = "model confidence"; }
     const tps = (a.targets || []).map((v, k) => `<div><span class="c-dim">TP${k + 1}${k < (a.hits || 0) ? " ✓" : ""}</span> <b class="tnum c-long">${px(v)}</b></div>`).join("");
     const now = a.price != null ? `<p class="d-copy">Now ${px(a.price)}${a.r_now != null ? ` (${a.r_now > 0 ? "+" : ""}${a.r_now}R)` : ""}.</p>` : "";
     const more = list.length > 1 ? `<p class="d-copy">Also active: ${list.slice(1).map((x) => `${x.timeframe} ${x.side.toLowerCase()}`).join(", ")}.</p>` : "";
@@ -251,7 +251,7 @@
         <div><span class="c-dim">Stop</span> <b class="tnum c-short">${px(a.stop_now != null ? a.stop_now : a.stop_loss)}</b></div>${tps}
       </div>
       ${now}${more}${fourH}${untested}
-      <p class="d-copy">Close a third at each target; after TP1 move the stop to the entry, after TP2 to TP1.</p>
+      <p class="d-copy">${(a.targets || []).length > 1 ? "Close a third at each target; after TP1 move the stop to the entry, after TP2 to TP1." : "Close the whole position at the target; the stop does not move."}</p>
       <div class="d-actions"><a class="d-btn primary" href="/signals?market=${esc(a.market)}&timeframe=${esc(a.timeframe)}">Open on the signals page</a></div>`;
   }
 
@@ -275,7 +275,8 @@
     pill.className = "d-pill";
     pill.innerHTML = "Setup forming" + tip("setup_forming", "setup forming");
     const last = e.last_closed;
-    const how = (t) => ({ TP3: "reached all three targets", TP2: "reached TP2, then closed at TP1", TP1: "reached TP1, then closed at the entry",
+    const how = (t) => ({ TP3: "reached all three targets", TP2: "reached TP2, then closed at TP1",
+                          TP1: (t.targets || []).length > 1 ? "reached TP1, then closed at the entry" : "reached its target",
                           SL: "hit its stop", EXPIRED: "closed at the time limit" }[t.status] || "closed");
     const lastTxt = last ? `Last signal: ${last.side.toLowerCase()} from ${when(last.signal_at)}, ${how(last)} (${signed(last.r, 2)}R after fees).` : "";
     $("sig-body").innerHTML = `
@@ -328,7 +329,7 @@
     pill.innerHTML = (e.fresh ? "New signal" : "Active signal") + ` · ${a.tier === "standard" ? "Standard" : "Strong"}` + tip("tier", "strong and standard signals");
     $("sig-prob").hidden = false;
     $("sig-prob-v").textContent = `${Math.round(a.confidence)}%`;
-    $("sig-prob-l").innerHTML = "chance of TP1" + tip("win_chance", "win chance");
+    $("sig-prob-l").innerHTML = "model confidence" + tip("win_chance", "model confidence");
 
     const now = p.price != null ? p.price : e.last_close;
     const all = L.tps.concat([a.stop_loss, a.entry]);
