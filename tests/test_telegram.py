@@ -277,8 +277,8 @@ check(set(msgs) == {555, 777}, "both linked users get a message")
 check("2 new signals" in msgs[555] and "BTC/USDT" in msgs[555] and "ETH/USDT" in msgs[555], "user 1 (all coins): one message with both")
 check("BTC/USDT" not in msgs[777] and "New Short signal: ETH/USDT (4h)" in msgs[777], "user 2 gets only the coin they chose")
 check("Entry: <b>63,120.50</b>" in msgs[555] and "(-4.94%)" in msgs[555] and "TP1: 64,680.75 (+2.47%)" in msgs[555]
-      and "TP3: 69,361.50 (+9.89%)" in msgs[555] and "Chance of TP1: 73%" in msgs[555] and "a third at each target" in msgs[555],
-      "message shows entry, stop, three targets and the chance of TP1")
+      and "TP3: 69,361.50 (+9.89%)" in msgs[555] and "Model confidence: 73%" in msgs[555] and "a third at each target" in msgs[555],
+      "message shows entry, stop, three targets and the model confidence")
 check('href="https://signals.example/signals?market=crypto&amp;timeframe=4h"' in msgs[555] and "Not financial advice" in msgs[555], "link to the stream + risk note")
 cur = Conn().cursor(); cur.execute("SELECT user_id FROM notifications WHERE category='SIGNAL'"); bell = cur.fetchall()
 check(len(bell) == 5, "bell notifications still created for everyone with alerts on (2 + 1 + 2)")
