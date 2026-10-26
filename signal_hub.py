@@ -17,7 +17,7 @@ Signal hub - the 15m / 1h / 4h signal streams for crypto and forex.
 * API (login required): /api/signals, /api/signals/stats, /api/signals/latest,
   /api/signals/streams, /api/signals/<id>, POST /api/signals/<id>/cancel (admin).
 
-Env: SIGNAL_STREAMS (default: crypto 4h only; 'all': all six streams; 'validated': only the streams whose model passed its test on
+Env: SIGNAL_STREAMS (default / 'all': all six streams; 'validated': only the streams whose model passed its test on
 unseen data; or a comma-separated list). Streams that have not passed the test are marked 'untested' everywhere.
 SIGNAL_HUB=off to stop the background job.
 """
@@ -39,10 +39,9 @@ from db import get_db_connection
 hub_bp = Blueprint("signal_hub", __name__)
 
 ALL_STREAMS = ["crypto_15m", "crypto_1h", "crypto_4h", "forex_15m", "forex_1h", "forex_4h"]
-# Default: only crypto 4h. It is the one stream that stays in profit on data the model never saw (about 76% of
-# signals reach TP1, average about +0.17R per signal after fees). The 15m and forex streams run simple rules that
-# lose money after fees, and crypto 1h passed its test but swings a lot week to week.
-DEFAULT_STREAMS = ["crypto_4h"]
+# Default: all six streams. The ones whose model has not passed the test on unseen data are marked untested
+# (experimental) on the site, in alerts and for live auto-trading.
+DEFAULT_STREAMS = list(ALL_STREAMS)
 DELAY_SEC = {"crypto": 45, "forex": 90}
 LOOP_SEC = 20
 CLOSED = ("TP1", "TP2", "TP3", "SL", "EXPIRED")
@@ -109,8 +108,8 @@ def stream_tested(market, tf):
 
 
 def enabled_streams():
-    """SIGNAL_STREAMS: empty (default) = DEFAULT_STREAMS (crypto 4h only); 'all' = all six streams (the ones that
-    have not passed the test on unseen data run simple rules and are marked 'untested' everywhere);
+    """SIGNAL_STREAMS: empty or 'all' (default) = all six streams (the ones that have not passed the test on unseen
+    data run simple rules and are marked 'untested' on the site, in alerts and for live auto-trading);
     'validated' = only the streams whose model passed that test; or a comma-separated list."""
     raw = (os.environ.get("SIGNAL_STREAMS") or "").strip().lower()
     if not raw:
@@ -617,7 +616,17 @@ def _where(market=None, tf=None, symbol=None, side=None, status=None, grade=None
         if gs:
             w.append("grade IN (" + ",".join(["%s"] * len(gs)) + ")")
             args.extend(gs)
-    return (" WHERE " + " AND ".join(w)) if w else "", args
+    # only the switched-on streams: old signals of a stream that was turned off (e.g. the losing 15m rules)
+    # are not listed to users any more
+    pairs = [k.split("_", 1) for k in enabled_streams()]
+    w.append("(" + " OR ".join(["(market=%s AND timeframe=%s)"] * len(pairs)) + ")")
+    args.extend(x for pr in pairs for x in pr)
+    return " WHERE " + " AND ".join(w), args
+
+
+def _on(row):
+    """True when the row belongs to a switched-on stream."""
+    return f"{row.get('market') or 'crypto'}_{row.get('timeframe') or '4h'}" in enabled_streams()
 
 
 def list_signals(market=None, tf=None, symbol=None, side=None, status=None, grade=None, sort="newest",
@@ -758,7 +767,7 @@ def bot_feed(now=None, window_bars=2):
     with _Cursor() as cur:
         cur.execute("""SELECT * FROM signal_events WHERE status='ACTIVE' AND hits=0 AND bar_time >= %s
                        ORDER BY bar_time ASC, id ASC LIMIT 300""", (now - timedelta(hours=4 * (window_bars + 1)),))
-        rows = cur.fetchall() or []
+        rows = [r for r in (cur.fetchall() or []) if _on(r)]
     out = []
     for r in rows:
         sec = markets.TF_SEC.get(r.get("timeframe") or "4h", 14400)
@@ -799,7 +808,7 @@ def active_for(symbol):
     with _Cursor() as cur:
         cur.execute("SELECT * FROM signal_events WHERE symbol=%s AND status='ACTIVE' ORDER BY bar_time DESC",
                     (symbol,))
-        return cur.fetchall() or []
+        return [r for r in (cur.fetchall() or []) if _on(r)]
 
 
 def _tested_keys():
