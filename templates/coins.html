@@ -113,7 +113,7 @@
     <h3>Four rules for beginners</h3>
     <ul>
       <li><b>Risk only 1% of your account on one trade.</b> The <a class="link" href="/advanced#risk-calc">risk calculator</a> works out the size for you.</li>
-      <li><b>Always set the stop-loss.</b> It is the price where the idea was wrong. Close a third of the trade at each target.</li>
+      <li><b>Always set the stop-loss.</b> It is the price where the idea was wrong. Close the trade at the target (on three-target signals, a third at each).</li>
       <li><b>Keep only 2 or 3 trades open at once.</b> Signals often come in groups because coins move together, so several open
         trades can win or lose together.</li>
       <li><b>No signal wins every time.</b> Practise in <a class="link" href="/demo-trading">demo trading</a> first, and see every win and loss on the
@@ -177,7 +177,8 @@
     var s = x.signal || {}, buy = x.status === "buy", d = s.decimals;
     var stop = s.stop_now != null && s.stop_now !== s.stop_loss ? s.stop_now : s.stop_loss;
     var t = (s.targets || []).map(function (v, k) {
-      return "<div><dt>Target " + (k + 1) + (k === 0 ? "<small>close a third at each target</small>" : "") + "</dt><dd>" + price(v, d) +
+      var many = (s.targets || []).length > 1;
+      return "<div><dt>Target" + (many ? " " + (k + 1) : "") + (k === 0 ? "<small>" + (many ? "close a third at each target" : "close the whole trade here") + "</small>" : "") + "</dt><dd>" + price(v, d) +
         (k < (s.hits || 0) ? " ✓" : "") + "</dd></div>";
     }).join("");
     var now = s.price != null ? '<div class="cc-now">Now ' + price(s.price, d) + (s.r_now != null ? " · " + (s.r_now >= 0 ? '<span class="pos">' : '<span class="neg">') +
