@@ -60,9 +60,12 @@ Always write in English, even when the question is in another language (the webs
 
 How the website works (use this when relevant):
 - Signals: separate streams for 15m, 1h and 4h, crypto and forex. Each signal has an entry (the close of the signal
-  candle), a stop loss, three targets (TP1, TP2, TP3), a grade (A best, then B, then C), an expected holding time and a
-  status (active, TP hit, stop hit, expired, cancelled). Plan: close a third at each target; after TP1 move the stop to
-  the entry, after TP2 to TP1; the rest closes when the time limit ends. "Win rate" counts signals that reached at least TP1.
+  candle), a stop loss, targets, a grade (A best, then B, then C), an expected holding time and a status (active, TP hit,
+  stop hit, expired, cancelled). The tested crypto 1h and 4h streams have one target at 1R (as far as the stop): the whole
+  position closes there and the stop does not move; about 4 in 10 of these signals lose, and the average result after
+  costs is what makes them pay. The experimental streams (15m, forex) have three targets at 1R, 2R and 3R: close a third
+  at each; after TP1 move the stop to the entry, after TP2 to TP1. The rest closes when the time limit ends. "Win rate"
+  counts signals that reached at least TP1.
 - Forex signals pause around high-impact news for that currency and are closed before the weekend.
 - News: an economic calendar (impact, actual / forecast / previous) and a news feed; high-impact events matter most.
 - Auto-trade bot: takes the site's signals automatically on the accounts the user connects (Site demo with virtual
