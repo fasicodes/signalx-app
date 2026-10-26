@@ -49,8 +49,8 @@ DATA["WIF/USDT"] = synth(99, drift=0.001)  # a coin outside the signal list
 print("\n[1] model file")
 m = se.model()
 check(len(m.features) == 82 and len(m.trees) == 250, "82 features, 250 trees")
-check(m.sl_atr == 2.0 and m.targets_r == [0.5, 1.0, 2.0] and m.max_bars == 54 and m.be_after == 1,
-      "plan: 2x ATR stop, targets 0.5R / 1R / 2R, stop to entry after TP1, 54 candles")
+check(m.sl_atr == 2.0 and m.targets_r == [1.0] and m.fractions == [1.0] and m.max_bars == 54 and m.be_after == 0,
+      "plan: 2x ATR stop, one target at 1R (the whole position), the stop never moves, 54 candles")
 check(abs(sum(m.fractions) - 1) < 1e-9 and len(set(round(x, 9) for x in m.fractions)) == 1, "a third closes at each target")
 check(0.5 < m.floor < m.watch_threshold < m.threshold < 0.95 and m.gap_hours == 24,
       f"levels: standard {m.floor:.3f} < forming {m.watch_threshold:.3f} < strong {m.threshold:.3f}, 24h rule")
@@ -60,7 +60,7 @@ check(se.signal_coins() == m.signal_coins + markets.CRYPTO_4H_ONLY and len(se.si
       "plus the coins added after the coin test (4h only), no duplicates")
 check(m.max_per_bar == 5, "at most 5 new signals per candle")
 t = se.test_stats()
-check(t["signals"] > 300 and 60 < t["win_rate"] < 90 and t["avg_net_r"] > 0 and t["period"].startswith("2025-10"),
+check(t["signals"] > 300 and 50 < t["win_rate"] < 90 and t["avg_net_r"] > 0 and t["period"].startswith("2025-10"),
       "out-of-sample test stats bundled (Oct 2025 onward, data the model never saw)")
 wf = se.walk_forward_stats()
 check(wf["signals"] > 1000 and all(v["avg_net_r"] > 0 for v in wf["years"].values()), "walk-forward 2023-2026: every year positive")
@@ -94,6 +94,9 @@ check(np.allclose(sc["BTC/USDT"][0], one[0]) and np.allclose(sc["BTC/USDT"][3], 
       "batched scoring == one coin at a time")
 
 print("\n[3] trade plan (follow)")
+check(se.targets("LONG", 100, 98) == [102] and se.targets("SHORT", 100, 102) == [98], "live plan: one target at 1R")
+_live_plan = (m.targets_r, m.fractions, m.be_after, m.tp_atr)
+m.targets_r, m.fractions, m.be_after, m.tp_atr = [0.5, 1.0, 2.0], [1 / 3] * 3, 1, 4.0   # the ladder rules (older signals)
 
 
 def run(side, entry, sl, rows, start=0, max_bars=None):
@@ -129,6 +132,7 @@ r = run("LONG", 100, 98, [(100, 101.2, 99.8, 101)] + [(100.6, 100.9, 100.3, 100.
 check(r["status"] is None and r["hits"] == 1 and close_to(r["stop_now"], 100) and r["bars"] == 6, "still running: TP1 reached, stop at entry")
 check(abs(se.cost_r(100, 98) - 0.0012 * 100 / 2) < 1e-12, "fees in R")
 
+m.targets_r, m.fractions, m.be_after, m.tp_atr = _live_plan
 print("\n[4] signal rules (replay_all)")
 base = {s: se.coin_features(DATA[s]) for s in ("BTC/USDT", "ETH/USDT", "SOL/USDT")}
 n = len(base["BTC/USDT"])
@@ -152,8 +156,8 @@ act, last = se.replay_all(S, lookback=300, closed=closed)
 tr = (act.get("ETH/USDT") or last.get("ETH/USDT"))
 check(tr and tr["tier"] == "strong" and tr["side"] == "LONG" and tr["bar_time"] == base["ETH/USDT"]["timestamp"].iloc[n - 250],
       "strong score -> strong signal on that candle")
-check(close_to(abs(tr["entry"] - tr["stop_loss"]), 2 * base["ETH/USDT"]["atr"].iloc[n - 250]) and len(tr["targets"]) == 3,
-      "stop 2x ATR at the signal candle, three targets")
+check(close_to(abs(tr["entry"] - tr["stop_loss"]), 2 * base["ETH/USDT"]["atr"].iloc[n - 250]) and len(tr["targets"]) == 1,
+      "stop 2x ATR at the signal candle, one target")
 # standard rule: a mid score only becomes a signal when no coin had one for 24h
 mid = lo.copy()
 mid[n - 200:] = m.floor + 0.01
@@ -248,7 +252,7 @@ for side in ("LONG", "SHORT"):
     e0 = res["last_close"]
     sl, tp = se.levels(side, e0, res["atr"])
     ok = (sl < e0 < tp) if side == "LONG" else (tp < e0 < sl)
-    check(ok and close_to(abs(tp - e0), 2 * abs(e0 - sl)), f"{side}: last target is twice the stop distance")
+    check(ok and close_to(abs(tp - e0), abs(e0 - sl)), f"{side}: the target is as far as the stop (1R)")
 board = eng.board(CLOCK["now"])
 act_rows = [r for r in board.values() if r["active"]]
 for r_ in act_rows[:3]:
@@ -271,10 +275,11 @@ for r_ in act2[:4]:
     a = r_["active"]
     tps = r_["targets"]
     long_ = a["side"] == "LONG"
-    ordered = (r_["stop_loss"] < r_["entry"] < tps[0] < tps[1] < tps[2]) if long_ else (r_["stop_loss"] > r_["entry"] > tps[0] > tps[1] > tps[2])
-    check(r_["verdict"] == a["side"] and ordered and r_["take_profit"] == tps[-1] and r_["fresh"] == (a["bar_time"] == r_["bar_time"])
-          and r_["tier"] == "strong" and r_["hits"] == a["hits"] and len(r_["tp_pcts"]) == 3,
-          f"{a['side']} {r_['tp_pcts']}: verdict, stop, three targets, tier and freshness from the running trade")
+    ordered = (r_["stop_loss"] < r_["entry"] < tps[0]) if long_ else (r_["stop_loss"] > r_["entry"] > tps[0])
+    check(r_["verdict"] == a["side"] and ordered and len(tps) == 1 and r_["take_profit"] == tps[-1]
+          and r_["fresh"] == (a["bar_time"] == r_["bar_time"])
+          and r_["tier"] == "strong" and r_["hits"] == a["hits"] and len(r_["tp_pcts"]) == 1,
+          f"{a['side']} {r_['tp_pcts']}: verdict, stop, the target, tier and freshness from the running trade")
     pr = se.progress(a, r_["last_close"])
     check(pr is not None and -100 <= pr["pct"] <= 100, "progress of a running trade at the last close")
 m.threshold, m.floor = saved
