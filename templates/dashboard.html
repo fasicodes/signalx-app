@@ -110,7 +110,7 @@
           <span class="d-pill" id="sig-pill" hidden></span>
           <p class="d-verdict" id="sig-verdict">Loading</p>
         </div>
-        <div class="d-prob" id="sig-prob" hidden><b class="tnum" id="sig-prob-v">--</b><span id="sig-prob-l">win chance</span></div>
+        <div class="d-prob" id="sig-prob" hidden><b class="tnum" id="sig-prob-v">--</b><span id="sig-prob-l">model confidence</span></div>
       </div>
       <p class="d-status" id="sig-status">Reading the market…</p>
       <div id="sig-body"></div>
@@ -143,7 +143,7 @@
       function render() {
         const g = document.getElementById("ls-grid");
         if (!data) return;
-        g.innerHTML = ["15m", "1h", "4h"].map((tf) => {
+        g.innerHTML = ["15m", "1h", "4h"].filter((tf) => (m + "_" + tf) in data).map((tf) => {
           const rows = data[m + "_" + tf] || [];
           const body = rows.length ? rows.map((s) => `<a class="ls-row" href="/signals?market=${m}&timeframe=${tf}">
               <span><b>${esc(s.symbol.replace("/USDT", ""))}</b> <span class="${s.side === "LONG" ? "l" : "s"}">${s.side === "LONG" ? "Long" : "Short"}</span> <small>${esc(s.timeframe || "")}${s.tested === false ? " · experimental" : ""}</small></span>
@@ -157,7 +157,12 @@
           const r = await fetch("/api/signals/latest", { credentials: "same-origin" });
           const d = await r.json();
           if (!r.ok || !d.ok) throw new Error(d.error || "failed");
-          data = d.streams; render();
+          data = d.streams;
+          document.querySelectorAll("#latest-streams .ls-tabs button").forEach((b) => {
+            b.hidden = !Object.keys(data).some((k) => k.startsWith(b.dataset.m + "_")); });
+          const tabs = document.querySelector("#latest-streams .ls-tabs");
+          tabs.hidden = [...tabs.children].filter((b) => !b.hidden).length < 2;
+          render();
         } catch (e) { document.getElementById("ls-grid").innerHTML = '<p class="d-empty">Signals could not be loaded right now.</p>'; }
       }
       document.querySelectorAll("#latest-streams .ls-tabs button").forEach((b) => b.addEventListener("click", () => {
@@ -234,7 +239,7 @@
 </main>
 
 <footer class="d-foot">
-  Signals come from a model and lose regularly; a full loss (−1R) is bigger than the first target (+0.5R). Results include 0.12% fees.
+  Signals come from a model and lose regularly: about 4 in 10 hit the stop (−1R). Results include 0.12% fees.
   Not financial advice. <a href="/faq">FAQ</a> &nbsp; <a href="/advanced">Pro terminal</a> &nbsp; <a href="/risk-disclosure">Risk disclosure</a>
 </footer>
 
