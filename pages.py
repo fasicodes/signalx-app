@@ -82,27 +82,29 @@ FAQ = [
          "<a href=\"/track-record\">Track record</a>. Forex pairs and gold have their own signal streams, which are marked untested "
          "(see the forex question below).</p>"),
         ("How often do new signals come?",
-         "<p>In the 12-month test there were 735 signals across 53 coins, about 2 a day, a new signal on 369 of 374 days, and the "
-         "longest wait between two new signals was 2.3 days. A signal can only start right after a 4-hour candle closes.</p>"),
+         "<p>In the 12-month test there were 805 signals across 93 coins, about 2 a day, a new signal on 380 of 381 days, and the "
+         "longest wait between two new signals was 1.3 days. A signal can only start right after a 4-hour candle closes.</p>"),
         ("Why does a coin say Wait?",
          "<p>Each coin has at most one signal at a time, and it only gets one when its setup is good enough, so a single coin often "
          "says Wait. Across all the coins there is almost always at least one signal running. The <a href=\"/signals\">Signals "
          "board</a> shows which coins have an active signal right now and which are closest to one.</p>"),
         ("How are the entry, stop loss and targets set?",
          "<p>The entry is the close of the 4-hour candle that gave the signal. The stop loss is 2 times the coin's average 4-hour "
-         "move (ATR) away from the entry; that distance is 1R. There are three targets: <b>TP1 at 0.5R, TP2 at 1R</b> (as far as the "
-         "stop) and <b>TP3 at 2R</b>. Close a third of the position at each. After TP1 move the stop to the entry, after TP2 to TP1, "
-         "so a signal that reached TP1 can no longer turn into a loss (apart from a price gap).</p>"),
+         "move (ATR) away from the entry; that distance is 1R. There is <b>one target at 1R</b>, as far from the entry as the stop. "
+         "Close the whole position there; the stop does not move. A win (+1R) and a loss (&minus;1R) are the same size, so about "
+         "4 in 10 signals lose and the stream still made money in testing because about 6 in 10 won. (Until October 2026 there "
+         "were three targets at 0.5R, 1R and 2R; that plan won more often but earned less per signal: +0.17R against +0.24R on "
+         "the same test.)</p>"),
         ("How long does a signal last?",
-         "<p>Until the stop (or the moved stop) is hit or TP3 is reached, or for at most 54 four-hour candles (9 days). After 9 "
-         "days, whatever is left closes at that candle's close.</p>"),
+         "<p>Until the stop or the target is hit, or for at most 54 four-hour candles (9 days). After 9 days the trade closes at "
+         "that candle's close.</p>"),
         ("What does \"Setup forming\" mean?",
          "<p>The model is close to a strong signal but still below the line. <b>It is not a trade.</b> Treat it only as a heads-up "
          "to watch the next 4-hour close.</p>"),
         ("Can I still take a signal that started hours ago?",
          "<p>You can, but the price has moved since the entry, so your risk and reward are different from the signal's. The signal "
          "card shows how far the price has moved and how close it is to the next target or the stop. If the price is already near "
-         "TP1, little reward is left for the same risk.</p>"),
+         "the target, little reward is left for the same risk.</p>"),
         ("Are there signals for forex or gold?",
          "<p>Yes, but they are marked <b>experimental</b>. We built and tested a separate model for forex pairs and gold, and after "
          "spreads it did not make money: the best version reached 70.8% wins (TP1 or better) on data it had never seen, but the "
@@ -115,26 +117,27 @@ FAQ = [
     ("results", "Results and risk", [
         ("How accurate are the signals?",
          "<p>The model was trained on July 2020 to September 2025 and then tested once on October 2025 to October 2026, data it "
-         "had never seen, on 53 coins (32 of them never used in training). In that test: <b>735 signals, 73.6% closed in profit "
-         "(73.9% reached TP1), +0.105R average per signal after fees</b>, profit factor 1.40, a worst drawdown of &minus;23.9R, "
-         "and 3 of the 12 full months lost money. Coins the model trained on did better (+0.15R) than new ones (+0.08R). A "
-         "walk-forward test on January 2023 to October 2026 (21 coins, re-trained every 6 months, tested on the next 6) gave 2,495 "
-         "signals, 72.7% won, +0.10R average, and every year was above zero. Past results do not guarantee future results.</p>"
-         "<p>Read the win rate with care: TP1 is a small target (half the stop distance), so about 65% of all trades of this kind "
-         "reach it even without any model. The model adds roughly 8 to 9 points on top of that, and the average result after fees "
-         "(+0.10R per signal) is the better measure of what it earns.</p>"
-         "<p>Strong and standard signals are not equal. In the 12-month test the strong ones (399 signals) won 77.2% with "
-         "+0.158R on average; the standard ones (336 signals, given when no coin has had a signal for 24 hours) won 69.3% with only "
-         "+0.042R, close to break-even after fees. Treat a standard signal as lower conviction: use a smaller size or skip it.</p>"),
-        ("If about 3 in 4 signals win, why is the profit per signal modest?",
-         "<p>Because many wins are small. A signal that reaches TP1 and then comes back to the entry makes about +0.17R, while a "
-         "full loss is &minus;1R. The profit comes from the signals that go on to TP2 (+0.67R) and TP3 (+1.17R). In the test the "
-         "average win was +0.50R and the average loss &minus;1.0R.</p>"),
+         "had never seen, on 93 coins (most of them never used in training). In that test, with today's one-target plan: <b>805 signals, 59.6% "
+         "reached the target, +0.236R average per signal after fees</b>, profit factor 1.66, a worst drawdown of &minus;17.5R, "
+         "and 1 of the 12 full months lost money (&minus;0.2R). Coins the model trained on (+0.25R) and new ones (+0.23R) did about "
+         "the same. A walk-forward test of the same kind of model on January 2023 to October 2025 (re-trained every 6 months, "
+         "tested on the next 6) gave 1,772 signals, 56.1% won, +0.135R average, and every year was above zero (2023 only just, "
+         "+0.05R). Past results do not guarantee future results.</p>"
+         "<p>Read the win rate with care: the target is as far as the stop, so a random entry would reach it about half the "
+         "time. The model adds roughly 10 points on top of that, and the average result after fees (+0.24R per signal) is the "
+         "better measure of what it earns.</p>"
+         "<p>Strong and standard signals are not equal. In the 12-month test the strong ones (467 signals) won 62.3% with "
+         "+0.322R on average; the standard ones (338 signals, given when no coin has had a signal for 24 hours) won 55.9% with "
+         "+0.118R. Treat a standard signal as lower conviction: use a smaller size or skip it.</p>"),
+        ("If about 4 in 10 signals lose, how can it make money?",
+         "<p>Because a win and a loss are about the same size. In the test the average win was +0.94R and the average loss "
+         "&minus;0.99R (after fees), and about 6 in 10 signals won, so 10 signals made about +2.4R together. Losses often come "
+         "in a row, so keep the risk per signal small.</p>"),
         ("How much should I risk on each signal?",
-         "<p>Keep it small and the same every time; that amount is 1R. Losing streaks happen: the worst drop was 23.9R in the "
-         "12-month test and 41.5R in the longer walk-forward test. At 1% per signal, 41.5R is about 41% of an account (simple sum, "
-         "before compounding), so plan for a drop at least that deep. There are often four or more signals open at once, so 0.5% per "
-         "signal (or a limit on open trades) is a sensible start. Only trade money you can afford to lose. The <a href=\"/tools\">position size "
+         "<p>Keep it small and the same every time; that amount is 1R. Losing streaks happen: the worst drop was 17.5R in the "
+         "12-month test and about 80R in the longer walk-forward test (2023 was a weak year). At 1% per signal, 80R would be most of "
+         "an account, so keep it well below that. There are often four or more signals open at once and they "
+         "usually move together with Bitcoin, so 0.25% to 0.5% per signal (and a limit on open trades) is a sensible start. Only trade money you can afford to lose. The <a href=\"/tools\">position size "
          "calculator</a> works out the size for you.</p>"),
         ("Where can I see the live results?",
          "<p>On the <a href=\"/track-record\">Track record</a> page. It records every signal the engine gives on a fixed list of "
