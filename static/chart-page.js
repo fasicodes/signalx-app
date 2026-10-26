@@ -2026,7 +2026,7 @@
     const d = S.eng;
     if (!d || d.coin !== S.coin) { box.innerHTML = `<p class="mk-empty">Loading…</p>`; chip.hidden = true; return; }
     if (d.asset === "forex") {
-      box.innerHTML = `<p class="eng-copy">${S.coin.startsWith("XAU") ? "Gold" : "Forex"} signals appear on the Signals page only when their model passes the unseen-data test (at least 70% wins and a positive average after costs). Until then you get this chart and the market brief on the dashboard.</p>`;
+      box.innerHTML = `<p class="eng-copy">${S.coin.startsWith("XAU") ? "Gold" : "Forex"} signals appear on the Signals page only when their model passes the unseen-data test (an average of at least +0.05R per signal after costs, with enough signals). Until then you get this chart and the market brief on the dashboard.</p>`;
       chip.hidden = false; chip.className = "mk-sig"; chip.innerHTML = "<i></i>Chart only";
       return;
     }
@@ -2045,14 +2045,14 @@
     if (a) {
       const long = a.side === "LONG", p = e.progress || {};
       box.innerHTML = `<div class="eng-state"><span class="eng-verdict ${long ? "c-long" : "c-short"}">${long ? "Long" : "Short"}</span>
-          <span class="mk-sig ${long ? "long" : "short"}"><i></i>${e.fresh ? "New signal" : "Active signal"}${a.tier === "standard" ? " (standard)" : ""} · ${Math.round(a.confidence)}% chance of TP1</span></div>
+          <span class="mk-sig ${long ? "long" : "short"}"><i></i>${e.fresh ? "New signal" : "Active signal"}${a.tier === "standard" ? " (standard)" : ""} · model confidence ${Math.round(a.confidence)}%</span></div>
         <div class="eng-lv"><div><span>Entry</span><b class="tnum">${fmt(a.entry)}</b></div><div><span>${a.hits ? "Stop (moved)" : "Stop"}</span><b class="tnum c-short">${fmt(a.hits && a.stop_now != null ? a.stop_now : a.stop_loss)}</b></div>${(a.targets || [a.take_profit]).map((v, k) => `<div><span>TP${k + 1}${k < (a.hits || 0) ? " ✓" : ""}</span><b class="tnum c-long">${fmt(v)}</b></div>`).join("")}</div>
-        ${p.move_pct != null ? `<p class="eng-copy">Price is ${p.move_pct >= 0 ? "+" : "−"}${Math.abs(p.move_pct).toFixed(2)}% since entry, ${Math.abs(p.pct)}% of the way to ${p.pct >= 0 ? "TP" + (p.next || 1) : "the stop"}. Close a third at each target; after TP1 the stop moves to the entry.</p>` : ""}${hist}${untested}`;
+        ${p.move_pct != null ? `<p class="eng-copy">Price is ${p.move_pct >= 0 ? "+" : "−"}${Math.abs(p.move_pct).toFixed(2)}% since entry, ${Math.abs(p.pct)}% of the way to ${p.pct >= 0 ? "TP" + (p.next || 1) : "the stop"}. ${(a.targets || []).length > 1 ? "Close a third at each target; after TP1 the stop moves to the entry." : "Close the whole position at the target."}</p>` : ""}${hist}${untested}`;
       chip.hidden = false; chip.className = `mk-sig ${long ? "long" : "short"}`; chip.innerHTML = `<i></i>${long ? "Long" : "Short"} signal`;
     } else {
       const close = Math.max(0, Math.min(100, e.strength || 0));
       box.innerHTML = `<div class="eng-state"><span class="eng-verdict c-amber">Wait</span><span class="mk-sig wait"><i></i>${Math.round(close)}% of the way to a strong signal${e.setup_forming ? " · setup forming" : ""}</span></div>
-        <p class="eng-copy">The model leans ${String(e.bias || "").toLowerCase()} (${e.bias === "LONG" ? e.p_long : e.p_short}% estimated chance of TP1)${e.covered === false ? "" : ", below the level it needs for a signal on this coin. It checks again at each 4-hour close"}.</p>${hist}${untested}`;
+        <p class="eng-copy">The model leans ${String(e.bias || "").toLowerCase()} (model confidence ${e.bias === "LONG" ? e.p_long : e.p_short}%)${e.covered === false ? "" : ", below the level it needs for a signal on this coin. It checks again at each 4-hour close"}.</p>${hist}${untested}`;
       chip.hidden = false; chip.className = "mk-sig wait"; chip.innerHTML = `<i></i>Wait · ${Math.round(close)}%`;
     }
   }
