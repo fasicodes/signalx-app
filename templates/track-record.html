@@ -142,7 +142,7 @@
       <li><b>Same coins, every candle.</b> All 102 crypto coins in the list are read together at every 4-hour candle close by signal engine v3. Every long or short is logged.</li>
       <li><b>Which candles become signals.</b> A coin gets a <b>strong</b> signal when the model's score is in its top 3%. If no coin has had a signal for 24 hours, the best coin gets a <b>standard</b> signal when its score is at least the model's median, so there is rarely a long wait. At most 5 new signals start on one candle (the highest scores), because many coins at once usually means one market move.</li>
       <li><b>Entry</b> is the close of the candle that gave the signal.</li>
-      <li><b>Stop-loss</b> is 2 &times; ATR(14) away from entry (that distance is 1R). <b>Targets:</b> TP1 at 0.5R, TP2 at 1R (as far as the stop), TP3 at 2R. A third of the position closes at each target. After TP1 the stop moves to the entry, after TP2 to TP1, so a signal that reached TP1 can no longer lose (apart from a gap at a candle's open).</li>
+      <li><b>Stop-loss</b> is 2 &times; ATR(14) away from entry (that distance is 1R). <b>Target:</b> one target at 1R (as far as the stop). The whole position closes there; the stop does not move. (Until October 2026 the plan was three targets at 0.5R, 1R and 2R, a third at each; signals from that time keep the old plan.)</li>
       <li><b>Win</b> means the whole signal closed above zero after fees. Judge the engine by the average R and the equity curve as well, not by the win rate alone.</li>
       <li><b>One signal per coin at a time.</b> New signals are ignored until the open one closes.</li>
       <li><b>Pessimistic fills.</b> If one candle touches the stop and a target, the stop counts first. If a candle opens past the stop, the exit is that worse price. A moved stop only works from the next candle.</li>
@@ -177,7 +177,7 @@
     const d = a >= 1000 ? 2 : a >= 10 ? 3 : a >= 1 ? 4 : 6;
     return Number(p).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
   }
-  const STATUS = { TP3: ["All 3 targets", "pos"], TP2: ["TP2, then stop at TP1", "pos"], TP1: ["TP1, then stop at entry", "pos"],
+  const STATUS = { TP3: ["All 3 targets", "pos"], TP2: ["TP2, then stop at TP1", "pos"], TP1: ["Target hit", "pos"],
     TP: ["Target hit", "pos"], SL: ["Stopped out", "neg"], EXPIRED: ["Time limit", "dim"], OPEN: ["Open", "dim"] };
   const tps = (r) => (r.targets || [r.take_profit]).map(price).join(" / ");
 
@@ -248,7 +248,7 @@
       fig("Average per signal", fmtR(s.avg_r), `${fmtR(s.total_r)} in total`, cls(s.avg_r), "avg_r"),
       fig("Profit factor", s.profit_factor == null ? "—" : s.profit_factor.toFixed(2), "Gross R won ÷ gross R lost", s.profit_factor >= 1 ? "pos" : "neg", "profit_factor"),
       fig("Largest drop", "−" + s.max_drawdown_pct.toFixed(1) + "%", "Peak to low, at 1% risk", "", "drawdown"),
-      fig("Targets reached", s.tp1_rate == null ? "—" : fmtPct(s.tp1_rate, 0), s.tp1_rate == null ? "TP1" : `reached TP1; TP2 ${fmtPct(s.tp2_rate, 0)}, TP3 ${fmtPct(s.tp3_rate, 0)}`, "", "targets"),
+      fig("Targets reached", s.tp1_rate == null ? "—" : fmtPct(s.tp1_rate, 0), s.tp1_rate == null ? "TP1" : (s.tp2_rate ? `reached TP1; TP2 ${fmtPct(s.tp2_rate, 0)}, TP3 ${fmtPct(s.tp3_rate, 0)}` : "reached the target"), "", "targets"),
       fig("Break-even win rate", fmtPct(s.breakeven_win_rate), "Needed with this payoff"),
     ].join("");
 
