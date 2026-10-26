@@ -53,10 +53,10 @@ FOLD_MONTHS = 6
 
 CFG = {
     "crypto_15m": dict(market="crypto", tf="15m", data_start="2021-06-01", dev=("2023-01-01", "2025-10-01"),
-                       hold=("2025-10-01", "2026-10-11"), sub=12, geoms={"s2": (2.0, 64), "s3": (3.0, 64)},
+                       hold=("2025-10-01", "2026-10-11"), sub=12, geoms={"s2": (2.0, 64), "s3": (3.0, 64), "t3": (3.0, 64, 1.0)},
                        session=True, volume=True, anchor="BTC/USDT", max_per_bar=3, cooldown=4),
     "crypto_1h": dict(market="crypto", tf="1h", data_start="2020-03-01", dev=("2023-01-01", "2025-10-01"),
-                      hold=("2025-10-01", "2026-10-11"), sub=2, geoms={"s2": (2.0, 48), "s3": (3.0, 48)},
+                      hold=("2025-10-01", "2026-10-11"), sub=2, geoms={"s2": (2.0, 48), "s3": (3.0, 48), "t2": (2.0, 48, 1.0)},
                       session=True, volume=True, anchor="BTC/USDT", max_per_bar=4, cooldown=2),
     # same as crypto_1h / crypto_4h plus order-flow inputs (taker buy volume, trade counts)
     "crypto_1hf": dict(market="crypto", tf="1h", data_start="2020-03-01", dev=("2023-01-01", "2025-10-01"),
@@ -66,7 +66,7 @@ CFG = {
                        hold=("2025-10-01", "2026-10-11"), sub=1, geoms={"s2": (2.0, 54)}, flow=True,
                        session=False, volume=True, anchor="BTC/USDT", max_per_bar=5, cooldown=1),
     "crypto_4h": dict(market="crypto", tf="4h", data_start="2020-03-01", dev=("2023-01-01", "2025-10-01"),
-                      hold=("2025-10-01", "2026-10-11"), sub=1, geoms={"s2": (2.0, 54)},
+                      hold=("2025-10-01", "2026-10-11"), sub=1, geoms={"s2": (2.0, 54), "t2": (2.0, 54, 1.0)},
                       session=False, volume=True, anchor="BTC/USDT", max_per_bar=5, cooldown=1),
     "forex_15m": dict(market="forex", tf="15m", data_start="2013-01-01", dev=("2017-01-01", "2021-01-01"),
                       hold=("2021-01-01", "2022-03-05"), sub=4, geoms={"s2": (2.0, 64), "s3": (3.0, 64)},
@@ -163,7 +163,7 @@ def feature_list(c):
     return cols
 
 
-def tp1_labels(o, h, l, c, dist, H, exit_mask=None):
+def tp1_labels(o, h, l, c, dist, H, exit_mask=None, tpm=0.5):
     """1 = TP1 (0.5 x dist) reached before the stop (dist) within H candles
     (pessimistic: a candle that touches the stop counts as the stop, a candle
     that opens beyond the stop too). Returns (yL, yS) as int8, -1 = unknown (end of data)."""
@@ -185,7 +185,7 @@ def tp1_labels(o, h, l, c, dist, H, exit_mask=None):
     out = []
     for sgn in (1, -1):
         stop = c - sgn * dist
-        tp = c + sgn * 0.5 * dist
+        tp = c + sgn * tpm * dist
         if sgn > 0:
             hit_sl = (LL <= stop[:, None]) & valid
             hit_tp = (HH >= tp[:, None]) & valid
@@ -276,8 +276,9 @@ def build(stream):
         o, h, l, cl, atr = (F[k].to_numpy(float) for k in ("open", "high", "low", "close", "atr"))
         em = ST.weekend_exit_mask(ts, sec) if c["market"] == "forex" else None
         labs = {}
-        for g, (k, H) in c["geoms"].items():
-            yL, yS = tp1_labels(o, h, l, cl, k * atr, H, em)
+        for g, gv in c["geoms"].items():
+            k, H = gv[:2]
+            yL, yS = tp1_labels(o, h, l, cl, k * atr, H, em, gv[2] if len(gv) > 2 else 0.5)
             labs[f"yL_{g}"], labs[f"yS_{g}"] = yL[keep], yS[keep]
         el = eligible(ts, c, c["tf"])
         np.savez(f"{out}/{sym.replace('/', '')}.npz", X=X.to_numpy(np.float32)[keep],
@@ -309,6 +310,21 @@ def load_ds(stream):
         D[sym] = {k: z[k] for k in z.files if k != "X"}
         D[sym]["X"] = np.load(xp, mmap_mode="r")
         D[sym]["ts"] = D[sym]["ts"].astype("datetime64[ns]")
+        c = CFG[stream]
+        for g, gv in c["geoms"].items():
+            if f"yL_{g}" in D[sym]:
+                continue
+            k, H = gv[:2]
+            lp = f"{out}/lab_{g}_{key}.npz"
+            if os.path.exists(lp):
+                z2 = np.load(lp)
+                D[sym][f"yL_{g}"], D[sym][f"yS_{g}"] = z2["yL"], z2["yS"]
+                continue
+            d = D[sym]
+            em = ST.weekend_exit_mask(pd.Series(d["ts"]), FE.TF_SEC[c["tf"]]) if c["market"] == "forex" else None
+            yL, yS = tp1_labels(d["o"], d["h"], d["l"], d["c"], k * d["atr"], H, em, gv[2] if len(gv) > 2 else 0.5)
+            np.savez(lp, yL=yL, yS=yS)
+            D[sym][f"yL_{g}"], D[sym][f"yS_{g}"] = yL, yS
     return meta["cols"], D
 
 
@@ -409,7 +425,7 @@ def folds(c):
 def wf(stream, g):
     c = CFG[stream]
     cols, D = load_ds(stream)
-    k, H = c["geoms"][g]
+    k, H = c["geoms"][g][:2]
     purge = pd.Timedelta(seconds=FE.TF_SEC[c["tf"]] * (H + 2))
     preds = {sym: (np.full(len(d["ts"]), np.nan, np.float32), np.full(len(d["ts"]), np.nan, np.float32))
              for sym, d in D.items()}
@@ -491,7 +507,7 @@ def policy_data(D, preds, thr, grade_a, grade_b, k, cal, gate=None):
 
 def simulate(stream, g, D, preds, thr, start, end, cal, grade_a=9, grade_b=9, max_per_bar=None, cooldown=None, gate=None):
     c = CFG[stream]
-    k, H = c["geoms"][g]
+    k, H = c["geoms"][g][:2]
     plan = {"targets_r": TARGETS_R, "fractions": FRACTIONS, "be_after": BE_AFTER, "max_bars": H,
             "tf_sec": FE.TF_SEC[c["tf"]]}
     policy = {"max_per_bar": c["max_per_bar"] if max_per_bar is None else max_per_bar,
@@ -566,7 +582,7 @@ def evaluate(stream, g, write=True):
     c = CFG[stream]
     cols, D = load_ds(stream)
     preds = dict(np.load(f"{R}/wf/{stream}_{g}.npz"))
-    k, H = c["geoms"][g]
+    k, H = c["geoms"][g][:2]
     ds, de = c["dev"]
     hs, he = c["hold"]
     # validation predictions (walk-forward) for calibration + threshold
@@ -665,7 +681,7 @@ def evaluate_mtf(stream, g, htf_stream, htf_g, write=True):
     cols, D = load_ds(stream)
     preds = dict(np.load(f"{R}/wf/{stream}_{g}.npz"))
     H = htf_scores(stream, htf_stream, htf_g)
-    k, H_bars = c["geoms"][g]
+    k, H_bars = c["geoms"][g][:2]
     ds, de = c["dev"]
     hs, he = c["hold"]
     vals, labs = [], []
@@ -750,7 +766,7 @@ def export(stream, g):
     fin = pickle.load(open(f"{R}/wf/{stream}_{g}_final.pkl", "rb"))
     clf, cols = fin["clf"], fin["cols"]
     trees, base = export_trees(clf)
-    k, H = c["geoms"][g]
+    k, H = c["geoms"][g][:2]
     hb = res.get("hold_bars_median") or H / 4
     mins = hb * FE.TF_SEC[c["tf"]] / 60
     hold_text = f"about {int(round(mins))} minutes" if mins < 90 else (
@@ -830,7 +846,7 @@ def export_mtf(stream, g):
     trees, base = export_trees(fin["clf"])
     htrees, hbase = export_trees(hfin["clf"])
     ch = CFG[htf_stream]
-    k, H = c["geoms"][g]
+    k, H = c["geoms"][g][:2]
     hb = res.get("hold_bars_median") or H / 4
     mins = hb * FE.TF_SEC[c["tf"]] / 60
     hold_text = f"about {int(round(mins))} minutes" if mins < 90 else (
