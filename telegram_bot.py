@@ -296,12 +296,14 @@ def signal_block(e):
     lines = [f"{icon} <b>New {'Long' if side == 'LONG' else 'Short'} signal: {html.escape(sym)} ({tf})</b>",
              f"Entry: <b>{_fmt(e['entry'], sym)}</b>",
              f"Stop loss: {_fmt(e['stop_loss'], sym)} ({_pct(e['stop_loss'], e['entry'], sym)})"]
-    for k, v in enumerate(_targets(e)):
+    tps = _targets(e)
+    for k, v in enumerate(tps):
         lines.append(f"TP{k + 1}: {_fmt(v, sym)} ({_pct(v, e['entry'], sym)})")
-    lines.append("Close a third at each target. After TP1 move the stop to the entry, after TP2 to TP1.")
+    lines.append("Close a third at each target. After TP1 move the stop to the entry, after TP2 to TP1." if len(tps) > 1
+                 else "Close the whole position at the target. The stop does not move.")
     extra = []
     if tf == "4h" and (e.get("market") or "crypto") == "crypto" and e.get("confidence") is not None:
-        extra.append(f"Chance of TP1: {float(e['confidence']):.0f}%")
+        extra.append(f"Model confidence: {float(e['confidence']):.0f}%")
     if e.get("hold_minutes"):
         h = int(e["hold_minutes"]) / 60
         extra.append(f"expected hold about {h:.0f} h" if h >= 1 else f"expected hold about {int(e['hold_minutes'])} min")
