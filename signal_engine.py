@@ -20,11 +20,11 @@ What it does
         coin gets one when its score is at least the model's median.
     At most `max_per_bar` new signals per candle (the highest scores), one
     trade at a time per coin; everything else is WAIT.
-  * Trade plan: stop = 2 x ATR(14) from entry (1R). Three targets:
-    TP1 = 0.5R, TP2 = 1R (as far as the stop), TP3 = 2R. A third of the
-    position closes at each target; after TP1 the stop moves to the entry,
-    after TP2 to TP1. Time limit 54 candles (9 days). Fees are counted as
-    0.12% round trip.
+  * Trade plan (signal_model.json "levels"): stop = 2 x ATR(14) from entry
+    (1R), one target at 1R; the whole position closes there and the stop never
+    moves. Time limit 54 candles (9 days). Fees are counted as 0.12% round
+    trip. (Until Oct 2026: targets 0.5R / 1R / 2R, a third at each, stop to the
+    entry after TP1 - see "exit_change" in the model file.)
 
 Measured on data the model never saw (Oct 2025 - Oct 2026, 53 coins, 32 of
 them never used in training) and in a walk-forward test (Jan 2023 - Oct 2026,
