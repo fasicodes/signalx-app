@@ -103,10 +103,19 @@ T0 = datetime(2026, 1, 1)
 se = tr.se
 m = se.model()
 print("\n[1] levels + outcome rules")
+check(m.targets_r == [1.0] and m.fractions == [1.0] and m.be_after == 0, "live plan: one target at 1R, the stop never moves")
 sl, tp = se.levels("LONG", 100.0, 2.0)
-check(close_to(sl, 96.0) and close_to(tp, 108.0), "LONG: stop 2x ATR, last target 2R")
+check(close_to(sl, 96.0) and close_to(tp, 104.0), "LONG: stop 2x ATR, the target 1R (as far as the stop)")
 sl, tp = se.levels("SHORT", 100.0, 2.0)
-check(close_to(sl, 104.0) and close_to(tp, 92.0), "SHORT levels mirrored")
+check(close_to(sl, 104.0) and close_to(tp, 96.0), "SHORT levels mirrored")
+o = tr.evaluate("LONG", 100, 98, 102, [bar(T0, 100, 101.3, 99.5, 101), bar(T0, 101, 102.4, 100.5, 102.2)])
+check(o["resolved"] and o["status"] == "TP1" and o["hits"] == 1 and close_to(o["r"], 1.0) and close_to(o["exit_price"], 102),
+      "one target: the whole position closes at +1R")
+o = tr.evaluate("LONG", 100, 98, 102, [bar(T0, 100, 101.3, 99.5, 101), bar(T0, 101, 101.2, 97.9, 98.2)])
+check(o["status"] == "SL" and close_to(o["r"], -1.0), "one target: the stop does not move, so a pull-back is a full -1R")
+# the ladder rules (still used by older signals and the experimental streams)
+_live_plan = (m.targets_r, m.fractions, m.be_after, m.tp_atr)
+m.targets_r, m.fractions, m.be_after, m.tp_atr = [0.5, 1.0, 2.0], [1 / 3] * 3, 1, 4.0
 check(close_to(tr.net_r(1.5, 100, 98), 1.5 - 0.0012 * 100 / 2), "fees taken off in R (0.12% round trip)")
 # LONG entry 100, stop 98 -> TP1 101, TP2 102, TP3 104
 o = tr.evaluate("LONG", 100, 98, 104, [bar(T0, 100, 100.6, 99, 100.5), bar(T0, 100.5, 104.2, 100.2, 104)])
@@ -147,6 +156,7 @@ for _ in range(300):
             or not close_to(ref["r"], f["r_gross"]):
         mism += 1
 check(mism == 0, "engine's trade follower == track record rules (300 random trades)")
+m.targets_r, m.fractions, m.be_after, m.tp_atr = _live_plan
 
 print("\n[2] stats")
 rows = [
@@ -209,7 +219,7 @@ i0 = idx[bt]
 exp = tr.evaluate(sig["verdict"], sig["entry"], sig["stop_loss"], sig["take_profit"], bars_all[i0 + 1:])
 check(close_to(sig["entry"], FRAMES["BTC/USDT"]["close"].iloc[i0]), "entry = close of the signal candle")
 check(close_to(abs(sig["entry"] - sig["stop_loss"]), 2 * F["atr"].iloc[i0]) and
-      close_to(abs(sig["take_profit"] - sig["entry"]), 4 * F["atr"].iloc[i0]), "stop 2x ATR, last target 4x ATR at that candle")
+      close_to(abs(sig["take_profit"] - sig["entry"]), 2 * F["atr"].iloc[i0]), "stop 2x ATR, the target 2x ATR (1R) at that candle")
 check(exp["status"] == out["status"] and close_to(exp["r"], out["r"]) and sig["tier"] in ("strong", "standard"),
       "outcome uses only candles after the signal")
 ok_seq = all(idx[trades[k + 1][1]] >= idx[trades[k][1]] + trades[k][2]["bars_held"] for k in range(len(trades) - 1))
@@ -303,10 +313,12 @@ base = FRAMES["BTC/USDT"].iloc[:400].copy()
 for sym in ("BTC/USDT", "ETH/USDT"):
     LIVE[(sym, "4h")] = base.copy()
 t_now = (base["timestamp"].iloc[-1] + pd.Timedelta(hours=2)).to_pydatetime()  # last candle still forming
-tr.meta_set("bt_status", {"state": "done", "version": se.ENGINE_VERSION, "finished_at": tr._iso(t_now)})
+tr.meta_set("bt_status", {"state": "done", "version": se.ENGINE_VERSION, "plan": tr._plan_sig(), "finished_at": tr._iso(t_now)})
 check(not tr._backtest_due(tr.meta_get("bt_status"), t_now + timedelta(days=6)) and
       tr._backtest_due(tr.meta_get("bt_status"), t_now + timedelta(days=7)), "backtest refresh due weekly")
-check(not tr._backtest_due({"state": "error", "version": se.ENGINE_VERSION, "finished_at": tr._iso(t_now)}, t_now + timedelta(minutes=30)),
+check(tr._backtest_due(dict(tr.meta_get("bt_status"), plan="old plan"), t_now + timedelta(days=1)),
+      "a changed trade plan re-runs the backtest at once")
+check(not tr._backtest_due({"state": "error", "version": se.ENGINE_VERSION, "plan": tr._plan_sig(), "finished_at": tr._iso(t_now)}, t_now + timedelta(minutes=30)),
       "failed backtest retried hourly, not every loop")
 acts = tr.engine_step(t_now)
 check(acts == ["evaluate"] and tr.meta_get("live_slot:4h") is not None, "first run only remembers the current candle")
@@ -338,8 +350,8 @@ LIVE[("BTC/USDT", "4h")] = ext
 tr.meta_set("last_eval_epoch", 0)
 tr.engine_step((t_last + pd.Timedelta(hours=12, minutes=1)).to_pydatetime())
 q = Conn().cursor(); q.execute("SELECT * FROM track_signals WHERE id=?", (r["id"],)); r2 = q.fetchone()
-check(r2["status"] == "TP3" and r2["hits"] == 3 and close_to(r2["r_multiple"], 3.5 / 3 - 0.0012 / 0.03) and r2["bars_held"] == 2,
-      "live signal: TP1 in the first candle, TP2 + TP3 in the second, R after fees")
+check(r2["status"] == "TP1" and r2["hits"] == 1 and close_to(r2["r_multiple"], 1.0 - 0.0012 / 0.03) and r2["bars_held"] == 2,
+      "live signal: the target (1R) reached in the second candle closes it, R after fees")
 n = 0
 print("\n[5] page + API")
 from flask import Flask  # noqa: E402
@@ -370,7 +382,7 @@ d = cl.get("/api/track-record").get_json()
 check(d["ok"] and d["live_visible"] and d["sources"]["BACKTEST"]["stats"]["signals"] == n and
       d["sources"]["LIVE"]["stats"]["signals"] == 1, "the site owner (ADMIN_EMAILS) gets live + backtest stats")
 check(b'data-src="LIVE"' in cl.get("/track-record").data, "the owner gets the live / backtest switch")
-check(isinstance(d["sources"]["LIVE"]["open"], list) and d["rules"]["max_bars"] == 54 and d["rules"]["targets_r"] == [0.5, 1.0, 2.0] and d["rules"]["model_test"]["signals"] > 0,
+check(isinstance(d["sources"]["LIVE"]["open"], list) and d["rules"]["max_bars"] == 54 and d["rules"]["targets_r"] == [1.0] and d["rules"]["model_test"]["signals"] > 0,
       "open signals, rules and model test stats exposed")
 page = cl.get("/track-record")
 check(page.status_code == 200 and b"Track record" in page.data, "public page renders")
