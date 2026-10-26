@@ -291,14 +291,14 @@ again = hub.scan_stream("crypto_1h", NOW)
 fresh = [k for k, v in hub.engine("crypto_1h").board(NOW).items() if v.get("fresh")]
 check(len(evs) == len(fresh) and again == [], f"scanner stores each fresh signal once ({len(evs)} new)")
 os.environ.pop("SIGNAL_STREAMS")
-check(hub.enabled_streams() == ["crypto_4h"],
-      "default: only crypto 4h runs (the losing untested streams stay off unless SIGNAL_STREAMS turns them on)")
+check(len(hub.enabled_streams()) == 6 and hub.enabled_streams() == hub.ALL_STREAMS,
+      "default: all six streams run (the ones that have not passed the test are marked untested)")
 os.environ["SIGNAL_STREAMS"] = "validated"
 check(hub.enabled_streams() == hub.validated_streams() and "crypto_4h" in hub.enabled_streams(),
       "SIGNAL_STREAMS=validated: only the streams whose model passed its test on unseen data (crypto 4h always)")
 check(hub.validated_streams() == ["crypto_4h"], "no model file -> only crypto 4h counts as tested")
 os.environ["SIGNAL_STREAMS"] = "bogus"
-check(hub.enabled_streams() == ["crypto_4h"], "SIGNAL_STREAMS with only unknown names falls back to crypto 4h")
+check(len(hub.enabled_streams()) == 6, "SIGNAL_STREAMS with only unknown names falls back to all six")
 os.environ.pop("SIGNAL_STREAMS")
 check(hub.stream_tested("crypto", "4h") and not hub.stream_tested("crypto", "15m") and not hub.stream_tested("forex", "1h")
       and not hub.stream_tested("forex", "15m") and not hub.stream_tested("forex", "4h"),
@@ -373,10 +373,11 @@ check(hub.enabled_streams() == ["crypto_1h"], "SIGNAL_STREAMS list: unknown name
 os.environ.pop("SIGNAL_STREAMS")
 import streams as _st  # noqa: E402
 check(not _st.passed_test({"signals": 400, "win_rate": 71.0, "avg_net_r": -0.01})
-      and not _st.passed_test({"signals": 400, "win_rate": 69.9, "avg_net_r": 0.05})
+      and not _st.passed_test({"signals": 400, "win_rate": 72.6, "avg_net_r": 0.03, "profit_factor": 1.1})
+      and not _st.passed_test({"signals": 400, "win_rate": 58.0, "avg_net_r": 0.08, "profit_factor": 1.05})
       and not _st.passed_test({"signals": 20, "win_rate": 80.0, "avg_net_r": 0.2})
-      and _st.passed_test({"signals": 400, "win_rate": 70.0, "avg_net_r": 0.01}),
-      "the live bar: >= 70% wins, positive average after costs, enough signals")
+      and _st.passed_test({"signals": 400, "win_rate": 55.8, "avg_net_r": 0.099, "profit_factor": 1.23}),
+      "the live bar: >= +0.05R average after costs, profit factor >= 1.1, enough signals (win rate not used)")
 
 # alert filters
 sub = {"coins": "ALL", "markets": json.dumps(["forex"]), "timeframes": json.dumps(["1h", "4h"])}
@@ -408,6 +409,12 @@ cl = app.test_client()
 check(cl.get("/api/signals").status_code == 401, "API needs a login")
 with cl.session_transaction() as ss:
     ss["user_id"] = 1
+os.environ["SIGNAL_STREAMS"] = "crypto_4h"
+d = cl.get("/api/signals?market=crypto&timeframe=1h").get_json()
+check(d["ok"] and d["total"] == 0, "SIGNAL_STREAMS=crypto_4h: signals of a switched-off stream (crypto 1h) are not listed")
+check(all(r["timeframe"] == "4h" for r in hub.active_for("SOL/USDT")) and all(r["timeframe"] == "4h" for r in hub.bot_feed()),
+      "SIGNAL_STREAMS=crypto_4h: dashboard and auto-trade feed only get crypto 4h signals")
+os.environ["SIGNAL_STREAMS"] = "all"
 d = cl.get("/api/signals?market=crypto&timeframe=1h").get_json()
 check(d["ok"] and d["total"] >= 1 and all(x["timeframe"] == "1h" and x["market"] == "crypto" for x in d["signals"]),
       "GET /api/signals filters by market and timeframe")
@@ -518,8 +525,10 @@ check(x4 and x4["coins"] == len(markets.CRYPTO_4H_ONLY) and x4["signals"] >= 50 
       "coin test: the added 4h coins passed on the year the model never saw (shown with the 4h numbers)")
 check(hub.coin_test("crypto_1h") is None, "coin test: the 1h stream got no new coins")
 ship = json.load(open(os.path.join(os.path.dirname(HERE), "models", "crypto_1h.json")))
-check(ship["selection"]["max_per_bar"] == 4 and ship["test"]["win_rate"] >= 70 and ship["test"]["avg_net_r"] > 0,
+check(ship["selection"]["max_per_bar"] == 4 and ship["test"]["avg_net_r"] >= 0.05 and ship["test"]["win_rate"] >= 50,
       "1h: at most 4 new signals per candle (8 passed the test but made the results swing more, see research/cap_test.py)")
+check(ship["levels"]["targets_r"] == [1.0] and ship["levels"]["be_after"] == 0 and ship["exit_change"]["holdout_new_plan"]["avg_net_r"]
+      > ship["exit_change"]["holdout_old_plan"]["avg_net_r"], "1h: one target at 1R, chosen on validation, better on the holdout too")
 
 # coins page: 4h "getting close" from the signal board, coins without data left out, joinable signals first
 os.environ["SIGNAL_STREAMS"] = "all"
