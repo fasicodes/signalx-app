@@ -27,18 +27,20 @@ GROUPS = [
         ("stop_loss", "Stop loss",
          "The price where you accept the trade was wrong and exit, so the loss stays small. Every signal has one. Always use it."),
         ("target", "Targets",
-         "The prices where you take profit (take profit). Every signal has three: TP1 at half the stop distance, TP2 as far "
-         "as the stop, TP3 at twice the stop distance. A third of the position closes at each one."),
+         "The prices where you take profit (take profit). Tested 1h and 4h signals have one target, as far from the entry as "
+         "the stop (1R): the whole position closes there and the stop does not move. Experimental signals have three: TP1 at "
+         "1R, TP2 at 2R, TP3 at 3R, a third of the position at each, with the stop moved to the entry after TP1."),
         ("targets", "Targets reached",
-         "How many signals reached TP1, TP2 and TP3. After TP1 the stop moves to the entry and after TP2 to TP1, so a signal "
-         "that reached TP1 can no longer lose (apart from a price gap)."),
+         "How many signals reached their target (or TP1, TP2 and TP3 on three-target signals). Because a win (+1R) and a "
+         "loss (-1R) are the same size, a stream needs clearly more than half of its signals to win."),
         ("tier", "Strong and standard signals",
          "Strong: the model's score is in its top 3%. Standard: when no coin has had a signal for 24 hours, the best coin gets "
-         "one if its score is at least average. Strong signals did better in testing (about +0.16R each); standard ones keep signals coming but earned much less "
-         "(about +0.04R, close to break-even after fees), so treat them as lower conviction."),
-        ("win_chance", "Win chance",
-         "The model's estimate of how often signals like this one reach target 1 before the stop. "
-         "In testing about 3 in 4 signals reached TP1 (about 2 in 3 trades of this kind reach it even without a model); a full loss (-1R) is bigger than one TP1 (+0.5R), which is why TP2 and TP3 matter."),
+         "one if its score is at least average. Strong signals did better in testing (about +0.32R each); standard ones keep "
+         "signals coming but earned much less (about +0.12R), so treat them as lower conviction."),
+        ("win_chance", "Model confidence",
+         "The model's estimate of how often the price moves half the stop distance in the signal's direction before the stop. "
+         "The 1R target is further away, so it is reached less often: in testing about 6 in 10 signals reached it (a random "
+         "entry would reach it about 5 in 10 times). Higher confidence did better, but no signal is certain."),
         ("progress", "Progress",
          "Where the live price is between the current stop and the next target. 100% to a target means it is reached; "
          "100% to stop means the stop is hit."),
@@ -55,11 +57,12 @@ GROUPS = [
     ]),
     ("Risk and results", [
         ("r", "R (risk unit)",
-         "1R is the amount you lose if the stop is hit. If you risk $10 on a signal, +0.5R is a $5 gain and −1R is a $10 loss. "
+         "1R is the amount you lose if the stop is hit. If you risk $10 on a signal, +1R is a $10 gain and −1R is a $10 loss. "
          "Keep 1R small, for example 1% of your account."),
         ("win_rate", "Win rate",
-         "The share of closed signals that ended above zero after fees. A signal that reached TP1 and then came back to the "
-         "entry still counts as a small win. A high win rate alone does not mean profit; look at the average R too."),
+         "The share of closed signals that reached their (first) target. A high win rate alone does not mean profit: it "
+         "depends on where the target is. With the target as far as the stop, a random entry wins about half the time, so "
+         "look at the average R after fees too."),
         ("avg_r", "Average result (R)",
          "The average result per signal in R, after fees. Above 0 means the signals made money overall in that period."),
         ("profit_factor", "Profit factor",
@@ -70,7 +73,7 @@ GROUPS = [
          "Running the same rules over past data to see how they would have done. Useful, but real trading can do worse."),
         ("unseen_data", "Tested on unseen data",
          "The model learned from July 2020 to September 2025 and was then tested once on October 2025 to October 2026, "
-         "data it had never seen. A walk-forward test on 2023 to 2026 (re-trained every 6 months) was positive every year."),
+         "data it had never seen. A walk-forward test on 2023 to 2025 (re-trained every 6 months) was positive every year."),
         ("fees", "Fees",
          "What the exchange charges to open and close a trade. Every tested result already takes off 0.12% per trade for fees and slippage."),
         ("leverage", "Leverage",
