@@ -199,7 +199,7 @@ def _untested(e):
 def event_text(e):
     msg = f"Entry {_fmt(e['entry'], e['symbol'])} · stop {_fmt(e['stop_loss'], e['symbol'])} · {_targets_txt(e)}"
     if (e.get("timeframe") or "4h") == "4h" and (e.get("market") or "crypto") == "crypto" and e.get("confidence") is not None:
-        msg += f" · chance of TP1 {float(e['confidence']):.0f}%"
+        msg += f" · model confidence {float(e['confidence']):.0f}%"
     news = e.get("news")
     if isinstance(news, dict) and news.get("title"):
         msg += f" · high-impact news soon: {news['title']}"
@@ -291,8 +291,9 @@ def _email_html(events, user_id=None):
     return f"""
     <div style="font-family:Segoe UI,Arial,sans-serif;color:#0d1c15;max-width:620px">
       <h2 style="margin:0 0 6px">New signal{'s' if len(events) > 1 else ''} from Signals FM</h2>
-      <p style="color:#4c5f56;margin:0 0 14px">Close a third at each target; after TP1 move the stop to the entry,
-      after TP2 to TP1. Every signal has a time limit (see the signals page).</p>
+      <p style="color:#4c5f56;margin:0 0 14px">One-target signals: close the whole position at the target. Three-target
+      signals: close a third at each; after TP1 move the stop to the entry, after TP2 to TP1. Every signal has a time limit
+      (see the signals page).</p>
       <table style="border-collapse:collapse;font-size:14px;border:1px solid #dbe6e0">
         <tr style="background:#eef4f1;text-align:left"><th style="padding:6px 10px">Symbol</th><th style="padding:6px 10px">Timeframe</th><th style="padding:6px 10px">Side</th>
         <th style="padding:6px 10px">Entry</th><th style="padding:6px 10px">Stop</th><th style="padding:6px 10px">TP1</th>
