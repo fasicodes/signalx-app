@@ -653,25 +653,26 @@ function renderTier1(data) {
           ${meterBar(eng.p_short ?? 0, "c-short")}
         </div>
       </div>
-      <div class="channel-detail">chance target 1 is hit before the stop, from similar past setups the model never trained on</div>`
+      <div class="channel-detail">model confidence: the chance the price moves half the stop distance its way before the stop (the 1R target is reached less often)</div>`
   }));
 
   cards.push(channelCard({
-    id: 2, title: "Trade Levels", model: "2× ATR stop · targets 0.5R / 1R / 2R",
+    id: 2, title: "Trade Levels", model: (eng.targets || []).length > 1 ? "2× ATR stop · targets 0.5R / 1R / 2R" : "2× ATR stop · one target at 1R",
     span2: true,
     body: `
       <div class="dual-split">
         <div class="dual-item"><span class="dual-label">ENTRY (4H CLOSE)</span><span class="dual-value">${isTrade ? fmtPrice(eng.entry) : "--"}</span></div>
         <div class="dual-item"><span class="dual-label">STARTED</span><span class="dual-value">${act ? when(act.signal_at) : "--"}</span></div>
         <div class="dual-item"><span class="dual-label">STOP LOSS${act && act.hits ? " (MOVED)" : ""}</span><span class="dual-value text-short">${isTrade ? fmtPrice(act && act.hits && act.stop_now != null ? act.stop_now : data.stop_loss) : "--"}</span></div>
-        ${(isTrade && eng.targets ? eng.targets : [null, null, null]).map((v, k) => `<div class="dual-item"><span class="dual-label">TP${k + 1}${act && k < (act.hits || 0) ? " ✓" : ""}</span><span class="dual-value text-long">${v != null ? fmtPrice(v) : "--"}</span></div>`).join("")}
+        ${(isTrade && eng.targets ? eng.targets : [null]).map((v, k) => `<div class="dual-item"><span class="dual-label">TP${k + 1}${act && k < (act.hits || 0) ? " ✓" : ""}</span><span class="dual-value text-long">${v != null ? fmtPrice(v) : "--"}</span></div>`).join("")}
         <div class="dual-item"><span class="dual-label">TIME LIMIT</span><span class="dual-value">9 days</span></div>
       </div>
       <div class="channel-detail">${isTrade
         ? (prog ? (prog.state === "target_touched" ? "target touched at the live price (confirms at the 4h close)"
                  : prog.state === "stop_touched" ? "stop touched at the live price (confirms at the 4h close)"
                  : `live ${fmtPrice(prog.price)} · ${prog.move_pct >= 0 ? "+" : ""}${prog.move_pct}% · ${Math.abs(prog.pct)}% of the way to ${prog.pct >= 0 ? "TP" + (prog.next || 1) : "the stop"}`)
-               : `stop ${fmtPct(eng.sl_pct, 2)} away · TP3 ${fmtPct(eng.tp_pct, 2)} away · close a third at each target`)
+               : (eng.targets || []).length > 1 ? `stop ${fmtPct(eng.sl_pct, 2)} away · TP3 ${fmtPct(eng.tp_pct, 2)} away · close a third at each target`
+                 : `stop ${fmtPct(eng.sl_pct, 2)} away · target ${fmtPct(eng.tp_pct, 2)} away · close the whole position at the target`)
           + (act ? ` · ends ${when(act.expires_at)}` : "")
         : "levels appear while a LONG or SHORT signal is active"}</div>`
   }));
