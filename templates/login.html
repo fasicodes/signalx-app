@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -181,8 +181,8 @@ body::before {
 .auth-form.active{display:block;}
 </style>
 {% include '_analytics.html' ignore missing %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
 </head>
 <body class="auth-page">
 
@@ -193,7 +193,7 @@ body::before {
 <div class="auth-card">
 
   <div class="brand-row">
-    <img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM">
+    <img class="lg-light" src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM"><img class="lg-dark" src="{{ url_for('static', filename='logo-green.png') }}" alt="Signals FM">
     <span class="brand-name">Signals FM</span>
   </div>
 
@@ -483,7 +483,7 @@ signupForm.addEventListener('submit', async (e) => {
     icon.innerHTML = t === 'dark' ? sunPath : moonPath;
     localStorage.setItem('signalsfm-theme', t);
   }
-  applyTheme(localStorage.getItem('signalsfm-theme') || 'light');
+  applyTheme(localStorage.getItem('signalsfm-theme') || 'dark');
   btn.addEventListener('click', () => {
     applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
   });
