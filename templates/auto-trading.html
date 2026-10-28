@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light" class="ds-ws">
+<html lang="en" data-theme="dark" class="ds-ws">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -207,8 +207,8 @@
   .acct-switch .mini { font-weight: 500; font-size: 10.5px; color: var(--text-faint); }
 </style>
 {% include '_analytics.html' ignore missing %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
 </head>
 <body class="an-shell">
 {% set active = 'bot' %}
@@ -451,7 +451,7 @@
 <script>
 (() => {
   "use strict";
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "light");
+  document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "dark");
 
   // ------------------------------------------------------------ helpers
   const $ = (id) => document.getElementById(id);
