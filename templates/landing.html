@@ -1,195 +1,200 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM: simple crypto signals with honest, tested results</title>
-<meta name="description" content="Clear crypto signals a beginner can follow: buy or sell near a price, a stop-loss and three targets. From models tested on a year of data they never saw, fees included. Free during the beta.">
+<meta name="description" content="Clear crypto signals a beginner can follow: buy or sell near a price, a stop-loss and a target. From models tested on a year of data they never saw, fees included. Free during the beta.">
 {% set seo_title = "Signals FM: simple crypto signals with honest, tested results" %}{% set seo_path = "/" %}
-{% set seo_description = "Clear crypto signals a beginner can follow, each with a stop-loss and three targets, from models tested on data they never saw. Alerts, demo trading and a strategy library. Free during the beta." %}
+{% set seo_description = "Clear crypto signals a beginner can follow, each with a stop-loss and a target, from models tested on data they never saw. Alerts, demo trading and a strategy library. Free during the beta." %}
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Syne:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
 <style>
-  /* Landing page only. Colours and fonts come from public.css, so light and dark themes both work. */
+  /* Landing page. Colours, type, radii and motion come from ds.css; this file only lays the page out. */
   .lp main { overflow: hidden; }
-  .lp .hero { position: relative; padding: 76px 0 64px; }
-  .lp .hero::before { content: ""; position: absolute; inset: -140px -10% auto; height: 760px; pointer-events: none;
-    background: radial-gradient(620px 360px at 76% 34%, color-mix(in srgb, var(--accent) 17%, transparent), transparent 70%),
-                radial-gradient(520px 320px at 8% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%); }
-  .lp .hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .55;
-    background-image: linear-gradient(var(--line-soft) 1px, transparent 1px), linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
-    background-size: 46px 46px;
-    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 62% 30%, #000 10%, transparent 75%);
-            mask-image: radial-gradient(ellipse 70% 60% at 62% 30%, #000 10%, transparent 75%); }
-  .lp .hero-grid { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.14fr) minmax(0, 0.86fr); gap: 52px; align-items: center; }
-  .lp .badge { display: inline-flex; align-items: center; gap: 9px; padding: 6px 13px; border-radius: 999px; border: 1px solid var(--line);
-    background: color-mix(in srgb, var(--panel) 85%, transparent); color: var(--text-dim); font-size: 13.5px; font-weight: 500; margin: 0 0 22px; }
-  .lp .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--long); box-shadow: 0 0 0 4px var(--long-dim); flex: none; }
-  .lp h1 { font-family: var(--display); font-weight: 700; font-size: clamp(32px, 4.5vw, 54px); line-height: 1.06; letter-spacing: -0.025em;
-    margin: 0 0 22px; max-width: 17ch; }
-  .lp h1 em { font-style: normal; color: var(--accent-bright); }
-  .lp .hero .lead { font-size: 18px; line-height: 1.6; max-width: 52ch; margin: 0 0 30px; }
-  .lp .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 34px; }
-  .lp .pbtn.xl { padding: 14px 24px; font-size: 16px; border-radius: 12px; }
-  .lp .facts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, max-content); gap: 14px 34px; }
+  .lp .wrap { max-width: 1180px; }
+  .lp h1, .lp h2, .lp h3 { font-family: var(--ds-font-display); }
+  .lp .pos { color: var(--ds-up); } .lp .neg { color: var(--ds-down); }
+
+  /* hero */
+  .lp .hero { position: relative; padding: 72px 0 64px; }
+  .lp .hero-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 56px; align-items: center; }
+  .lp .badge { display: inline-flex; align-items: center; gap: 9px; padding: 6px 14px; border-radius: var(--ds-r-pill); background: var(--ds-brand-soft);
+    color: var(--ds-brand-strong); font: 600 13.5px var(--ds-font-body); margin: 0 0 22px; }
+  .lp .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ds-up); box-shadow: 0 0 0 4px var(--ds-up-soft); flex: none; }
+  .lp h1 { font-weight: 800; font-size: clamp(34px, 4.7vw, 58px); line-height: 1.04; letter-spacing: -0.03em; margin: 0 0 22px; max-width: 16ch; }
+  .lp .hero .lead { font-size: 18.5px; line-height: 1.6; max-width: 50ch; margin: 0 0 30px; color: var(--ds-text-dim); }
+  .lp .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 36px; }
+  .lp .pbtn.xl { padding: 14px 26px; font-size: 16px; border-radius: 14px; }
+  .lp .facts { list-style: none; margin: 0; padding: 22px 0 0; display: grid; grid-template-columns: repeat(3, max-content); gap: 14px 40px; border-top: 1px solid var(--ds-line); }
   .lp .facts li { display: flex; flex-direction: column; min-width: 0; }
-  .lp .facts b { font: 700 25px/1.2 var(--display); letter-spacing: -0.01em; color: var(--text); }
-  .lp .facts span { color: var(--text-faint); font-size: 13.5px; }
+  .lp .facts b { font: 800 26px/1.2 var(--ds-font-display); letter-spacing: -0.02em; color: var(--ds-text); }
+  .lp .facts span { color: var(--ds-text-faint); font-size: 13.5px; }
 
-  /* example signal */
-  .lp .ex { position: relative; margin: 0; padding: 26px 0 34px 24px; }
-  .lp .ex-card { position: relative; max-width: 430px; margin-left: auto; padding: 22px 22px 20px; border-radius: 22px;
-    border: 1px solid color-mix(in srgb, var(--long) 45%, var(--line));
-    background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 90%, var(--accent) 10%), var(--panel) 55%);
-    box-shadow: 0 40px 90px -36px rgba(0, 0, 0, .65), 0 0 0 7px color-mix(in srgb, var(--long) 6%, transparent); }
+  /* example signal: the one memorable object on the page */
+  .lp .ex { position: relative; margin: 0; padding: 28px 28px 22px; border-radius: 30px; background: var(--ds-brand-soft); }
+  .lp .ex-card { position: relative; max-width: 430px; margin-left: auto; padding: 22px 22px 20px; border-radius: 22px; background: var(--ds-surface);
+    border: 1px solid var(--ds-line); box-shadow: var(--ds-shadow-3); }
   .lp .ex-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
-  .lp .ex-tag { font: 600 11.5px var(--body); letter-spacing: .07em; text-transform: uppercase; color: var(--text-faint);
-    border: 1px dashed var(--text-faint); border-radius: 999px; padding: 3px 10px; }
-  .lp .side { font: 700 13px var(--body); letter-spacing: .05em; padding: 5px 13px; border-radius: 999px; }
-  .lp .side.buy { color: var(--long); background: var(--long-dim); }
-  .lp .ex-coin { margin: 0 0 10px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .lp .ex-coin b { font: 700 28px var(--display); }
-  .lp .ex-coin span { color: var(--text-faint); font-size: 13.5px; }
+  .lp .ex-tag { font: 600 12.5px var(--ds-font-body); color: var(--ds-text-faint); border: 1px dashed var(--ds-text-faint); border-radius: var(--ds-r-pill); padding: 3px 11px; }
+  .lp .side { font: 700 13px var(--ds-font-body); padding: 5px 14px; border-radius: var(--ds-r-pill); }
+  .lp .side.buy { color: var(--ds-up); background: var(--ds-up-soft); }
+  .lp .ex-coin { margin: 0 0 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .lp .ex-coin b { font: 800 30px var(--ds-font-display); letter-spacing: -0.02em; }
+  .lp .ex-coin span { color: var(--ds-text-faint); font-size: 13.5px; }
   .lp .ex-plan { margin: 0; display: grid; }
-  .lp .ex-plan div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
-  .lp .ex-plan dt { color: var(--text-dim); font-size: 14.5px; }
-  .lp .ex-plan dt small { display: block; color: var(--text-faint); font-size: 12px; }
-  .lp .ex-plan dd { margin: 0; font: 600 15.5px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .lp .ex-bar { position: relative; height: 6px; border-radius: 999px; margin: 18px 0 7px;
-    background: linear-gradient(90deg, var(--short) 0 30%, var(--line) 30% 37%, var(--long) 37% 100%); }
-  .lp .ex-bar i { position: absolute; top: 50%; left: 47%; width: 15px; height: 15px; border-radius: 50%; background: var(--text);
-    border: 3px solid var(--panel); transform: translate(-50%, -50%); }
-  .lp .ex-scale { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-faint); }
-  .lp .ex-plain { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--panel-raised); color: var(--text-dim); font-size: 14px; line-height: 1.55; }
-  .lp .ex-chip { position: absolute; display: flex; align-items: center; gap: 9px; padding: 9px 13px; border-radius: 13px; background: var(--panel);
-    border: 1px solid var(--line); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .6); font-size: 13.5px; color: var(--text-dim); white-space: nowrap; }
-  .lp .ex-chip b { color: var(--text); font-weight: 700; }
-  .lp .ex-chip.c1 { top: 0; left: 0; }
-  .lp .ex-chip.c2 { bottom: 10px; left: 10px; }
-  .lp .ex figcaption { position: absolute; right: 4px; bottom: 0; font-size: 12px; color: var(--text-faint); }
-  .lp .st { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; border-radius: 999px;
-    font: 700 11.5px var(--body); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
-  .lp .st.buy { color: var(--long); background: var(--long-dim); }
-  .lp .st.sell { color: var(--short); background: var(--short-dim); }
-  .lp .st.close { color: var(--wait); background: var(--wait-dim); }
-  .lp .st.wait { color: var(--text-dim); background: var(--panel-raised); box-shadow: inset 0 0 0 1px var(--line); }
+  .lp .ex-plan div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--ds-line-soft); }
+  .lp .ex-plan dt { color: var(--ds-text-dim); font-size: 14.5px; }
+  .lp .ex-plan dt small { display: block; color: var(--ds-text-faint); font-size: 12.5px; }
+  .lp .ex-plan dd { margin: 0; font: 650 17px var(--ds-font-body); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .lp .ex-bar { position: relative; height: 8px; border-radius: 999px; margin: 20px 0 8px; background: linear-gradient(90deg, var(--ds-down) 0 50%, var(--ds-up) 50% 100%); opacity: .9; }
+  .lp .ex-bar i { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--ds-surface); border: 3px solid var(--ds-text); transform: translate(-50%, -50%); }
+  .lp .ex-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--ds-text-faint); }
+  .lp .ex-plain { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--ds-surface-2); color: var(--ds-text-dim); font-size: 14px; line-height: 1.55; }
+  .lp .ex-chip { position: absolute; display: flex; align-items: center; gap: 9px; padding: 9px 13px; border-radius: 13px; background: var(--ds-surface);
+    border: 1px solid var(--ds-line); box-shadow: var(--ds-shadow-2); font-size: 13.5px; color: var(--ds-text-dim); white-space: nowrap; }
+  .lp .ex-chip b { color: var(--ds-text); font-weight: 700; }
+  .lp .ex-chip.c1 { top: -4px; left: -6px; }
+  .lp .ex-chip.c2 { bottom: 34px; left: 0; }
+  .lp .ex figcaption { margin-top: 12px; text-align: right; font-size: 12.5px; color: var(--ds-text-faint); }
+  .lp .st { display: inline-flex; align-items: center; justify-content: center; padding: 4px 11px; border-radius: var(--ds-r-pill); font: 650 12.5px var(--ds-font-body); white-space: nowrap; }
+  .lp .st.buy { color: var(--ds-up); background: var(--ds-up-soft); }
+  .lp .st.sell { color: var(--ds-down); background: var(--ds-down-soft); }
+  .lp .st.close { color: var(--ds-warn); background: var(--ds-warn-soft); }
+  .lp .st.wait { color: var(--ds-text-dim); background: var(--ds-surface-2); box-shadow: inset 0 0 0 1px var(--ds-line); }
 
-  /* live strip */
-  .lp .live { position: relative; z-index: 1; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
-    background: color-mix(in srgb, var(--panel) 75%, transparent); }
-  .lp .live-in { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-top: 15px; padding-bottom: 15px; font-size: 14.5px; color: var(--text-dim); }
-  .lp .live-badge { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--long); }
+  /* signals right now */
+  .lp .live { background: var(--ds-surface); border-top: 1px solid var(--ds-line); border-bottom: 1px solid var(--ds-line); }
+  .lp .live-in { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-top: 16px; padding-bottom: 16px; font-size: 14.5px; color: var(--ds-text-dim); }
+  .lp .live-badge { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ds-up); }
   .lp .live-badge .dot { animation: lp-pulse 2.2s ease-out infinite; }
-  @keyframes lp-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--long) 55%, transparent); } 80%, 100% { box-shadow: 0 0 0 9px transparent; } }
-  .lp .live-n b { color: var(--text); }
-  .lp .live-chip { display: inline-flex; gap: 6px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
-    font-size: 13.5px; white-space: nowrap; }
-  .lp .live-chip b { color: var(--text); }
-  .lp .live-more { margin-left: auto; color: var(--accent-bright); font-weight: 600; text-decoration: none; }
+  @keyframes lp-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ds-up) 50%, transparent); } 80%, 100% { box-shadow: 0 0 0 9px transparent; } }
+  .lp .live-n b { color: var(--ds-text); }
+  .lp .live-chip { display: inline-flex; gap: 6px; padding: 5px 12px; border: 1px solid var(--ds-line); border-radius: var(--ds-r-pill); background: var(--ds-surface-2); font-size: 13.5px; white-space: nowrap; }
+  .lp .live-chip b { color: var(--ds-text); }
+  .lp .live-more { margin-left: auto; color: var(--ds-brand-strong); font-weight: 600; text-decoration: none; }
   .lp .live-more:hover { text-decoration: underline; }
 
   /* sections */
-  .lp .sec { padding: 92px 0; }
-  .lp .sec + .sec { border-top: 1px solid var(--line-soft); }
-  .lp .sec-head { max-width: 660px; margin: 0 0 42px; }
-  .lp h2 { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 3.7vw, 42px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 14px; }
-  .lp .sec-head > p:not(.eyebrow), .lp .split p.sub { color: var(--text-dim); font-size: 17px; margin: 0; }
+  .lp .sec { padding: 88px 0; }
+  .lp .sec-head { max-width: 680px; margin: 0 0 40px; }
+  .lp h2 { font-weight: 800; font-size: clamp(28px, 3.6vw, 42px); line-height: 1.1; letter-spacing: -0.025em; margin: 0 0 14px; }
+  .lp .sec-head > p, .lp .split p.sub { color: var(--ds-text-dim); font-size: 17.5px; margin: 0; }
 
-  .lp .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
-  .lp .steps li { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 26px 24px 24px; }
-  .lp .steps .n { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 13px;
-    background: var(--long-dim); color: var(--accent-bright); font: 700 19px var(--display); margin-bottom: 18px; }
-  .lp .steps h3 { margin: 0 0 8px; font-size: 19px; font-weight: 600; }
-  .lp .steps p { margin: 0; color: var(--text-dim); font-size: 15px; }
-  .lp .steps li:not(:last-child)::after { content: ""; position: absolute; top: 44px; right: -16px; width: 10px; height: 10px; z-index: 1;
-    border-top: 2px solid var(--text-faint); border-right: 2px solid var(--text-faint); transform: rotate(45deg); }
+  /* how it works: a real sequence, drawn as one connected line */
+  .lp .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; position: relative; }
+  .lp .steps li { position: relative; padding: 0 28px 0 0; }
+  .lp .steps .n { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; position: relative; z-index: 1;
+    background: var(--ds-brand); color: var(--ds-on-brand); font: 800 18px var(--ds-font-display); margin-bottom: 20px; box-shadow: 0 0 0 6px var(--ds-bg); }
+  .lp .steps li:not(:last-child)::before { content: ""; position: absolute; top: 21px; left: 44px; right: 0; height: 2px; background: var(--ds-line); }
+  .lp .steps h3 { margin: 0 0 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .lp .steps p { margin: 0; color: var(--ds-text-dim); font-size: 15.5px; }
 
   .lp .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 60px; align-items: center; }
   .lp .answers { list-style: none; margin: 26px 0 30px; padding: 0; display: grid; gap: 16px; }
-  .lp .answers li { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 14px; align-items: start; color: var(--text-dim); font-size: 15.5px; }
+  .lp .answers li { display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 14px; align-items: start; color: var(--ds-text-dim); font-size: 15.5px; }
   .lp .answers .st { justify-self: start; margin-top: 2px; }
-  .lp .coins-demo { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 20px;
-    box-shadow: 0 40px 90px -46px rgba(0, 0, 0, .6); }
+  .lp .coins-demo { background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: 22px; padding: 20px; box-shadow: var(--ds-shadow-2); }
   .lp .cd-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 0 14px; font-weight: 600; }
   .lp .cd-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .lp .cd { background: var(--panel-raised); border: 1px solid var(--line-soft); border-radius: 13px; padding: 12px; display: flex; flex-direction: column;
-    align-items: flex-start; gap: 8px; min-width: 0; }
-  .lp .cd b { font: 700 16px var(--display); }
-  .lp .cd.hot { border-color: color-mix(in srgb, var(--long) 50%, transparent); }
-  .lp .cd.hot.s { border-color: color-mix(in srgb, var(--short) 50%, transparent); }
+  .lp .cd { background: var(--ds-surface-2); border: 1px solid var(--ds-line-soft); border-radius: 13px; padding: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+  .lp .cd b { font: 700 16px var(--ds-font-display); }
+  .lp .cd.hot { border-color: color-mix(in srgb, var(--ds-up) 45%, transparent); }
+  .lp .cd.hot.s { border-color: color-mix(in srgb, var(--ds-down) 45%, transparent); }
 
+  /* terminal section */
+  .lp .term { background: var(--ds-surface); border-top: 1px solid var(--ds-line); border-bottom: 1px solid var(--ds-line); }
+  .lp .term-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 60px; align-items: center; }
+  .lp .term .sub { color: var(--ds-text-dim); font-size: 17.5px; margin: 0 0 26px; }
+  .lp .spec { margin: 0; display: grid; border: 1px solid var(--ds-line); border-radius: 20px; overflow: hidden; background: var(--ds-bg); }
+  .lp .spec div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 16px 22px; align-items: baseline; }
+  .lp .spec div + div { border-top: 1px solid var(--ds-line); }
+  .lp .spec dt { color: var(--ds-text-faint); font-size: 14px; font-weight: 500; }
+  .lp .spec dd { margin: 0; font-size: 15.5px; color: var(--ds-text); line-height: 1.5; }
+  .lp .spec dd b { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .lp .tf { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .lp .tf span { padding: 2px 10px; border-radius: 8px; background: var(--ds-surface-2); border: 1px solid var(--ds-line); font: 600 13px var(--ds-font-body); font-variant-numeric: tabular-nums; }
+  .lp .tf span.core { background: var(--ds-brand-soft); border-color: transparent; color: var(--ds-brand-strong); }
+
+  /* results */
   .lp .res-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
-  .lp .res-card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px; min-width: 0; }
-  .lp .res-card.total { border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-    background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 88%, var(--accent) 12%), var(--panel) 70%); }
-  .lp .res-card h3 { margin: 0 0 16px; font-size: 17px; font-weight: 600; }
-  .lp .res-card h3 span { display: block; color: var(--text-faint); font-weight: 400; font-size: 13.5px; margin-top: 2px; }
+  .lp .res-card { background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: 20px; padding: 24px; min-width: 0; box-shadow: var(--ds-shadow-1); }
+  .lp .res-card.total { border-color: color-mix(in srgb, var(--ds-brand) 45%, var(--ds-line)); background: var(--ds-brand-soft); }
+  .lp .res-card h3 { margin: 0 0 16px; font-size: 17.5px; font-weight: 700; }
+  .lp .res-card h3 span { display: block; color: var(--ds-text-faint); font: 400 13.5px var(--ds-font-body); margin-top: 2px; }
   .lp .res-card dl { margin: 0; display: grid; gap: 14px; }
-  .lp .res-card dt { color: var(--text-faint); font-size: 13.5px; }
-  .lp .res-card dd { margin: 2px 0 0; font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .lp .res-card dd small { font: 400 13.5px var(--body); color: var(--text-dim); margin-left: 6px; letter-spacing: 0; }
-  .lp .res-card .res-extra { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--text-dim);
-    font-size: 13.5px; line-height: 1.5; }
-  .lp .res-card .res-extra b { color: var(--text); }
-  .lp .truth { margin-top: 20px; background: var(--wait-dim); border: 1px solid color-mix(in srgb, var(--wait) 40%, transparent); border-radius: 20px;
-    padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 30px; align-items: center; }
-  .lp .truth h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
-  .lp .truth p { margin: 0; color: var(--text); font-size: 15px; max-width: 80ch; }
+  .lp .res-card dt { color: var(--ds-text-faint); font-size: 13.5px; }
+  .lp .res-card dd { margin: 2px 0 0; font: 800 30px/1.15 var(--ds-font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .lp .res-card dd small { font: 400 13.5px var(--ds-font-body); color: var(--ds-text-dim); margin-left: 6px; letter-spacing: 0; }
+  .lp .res-card .res-extra { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--ds-line); color: var(--ds-text-dim); font-size: 13.5px; line-height: 1.5; }
+  .lp .res-card .res-extra b { color: var(--ds-text); }
+  .lp .truth { margin-top: 20px; background: var(--ds-warn-soft); border: 1px solid color-mix(in srgb, var(--ds-warn) 35%, transparent); border-radius: 20px;
+    padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 30px; align-items: center; box-shadow: none; }
+  .lp .truth h3 { margin: 0 0 6px; font-size: 17px; font-weight: 700; }
+  .lp .truth p { margin: 0; color: var(--ds-text); font-size: 15px; max-width: 80ch; }
   .lp .truth .links { display: flex; gap: 16px; flex-wrap: wrap; white-space: nowrap; }
-  .lp .truth a { color: var(--accent-bright); font-weight: 600; }
+  .lp .truth a { color: var(--ds-brand-strong); font-weight: 600; }
 
-  .lp .feat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
-  .lp .feat { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px;
-    text-decoration: none; color: inherit; transition: border-color .15s, transform .15s; min-width: 0; }
-  .lp .feat:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); transform: translateY(-2px); }
-  .lp .feat .ico { width: 44px; height: 44px; border-radius: 13px; background: var(--long-dim); color: var(--accent-bright); display: flex;
-    align-items: center; justify-content: center; margin-bottom: 18px; }
+  /* what you get: one bordered grid, not a pile of cards */
+  .lp .feat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--ds-line); border-radius: 22px; overflow: hidden; background: var(--ds-surface); }
+  .lp .feat { display: flex; flex-direction: column; padding: 28px 26px; text-decoration: none; color: inherit; min-width: 0; border-radius: 0; box-shadow: none; border: 0;
+    border-right: 1px solid var(--ds-line); border-bottom: 1px solid var(--ds-line); background: var(--ds-surface); transition: background-color var(--ds-t-base) var(--ds-ease); }
+  .lp .feat:nth-child(3n) { border-right: 0; } .lp .feat:nth-last-child(-n+3) { border-bottom: 0; }
+  .lp .feat:hover { background: var(--ds-surface-2); box-shadow: none; }
+  .lp .feat .ico { width: 44px; height: 44px; border-radius: 13px; background: var(--ds-brand-soft); color: var(--ds-brand-strong); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
   .lp .feat .ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-  .lp .feat h3 { margin: 0 0 6px; font-size: 17.5px; font-weight: 600; }
-  .lp .feat p { margin: 0 0 16px; color: var(--text-dim); font-size: 15px; flex: 1; }
-  .lp .feat .go { color: var(--accent-bright); font-size: 14px; font-weight: 600; }
+  .lp .feat h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+  .lp .feat p { margin: 0 0 16px; color: var(--ds-text-dim); font-size: 15px; flex: 1; }
+  .lp .feat .go { color: var(--ds-brand-strong); font-size: 14px; font-weight: 600; }
 
   .lp .faq-wrap { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 56px; align-items: start; }
   .lp .faq-wrap .sec-head { margin: 0; }
   .lp .faq-more { margin: 18px 0 0; }
-  .lp .faq-more a { color: var(--accent-bright); font-weight: 600; }
+  .lp .faq-more a { color: var(--ds-brand-strong); font-weight: 600; }
 
-  .lp .cta { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 30px; flex-wrap: wrap; padding: 46px 46px;
-    border-radius: 26px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
-    background: radial-gradient(640px 320px at 92% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%), var(--panel); }
-  .lp .cta h2 { margin: 0 0 10px; }
-  .lp .cta p.eyebrow { color: var(--accent-bright); margin: 0 0 12px; font-size: 13px; }
-  .lp .cta p { color: var(--text-dim); margin: 0 0 18px; max-width: 58ch; font-size: 16px; }
-  .lp .cta ul.checks { grid-template-columns: repeat(3, auto); gap: 10px 26px; font-size: 14.5px; color: var(--text-dim); }
+  .lp .cta { display: flex; align-items: center; justify-content: space-between; gap: 30px; flex-wrap: wrap; padding: 48px; border-radius: 28px;
+    background: var(--ds-brand); color: var(--ds-on-brand); }
+  .lp .cta h2 { margin: 0 0 10px; color: inherit; }
+  .lp .cta p { color: color-mix(in srgb, var(--ds-on-brand) 86%, transparent); margin: 0 0 18px; max-width: 58ch; font-size: 16.5px; }
+  .lp .cta ul.checks { grid-template-columns: repeat(3, auto); gap: 10px 26px; font-size: 14.5px; color: inherit; }
+  .lp .cta .pbtn.primary { background: var(--ds-surface); color: var(--ds-brand-strong); border-color: var(--ds-surface); box-shadow: var(--ds-shadow-2); }
+  .lp .cta .pbtn.primary:hover { background: var(--ds-surface-2); color: var(--ds-brand-strong); border-color: var(--ds-surface-2); }
+  html[data-theme="dark"] .lp .cta { background: color-mix(in srgb, var(--ds-brand) 22%, var(--ds-surface)); color: var(--ds-text); }
+  html[data-theme="dark"] .lp .cta p { color: var(--ds-text-dim); }
+  html[data-theme="dark"] .lp .cta .pbtn.primary { background: var(--ds-brand); color: var(--ds-on-brand); border-color: var(--ds-brand); }
   .lp .pfoot { margin-top: 0; }
 
-  @media (prefers-reduced-motion: reduce) { .lp .live-badge .dot { animation: none; } .lp .feat, .lp .feat:hover { transition: none; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .lp .live-badge .dot { animation: none; } }
   @media (max-width: 980px) {
-    .lp .hero-grid, .lp .split, .lp .faq-wrap { grid-template-columns: minmax(0, 1fr); gap: 44px; }
-    .lp .ex { max-width: 520px; }
-    .lp .res-grid, .lp .feat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lp .hero-grid, .lp .split, .lp .faq-wrap, .lp .term-grid { grid-template-columns: minmax(0, 1fr); gap: 44px; }
+    .lp .ex { max-width: 540px; }
+    .lp .res-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .lp .res-card.total { grid-column: 1 / -1; }
+    .lp .feat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lp .feat:nth-child(3n) { border-right: 1px solid var(--ds-line); } .lp .feat:nth-child(2n) { border-right: 0; }
+    .lp .feat:nth-last-child(-n+3) { border-bottom: 1px solid var(--ds-line); } .lp .feat:nth-last-child(-n+2) { border-bottom: 0; }
   }
   @media (max-width: 720px) {
-    .lp .hero { padding: 40px 0 40px; }
+    .lp .hero { padding: 36px 0 40px; }
     .lp .hero .lead { font-size: 16.5px; }
-    .lp .sec { padding: 60px 0; }
-    .lp .steps, .lp .res-grid, .lp .feat-grid { grid-template-columns: minmax(0, 1fr); }
-    .lp .steps li::after { display: none; }
-    .lp .ex { padding: 0; }
+    .lp .sec { padding: 56px 0; }
+    .lp .steps { grid-template-columns: minmax(0, 1fr); gap: 26px; }
+    .lp .steps li { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 16px; padding: 0; }
+    .lp .steps .n { grid-row: span 2; margin: 0; }
+    .lp .steps li:not(:last-child)::before { top: 44px; bottom: -26px; left: 21px; right: auto; width: 2px; height: auto; }
+    .lp .steps h3 { margin-top: 8px; font-size: 18px; }
+    .lp .res-grid, .lp .feat-grid { grid-template-columns: minmax(0, 1fr); }
+    .lp .feat, .lp .feat:nth-child(n) { border-right: 0; border-bottom: 1px solid var(--ds-line); } .lp .feat:last-child { border-bottom: 0; }
+    .lp .ex { padding: 16px 14px 14px; border-radius: 24px; }
     .lp .ex-card { margin: 0; }
     .lp .ex-chip { position: static; display: inline-flex; margin: 12px 8px 0 0; box-shadow: none; }
-    .lp .ex figcaption { position: static; margin-top: 10px; }
     .lp .ctas .pbtn { flex: 1 1 auto; justify-content: center; }
     .lp .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; }
     .lp .facts b { font-size: 20px; }
     .lp .facts span { font-size: 12.5px; line-height: 1.4; }
-    .lp .steps li { display: grid; grid-template-columns: 42px minmax(0, 1fr); column-gap: 14px; padding: 18px; }
-    .lp .steps .n { grid-row: span 2; margin: 0; }
-    .lp .steps h3 { margin-top: 8px; font-size: 17.5px; }
     .lp .cd:nth-child(9) { display: none; }
     .lp .res-card { padding: 18px; }
     .lp .res-card dl { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -200,10 +205,13 @@
     .lp .cd-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .lp .truth { grid-template-columns: minmax(0, 1fr); }
     .lp .truth .links { white-space: normal; }
-    .lp .cta { padding: 28px 22px; }
+    .lp .spec div { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 14px 18px; }
+    .lp .cta { padding: 30px 22px; }
     .lp .cta ul.checks { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
 </head>
 <body class="lp">
 {% set active = 'home' %}
@@ -230,7 +238,7 @@
     <div class="wrap hero-grid">
       <div class="hero-copy">
         <p class="badge"><span class="dot"></span>Free during the beta &middot; no card needed</p>
-        <h1>Know what to buy, where to stop and <em>when to take profit.</em></h1>
+        <h1>Know what to buy, where to stop and when to take profit.</h1>
         <p class="lead">Our tested models check {{ CHECK }}. When a coin has a good trade, you get a simple
           plan in plain words. When none does, we tell you to wait.</p>
         <div class="ctas">
@@ -238,7 +246,7 @@
           <a class="pbtn xl" href="#how">How it works</a>
         </div>
         <ul class="facts">
-          {% if WIN %}<li><b>{{ WIN }}%</b><span>reached target 1 in testing</span></li>{% endif %}
+          {% if WIN %}<li><b>{{ WIN }}%</b><span>reached the target in testing</span></li>{% endif %}
           {% if PERDAY %}<li><b>{{ PERDAY }} a day</b><span>signals on average</span></li>{% endif %}
           <li><b>Fees</b><span>included in every result</span></li>
         </ul>
@@ -251,13 +259,11 @@
           <dl class="ex-plan">
             <div><dt>Buy near</dt><dd>67,250</dd></div>
             <div><dt>Stop-loss<small>exit here if it goes wrong</small></dt><dd class="neg">65,790</dd></div>
-            <div><dt>Target 1<small>take a third off at each target</small></dt><dd class="pos">67,980</dd></div>
-            <div><dt>Target 2</dt><dd class="pos">68,710</dd></div>
-            <div><dt>Target 3</dt><dd class="pos">70,170</dd></div>
+            <div><dt>Target<small>as far above your entry as the stop is below it</small></dt><dd class="pos">68,710</dd></div>
           </dl>
           <div class="ex-bar" aria-hidden="true"><i></i></div>
-          <div class="ex-scale" aria-hidden="true"><span>Stop-loss</span><span>Now</span><span>Target 3</span></div>
-          <p class="ex-plain">Buy BTC near 67,250. If the price falls to 65,790, close the trade. Take a third off at each target.
+          <div class="ex-scale" aria-hidden="true"><span>Stop-loss</span><span>Entry</span><span>Target</span></div>
+          <p class="ex-plain">Buy BTC near 67,250. If the price falls to 65,790, close the trade. If it rises to 68,710, take your profit.
             Risk only 1% of your account.</p>
         </div>
         <div class="ex-chip c1" aria-hidden="true"><b>ETH</b><span class="st close">Getting close</span></div>
@@ -275,17 +281,16 @@
         {% for r in lv.recent %}
           <span class="live-chip"><b>{{ r.coin }}</b><span class="{{ 'pos' if r.side == 'LONG' else 'neg' }}">{{ 'Buy' if r.side == 'LONG' else 'Sell' }}</span>{% if r.timeframe %}&middot; {{ r.timeframe }}{% endif %} &middot; {{ r.ago }}</span>
         {% endfor %}
-        <a class="live-more" href="/login">Log in to see entry, stop-loss and targets &rarr;</a>
+        <a class="live-more" href="/login">Log in to see entry, stop-loss and target &rarr;</a>
       {% else %}
         <span class="live-n">Our models check {{ CHECK }}. Log in to see the signals as they start.</span>
       {% endif %}
     </div>
   </section>
 
-  <section class="sec" id="how">
+  <section class="sec" id="how" data-reveal>
     <div class="wrap">
       <div class="sec-head">
-        <p class="eyebrow">How it works</p>
         <h2>Three steps. No chart reading needed.</h2>
         <p>You don't have to learn indicators first. The models read the market; you follow one clear plan with a small, fixed risk.</p>
       </div>
@@ -293,21 +298,20 @@
         <li><span class="n">1</span><h3>We check every coin</h3>
           <p>Our tested models check {{ CHECK }}. They read each coin's trend, Bitcoin and the whole market.</p></li>
         <li><span class="n">2</span><h3>You get one clear plan</h3>
-          <p>Buy or sell near a price, a stop-loss where you get out if it goes wrong, and three targets where you take profit.</p></li>
+          <p>Buy or sell near a price, a stop-loss where you get out if it goes wrong, and a target where you take profit.</p></li>
         <li><span class="n">3</span><h3>You keep every loss small</h3>
           <p>Risk the same small amount on every signal, for example 1% of your account. Practise with virtual money first.</p></li>
       </ol>
     </div>
   </section>
 
-  <section class="sec" id="coins">
+  <section class="sec" id="coins" data-reveal>
     <div class="wrap split">
       <div>
-        <p class="eyebrow">Coins right now</p>
         <h2>Every coin, one clear answer</h2>
         <p class="sub">Open one page and see what to do on all {{ COINS }} coins. No guessing and no hype.</p>
         <ul class="answers">
-          <li><span class="st buy">Signal</span><span>A tested model found a good trade. You get the full plan: entry, stop-loss and targets.</span></li>
+          <li><span class="st buy">Signal</span><span>A tested model found a good trade. You get the full plan: entry, stop-loss and target.</span></li>
           <li><span class="st close">Getting close</span><span>A signal may start at the next candle close. Don't trade yet.</span></li>
           <li><span class="st wait">Wait</span><span>No good trade right now. Waiting is also a decision: it keeps your money safe.</span></li>
         </ul>
@@ -330,10 +334,27 @@
     </div>
   </section>
 
-  <section class="sec" id="results">
+  <section class="sec term" id="terminal" data-reveal>
+    <div class="wrap term-grid">
+      <div>
+        <h2>Ready for more? Open the Pro terminal.</h2>
+        <p class="sub">When you want to look closer, the same signals come with a full trading workstation: charts, indicators, order book and risk tools. Everything is free during the beta.</p>
+        <a class="pbtn primary lg" href="/login">Open the Pro terminal</a>
+      </div>
+      <dl class="spec">
+        <div><dt>Chart timeframes</dt><dd><span class="tf"><span>1m</span><span>5m</span><span class="core">15m</span><span>30m</span><span class="core">1h</span><span class="core">4h</span><span class="core">1d</span><span>1w</span></span></dd></div>
+        <div><dt>Chart tools</dt><dd><b>25</b> indicators and more than <b>30</b> drawing tools, with undo and redo</dd></div>
+        <div><dt>Market data</dt><dd>Order book and liquidity scanner, funding rate and open interest, buying and selling pressure</dd></div>
+        <div><dt>Signal readout</dt><dd><b>27</b> analysis channels behind each Buy, Sell or Wait, shown with stop-loss and target</dd></div>
+        <div><dt>Risk tools</dt><dd>Position size, risk/reward and liquidation calculators, plus a <a href="/pro-insights">Pro insights</a> page that checks how much to trust each signal</dd></div>
+        <div><dt>Your trading</dt><dd>Demo trading, trade journal, profit and loss dashboard, price alerts, watchlist and an optional auto-trade bot</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="sec" id="results" data-reveal>
     <div class="wrap">
       <div class="sec-head">
-        <p class="eyebrow">Honest results</p>
         <h2>Tested on a year of data the models never saw</h2>
         <p>Each model was built on older data, then tested once on the year after it, with trading fees included. These are the
           numbers from that test. They are not a promise of future results.</p>
@@ -345,12 +366,12 @@
           <h3>{{ '1-hour' if s.timeframe == '1h' else '4-hour' }} model<span>{{ s.period }}</span></h3>
           <dl>
             <div><dt>Signals in the test</dt><dd>{{ "{:,}".format(s.signals) }}<small>about {{ s.per_day | round(1) }} a day</small></dd></div>
-            <div><dt>Reached the first target</dt><dd class="pos">{{ s.win_rate }}%</dd></div>
+            <div><dt>Reached the target</dt><dd class="pos">{{ s.win_rate }}%</dd></div>
             <div><dt>Average per signal</dt><dd>{{ "%+.2f" | format(s.avg_r) }}R<small>after fees</small></dd></div>
           </dl>
           {% if s.extra_coins %}
           <p class="res-extra">Also tested on <b>{{ s.extra_coins.coins }} more coins</b> it was never trained on, in the same year:
-            {{ s.extra_coins.win_rate }}% reached the first target, {{ "%+.2f" | format(s.extra_coins.avg_r) }}R per signal. They now get
+            {{ s.extra_coins.win_rate }}% reached the target, {{ "%+.2f" | format(s.extra_coins.avg_r) }}R per signal. They now get
             4-hour signals too.</p>
           {% endif %}
         </article>
@@ -360,7 +381,7 @@
           <h3>Both models together<span>the same year, all coins</span></h3>
           <dl>
             <div><dt>Signals in the test</dt><dd>{{ "{:,}".format(T.signals) }}<small>about {{ T.per_day }} a day</small></dd></div>
-            <div><dt>Reached the first target</dt><dd class="pos">{{ T.win_rate }}%</dd></div>
+            <div><dt>Reached the target</dt><dd class="pos">{{ T.win_rate }}%</dd></div>
             <div><dt>Average per signal</dt><dd>{{ "%+.2f" | format(T.avg_r) }}R<small>after fees</small></dd></div>
           </dl>
         </article>
@@ -372,7 +393,7 @@
           <h3>4-hour model<span>{{ S.get('period') or 'one year of unseen data' }}</span></h3>
           <dl>
             {% if NSIG %}<div><dt>Signals in the test</dt><dd>{{ "{:,}".format(NSIG) }}</dd></div>{% endif %}
-            <div><dt>Reached the first target</dt><dd class="pos">{{ WIN }}%</dd></div>
+            <div><dt>Reached the target</dt><dd class="pos">{{ WIN }}%</dd></div>
             {% if AVGR is not none %}<div><dt>Average per signal</dt><dd>{{ "%+.2f" | format(AVGR) }}R<small>after fees</small></dd></div>{% endif %}
           </dl>
         </article>
@@ -381,8 +402,8 @@
       <div class="truth">
         <div>
           <h3>Read this before you trade</h3>
-          <p>{% if WIN %}About {{ (WIN / 10) | round | int }} in 10 signals reached the first target, but not every signal wins. {% else %}Not every signal wins. {% endif %}A win
-            (+1R) and a full loss (&minus;1R) are the same size, so about 4 in 10 signals lose and some months lose money. That is why every signal has a
+          <p>{% if WIN %}About {{ (WIN / 10) | round | int }} in 10 signals reached the target, but not every signal wins. {% else %}Not every signal wins. {% endif %}A win
+            (+1R) and a full loss (&minus;1R) are the same size, so some signals lose and some months lose money. That is why every signal has a
             stop-loss, and why you should risk only a small, fixed amount on each one. Signals often come in groups because coins move
             together, so keep only a few trades open at once. R is the amount you risk on one trade.</p>
         </div>
@@ -394,10 +415,9 @@
     </div>
   </section>
 
-  <section class="sec" id="features">
+  <section class="sec" id="features" data-reveal>
     <div class="wrap">
       <div class="sec-head">
-        <p class="eyebrow">What you get</p>
         <h2>Everything a beginner needs, in one place</h2>
         <p>Free during the beta. Start with virtual money, then trade the signals your way.</p>
       </div>
@@ -407,7 +427,7 @@
           <h3>Coins right now</h3><p>The answer for every coin on one page: signal, getting close or wait.</p><span class="go">See every coin</span></a>
         <a class="feat" href="/login">
           <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg></span>
-          <h3>Signals in plain words</h3><p>Buy near, stop-loss and three targets, plus one sentence that tells you exactly what to do.</p><span class="go">Get free signals</span></a>
+          <h3>Signals in plain words</h3><p>Buy near, stop-loss and a target, plus one sentence that tells you exactly what to do.</p><span class="go">Get free signals</span></a>
         <a class="feat" href="/login">
           <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg></span>
           <h3>Instant alerts</h3><p>Hear about each new signal in the app, by email or on Telegram, so you don't have to watch charts all day.</p><span class="go">Turn on alerts</span></a>
@@ -424,10 +444,9 @@
     </div>
   </section>
 
-  <section class="sec" id="faq">
+  <section class="sec" id="faq" data-reveal>
     <div class="wrap faq-wrap">
       <div class="sec-head">
-        <p class="eyebrow">Questions</p>
         <h2>Before you start</h2>
         <p>Short answers to what beginners ask most.</p>
       </div>
@@ -437,8 +456,8 @@
             Demo trading with virtual money, and tap any "?" in the app to see what a word means.</p></div></details>
         <details class="qa"><summary>How accurate are the signals?</summary>
           <div class="a"><p>{% if WIN %}In a year of testing on data the models never saw, {{ WIN }}% of {% if NSIG %}{{ "{:,}".format(NSIG) }} {% endif %}signals reached the
-            first target{% if AVGR is not none %}, and the average signal made {{ "%+.2f" | format(AVGR) }}R after fees{% endif %}. {% endif %}Not every signal wins, and a
-            full loss is bigger than a first-target win, so keep the risk on each signal small.</p></div></details>
+            target{% if AVGR is not none %}, and the average signal made {{ "%+.2f" | format(AVGR) }}R after fees{% endif %}. {% endif %}Not every signal wins, so keep the
+            risk on each signal small.</p></div></details>
         <details class="qa"><summary>Is there a signal on every coin all the time?</summary>
           <div class="a"><p>No, and that is on purpose. A coin gets a signal only when a model sees a good trade; the others say "Wait".
             {% if PERDAY %}Across all coins there are about {{ PERDAY }} signals a day on average.{% endif %} Forcing a trade on every coin would
@@ -459,7 +478,6 @@
     <div class="wrap">
       <div class="cta">
         <div>
-          <p class="eyebrow">Pricing</p>
           <h2>Free while we're in beta.</h2>
           <p>Signals, alerts, Coins right now, Demo trading, the strategy library and the Auto-Trade bot. Create an account in a minute.</p>
           <ul class="checks"><li>All features free in beta</li><li>No card needed</li><li>Practise with virtual money first</li></ul>
