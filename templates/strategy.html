@@ -1,100 +1,79 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ s.name }}: rules and backtest | Signals FM</title>
-<meta name="description" content="{{ s.summary }} Rules, a daily updated backtest on real crypto and forex candles after costs, and its latest trades.">
-{% set seo_title = s.name ~ " strategy: rules and backtest" %}{% set seo_path = "/strategies/" ~ s.slug %}{% set seo_description = s.summary %}
+<title>Trading strategies tested on real data | Signals FM</title>
+<meta name="description" content="Thirty well-known trading strategies (EMA cross, RSI, MACD, Bollinger Bands, Supertrend, breakouts and more) backtested on real crypto and forex candles after costs, updated every day, plus strategies shared by traders.">
+{% set seo_title = "Trading strategies tested on real data" %}{% set seo_path = "/strategies" %}{% set seo_description = "Well-known trading strategies backtested on real candles after costs, updated every day, plus strategies shared by traders." %}
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='strategies.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
 </head>
 <body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
 {% set active = 'strategies' %}
 {% if session.get('user_id') %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
 
 <main class="wrap">
-  <p class="crumbs"><a href="/strategies">Strategies</a> › <a href="/strategies?category={{ s.category | urlencode }}">{{ s.category }}</a></p>
-  <section class="sd-head">
-    <div class="badges">
-      <span class="bdg site">By Signals FM</span>
-      <span class="bdg ok">Backtested</span>
-      <span class="bdg" id="upd">Updated …</span>
-    </div>
-    <h1>{{ s.name }}</h1>
-    <p class="sd-lead">{{ s.summary }}</p>
-    <div class="sd-actions">
-      <button type="button" class="pbtn" id="like" data-target="lib:{{ s.slug }}" data-logged-in="{{ '1' if logged_in else '0' }}" aria-pressed="false">
-        <svg class="hrt" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-9.3-8.6C.9 8 3 4.5 6.4 4.5c2 0 3.4 1.1 4.1 2.3.7-1.2 2.1-2.3 4.1-2.3 3.4 0 5.5 3.5 3.7 6.9C19 15.6 12 20 12 20z"/></svg>
-        Like <b>0</b></button>
-      <a class="pbtn" href="/strategies">All strategies</a>
-    </div>
+  <section class="st-head">
+    <p class="eyebrow">Strategy library</p>
+    <h1>Trading strategies, tested on real data</h1>
+    <p>Well-known strategies backtested by Signals FM on real candles, after costs, and strategies shared by traders.
+      The backtest results update automatically every day.</p>
+    <p class="meta-line" id="meta-line">Loading…</p>
   </section>
 
-  <section class="block sd-grid">
-    <div>
-      <h2 class="sec">How it works</h2>
-      <p class="sec-sub">{{ s.description }}</p>
-      <ul class="rules-list">{% for r in s.rules %}<li>{{ r }}</li>{% endfor %}</ul>
+  <div class="st-bar">
+    <div class="pseg" role="group" aria-label="Which strategies">
+      <button type="button" data-tab="all" aria-pressed="true">All</button>
+      <button type="button" data-tab="library" aria-pressed="false">By Signals FM</button>
+      <button type="button" data-tab="community" aria-pressed="false">Community</button>
     </div>
-    <div>
-      <h2 class="sec">Test settings</h2>
-      <dl class="kv">
-        <dt>Entry</dt><dd>Close of the candle where the rule fires</dd>
-        <dt>Stop-loss</dt><dd>{{ s.stop_atr }} × ATR(14) from the entry (this distance is 1R)</dd>
-        <dt>Time limit</dt><dd>{{ s.max_bars }} candles</dd>
-        <dt>Opposite signal</dt><dd>{{ "Closes the trade and turns around" if s.reverse else "Ignored while a trade is open" }}</dd>
-        <dt>Costs</dt><dd>Crypto 0.12% of the position per trade, forex the typical spread</dd>
-        <dt>Markets</dt><dd id="cover">Crypto coins and forex pairs, 1h and 4h candles</dd>
-      </dl>
-    </div>
-  </section>
+    <span class="grow"></span>
+    <a class="pbtn primary" href="{% if logged_in %}/strategies/new{% else %}/login?next=/strategies/new{% endif %}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Share a strategy</a>
+  </div>
 
-  <section class="block">
-    <h2 class="sec">Backtest results</h2>
-    <p class="sec-sub" id="res-sub">Every trade of the last year on every coin, after costs. Choose a market and timeframe.</p>
-    <div class="pseg res-tabs" role="group" aria-label="Market and timeframe" id="res-tabs">
-      <button type="button" data-k="crypto_1h" aria-pressed="false">Crypto 1h</button>
-      <button type="button" data-k="crypto_4h" aria-pressed="true">Crypto 4h</button>
-      <button type="button" data-k="forex_1h" aria-pressed="false">Forex 1h</button>
-      <button type="button" data-k="forex_4h" aria-pressed="false">Forex 4h</button>
-    </div>
-    <div id="res-body">
-      <dl class="figs6" id="figs"></dl>
-      <h3 class="sec" style="font-size:18px;margin:6px 0 8px">Result of every trade added up</h3>
-      <div class="chart-box"><svg id="curve" role="img" aria-label="Cumulative result in R"></svg>
-        <div class="chart-cap"><span id="c-start"></span><span id="c-end"></span></div></div>
-      <h3 class="sec" style="font-size:18px;margin:26px 0 8px">By symbol</h3>
-      <div class="ptable-wrap" id="by-sym"></div>
-    </div>
-    <div class="res-error" id="res-error" hidden></div>
-  </section>
+  <div class="st-filters">
+    <input class="pinput" id="f-q" type="search" placeholder="Search strategies" aria-label="Search strategies" maxlength="80">
+    <select class="pselect" id="f-cat" aria-label="Category">
+      <option value="">All categories</option>
+      {% for c in community_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+    </select>
+    <select class="pselect" id="f-market" aria-label="Market">
+      <option value="">Crypto and forex</option>
+      <option value="crypto">Crypto</option>
+      <option value="forex">Forex</option>
+    </select>
+    <select class="pselect" id="f-tf" aria-label="Timeframe">
+      <option value="">All timeframes</option>
+      <option value="15m">15m</option>
+      <option value="1h">1h</option>
+      <option value="4h">4h</option>
+      <option value="1d">1d</option>
+    </select>
+    <select class="pselect" id="f-sort" aria-label="Sort">
+      <option value="popular">Popular</option>
+      <option value="best">Best backtest result</option>
+      <option value="newest">Newest</option>
+    </select>
+  </div>
+  <p class="st-note">Backtests show how a strategy's plain rules did over the last year, after trading costs. They are not the
+    site's tested signals and not a promise of future results. Community strategies are shared by users and are not tested by Signals FM.</p>
 
-  <section class="block">
-    <h2 class="sec">Latest trades on the chart</h2>
-    <p class="sec-sub" id="pv-sub">The newest candles with the strategy's lines. Triangles mark entries (green long, red short), circles the exits.</p>
-    <div class="legend" id="legend"></div>
-    <div class="chart-box"><svg id="chart" role="img" aria-label="Recent candles with this strategy's entries"></svg>
-      <div class="chart-cap"><span id="p-start"></span><span id="p-end"></span></div></div>
-  </section>
-
-  <section class="block">
-    <h2 class="sec">Read these numbers carefully</h2>
-    <ul class="rules-list">
-      <li><b>R</b> is the risk of one trade: the distance from entry to stop. +0.10R per trade means that, on average, a trade
-        made a tenth of what it risked, after costs.</li>
-      <li><b>Win rate</b> is the share of trades that ended above zero. Trend strategies often win less than half of their trades
-        and still make money with a few big winners; mean-reversion strategies the other way round.</li>
-      <li>This is a plain backtest of public rules over one year. A good year can be luck, so look at the number of trades, the
-        drawdown and how many symbols made money. It is not one of the site's tested signal models and not advice.</li>
-    </ul>
-  </section>
+  <div class="sgrid" id="grid" aria-live="polite"></div>
+  <div class="st-empty" id="empty" hidden>No strategies match these filters.</div>
+  <div class="st-pager" id="pager" hidden>
+    <button type="button" class="pbtn" id="prev">Previous</button>
+    <span id="pinfo"></span>
+    <button type="button" class="pbtn" id="next">Next</button>
+  </div>
 </main>
 
 {% include '_public_footer.html' %}
@@ -105,80 +84,96 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var esc = SF.esc;
-  var SLUG = {{ s.slug | tojson }};
-  var DATA = null, KEY = "crypto_4h";
-  var cls = function (v) { return v > 0 ? "pos" : v < 0 ? "neg" : "dim"; };
+  var state = { tab: "all", page: 1 };
+  try {
+    var u = new URL(location.href);
+    ["tab", "q", "category", "market", "timeframe", "sort"].forEach(function (k) { if (u.searchParams.get(k)) state[k] = u.searchParams.get(k); });
+  } catch (e) {}
+  if (state.q) $("f-q").value = state.q;
+  if (state.category) $("f-cat").value = state.category;
+  if (state.market) $("f-market").value = state.market;
+  if (state.timeframe) $("f-tf").value = state.timeframe;
+  if (state.sort) $("f-sort").value = state.sort;
+  document.querySelectorAll("[data-tab]").forEach(function (b) {
+    b.setAttribute("aria-pressed", b.getAttribute("data-tab") === state.tab ? "true" : "false");
+    b.addEventListener("click", function () { state.tab = b.getAttribute("data-tab"); state.page = 1; sync(); load(); });
+  });
 
-  function figs(r) {
-    var pf = r.profit_factor == null ? "--" : Number(r.profit_factor).toFixed(2);
-    var items = [
-      ["Trades", r.trades, (r.trades_per_day != null ? r.trades_per_day + " a day" : "") + " · " + (r.symbols || 0) + " symbols"],
-      ["Win rate", SF.pct(r.win_rate), "trades above zero"],
-      ["Average per trade", '<span class="' + cls(r.avg_r) + '">' + SF.fmtR(r.avg_r, 3) + "</span>", "after costs"],
-      ["Total", '<span class="' + cls(r.total_r) + '">' + SF.fmtR(r.total_r, 1) + "</span>", (r.positive_symbols || 0) + " of " + (r.symbols || 0) + " symbols positive"],
-      ["Profit factor", pf, "gains ÷ losses"],
-      ["Worst drawdown", '<span class="neg">' + SF.fmtR(r.max_drawdown_r, 1) + "</span>", "peak to low"]
-    ];
-    return items.map(function (x) { return "<div><dt>" + x[0] + "</dt><dd>" + x[1] + "<small>" + esc(x[2]) + "</small></dd></div>"; }).join("");
+  function sync() {
+    document.querySelectorAll("[data-tab]").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-tab") === state.tab ? "true" : "false"); });
+    state.q = $("f-q").value.trim(); state.category = $("f-cat").value; state.market = $("f-market").value;
+    state.timeframe = $("f-tf").value; state.sort = $("f-sort").value;
+    try {
+      var u = new URL(location.href);
+      ["tab", "q", "category", "market", "timeframe", "sort"].forEach(function (k) {
+        if (state[k] && !(k === "tab" && state[k] === "all") && !(k === "sort" && state[k] === "popular")) u.searchParams.set(k, state[k]);
+        else u.searchParams.delete(k);
+      });
+      history.replaceState(null, "", u);
+    } catch (e) {}
   }
-  function bySym(rows) {
-    if (!rows || !rows.length) return '<p class="dim">No trades.</p>';
-    return '<table class="ptable"><thead><tr><th>Symbol</th><th class="num">Trades</th><th class="num">Win rate</th><th class="num">Avg per trade</th><th class="num">Total</th></tr></thead><tbody>' +
-      rows.map(function (r) {
-        return "<tr><td>" + esc(r.symbol) + '</td><td class="num">' + r.trades + '</td><td class="num">' + SF.pct(r.win_rate) +
-          '</td><td class="num ' + cls(r.avg_r) + '">' + SF.fmtR(r.avg_r, 3) + '</td><td class="num ' + cls(r.total_r) + '">' + SF.fmtR(r.total_r, 1) + "</td></tr>";
-      }).join("") + "</tbody></table>";
+
+  function resLine(h) {
+    if (!h || h.avg_r == null) return '<div class="resline"><span class="res na">No result yet</span></div>';
+    var cls = h.avg_r > 0 ? "pos" : h.avg_r < 0 ? "neg" : "na";
+    return '<div class="resline" title="Crypto 4h backtest, ' + h.trades + ' trades, after costs"><span class="res ' + cls + '">' +
+      SF.fmtR(h.avg_r, 3) + "</span> a trade · " + SF.pct(h.win_rate) + " wins · crypto 4h</div>";
   }
-  function show() {
-    document.querySelectorAll("#res-tabs button").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-k") === KEY ? "true" : "false"); });
-    var r = (DATA.results || {})[KEY];
-    if (!r || r.error || !r.trades) {
-      $("res-body").hidden = true; $("res-error").hidden = false;
-      $("res-error").textContent = r && r.error ? r.error : (r && r.trades === 0 ? "This strategy made no trades here." : "No result for this market yet.");
-      return;
-    }
-    $("res-body").hidden = false; $("res-error").hidden = true;
-    $("figs").innerHTML = figs(r);
-    SF.curve($("curve"), r.curve);
-    var c = r.curve || [];
-    $("c-start").textContent = c.length ? SF.date(c[0][0]) : "";
-    $("c-end").textContent = c.length ? SF.date(c[c.length - 1][0]) : "";
-    $("by-sym").innerHTML = bySym(r.by_symbol);
-    $("res-sub").textContent = "Every trade on every " + (r.market === "forex" ? "pair" : "coin") + " over " + (r.period || "the last year") +
-      ", " + r.timeframe + " candles, after costs.";
+  var HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-9.3-8.6C.9 8 3 4.5 6.4 4.5c2 0 3.4 1.1 4.1 2.3.7-1.2 2.1-2.3 4.1-2.3 3.4 0 5.5 3.5 3.7 6.9C19 15.6 12 20 12 20z"/></svg>';
+
+  function card(x) {
+    var lib = x.kind === "library";
+    var flag = lib ? '<span class="flag ok">Backtested</span>'
+                   : '<span class="flag warn">Not tested' + (x.status === "hidden" ? " · hidden" : "") + "</span>";
+    var thumb = lib
+      ? '<svg role="img" aria-label="Recent ' + esc((x.preview || {}).symbol || "") + ' chart with this strategy"></svg>'
+      : (x.image_url ? '<img src="' + esc(x.image_url) + '" alt="" loading="lazy">'
+                     : '<div class="ph">' + esc(x.category) + " · " + esc(x.market === "both" ? "Crypto and forex" : x.market) + "</div>");
+    var by = lib
+      ? '<span class="by"><span class="av site">S</span><span>By Signals FM</span></span>'
+      : '<span class="by"><span class="av">' + esc((x.author || "?").slice(0, 1).toUpperCase()) + '</span><span>By ' + esc(x.author) + "</span></span>";
+    var likes = '<span class="likes" title="Likes">' + HEART + (x.likes || 0) + "</span>";
+    var meta = lib ? esc(x.category)
+                   : esc(x.category) + " · " + esc(x.market === "both" ? "Crypto and forex" : (x.market === "crypto" ? "Crypto" : "Forex")) +
+                     (x.timeframe && x.timeframe !== "any" ? " · " + esc(x.timeframe) : "");
+    return '<a class="scard" href="' + esc(x.url) + '"><div class="thumb">' + thumb + flag + '</div><div class="body">' +
+      '<span class="cat">' + meta + "</span><h3>" + esc(x.title) + "</h3><p>" + esc(x.summary) + "</p>" +
+      (lib ? resLine(x.headline) : "") + '<div class="foot">' + by + likes + "</div></div></a>";
   }
-  document.querySelectorAll("#res-tabs button").forEach(function (b) {
-    b.addEventListener("click", function () { if (!b.disabled) { KEY = b.getAttribute("data-k"); show(); } });
-  });
-  SF.bindLike($("like"));
-  SF.api("/api/strategies/library/" + encodeURIComponent(SLUG)).then(function (d) {
-    if (!d.ok) { $("res-body").hidden = true; $("res-error").hidden = false; $("res-error").textContent = d.error || "Could not load the results."; return; }
-    DATA = d.strategy;
-    $("upd").textContent = DATA.updated_at ? "Updated " + SF.ago(DATA.updated_at) : "First results coming";
-    $("like").querySelector("b").textContent = DATA.likes || 0;
-    if (DATA.liked) { $("like").classList.add("liked"); $("like").setAttribute("aria-pressed", "true"); }
-    var m = DATA.meta || {};
-    if (m.coins) $("cover").textContent = m.coins + " crypto coins" + (m.forex ? " and " + m.forex + " forex pairs" : "") + ", 1h and 4h candles";
-    var first = null;
-    document.querySelectorAll("#res-tabs button").forEach(function (b) {
-      var r = (DATA.results || {})[b.getAttribute("data-k")];
-      b.disabled = !r || !!r.error;
-      b.title = r && r.error ? r.error : "";
-      if (!b.disabled && !first) first = b.getAttribute("data-k");
+
+  var seq = 0;
+  function load() {
+    var my = ++seq;
+    var p = new URLSearchParams({ tab: state.tab, page: state.page, sort: state.sort || "popular" });
+    ["q", "category", "market", "timeframe"].forEach(function (k) { if (state[k]) p.set(k, state[k]); });
+    SF.api("/api/strategies?" + p).then(function (d) {
+      if (my !== seq) return;
+      if (!d.ok) { $("grid").innerHTML = ""; $("empty").hidden = false; $("empty").textContent = d.error || "Could not load the strategies."; return; }
+      var m = d.meta || {};
+      var src = m.source === "live" ? "Backtests updated " + SF.ago(m.updated_at) + " (every " + Math.round(m.refresh_hours || 24) + " hours)"
+              : m.source === "seed" ? "Backtests over " + (m.period || "the last year") + " (the daily update starts after launch)"
+              : "The first backtests are being calculated";
+      var cover = [];
+      if (m.coins) cover.push(m.coins + " crypto coins");
+      if (m.forex) cover.push(m.forex + " forex pairs");
+      $("meta-line").textContent = src + (cover.length ? " · " + cover.join(" and ") : "") + " · results in R after costs";
+      $("grid").innerHTML = d.items.map(card).join("");
+      $("empty").hidden = d.items.length > 0;
+      $("empty").textContent = "No strategies match these filters.";
+      var svgs = $("grid").querySelectorAll(".scard svg[role=img]");
+      var libs = d.items.filter(function (x) { return x.kind === "library"; });
+      svgs.forEach(function (svg, i) { SF.mini(svg, (libs[i] || {}).preview); });
+      $("pager").hidden = d.pages <= 1;
+      $("pinfo").textContent = "Page " + d.page + " of " + d.pages + " · " + d.total + " strategies";
+      $("prev").disabled = d.page <= 1; $("next").disabled = d.page >= d.pages;
     });
-    var cur = (DATA.results || {})[KEY];
-    if ((!cur || cur.error) && first) KEY = first;
-    show();
-    var pv = DATA.preview;
-    if (pv) {
-      var legend = SF.candles($("chart"), pv);
-      $("legend").innerHTML = legend.map(function (x) { return '<span><i style="background:' + x.color + '"></i>' + esc(x.name) + "</span>"; }).join("");
-      $("pv-sub").textContent = "The newest " + pv.c.length + " candles of " + pv.symbol + " (" + pv.timeframe + ") with the strategy's lines. Triangles mark entries (green long, red short), circles the exits.";
-      $("p-start").textContent = SF.date(pv.start); $("p-end").textContent = SF.date(pv.end);
-    } else {
-      $("pv-sub").textContent = "The chart appears after the first daily update.";
-    }
-  });
+  }
+  var timer = null;
+  $("f-q").addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(function () { state.page = 1; sync(); load(); }, 250); });
+  ["f-cat", "f-market", "f-tf", "f-sort"].forEach(function (id) { $(id).addEventListener("change", function () { state.page = 1; sync(); load(); }); });
+  $("prev").addEventListener("click", function () { state.page = Math.max(1, state.page - 1); load(); window.scrollTo(0, 0); });
+  $("next").addEventListener("click", function () { state.page += 1; load(); window.scrollTo(0, 0); });
+  load();
 })();
 </script>
 </body>
