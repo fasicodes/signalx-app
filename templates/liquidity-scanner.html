@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0a100e">
+<meta name="theme-color" content="#050505">
 <title>Liquidity scanner | Signals FM</title>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
@@ -14,8 +14,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
 <link rel="stylesheet" href="{{ url_for('static', filename='market.css') }}?v=20261010a">
 {% include '_analytics.html' ignore missing %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
 </head>
 <body class="app an-shell mk-page">
 {% from '_tip.html' import tip %}
