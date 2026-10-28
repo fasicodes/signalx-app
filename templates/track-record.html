@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Track record: every Signals FM signal and its result</title>
-<meta name="description" content="Every long and short Signals FM gives on 102 crypto coins, recorded automatically with its stop-loss, three targets and result. Live record plus a 365-day backtest, after fees.">
+<meta name="description" content="Every long and short Signals FM gives on 102 crypto coins, recorded automatically with its stop-loss, target and result. Live record plus a 365-day backtest, after fees.">
 {% set seo_title = "Signals FM track record" %}{% set seo_path = "/track-record" %}{% set seo_description = "Every long and short Signals FM gives, logged automatically with its stop, targets and result in R." %}
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <style>
@@ -62,6 +62,8 @@
   .rules li b { color: var(--text); font-weight: 600; }
   .lede .small-sample { display: block; margin-top: 10px; font-size: 14.5px; color: var(--text-dim, #8b96a5); max-width: 80ch; }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
 </head>
 <body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
 {% from '_tip.html' import tip %}
@@ -72,7 +74,7 @@
   <section class="phead">
     <h1>Every signal, recorded. Wins and losses.</h1>
     <p>At every 4-hour candle close, Signals FM reads the same 102 crypto coins and logs every long or short it gives, with the
-      stop-loss and the three targets shown on the dashboard. Nothing is picked afterwards. Results are in R after fees: 1R is the distance from entry to stop.</p>
+      stop-loss and the target shown on the dashboard. Nothing is picked afterwards. Results are in R after fees: 1R is the distance from entry to stop.</p>
     <div class="src-row">
       {% if live_visible %}
       <div class="pseg" role="group" aria-label="Which results">
