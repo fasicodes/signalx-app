@@ -2828,6 +2828,19 @@ signal_hub.init_hub(app, get_candles=_stream_candles, notify=__import__("signalb
                     blocked=news.blackout_reason, news_for=news.upcoming_for_symbol)
 
 # ============================================================
+# PRO INSIGHTS - insights.py (/pro-insights): the ten things a professional checks - funding / open interest, spread and
+# slippage, signals that move together, position size, confidence range, results by market condition and session,
+# live record against the test, events, losing streaks.
+# ============================================================
+import insights
+insights.init_insights(
+    app, get_candles=_stream_candles, funding=funding_open_interest,
+    order_book=lambda sym: exchange.fetch_order_book(sym, limit=50),
+    calendar=news.calendar,
+    calendar_status=lambda: dict(news._status.get("calendar") or {}, configured=news.calendar_provider() is not None))
+limiter.limit("60 per minute")(insights.insights_bp)
+
+# ============================================================
 # SITE-WIDE AI ASSISTANT - site_assistant.py (chat widget on every main page)
 # Claude API (ANTHROPIC_API_KEY, server side), streaming, live context.
 # ============================================================
