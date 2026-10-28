@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -67,6 +67,7 @@
   .lp .st.wait { color: var(--ds-text-dim); background: var(--ds-surface-2); box-shadow: inset 0 0 0 1px var(--ds-line); }
 
   /* signals right now */
+  .lp .mkt { padding: 0 0 44px; }
   .lp .live { background: var(--ds-surface); border-top: 1px solid var(--ds-line); border-bottom: 1px solid var(--ds-line); }
   .lp .live-in { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-top: 16px; padding-bottom: 16px; font-size: 14.5px; color: var(--ds-text-dim); }
   .lp .live-badge { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ds-up); }
@@ -210,8 +211,9 @@
     .lp .cta ul.checks { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
+<script src="{{ url_for('static', filename='market-strip.js') }}" defer></script>
 </head>
 <body class="lp">
 {% set active = 'home' %}
@@ -270,6 +272,12 @@
         <div class="ex-chip c2" aria-hidden="true"><b>SOL</b><span class="st wait">Wait</span></div>
         <figcaption>An example of how a signal looks in the app</figcaption>
       </figure>
+    </div>
+  </section>
+
+  <section class="mkt" aria-label="Market prices">
+    <div class="wrap">
+      <div class="mstrip" data-market-strip role="group" aria-label="Market prices"><ul class="mstrip-list" role="list"><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li></ul><p class="mstrip-note" role="status"></p></div>
     </div>
   </section>
 
