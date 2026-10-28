@@ -1,15 +1,17 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Share a strategy | Signals FM</title>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='strategies.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
 </head>
 <body class="an-shell in-app">
 {% set active = 'strategies' %}
