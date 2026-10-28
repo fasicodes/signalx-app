@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trading signals 15m, 1h, 4h | Signals FM</title>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
@@ -26,7 +26,7 @@
   .side { font: 700 12px var(--mono); letter-spacing: .04em; padding: 3px 9px; border-radius: 6px; }
   .side.LONG { background: var(--long-dim); color: var(--long); }
   .side.SHORT { background: var(--short-dim); color: var(--short); }
-  .tag-new { font: 700 11px var(--mono); color: #03140b; background: var(--accent); padding: 2px 7px; border-radius: 5px; }
+  .tag-new { font: 700 11px var(--mono); color: var(--on-accent); background: var(--accent); padding: 2px 7px; border-radius: 5px; }
   .since { margin-left: auto; font-size: 12.5px; color: var(--text-faint); text-align: right; }
   .lv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 12.5px; }
   .lv span { color: var(--text-faint); display: block; }
@@ -93,7 +93,7 @@
   .strip.s5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   @media (max-width: 900px) { .strip.s5 { grid-template-columns: 1fr 1fr; } }
   .badge { font: 600 12px var(--body); padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--text-dim); white-space: nowrap; }
-  .badge.A { color: #03140b; background: var(--accent); border-color: var(--accent); }
+  .badge.A { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
   .badge.B { color: var(--long); border-color: var(--long); }
   .badge.C { color: var(--text-dim); }
   .badge.untested { color: var(--wait); border-color: var(--wait); }
@@ -137,6 +137,8 @@
   .tbox .err { color: var(--short); font-size: 13.5px; } .tbox .ok { color: var(--long); font-size: 13.5px; }
 </style>
 {% include '_analytics.html' ignore missing %}
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
 </head>
 <body class="app an-shell">
 {% from '_tip.html' import tip %}
