@@ -40,7 +40,7 @@ a { color: inherit; }
 .pbtn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--body); font-size: 14px; font-weight: 600; padding: 9px 16px;
         border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); text-decoration: none; cursor: pointer; }
 .pbtn:hover { border-color: var(--text-faint); }
-.pbtn.primary { background: var(--accent); border-color: var(--accent); color: #03140b; }
+.pbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .pbtn.primary:hover { filter: brightness(1.08); }
 .theme-btn { width: 38px; height: 38px; justify-content: center; padding: 0; }
 .pnav .brand span, .pbtn { white-space: nowrap; }
