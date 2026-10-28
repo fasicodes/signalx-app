@@ -30,6 +30,8 @@
 
   // ------------------------------------------------------------------ small helpers
   function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  // default colour of a new drawing: yellow on the dark theme, a darker amber on the light one (set in ds.css)
+  const DRAW = () => css("--ds-draw") || "#ffd43b";
   function alpha(hex, a) {
     const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
     if (!m) return hex;
@@ -80,7 +82,7 @@
   // ================================================================== chart setup
   function theme() {
     return {
-      layout: { background: { type: "solid", color: "transparent" }, textColor: css("--dim"), fontFamily: "Inter, system-ui, sans-serif", fontSize: 11.5,
+      layout: { background: { type: "solid", color: "transparent" }, textColor: css("--dim"), fontFamily: "IBM Plex Mono, ui-monospace, monospace", fontSize: 11.5,
                 attributionLogo: false, panes: { separatorColor: css("--line"), separatorHoverColor: alpha(css("--accent") || "#22c55e", 0.25), enableResize: true } },
       grid: { vertLines: { color: css("--line-soft") }, horzLines: { color: css("--line-soft") } },
       rightPriceScale: { borderColor: css("--line"), mode: S.set.log ? 1 : 0 },
@@ -677,7 +679,7 @@
     return out;
   };
   const L = (color, width, extra) => Object.assign({ color, lineWidth: width || 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }, extra || {});
-  const C = { gold: "#e2b93b", blue: "#4dabf7", purple: "#c084fc", orange: "#f5a623", cyan: "#2dd4bf", pink: "#f472b6", gray: "#8a9aa8", up: "#36e0a0", down: "#ff526b" };
+  const C = { gold: "#e2b93b", blue: "#8fa39a", purple: "#c084fc", orange: "#f5a623", cyan: "#2dd4bf", pink: "#f472b6", gray: "#8a9aa8", up: "#36e0a0", down: "#ff526b" };
   const num = (k, label, def, min, max, step) => ({ k, label, def, min, max, step: step || 1 });
   const sel = (k, label, def, opts) => ({ k, label, def, opts });
 
@@ -729,7 +731,7 @@
         const mid = (q) => bars.map((_, i) => (i < q - 1 ? null : (rollMax(h, q, i) + rollMin(l, q, i)) / 2));
         const tk = mid(p.t), kj = mid(p.k), sb = mid(p.s), a = new Array(n).fill(null), b = new Array(n).fill(null);
         for (let i = 0; i + p.k < n; i++) { a[i + p.k] = tk[i] != null && kj[i] != null ? (tk[i] + kj[i]) / 2 : null; b[i + p.k] = sb[i]; }
-        ctx.fillBand(a, b, "rgba(77,171,247,0.10)");
+        ctx.fillBand(a, b, "rgba(143,163,154,0.10)");
         ctx.polyline(tk, C.blue, 1.1); ctx.polyline(kj, C.down, 1.1);
         const chikou = new Array(n).fill(null);
         for (let i = p.k; i < n; i++) chikou[i - p.k] = bars[i].close;
@@ -1147,7 +1149,7 @@
   ];
   const groupOf = {}, labelOf = {}, groupCurrent = {};
   TOOL_GROUPS.forEach((g) => { g.tools.forEach(([id, label]) => { groupOf[id] = g.id; labelOf[id] = label; }); groupCurrent[g.id] = g.tools[0][0]; });
-  const COLORS = ["#4dabf7", "#36e0a0", "#ff526b", "#f5a623", "#c084fc", "#e8f1ec"];
+  const COLORS = ["#ffd43b", "#36e0a0", "#ff526b", "#f5a623", "#c084fc", "#e8f1ec"];
 
   function renderToolbar() {
     toolsEl.innerHTML = "";
@@ -1647,7 +1649,7 @@
         if (sel) anchor = { x: width - 120, y: y - 8 };
         return;
       }
-      if (t === "vertical") { const x = tX(d.time); if (!okXY(x)) return; el("line", { x1: x, x2: x, y1: 0, y2: height, stroke: col("#4dabf7"), "stroke-width": sw(1.4), "stroke-dasharray": "4 3" }); if (sel) anchor = { x, y: 50 }; return; }
+      if (t === "vertical") { const x = tX(d.time); if (!okXY(x)) return; el("line", { x1: x, x2: x, y1: 0, y2: height, stroke: col(DRAW()), "stroke-width": sw(1.4), "stroke-dasharray": "4 3" }); if (sel) anchor = { x, y: 50 }; return; }
       if (t === "hray") { const x = tX(d.time), y = pY(d.price); if (!okXY(x, y)) return; const c = col("#f5a623"); el("line", { x1: x, x2: width, y1: y, y2: y, stroke: c, "stroke-width": sw(1.4) }); el("circle", { cx: x, cy: y, r: 3, fill: c }); if (sel) anchor = { x, y }; return; }
       if (t === "crossline") {
         const x = tX(d.time), y = pY(d.price); if (!okXY(x, y)) return;
@@ -1672,14 +1674,14 @@
       if (t === "brush" || t === "path") {
         const ps = d.points.map((p) => ({ x: tX(p.time), y: pY(p.price) })).filter((p) => okXY(p.x, p.y));
         if (ps.length < 2) return;
-        const c = col(t === "brush" ? "#c084fc" : "#4dabf7");
+        const c = col(t === "brush" ? "#c084fc" : DRAW());
         el("polyline", { points: ps.map((p) => `${p.x},${p.y}`).join(" "), fill: "none", stroke: c, "stroke-width": sw(2), "stroke-linejoin": "round", "stroke-linecap": "round" });
         if (t === "path") ps.forEach((p) => el("circle", { cx: p.x, cy: p.y, r: 2.5, fill: c }));
         if (sel) anchor = ps[0]; return;
       }
       if (t === "rectangle" || t === "ellipse") {
         if (!ok2) return;
-        const x = Math.min(P1.x, P2.x), y = Math.min(P1.y, P2.y), w = Math.abs(P2.x - P1.x), h = Math.abs(P2.y - P1.y), c = col("#4dabf7");
+        const x = Math.min(P1.x, P2.x), y = Math.min(P1.y, P2.y), w = Math.abs(P2.x - P1.x), h = Math.abs(P2.y - P1.y), c = col(DRAW());
         if (t === "rectangle") el("rect", { x, y, width: w, height: h, fill: alpha(c, 0.12), stroke: c, "stroke-width": sw(1.4) });
         else el("ellipse", { cx: x + w / 2, cy: y + h / 2, rx: w / 2, ry: h / 2, fill: alpha(c, 0.12), stroke: c, "stroke-width": sw(1.4) });
         if (sel) anchor = { x: x + w / 2, y }; return;
@@ -1694,7 +1696,7 @@
         if (sel) anchor = { x: x + w / 2, y }; return;
       }
       if (t === "triangle") {
-        const ps = [P1, P2, P3].filter(Boolean), c = col("#4dabf7");
+        const ps = [P1, P2, P3].filter(Boolean), c = col(DRAW());
         if (ps.length === 3 && okXY(P3.x, P3.y) && ok2) { el("polygon", { points: ps.map((p) => `${p.x},${p.y}`).join(" "), fill: alpha(c, 0.12), stroke: c, "stroke-width": sw(1.5) }); if (sel) anchor = P1; }
         return;
       }
@@ -1710,7 +1712,7 @@
         let x1 = P1.x, y1 = P1.y, x2 = P2.x, y2 = P2.y;
         if (t === "extended") { const dx = P2.x - P1.x, dy = P2.y - P1.y; if (Math.abs(dx) > 0.0001) { x1 = 0; y1 = P1.y + ((0 - P1.x) / dx) * dy; x2 = width; y2 = P1.y + ((width - P1.x) / dx) * dy; } }
         const upMove = d.p2.price >= d.p1.price;
-        const c = t === "measure" ? (upMove ? "#36e0a0" : "#ff526b") : col(t === "callout" ? "#f5a623" : "#4dabf7");
+        const c = t === "measure" ? (upMove ? "#36e0a0" : "#ff526b") : col(t === "callout" ? "#f5a623" : DRAW());
         el("line", { x1, y1, x2, y2, stroke: c, "stroke-width": sw(1.8) });
         if (t === "trendline" || t === "extended") { el("circle", { cx: P1.x, cy: P1.y, r: 2.6, fill: c }); el("circle", { cx: P2.x, cy: P2.y, r: 2.6, fill: c }); }
         if (t === "trendangle") el("text", { x: (P1.x + P2.x) / 2, y: (P1.y + P2.y) / 2 - 6, fill: c, "font-size": 10, ...font }).textContent = `${((Math.atan2(-(P2.y - P1.y), P2.x - P1.x) * 180) / Math.PI).toFixed(1)}°`;
@@ -1760,7 +1762,7 @@
       }
       if (t === "fibchannel") {
         if (!ok3) return;
-        const off = P3.y - lerpY(P1, P2, P3.x), c = col("#4dabf7");
+        const off = P3.y - lerpY(P1, P2, P3.x), c = col(DRAW());
         FIB.forEach((lv) => el("line", { x1: P1.x, y1: P1.y + off * lv, x2: P2.x, y2: P2.y + off * lv, stroke: c, "stroke-width": lv === 0 || lv === 1 ? sw(1.6) : sw(1), opacity: 0.85 }));
         if (sel) anchor = P3; return;
       }
@@ -1768,13 +1770,13 @@
         if (!ok2) return;
         const unit = typeof d.p2.time === "number" && typeof d.p1.time === "number" ? d.p2.time - d.p1.time : null;
         if (unit == null) return;
-        const c = col("#4dabf7");
+        const c = col(DRAW());
         FIB_SEQ.forEach((n) => { const x0 = tX(d.p1.time + n * unit); if (!okXY(x0)) return; el("line", { x1: x0, x2: x0, y1: 0, y2: height, stroke: c, "stroke-width": sw(1), opacity: 0.75 }); el("text", { x: x0 + 3, y: 14, fill: c, "font-size": 9.5, ...font }).textContent = n; });
         if (sel) anchor = P1; return;
       }
       if (t === "daterange") {
         if (!ok2) return;
-        const yM = (P1.y + P2.y) / 2, c = col("#4dabf7"), bars = Math.round(Math.abs(d.p2.time - d.p1.time) / TF_SEC[S.tf]);
+        const yM = (P1.y + P2.y) / 2, c = col(DRAW()), bars = Math.round(Math.abs(d.p2.time - d.p1.time) / TF_SEC[S.tf]);
         el("line", { x1: P1.x, x2: P2.x, y1: yM, y2: yM, stroke: c, "stroke-width": sw(1.6) });
         el("text", { x: (P1.x + P2.x) / 2, y: yM - 8, "text-anchor": "middle", fill: c, "font-size": 10, ...font }).textContent = `${bars} bars`;
         if (sel) anchor = { x: (P1.x + P2.x) / 2, y: yM - 12 }; return;
@@ -1832,7 +1834,7 @@
       if (t === "abcd" || t === "xabcd" || t === "elliott") {
         const raw = d.points || [], ps = raw.map((p) => ({ x: tX(p.time), y: pY(p.price) }));
         if (ps.some((p) => !okXY(p.x, p.y)) || ps.length < 2) return;
-        const c = col(t === "elliott" ? "#4dabf7" : t === "abcd" ? "#36e0a0" : "#c084fc");
+        const c = col(t === "elliott" ? DRAW() : t === "abcd" ? "#36e0a0" : "#c084fc");
         if (t === "xabcd" && ps.length === 5) {
           el("polygon", { points: [ps[0], ps[1], ps[2]].map((p) => `${p.x},${p.y}`).join(" "), fill: alpha(c, 0.12), stroke: "none" });
           el("polygon", { points: [ps[2], ps[3], ps[4]].map((p) => `${p.x},${p.y}`).join(" "), fill: alpha(c, 0.12), stroke: "none" });
@@ -1868,7 +1870,7 @@
       }
       if (t === "regression") {
         const r = regressionGeom(d); if (!r) return;
-        const c = col("#4dabf7");
+        const c = col(DRAW());
         el("polygon", { points: [r.au, r.bu, r.bl, r.al].map((p) => `${p.x},${p.y}`).join(" "), fill: alpha(c, 0.08), stroke: "none" });
         el("line", { x1: r.a.x, y1: r.a.y, x2: r.b.x, y2: r.b.y, stroke: c, "stroke-width": sw(1.8) });
         [[r.au, r.bu], [r.al, r.bl]].forEach(([a, b]) => el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: c, "stroke-width": sw(1), "stroke-dasharray": "5 3" }));
@@ -1877,7 +1879,7 @@
       }
       if (t === "parallel") {
         if (!ok3) return;
-        const off = P3.y - lerpY(P1, P2, P3.x), c = col("#4dabf7");
+        const off = P3.y - lerpY(P1, P2, P3.x), c = col(DRAW());
         el("polygon", { points: `${P1.x},${P1.y} ${P2.x},${P2.y} ${P2.x},${P2.y + off} ${P1.x},${P1.y + off}`, fill: alpha(c, 0.1), stroke: "none" });
         el("line", { x1: P1.x, y1: P1.y, x2: P2.x, y2: P2.y, stroke: c, "stroke-width": sw(1.6) });
         el("line", { x1: P1.x, y1: P1.y + off, x2: P2.x, y2: P2.y + off, stroke: c, "stroke-width": sw(1.6) });
@@ -1886,13 +1888,13 @@
       }
       if (t === "circle") {
         if (!ok2) return;
-        const c = col("#4dabf7"), r = Math.hypot(P2.x - P1.x, P2.y - P1.y);
+        const c = col(DRAW()), r = Math.hypot(P2.x - P1.x, P2.y - P1.y);
         el("circle", { cx: P1.x, cy: P1.y, r, fill: alpha(c, 0.1), stroke: c, "stroke-width": sw(1.4) });
         if (sel) anchor = { x: P1.x, y: P1.y - r }; return;
       }
       if (t === "infoline") {
         if (!ok2) return;
-        const c = col("#4dabf7"), dp = d.p2.price - d.p1.price, pc = (dp / d.p1.price) * 100;
+        const c = col(DRAW()), dp = d.p2.price - d.p1.price, pc = (dp / d.p1.price) * 100;
         const bars = typeof d.p1.time === "number" ? Math.round(Math.abs(d.p2.time - d.p1.time) / TF_SEC[S.tf]) : 0;
         const ang = (Math.atan2(-(P2.y - P1.y), P2.x - P1.x) * 180) / Math.PI;
         el("line", { x1: P1.x, y1: P1.y, x2: P2.x, y2: P2.y, stroke: c, "stroke-width": sw(1.8) });
@@ -1925,7 +1927,7 @@
         if (!ok2) return;
         const unit = typeof d.p2.time === "number" && typeof d.p1.time === "number" ? Math.abs(d.p2.time - d.p1.time) : 0;
         if (!unit) return;
-        const c = col("#4dabf7"), t0 = Math.min(d.p1.time, d.p2.time);
+        const c = col(DRAW()), t0 = Math.min(d.p1.time, d.p2.time);
         for (let k = 0; k < 400; k++) { const x0 = tX(t0 + k * unit); if (x0 == null) break; el("line", { x1: x0, x2: x0, y1: 0, y2: height, stroke: c, "stroke-width": sw(k ? 1 : 1.4), opacity: k ? 0.6 : 0.9 }); }
         if (sel) anchor = P1; return;
       }
@@ -1938,7 +1940,7 @@
       }
       if (t === "pricelabel") {
         const x = tX(d.time), y = pY(d.price); if (!okXY(x, y)) return;
-        const c = col("#4dabf7"), txt = fmt(d.price), w = txt.length * 6.8 + 16;
+        const c = col(DRAW()), txt = fmt(d.price), w = txt.length * 6.8 + 16;
         el("path", { d: `M ${x} ${y} L ${x + 8} ${y - 10} H ${x + 8 + w} V ${y + 10} H ${x + 8} Z`, fill: c, stroke: sel ? "#fff" : "none" });
         el("text", { x: x + 14, y: y + 4, fill: "#06110c", "font-size": 11, "font-weight": 700, ...font }).textContent = txt;
         if (sel) anchor = { x: x + w / 2, y: y - 12 }; return;
@@ -1962,7 +1964,7 @@
       }
     } else if (activeTool === "path" && pendingPoints.length) {
       const ps = pendingPoints.map((p) => ({ x: tX(p.time), y: pY(p.price) })).filter((p) => okXY(p.x, p.y));
-      if (ps.length) el("polyline", { points: ps.map((p) => `${p.x},${p.y}`).join(" "), fill: "none", stroke: "#4dabf7", "stroke-width": 1.6, "stroke-dasharray": "3 3" });
+      if (ps.length) el("polyline", { points: ps.map((p) => `${p.x},${p.y}`).join(" "), fill: "none", stroke: DRAW(), "stroke-width": 1.6, "stroke-dasharray": "3 3" });
     }
     if (liveBrush && liveBrush.length > 1) {
       const ps = liveBrush.map((p) => ({ x: tX(p.time), y: pY(p.price) })).filter((p) => okXY(p.x, p.y));
