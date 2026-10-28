@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,78 +9,73 @@
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="{{ url_for('static', filename='premium-ui.css') }}?v=20260814-premium-2">
+<link rel="stylesheet" href="{{ url_for('static', filename='premium-ui.css') }}?v=20261028b">
 {% include '_analytics.html' ignore missing %}
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
 </head>
 <body>
-<style>
-  /* phones: the header links become one swipeable row instead of wrapping into three */
-  @media (max-width: 760px) {
-    .topbar-right { flex-wrap: nowrap !important; justify-content: flex-start !important; overflow-x: auto; max-width: 100%; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-    .topbar-right::-webkit-scrollbar { display: none; }
-    .topbar-right > a, .topbar-right > div { flex: none; white-space: nowrap; }
-  }
-</style>
 
 <div class="terminal">
 
   <header class="topbar">
     <div class="brand">
-      <button type="button" class="hamburger-btn" id="hamburger-btn" aria-label="Open menu" aria-expanded="false">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <button type="button" class="hamburger-btn tb-icon" id="hamburger-btn" aria-label="Open menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
-      <div class="brand-row">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="Signals FM" style="height:32px; width:auto;">
+      <a class="brand-row" href="/" aria-label="Signals FM home">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="brand-logo" width="32" height="32">
         <span class="brand-name">Signals FM</span>
-      </div>
-      <span class="brand-tagline">Pro terminal</span>
+      </a>
+      <span class="tb-badge">Pro terminal</span>
     </div>
+
+    <nav class="tb-nav" aria-label="Site pages">
+      <a class="tb-link" href="/">Home</a>
+      <a class="tb-link" href="/signals">Signals</a>
+      <a class="tb-link" href="/demo-trading">Demo trading</a>
+      <a class="tb-link" href="/auto-trading">Auto trade</a>
+      <a class="tb-link" href="/track-record">Track record</a>
+      <a class="tb-link" href="/pro-insights">Pro insights</a>
+      <a class="tb-link" href="/tools">Tools</a>
+    </nav>
+
     <div class="topbar-right">
-      <div class="live-clock"><span class="dot"></span><span id="clock-text">--:--:--</span></div>
+      <div class="live-clock" title="Your local time"><span class="dot" aria-hidden="true"></span><span id="clock-text">--:--:--</span></div>
 
-      <a href="/demo-trading" style="margin-left:12px;background:var(--panel-raised);border:1px solid var(--line);color:var(--accent);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">DEMO TRADING</a>
-
-      <a href="/auto-trading" style="margin-left:8px;background:var(--panel-raised);border:1px solid var(--line);color:var(--long);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">AUTO TRADE</a>
-
-      <a href="/" style="margin-left:12px;background:var(--accent);border:1px solid var(--accent);color:#03140b;border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">HOME</a>
-      <a href="/signals" style="margin-left:8px;background:var(--panel-raised);border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">SIGNALS</a>
-      <a href="/track-record" style="margin-left:8px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">TRACK RECORD</a>
-
-      <a href="/tools" style="margin-left:8px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;padding:8px 14px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.4px;text-decoration:none;">TOOLS</a>
-
-      <div style="position:relative; margin-left:10px;">
-        <button type="button" id="notif-bell-btn" title="Notifications" style="width:34px;height:34px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span id="notif-bell-badge" style="display:none; position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px; border-radius:8px; background:var(--short); color:#fff; font-family:var(--mono); font-size:9px; font-weight:800; line-height:16px; text-align:center;">0</span>
+      <div class="tb-pop-wrap">
+        <button type="button" id="notif-bell-btn" class="tb-icon" title="Notifications" aria-label="Notifications">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notif-bell-badge" class="tb-badge-dot" style="display:none">0</span>
         </button>
-        <div id="notif-dropdown" style="display:none; position:absolute; right:0; top:42px; width:320px; max-height:420px; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 12px 30px rgba(0,0,0,0.4); z-index:60;">
-          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--line);">
-            <span style="font-family:var(--mono); font-size:11px; font-weight:800; letter-spacing:0.4px; color:var(--text);">NOTIFICATIONS</span>
-            <button type="button" id="notif-mark-all-btn" style="background:none; border:none; color:var(--accent); font-family:var(--mono); font-size:10px; font-weight:700; cursor:pointer;">MARK ALL READ</button>
+        <div id="notif-dropdown" class="tb-pop tb-pop-wide" style="display:none">
+          <div class="tb-pop-head">
+            <span>Notifications</span>
+            <button type="button" id="notif-mark-all-btn" class="tb-pop-action">Mark all read</button>
           </div>
-          <div id="notif-dropdown-list" style="padding:8px;">
-            <p style="color:var(--text-faint); font-size:12px; padding:10px;">Loading…</p>
+          <div id="notif-dropdown-list" class="tb-pop-body">
+            <p class="tb-pop-empty">Loading…</p>
           </div>
         </div>
       </div>
 
-      <button type="button" id="theme-toggle-btn" title="Toggle light/dark mode" style="margin-left:10px;width:34px;height:34px;background:var(--panel-raised);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-        <svg id="theme-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <button type="button" id="theme-toggle-btn" class="tb-icon" title="Switch light / dark" aria-label="Switch between light and dark theme">
+        <svg id="theme-toggle-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </button>
 
-      <div style="position:relative; margin-left:10px;">
-        <button type="button" id="avatar-btn" style="width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--panel-raised);cursor:pointer;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:var(--mono);font-size:12px;font-weight:700;">
+      <div class="tb-pop-wrap">
+        <button type="button" id="avatar-btn" class="tb-avatar" aria-label="Account menu">
           {% if user_avatar %}
-            <img src="{{ user_avatar }}" alt="{{ user_email }}" style="width:100%;height:100%;object-fit:cover;">
+            <img src="{{ user_avatar }}" alt="{{ user_email }}">
           {% else %}
             {{ (user_email or "?")[0]|upper }}
           {% endif %}
         </button>
-        <div id="avatar-menu" style="display:none; position:absolute; right:0; top:42px; background:var(--panel); border:1px solid var(--line); border-radius:8px; min-width:200px; box-shadow:0 12px 30px rgba(0,0,0,0.4); z-index:50; overflow:hidden;">
-          <div style="padding:12px 14px; border-bottom:1px solid var(--line); font-family:var(--mono); font-size:11px; color:var(--text-dim); word-break:break-all;">{{ user_email }}</div>
-          <button type="button" id="logout-btn" style="width:100%; text-align:left; background:none; border:none; color:var(--short); padding:11px 14px; font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Logout</button>
+        <div id="avatar-menu" class="tb-pop" style="display:none">
+          <div class="tb-pop-user">{{ user_email }}</div>
+          <button type="button" id="logout-btn" class="tb-pop-danger">Log out</button>
         </div>
       </div>
     </div>
@@ -106,7 +101,7 @@
           icon.innerHTML = t === 'dark' ? sunPath : moonPath;
           localStorage.setItem('signalsfm-theme', t);
         }
-        applyTheme(localStorage.getItem('signalsfm-theme') || 'dark');
+        applyTheme(localStorage.getItem('signalsfm-theme') || 'light');
         btn.addEventListener('click', () => {
           applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
         });
@@ -140,55 +135,55 @@
     <div class="side-drawer-links">
       <button class="panel-tab" id="home-nav-tab" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 11.5L12 4l8 7.5M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">HOME</span>
+        <span class="panel-tab-text">Home</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="contact" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">CONTACT US</span>
+        <span class="panel-tab-text">Contact us</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="about" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v6M12 7.5v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">ABOUT</span>
+        <span class="panel-tab-text">About</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="privacy" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">PRIVACY POLICY</span>
+        <span class="panel-tab-text">Privacy policy</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="terms" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">TERMS &amp; CONDITIONS</span>
+        <span class="panel-tab-text">Terms &amp; conditions</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="disclaimer" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4M12 17v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">DISCLAIMER</span>
+        <span class="panel-tab-text">Disclaimer</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="watchlist" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5c-6 0-9.5 5.5-10 7 0.5 1.5 4 7 10 7s9.5-5.5 10-7c-0.5-1.5-4-7-10-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></span>
-        <span class="panel-tab-text">WATCHLIST</span>
+        <span class="panel-tab-text">Watchlist</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="alerts" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">PRICE ALERTS</span>
+        <span class="panel-tab-text">Price alerts</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="risk-calc" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h8M8 12h3M13 12h3M8 16h3M13 16h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">RISK CALCULATOR</span>
+        <span class="panel-tab-text">Risk calculator</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="active-trades" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 17l5-6 4 4 7-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="6" r="1.6" fill="currentColor"/></svg></span>
-        <span class="panel-tab-text">ACTIVE TRADES</span>
+        <span class="panel-tab-text">Active trades</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="trade-history" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.6 5.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 12V7M4 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">TRADE HISTORY</span>
+        <span class="panel-tab-text">Trade history</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="trade-journal" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-6-3-6 3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
-        <span class="panel-tab-text">TRADE JOURNAL</span>
+        <span class="panel-tab-text">Trade journal</span>
       </button>
       <button class="panel-tab home-info-tab" data-info="pnl-dashboard" type="button">
         <span class="panel-tab-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 19V9M10 19V4M16 19v-7M22 19H2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="panel-tab-text">P&amp;L DASHBOARD</span>
+        <span class="panel-tab-text">P&amp;L dashboard</span>
       </button>
     </div>
   </nav>
@@ -234,7 +229,7 @@
     </select>
 
     <button id="get-signal-btn" class="scan-btn">
-      <span class="scan-btn-text">RUN ANALYSIS</span>
+      <span class="scan-btn-text">Run analysis</span>
     </button>
   </div>
 
@@ -263,7 +258,7 @@
       </div>
       <div class="hero-data">
         <span class="hero-eyebrow">Mark Price</span>
-        <div id="hero-price" class="hero-price">--</div>
+        <div id="hero-price" class="hero-price" data-ds-tick>--</div>
         <div class="hero-sub">
           <span>RSI <b id="hero-rsi">--</b></span>
           <span>MACD <b id="hero-macd">--</b></span>
@@ -278,11 +273,11 @@
         <div class="channel-id-group">
           <span class="scope-ticks"><span style="height:4px"></span><span style="height:8px"></span><span style="height:5px"></span><span style="height:11px"></span><span style="height:6px"></span></span>
           <div>
-            <div class="channel-id">CH.01–27</div>
-            <div class="channel-title">Concept Agreement</div>
+            <div class="channel-id">Channels 1-27</div>
+            <div class="channel-title">Concept agreement</div>
           </div>
         </div>
-        <span class="channel-model">NOT A WIN RATE</span>
+        <span class="channel-model">Not a win rate</span>
       </div>
       <div class="accuracy-score-main">
         <div class="accuracy-gauge-row">
@@ -309,11 +304,11 @@
         <div class="channel-id-group">
           <span class="scope-ticks"><span style="height:6px"></span><span style="height:10px"></span><span style="height:4px"></span></span>
           <div>
-            <div class="channel-id">DISPLAY ONLY</div>
-            <div class="channel-title">Candlestick Patterns</div>
+            <div class="channel-id">Display only</div>
+            <div class="channel-title">Candlestick patterns</div>
           </div>
         </div>
-        <span class="channel-model">CHART READING</span>
+        <span class="channel-model">Chart reading</span>
       </div>
       <div id="candle-patterns-list" class="candle-patterns-list">
         <div class="candle-patterns-empty">waiting for a verdict</div>
@@ -321,15 +316,15 @@
     </section>
 
     <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;01</span>
-      <span class="tier-label">Core Verdict Engine</span>
+      <span class="tier-num">Tier 1</span>
+      <span class="tier-label">Core verdict engine</span>
     </div>
     <p class="tier-note">Signal engine v3: a model trained on mid 2020&ndash;Sep 2025 and tested on data it never saw. It reads closed 4-hour candles, the daily trend, Bitcoin and 16-coin market breadth for all 102 crypto coins together: its strongest ~3% of setups become strong signals, and if no coin has had a signal for 24 hours the best setup gets a standard one. Every signal has a 2&times; ATR stop and three targets. This is the only tier that sets the verdict and confidence; the other tiers are display-only.</p>
     <div id="tier-1" class="channel-grid"></div>
 
     <div class="tier-divider">
-      <span class="tier-num">TIER&nbsp;02–03</span>
-      <span class="tier-label">Microstructure · Extended Signals · Liquidity · Live Chart</span>
+      <span class="tier-num">Tier 2-3</span>
+      <span class="tier-label">Microstructure, extended signals, liquidity and live chart</span>
     </div>
     <p class="tier-note">Ch.06–19 — order-book, regime, cross-asset &amp; liquidity diagnostics, plus a live price chart. Display-only: does not alter the verdict above.</p>
 
@@ -339,19 +334,19 @@
       <div class="panel-tabs">
         <button class="panel-tab active" data-panel="microstructure" type="button">
           <span class="panel-tab-num">01</span>
-          <span class="panel-tab-text">DASHBOARD</span>
+          <span class="panel-tab-text">Dashboard</span>
         </button>
         <button class="panel-tab" data-panel="extended" type="button">
           <span class="panel-tab-num">02</span>
-          <span class="panel-tab-text">EXTENDED SIGNALS</span>
+          <span class="panel-tab-text">Extended signals</span>
         </button>
         <a class="panel-tab panel-tab-link" href="/liquidity-scanner" data-goto="/liquidity-scanner" title="Opens the full Liquidity scanner for this coin">
           <span class="panel-tab-num">03</span>
-          <span class="panel-tab-text">LIQUIDITY SCANNER &#8599;</span>
+          <span class="panel-tab-text">Liquidity scanner &#8599;</span>
         </a>
         <a class="panel-tab panel-tab-link" href="/chart" data-goto="/chart" title="Opens the full Live chart for this coin">
           <span class="panel-tab-num">04</span>
-          <span class="panel-tab-text">LIVE CHART &#8599;</span>
+          <span class="panel-tab-text">Live chart &#8599;</span>
         </a>
       </div>
 
@@ -1025,7 +1020,7 @@
               <input type="number" id="alert-target" step="any" placeholder="e.g. 65000" style="width:100%; box-sizing:border-box; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
             </div>
             <div id="alert-form-msg" style="font-size:11.5px; margin-bottom:8px; min-height:14px;"></div>
-            <button type="button" id="alert-create-btn" style="width:100%; padding:10px 0; border-radius:7px; border:none; background:var(--long); color:#06231a; font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">CREATE ALERT</button>
+            <button type="button" id="alert-create-btn" class="ds-btn primary ds-block">Create alert</button>
           </div>
 
           <h3 class="about-subhead">Your Alerts</h3>
@@ -1043,23 +1038,23 @@
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0;">
             <div>
               <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Account Balance ($)</label>
-              <input type="number" id="risk-balance" step="any" value="10000" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <input type="number" id="risk-balance" step="any" value="10000" min="0" data-prefix="$" data-ds-stepper="100" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
             </div>
             <div>
               <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Risk (%)</label>
-              <input type="number" id="risk-percent" step="any" value="1" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <input type="number" id="risk-percent" step="any" value="1" min="0" max="100" data-suffix="%" data-ds-stepper="0.25" data-ds-slider="0.25,5,0.25" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
             </div>
             <div>
               <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Entry Price</label>
-              <input type="number" id="risk-entry" step="any" placeholder="e.g. 100" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <input type="number" id="risk-entry" step="any" placeholder="e.g. 100" data-prefix="$" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
             </div>
             <div>
               <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Stop Loss</label>
-              <input type="number" id="risk-sl" step="any" placeholder="e.g. 98" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <input type="number" id="risk-sl" step="any" placeholder="e.g. 98" data-prefix="$" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
             </div>
             <div>
               <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Take Profit</label>
-              <input type="number" id="risk-tp" step="any" placeholder="e.g. 106" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
+              <input type="number" id="risk-tp" step="any" placeholder="e.g. 106" data-prefix="$" style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:6px; padding:9px 10px; color:var(--text); font-family:var(--mono); font-size:12px;">
             </div>
             <div>
               <label style="display:block; font-size:10.5px; color:var(--text-dim); margin-bottom:5px;">Direction</label>
@@ -1070,8 +1065,8 @@
             </div>
           </div>
 
-          <div id="risk-calc-msg" style="font-size:11.5px; color:var(--short); margin-bottom:8px; min-height:14px;"></div>
-          <div id="risk-calc-results" class="perf-summary-grid" style="margin-top:6px;"></div>
+          <div id="risk-calc-msg" class="ds-form-msg" role="status" aria-live="polite"></div>
+          <div id="risk-calc-results" class="perf-summary-grid ds-results" data-ds-live></div>
         </div>
       </div>
 
@@ -1189,7 +1184,7 @@ document.querySelectorAll(".panel-tab-link").forEach(function (a) {
       if (typeof runBtn !== 'undefined' && runBtn) {
         runBtn.disabled = false;
         var btnText = runBtn.querySelector('.scan-btn-text');
-        if (btnText) btnText.textContent = 'RUN ANALYSIS';
+        if (btnText) btnText.textContent = 'Run analysis';
       }
 
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1290,18 +1285,18 @@ document.querySelectorAll(".panel-tab-link").forEach(function (a) {
     <div id="track-modal-fields" style="font-family:var(--mono); font-size:12.5px;"></div>
 
     <label style="display:block; font-size:11px; color:var(--text-dim); margin:12px 0 6px;">Position Size (USD) — how much did you use for this trade?</label>
-    <input type="number" id="track-position-size" placeholder="e.g. 500" min="1" step="0.01"
+    <input type="number" id="track-position-size" placeholder="e.g. 500" min="1" step="0.01" data-prefix="$" data-ds-stepper="10"
            style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:13px; margin-bottom:10px;">
 
     <label style="display:block; font-size:11px; color:var(--text-dim); margin:0 0 6px;">Leverage (optional)</label>
-    <input type="number" id="track-leverage" placeholder="e.g. 5" min="1" step="0.1"
+    <input type="number" id="track-leverage" placeholder="e.g. 5" min="1" step="0.1" data-suffix="x" data-ds-stepper="1"
            style="width:100%; box-sizing:border-box; background:var(--panel-raised); border:1px solid var(--line); border-radius:7px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:13px; margin-bottom:16px;">
 
     <div id="track-modal-msg" style="font-size:12px; margin-bottom:10px; min-height:16px;"></div>
 
     <div style="display:flex; gap:10px;">
-      <button id="track-cancel-btn" type="button" style="flex:1; padding:11px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--text-dim); font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Cancel</button>
-      <button id="track-start-btn" type="button" style="flex:1; padding:11px 0; border-radius:7px; border:none; background:var(--long); color:#06231a; font-family:var(--mono); font-size:12px; font-weight:700; cursor:pointer;">Start Tracking</button>
+      <button id="track-cancel-btn" type="button" class="ds-btn ds-grow">Cancel</button>
+      <button id="track-start-btn" type="button" class="ds-btn primary ds-grow">Start tracking</button>
     </div>
   </div>
 </div>
@@ -1482,10 +1477,7 @@ document.querySelectorAll(".panel-tab-link").forEach(function (a) {
       zone.querySelector('.view-trade-link').addEventListener('click', (e) => openTradeDetail(e.target.dataset.id));
     } else {
       zone.innerHTML = `
-        <button id="track-this-trade-btn" type="button"
-          style="width:100%; padding:13px 0; margin-bottom:18px; border-radius:9px; border:none; background:var(--long); color:#06231a; font-family:var(--mono); font-weight:700; font-size:13px; letter-spacing:0.3px; cursor:pointer;">
-          TRACK THIS TRADE
-        </button>`;
+        <button id="track-this-trade-btn" type="button" class="ds-btn primary lg ds-block ds-mb">Track this trade</button>`;
       document.getElementById('track-this-trade-btn').addEventListener('click', openTrackModal);
     }
   }
