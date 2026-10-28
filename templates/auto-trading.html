@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light" class="ds-ws">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signals FM — Auto-Trade Bot</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='legacy.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
@@ -207,6 +207,8 @@
   .acct-switch .mini { font-weight: 500; font-size: 10.5px; color: var(--text-faint); }
 </style>
 {% include '_analytics.html' ignore missing %}
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
 </head>
 <body class="an-shell">
 {% set active = 'bot' %}
@@ -279,7 +281,7 @@
             <button class="btn btn-sm" id="btn-analyze">Check signal</button>
           </div>
           <div class="hero-actions">
-            <button class="btn btn-primary" id="btn-long" disabled>Manual LONG</button>
+            <button class="btn btn-long" id="btn-long" disabled>Manual LONG</button>
             <button class="btn btn-danger" id="btn-short" disabled>Manual SHORT</button>
           </div>
         </div>
@@ -305,16 +307,16 @@
           <div class="field"><label for="s-grade">Signal strength</label><select class="sel" id="s-grade"><option value="A">Strongest signals only</option><option value="B">Strong signals and above</option><option value="C">All signals</option></select></div>
           <div class="field"><label for="s-symbols">Symbols</label><select class="sel" id="s-symbols"><option value="all">All signal symbols</option><option value="list">Only the ticked coins</option></select></div>
           <select class="sel" id="s-timeframe" hidden aria-hidden="true"></select>
-          <div class="field"><label for="s-risk">Risk per trade (% of balance)</label><input class="inp" type="number" id="s-risk" min="0.1" max="3" step="0.1">
+          <div class="field"><label for="s-risk">Risk per trade (% of balance)</label><input class="inp" type="number" id="s-risk" min="0.1" max="3" step="0.1" data-suffix="%" data-ds-stepper="0.1" data-ds-slider="0.1,3,0.1">
             <span class="hint">Loss if the stop-loss is hit (0.1–3%)</span></div>
-          <div class="field"><label for="s-maxpos">Max position size (USDT)</label><input class="inp" type="number" id="s-maxpos" min="10" step="10"></div>
-          <div class="field"><label for="s-maxopen">Max open positions</label><input class="inp" type="number" id="s-maxopen" min="1" max="5" step="1"></div>
-          <div class="field"><label for="s-daily">Daily loss limit (%)</label><input class="inp" type="number" id="s-daily" min="1" max="20" step="0.5">
+          <div class="field"><label for="s-maxpos">Max position size (USDT)</label><input class="inp" type="number" id="s-maxpos" min="10" step="10" data-suffix="USDT" data-ds-stepper="10"></div>
+          <div class="field"><label for="s-maxopen">Max open positions</label><input class="inp" type="number" id="s-maxopen" min="1" max="5" step="1" data-ds-stepper="1"></div>
+          <div class="field"><label for="s-daily">Daily loss limit (%)</label><input class="inp" type="number" id="s-daily" min="1" max="20" step="0.5" data-suffix="%" data-ds-stepper="0.5" data-ds-slider="1,20,0.5">
             <span class="hint">The bot pauses for the day after this loss</span></div>
-          <div class="field"><label for="s-conf">Min signal confidence (%)</label><input class="inp" type="number" id="s-conf" min="55" max="95" step="1">
+          <div class="field"><label for="s-conf">Min signal confidence (%)</label><input class="inp" type="number" id="s-conf" min="55" max="95" step="1" data-suffix="%" data-ds-stepper="1" data-ds-slider="55,95,1">
             <span class="hint" id="s-conf-hint">Higher means fewer, more selective trades</span></div>
-          <div class="field"><label for="s-rr">Reward : Risk</label><input class="inp" type="number" id="s-rr" min="1" max="4" step="0.1">
-            <span class="hint">Only used when a signal has no targets of its own (v3 signals bring three)</span></div>
+          <div class="field"><label for="s-rr">Reward : Risk</label><input class="inp" type="number" id="s-rr" min="1" max="4" step="0.1" data-suffix="R" data-ds-stepper="0.1" data-ds-slider="1,4,0.1">
+            <span class="hint">Only used when a signal has no target of its own</span></div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:8px;">
           <button class="btn" id="btn-reset-settings">Undo</button>
@@ -449,7 +451,7 @@
 <script>
 (() => {
   "use strict";
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "dark");
+  document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "light");
 
   // ------------------------------------------------------------ helpers
   const $ = (id) => document.getElementById(id);
