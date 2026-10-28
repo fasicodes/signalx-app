@@ -2474,6 +2474,49 @@ def ticker_strip():
 
 
 # ============================================================
+# /market-pulse: the price strip on the home page and in the terminal.
+# Public and read-only: coin names, last price and 24h change, plus a 24-hour price line per coin. A visitor can see
+# the market before signing up. It shares the /ticker cache above and keeps each 24-hour line for 5 minutes, so a
+# thousand visitors cost the same few exchange calls as one.
+# ============================================================
+@app.route("/market-pulse", methods=["GET"])
+@limiter.limit("30 per minute", key_func=_rate_key)
+def market_pulse():
+    try:
+        tickers = _shared(("ticker",), 5, lambda: exchange.fetch_tickers(TICKER_SYMBOLS), stale_ok=60)
+    except Exception as e:
+        return _data_error("market-pulse", e)
+    items = []
+    for sym in TICKER_SYMBOLS:
+        t = tickers.get(sym)
+        if not t or not isinstance(t.get("last"), (int, float)):
+            continue
+        items.append({"symbol": sym.split("/")[0], "pair": sym, "last": t["last"], "changePercent": t.get("percentage")})
+    return jsonify({"items": items, "source": "OKX", "ts": int(time.time())})
+
+
+def _pulse_line(sym):
+    df = get_candles(symbol=sym, timeframe="1h", limit=24)
+    return [_sig(x, 8) for x in df["close"].tail(24).tolist()]
+
+
+@app.route("/market-pulse/lines", methods=["GET"])
+@limiter.limit("10 per minute", key_func=_rate_key)
+def market_pulse_lines():
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(sym):
+        try:
+            return sym.split("/")[0], _shared(("pulse-line", sym), 300, lambda: _pulse_line(sym), stale_ok=3600)
+        except Exception:
+            return sym.split("/")[0], None
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        pairs = list(pool.map(one, TICKER_SYMBOLS))
+    return jsonify({"lines": {k: v for k, v in pairs if v}, "hours": 24})
+
+
+# ============================================================
 # NEW (v7): /candles  -->  "LIVE CHART" tab ke liye OHLCV series
 #
 # Frontend har chand second baad (poll) chhote limit ke sath is
