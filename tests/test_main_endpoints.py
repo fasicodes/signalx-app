@@ -266,6 +266,37 @@ main.exchange.fetch_tickers = lambda syms: (_ for _ in ()).throw(RuntimeError(SE
 r = member.get("/ticker")
 check(r.status_code == 200 and r.get_json(), "/ticker: exchange hiccup keeps showing the last prices")
 
+# /market-pulse: the public price strip. Visitors can read it, it shares the /ticker cache and never leaks internals.
+main._SHARED.clear()
+main.exchange.fetch_tickers = fake_tickers
+tick_calls.clear()
+pulse = guest.get("/market-pulse")
+body = pulse.get_json() or {}
+check(pulse.status_code == 200 and len(body.get("items", [])) == len(main.TICKER_SYMBOLS), "/market-pulse: a visitor gets every coin")
+check(all(set(i) == {"symbol", "pair", "last", "changePercent"} for i in body.get("items", [])), "/market-pulse: only name, price and 24h change")
+guest.get("/market-pulse"); member.get("/ticker")
+check(len(tick_calls) == 1, f"/market-pulse + /ticker share one exchange call (got {len(tick_calls)})")
+main._SHARED.clear()
+main.exchange.fetch_tickers = lambda syms: (_ for _ in ()).throw(RuntimeError(SECRET))
+r = guest.get("/market-pulse")
+check(r.status_code == 502 and SECRET not in r.get_data(as_text=True), "/market-pulse failure -> 502 without internals")
+main.exchange.fetch_tickers = lambda syms: {"BTC/USDT": {"last": 100.0, "percentage": None}, "ETH/USDT": {"last": None}}
+main._SHARED.clear()
+items = guest.get("/market-pulse").get_json()["items"]
+check([i["symbol"] for i in items] == ["BTC"] and items[0]["changePercent"] is None, "/market-pulse: a coin without a price is left out, a missing change stays empty")
+main.get_candles = fake_candles
+main._SHARED.clear()
+lines = guest.get("/market-pulse/lines").get_json()
+check(set(lines["lines"]) == {s_.split("/")[0] for s_ in main.TICKER_SYMBOLS} and all(len(v) == 24 for v in lines["lines"].values()),
+      "/market-pulse/lines: one 24-point line per coin")
+main.get_candles = lambda *a, **k: (_ for _ in ()).throw(RuntimeError(SECRET))
+main._SHARED.clear()
+r = guest.get("/market-pulse/lines")
+check(r.status_code == 200 and r.get_json()["lines"] == {} and SECRET not in r.get_data(as_text=True), "/market-pulse/lines: no data -> empty, no internals")
+main.get_candles = fake_candles
+main.exchange.fetch_tickers = fake_tickers
+main._SHARED.clear()
+
 sig_calls = []
 main.get_candles = fake_candles
 
