@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light" class="ds-ws">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +7,7 @@
 <meta name="description" content="Practice crypto spot and futures trading with live prices and virtual funds.">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='legacy.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
@@ -299,6 +299,8 @@
   .foot a { color: inherit; }
 </style>
 {% include '_analytics.html' ignore missing %}
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
 </head>
 <body class="an-shell">
 {% set active = 'demo' %}
@@ -308,7 +310,7 @@
   <header class="dt-panel dt-top">
     <div class="dt-brand">
       <h1 class="page-title">Demo trading</h1>
-      <span class="pill" title="Live market prices, virtual money">PRACTICE<span class="long"> · VIRTUAL USDT</span></span>
+      <span class="pill" title="Live market prices, virtual money">Practice<span class="long"> · virtual USDT</span></span>
     </div>
     <div class="dt-acct" aria-live="polite">
       <div class="acct-kv"><span>Equity<button class="help" data-term="equity" aria-label="What is equity?">?</button></span><b id="a-equity">—</b></div>
@@ -586,7 +588,7 @@
     </div>
     <div class="mnote" id="lv-info"></div>
     <div class="alert err" id="lv-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="lv-save">Confirm</button></div>
+    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn primary" id="lv-save">Confirm</button></div>
   </div>
 </div>
 
@@ -614,7 +616,7 @@
     <div class="fld"><label for="ts-tp">Take-profit price (empty = none)</label><input class="inp" id="ts-tp" inputmode="decimal" autocomplete="off"><div class="tpsl-note" id="ts-tp-note">&nbsp;</div></div>
     <div class="fld"><label for="ts-sl">Stop-loss price (empty = none)</label><input class="inp" id="ts-sl" inputmode="decimal" autocomplete="off"><div class="tpsl-note" id="ts-sl-note">&nbsp;</div></div>
     <div class="alert err" id="ts-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="ts-go">Save</button></div>
+    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn primary" id="ts-go">Save</button></div>
   </div>
 </div>
 
@@ -629,7 +631,7 @@
     <div class="fld"><label for="mg-amt">Amount (USDT)</label><input class="inp" id="mg-amt" inputmode="decimal" autocomplete="off"></div>
     <div class="mnote" id="mg-info"></div>
     <div class="alert err" id="mg-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="mg-go">Confirm</button></div>
+    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn primary" id="mg-go">Confirm</button></div>
   </div>
 </div>
 
@@ -641,7 +643,7 @@
     <div class="fld"><label for="jn-tag">Setup</label><input class="inp" id="jn-tag" list="tag-list" maxlength="40" autocomplete="off"></div>
     <div class="fld"><label for="jn-notes">Notes &amp; lessons</label><textarea class="inp" id="jn-notes" maxlength="1000" rows="5" placeholder="What went well? What would you do differently?"></textarea></div>
     <div class="alert err" id="jn-err" hidden></div>
-    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn long" id="jn-go">Save</button></div>
+    <div class="mfoot"><button class="dt-btn" data-close>Cancel</button><button class="dt-btn primary" id="jn-go">Save</button></div>
   </div>
 </div>
 
@@ -664,7 +666,7 @@
     <div class="mhead"><span id="m-guide-title">Demo Trading guide</span><button class="mx" data-close aria-label="Close">×</button></div>
     <div class="guide-nav" id="guide-nav"></div>
     <div class="guide" id="guide-body"></div>
-    <div class="mfoot"><button class="dt-btn long" data-close>Got it</button></div>
+    <div class="mfoot"><button class="dt-btn primary" data-close>Got it</button></div>
   </div>
 </div>
 
@@ -674,7 +676,7 @@
 <script>
 (() => {
   "use strict";
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "dark");
+  document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "light");
 
   // ================================================================ helpers
   const $ = (id) => document.getElementById(id);
