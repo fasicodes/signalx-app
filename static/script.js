@@ -122,7 +122,7 @@ function channelCard({ id, title, model, body, span2 = false }) {
         <div class="channel-id-group">
           ${scopeTicks(id)}
           <div>
-            <div class="channel-id">CH.${String(id).padStart(2, "0")}</div>
+            <div class="channel-id">Channel ${id}</div>
             <div class="channel-title">${title}</div>
           </div>
         </div>
@@ -492,8 +492,10 @@ function renderHero(data) {
 
   const tag = document.getElementById("hero-trend-tag");
   const eng = data.engine || {};
-  const state = eng.active ? (eng.fresh ? "NEW 4H SIGNAL" : "ACTIVE 4H SIGNAL") : "4H ENGINE · NO SETUP";
-  tag.textContent = `${data.coin || ""} · ${state} · ${data.trend || "--"}`.toUpperCase();
+  const state = eng.active ? (eng.fresh ? "New 4h signal" : "Active 4h signal") : "4h engine: no setup";
+  const trendRaw = String(data.trend || "--");
+  const trend = trendRaw.charAt(0).toUpperCase() + trendRaw.slice(1).toLowerCase();
+  tag.textContent = `${data.coin || ""} · ${state} · ${trend}`;
 }
 
 /* ---------------------------- concept agreement (Ch.01-05 signaling-concept agreement; NOT a win rate) ---------------------------- */
@@ -551,9 +553,9 @@ function renderAccuracyScore(data) {
 
   if (histEl) {
     histEl.innerHTML = accuracyHistory.map((h) => {
-      const height = Math.max(6, Math.round((h.pct / 100) * 34));
+      const height = Math.max(6, Math.round((h.pct / 100) * 54));
       return `<div class="bar-col"><span style="height:${height}px; background:${accuracyColor(h.pct)}"></span></div>`;
-    }).join("") || `<div class="bar-col"><span style="height:2px; background:var(--line)"></span></div>`;
+    }).join("") || `<p class="acc-history-empty">A short history appears here as the readout refreshes.</p>`;
   }
 }
 
@@ -2818,7 +2820,7 @@ async function runAnalysis(forceAnalyze) {
   errorText.classList.add("hidden");
   errorText.textContent = "";
   runBtn.disabled = true;
-  runBtn.querySelector(".scan-btn-text").textContent = "SCANNING…";
+  runBtn.querySelector(".scan-btn-text").textContent = "Analysing…";
 
   if (coin !== currentCoin) {
     lastLiquidityExtra = null;
@@ -2848,7 +2850,7 @@ async function runAnalysis(forceAnalyze) {
     emptyState.classList.remove("hidden");
   } finally {
     runBtn.disabled = false;
-    runBtn.querySelector(".scan-btn-text").textContent = "RUN ANALYSIS";
+    runBtn.querySelector(".scan-btn-text").textContent = "Run analysis";
   }
 }
 
