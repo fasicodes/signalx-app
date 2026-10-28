@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light" class="ds-ws">
+<html lang="en" data-theme="dark" class="ds-ws">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -299,8 +299,8 @@
   .foot a { color: inherit; }
 </style>
 {% include '_analytics.html' ignore missing %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
 </head>
 <body class="an-shell">
 {% set active = 'demo' %}
@@ -366,7 +366,7 @@
             <span><i style="border-color:var(--long);border-top-style:dashed"></i>Take-profit</span>
             <span><i style="border-color:var(--short);border-top-style:dashed"></i>Stop-loss</span>
             <span><i style="border-color:var(--wait)"></i>Liquidation</span>
-            <span><i style="border-color:#7aa2ff;border-top-style:dotted"></i>Open order</span>
+            <span><i style="border-color:#ffd43b;border-top-style:dotted"></i>Open order</span>
           </div>
         </div>
         <div id="chart"></div>
@@ -676,7 +676,7 @@
 <script>
 (() => {
   "use strict";
-  document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "light");
+  document.documentElement.setAttribute("data-theme", localStorage.getItem("signalsfm-theme") || "dark");
 
   // ================================================================ helpers
   const $ = (id) => document.getElementById(id);
@@ -975,7 +975,7 @@
         if (o.type === "TRAILING_STOP") {
           px = o.trail_active && o.trail_extreme ? o.trail_extreme * (o.side === "SELL" ? 1 - o.callback_pct / 100 : 1 + o.callback_pct / 100) : o.activation_price;
         }
-        add(px, "#7aa2ff", `${o.side === "BUY" ? "Buy" : "Sell"} ${TYPE_LABEL[o.type]}`, 1);
+        add(px, "#ffd43b", `${o.side === "BUY" ? "Buy" : "Sell"} ${TYPE_LABEL[o.type]}`, 1);
       });
     }
     if ($("i-tpsl").checked) {
