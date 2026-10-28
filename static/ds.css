@@ -2,7 +2,7 @@
    Signals FM design system
    One stylesheet for every page. It is loaded last, so it sets the colours, fonts, shapes and motion that the
    older page stylesheets (public.css, shell.css, app.css, style.css, market.css, strategies.css) read through
-   their own variable names. Light is the default theme; dark is the same system, not a different site.
+   their own variable names. Dark (black, green, red, yellow) is the default theme; light is the same system, not a different site.
 
    Contents
      1. Tokens (colour, type, space, shape, elevation, motion) - light and dark
@@ -14,66 +14,87 @@
    ========================================================================== */
 
 /* ---------- 1. tokens ---------- */
+/* Direction: a deep black trading workstation. Bright green is the one brand colour (actions, active state, gains),
+   red is for losses and stop-loss, yellow is for caution, demo and premium highlights. Nothing glows; depth comes
+   from surface steps and thin borders. Dark is the default theme; light is the same system on warm-white.
+   Contrast (checked with a script, WCAG 2.x): body text 18:1, secondary text 8:1, faint text 5:1 on every surface,
+   green 13:1, red 5.3:1, yellow 13:1 on the dark surfaces; light theme text pairs all above 4.5:1. */
 :root,
-html[data-theme="light"] {
-  color-scheme: light;
-  /* surfaces */
-  --ds-bg: #f4f6fb;
-  --ds-surface: #ffffff;
-  --ds-surface-2: #eef1f8;
-  --ds-surface-3: #e6eaf3;
-  --ds-line: #dde2ee;
-  --ds-line-soft: #e8ecf4;
-  /* text (all pairs meet 4.5:1 on --ds-surface and --ds-bg) */
-  --ds-text: #0b1220;
-  --ds-text-dim: #465067;
-  --ds-text-faint: #646d82;
-  /* brand */
-  --ds-brand: #2c52f0;
-  --ds-brand-strong: #1c3bc4;
-  --ds-brand-soft: rgba(44, 82, 240, 0.09);
-  --ds-on-brand: #ffffff;
-  /* market meaning: never the only signal, always paired with text, an arrow or a sign */
-  --ds-up: #0b7f4f;
-  --ds-up-soft: rgba(11, 127, 79, 0.1);
-  --ds-down: #cc1f3e;
-  --ds-down-soft: rgba(204, 31, 62, 0.09);
-  --ds-warn: #94590a;
-  --ds-warn-soft: rgba(176, 106, 8, 0.12);
-  /* elevation */
-  --ds-shadow-1: 0 1px 2px rgba(16, 24, 48, 0.06), 0 1px 1px rgba(16, 24, 48, 0.04);
-  --ds-shadow-2: 0 6px 18px -6px rgba(16, 24, 48, 0.14), 0 2px 4px rgba(16, 24, 48, 0.05);
-  --ds-shadow-3: 0 24px 60px -20px rgba(16, 24, 48, 0.28), 0 6px 14px rgba(16, 24, 48, 0.06);
-  --ds-scrim: rgba(11, 18, 32, 0.45);
-}
 html[data-theme="dark"] {
   color-scheme: dark;
-  --ds-bg: #0a0e17;
-  --ds-surface: #111726;
-  --ds-surface-2: #172033;
-  --ds-surface-3: #1e2940;
-  --ds-line: #27324b;
-  --ds-line-soft: #1c263b;
-  --ds-text: #eaf0fb;
-  --ds-text-dim: #a2aec6;
-  --ds-text-faint: #8392ae;
-  --ds-brand: #7b94ff;
-  --ds-brand-strong: #a3b4ff;
-  --ds-brand-soft: rgba(123, 148, 255, 0.14);
-  --ds-on-brand: #07101f;
-  --ds-up: #36d399;
-  --ds-up-soft: rgba(54, 211, 153, 0.13);
-  --ds-down: #ff7a8f;
-  --ds-down-soft: rgba(255, 122, 143, 0.13);
-  --ds-warn: #fbbf4a;
-  --ds-warn-soft: rgba(251, 191, 74, 0.13);
-  --ds-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --ds-shadow-2: 0 8px 22px -8px rgba(0, 0, 0, 0.55);
-  --ds-shadow-3: 0 28px 70px -22px rgba(0, 0, 0, 0.7);
-  --ds-scrim: rgba(2, 5, 12, 0.66);
+  /* surfaces: page, card, raised panel, hover/track */
+  --ds-bg: #050505;
+  --ds-surface: #0b0d0b;
+  --ds-surface-2: #111411;
+  --ds-surface-3: #191d1a;
+  --ds-line: #252b26;
+  --ds-line-soft: #1a1f1b;
+  --ds-field-line: #4c564f;          /* input boundaries: 3:1 against the surface */
+  /* text */
+  --ds-text: #f5f7f5;
+  --ds-text-dim: #a1aaa4;
+  --ds-text-faint: #8a948d;
+  /* brand: green. -strong is the text-safe shade on dark surfaces, -hover the pressed/hover fill */
+  --ds-brand: #00ff88;
+  --ds-brand-hover: #00d977;
+  --ds-brand-strong: #00ff88;
+  --ds-brand-soft: rgba(0, 255, 136, 0.1);
+  --ds-on-brand: #04130b;
+  /* market meaning: never the only signal, always paired with text, an arrow or a sign */
+  --ds-up: #00f08a;
+  --ds-up-soft: rgba(0, 240, 138, 0.12);
+  --ds-down: #ff3b4d;
+  --ds-down-fill: #d92b3d;           /* red used as a button fill (white text 4.8:1) */
+  --ds-down-soft: rgba(255, 59, 77, 0.13);
+  --ds-warn: #ffd43b;
+  --ds-warn-soft: rgba(255, 212, 59, 0.12);
+  --ds-gold: #ffd43b;                /* premium highlight fill */
+  --ds-on-gold: #171200;
+  --ds-draw: #ffd43b;                /* default colour of a new chart drawing */
+  /* elevation */
+  --ds-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --ds-shadow-2: 0 8px 22px -8px rgba(0, 0, 0, 0.7), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --ds-shadow-3: 0 28px 70px -22px rgba(0, 0, 0, 0.85), 0 2px 6px rgba(0, 0, 0, 0.5);
+  --ds-shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --ds-inset: inset 0 1px 1px rgba(0, 0, 0, 0.35);
+  --ds-scrim: rgba(0, 0, 0, 0.72);
+}
+html[data-theme="light"] {
+  color-scheme: light;
+  --ds-bg: #f4f6f3;
+  --ds-surface: #ffffff;
+  --ds-surface-2: #eef1ec;
+  --ds-surface-3: #e4e9e3;
+  --ds-line: #d7ded6;
+  --ds-line-soft: #e5eae3;
+  --ds-field-line: #8a948c;
+  --ds-text: #0a0f0b;
+  --ds-text-dim: #444d46;
+  --ds-text-faint: #5b665e;
+  --ds-brand: #00804a;
+  --ds-brand-hover: #006b3d;
+  --ds-brand-strong: #005f36;
+  --ds-brand-soft: rgba(0, 128, 74, 0.09);
+  --ds-on-brand: #ffffff;
+  --ds-up: #00703e;
+  --ds-up-soft: rgba(0, 112, 62, 0.1);
+  --ds-down: #b80f2a;
+  --ds-down-fill: #b80f2a;
+  --ds-down-soft: rgba(200, 16, 46, 0.09);
+  --ds-warn: #7d5700;
+  --ds-warn-soft: rgba(255, 212, 59, 0.28);
+  --ds-gold: #ffd43b;
+  --ds-on-gold: #171200;
+  --ds-draw: #9a6a00;
+  --ds-shadow-1: 0 1px 2px rgba(10, 20, 12, 0.07), 0 1px 1px rgba(10, 20, 12, 0.04);
+  --ds-shadow-2: 0 6px 18px -6px rgba(10, 20, 12, 0.16), 0 2px 4px rgba(10, 20, 12, 0.05);
+  --ds-shadow-3: 0 24px 60px -20px rgba(10, 20, 12, 0.3), 0 6px 14px rgba(10, 20, 12, 0.06);
+  --ds-shadow-btn: 0 1px 2px rgba(0, 60, 30, 0.3);
+  --ds-inset: inset 0 1px 1px rgba(10, 20, 12, 0.04);
+  --ds-scrim: rgba(5, 10, 6, 0.5);
 }
 :root {
-  /* type: Manrope for headings, Inter for interface text, IBM Plex Mono only for code-like columns */
+  /* type: Manrope for headings, Inter for interface text, IBM Plex Mono for prices, market data and other figures */
   --ds-font-display: "Manrope", "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --ds-font-body: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
   --ds-font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -204,12 +225,11 @@ html { scrollbar-color: var(--ds-line) transparent; }
 .pbtn:active, .d-btn:active, .an-gbtn:active, .ds-btn:active { transform: translateY(1px); box-shadow: none; }
 .pbtn.primary, .d-btn.primary, .an-gbtn.primary, .ds-btn.primary {
   background: var(--ds-brand); border-color: var(--ds-brand); color: var(--ds-on-brand); filter: none;
-  box-shadow: 0 1px 2px rgba(28, 59, 196, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  box-shadow: var(--ds-shadow-btn);
 }
 .pbtn.primary:hover, .d-btn.primary:hover, .an-gbtn.primary:hover, .ds-btn.primary:hover {
-  background: var(--ds-brand-strong); border-color: var(--ds-brand-strong); color: var(--ds-on-brand); filter: none;
+  background: var(--ds-brand-hover); border-color: var(--ds-brand-hover); color: var(--ds-on-brand); filter: none;
 }
-html[data-theme="dark"] .pbtn.primary:hover, html[data-theme="dark"] .d-btn.primary:hover { background: #93a8ff; border-color: #93a8ff; }
 .pbtn[disabled], .d-btn[disabled], .ds-btn[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
 .pbtn.lg, .ds-btn.lg { min-height: 46px; border-radius: 12px; }
 .pbtn.xl { min-height: 52px; border-radius: 14px; }
@@ -217,12 +237,12 @@ html[data-theme="dark"] .pbtn.primary:hover, html[data-theme="dark"] .d-btn.prim
 
 /* fields */
 .pinput, .pselect, .ds-input, .cform textarea.pinput {
-  background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: var(--ds-r-md); color: var(--ds-text);
+  background: var(--ds-surface); border: 1px solid var(--ds-field-line); border-radius: var(--ds-r-md); color: var(--ds-text);
   font-family: var(--ds-font-body); font-size: 15px; font-variant-numeric: tabular-nums; min-height: 44px; padding: 10px 14px;
-  box-shadow: inset 0 1px 1px rgba(16, 24, 48, 0.03);
+  box-shadow: var(--ds-inset);
   transition: border-color var(--ds-t-base) var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease), background-color var(--ds-t-base) var(--ds-ease);
 }
-.pinput:hover, .pselect:hover, .ds-input:hover { border-color: color-mix(in srgb, var(--ds-text-faint) 55%, var(--ds-line)); }
+.pinput:hover, .pselect:hover, .ds-input:hover { border-color: var(--ds-text-faint); }
 .pinput:focus, .pselect:focus, .ds-input:focus, .pinput:focus-visible, .pselect:focus-visible {
   outline: none; border-color: var(--ds-brand); box-shadow: 0 0 0 3px var(--ds-brand-soft);
 }
@@ -415,10 +435,10 @@ body:has(> .terminal) { padding: 14px 20px 28px; }
 .coin-picker-option-tag { font: 600 11px var(--ds-font-body); letter-spacing: 0; border-radius: 6px; }
 .scan-btn {
   height: 44px; padding: 0 26px; border-radius: 12px; background: var(--ds-brand); color: var(--ds-on-brand); font: 600 15px var(--ds-font-body); letter-spacing: 0;
-  box-shadow: 0 1px 2px rgba(28, 59, 196, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  box-shadow: var(--ds-shadow-btn);
   transition: background-color var(--ds-t-base) var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease), transform var(--ds-t-fast) var(--ds-ease);
 }
-.scan-btn:hover { filter: none; background: var(--ds-brand-strong); box-shadow: var(--ds-shadow-2); }
+.scan-btn:hover { filter: none; background: var(--ds-brand-hover); box-shadow: var(--ds-shadow-2); }
 .scan-btn:active { transform: translateY(1px); box-shadow: none; }
 .scan-btn:disabled { opacity: 0.6; }
 .error-text { color: var(--ds-down); font: 500 14px var(--ds-font-body); background: var(--ds-down-soft); border-radius: 12px; padding: 10px 14px; }
@@ -516,9 +536,9 @@ body:has(> .terminal) { padding: 14px 20px 28px; }
 .home-info-panel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .home-info-panel select, .home-info-panel textarea,
 .trade-modal-card input:not([type="checkbox"]):not([type="radio"]), .trade-modal-card select, .trade-modal-card textarea,
 .tmodal input:not([type="checkbox"]):not([type="radio"]), .tmodal select, .tmodal textarea {
-  background: var(--ds-surface) !important; border: 1px solid var(--ds-line) !important; border-radius: 12px !important; color: var(--ds-text) !important;
+  background: var(--ds-surface) !important; border: 1px solid var(--ds-field-line) !important; border-radius: 12px !important; color: var(--ds-text) !important;
   font: 400 15px var(--ds-font-body) !important; min-height: 44px; padding: 10px 14px !important; box-sizing: border-box;
-  box-shadow: inset 0 1px 1px rgba(16, 24, 48, 0.03); font-variant-numeric: tabular-nums;
+  box-shadow: var(--ds-inset); font-variant-numeric: tabular-nums;
   transition: border-color var(--ds-t-base) var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease);
 }
 .home-info-panel input:focus, .home-info-panel select:focus, .trade-modal-card input:focus, .trade-modal-card select:focus, .tmodal input:focus, .tmodal select:focus {
@@ -533,7 +553,7 @@ body:has(> .terminal) { padding: 14px 20px 28px; }
 .home-info-panel button[style*="transparent"], .trade-modal-card button[style*="transparent"] {
   background: var(--ds-surface) !important; border: 1px solid var(--ds-line) !important; color: var(--ds-text) !important; border-radius: 12px !important; font: 600 14px var(--ds-font-body) !important; min-height: 44px;
 }
-.home-info-panel button[style*="var(--accent)"]:hover, .home-info-panel button[style*="var(--long)"]:hover { background: var(--ds-brand-strong) !important; }
+.home-info-panel button[style*="var(--accent)"]:hover, .home-info-panel button[style*="var(--long)"]:hover { background: var(--ds-brand-hover) !important; }
 .trade-modal-card { border-radius: var(--ds-r-lg) !important; box-shadow: var(--ds-shadow-3) !important; animation: ds-pop var(--ds-t-base) var(--ds-ease) both; }
 .trade-modal-card h3 { font: 800 19px var(--ds-font-display) !important; letter-spacing: -0.01em; }
 .ds-form-msg { font: 500 13.5px var(--ds-font-body); color: var(--ds-down); min-height: 18px; margin: 4px 0 8px; }
@@ -552,10 +572,10 @@ body:has(> .terminal) { padding: 14px 20px 28px; }
 
 /* ---------- 7. numeric fields (ds.js) and sliders ---------- */
 .ds-num {
-  display: flex; align-items: stretch; width: 100%; background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: 12px; overflow: hidden;
-  box-shadow: inset 0 1px 1px rgba(16, 24, 48, 0.03); transition: border-color var(--ds-t-base) var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease);
+  display: flex; align-items: stretch; width: 100%; background: var(--ds-surface); border: 1px solid var(--ds-field-line); border-radius: 12px; overflow: hidden;
+  box-shadow: var(--ds-inset); transition: border-color var(--ds-t-base) var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease);
 }
-.ds-num:hover { border-color: color-mix(in srgb, var(--ds-text-faint) 55%, var(--ds-line)); }
+.ds-num:hover { border-color: var(--ds-text-faint); }
 .ds-num.is-focus { border-color: var(--ds-brand); box-shadow: 0 0 0 3px var(--ds-brand-soft); }
 .ds-num.is-invalid { border-color: var(--ds-down); box-shadow: 0 0 0 3px var(--ds-down-soft); }
 .ds-num-pre, .ds-num-suf {
@@ -564,7 +584,7 @@ body:has(> .terminal) { padding: 14px 20px 28px; }
 .ds-num-pre { border-right: 1px solid var(--ds-line-soft); } .ds-num-suf { border-left: 1px solid var(--ds-line-soft); }
 .ds-num .ds-num-input, .home-info-panel .ds-num .ds-num-input, .trade-modal-card .ds-num .ds-num-input, .tmodal .ds-num .ds-num-input {
   flex: 1; min-width: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; border-radius: 0 !important;
-  font: 600 16px var(--ds-font-body) !important; font-variant-numeric: tabular-nums; min-height: 44px; padding: 10px 12px !important; -moz-appearance: textfield; appearance: textfield;
+  font: 500 16px var(--ds-font-mono) !important; font-variant-numeric: tabular-nums; min-height: 44px; padding: 10px 12px !important; -moz-appearance: textfield; appearance: textfield;
 }
 .ds-num .ds-num-input::-webkit-outer-spin-button, .ds-num .ds-num-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .ds-num .ds-num-input:focus { outline: none; box-shadow: none !important; }
@@ -595,12 +615,12 @@ body:has(> .terminal) { padding: 14px 20px 28px; }
 /* inputs inside the numeric wrapper: the wrapper draws the border, the input is bare */
 .ds-num input.ds-num-input.ds-num-input.ds-num-input.ds-num-input {
   border: 0 !important; background: transparent !important; box-shadow: none !important; border-radius: 0 !important; min-height: 44px; padding: 10px 12px !important;
-  font: 600 16px var(--ds-font-body) !important; font-variant-numeric: tabular-nums;
+  font: 500 16px var(--ds-font-mono) !important; font-variant-numeric: tabular-nums;
 }
 /* native selects get one custom chevron so they match the rest of the form */
 .home-info-panel select, .trade-modal-card select, .tmodal select, select.ds-select {
   -webkit-appearance: none !important; appearance: none !important; padding-right: 38px !important; background-repeat: no-repeat !important; background-position: right 14px center !important; background-size: 12px !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23646d82' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a948d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
 }
 .about-card p { font: 400 15px/1.65 var(--ds-font-body); color: var(--ds-text-dim); }
 .about-card p b, .about-card p strong { color: var(--ds-text); }
@@ -618,7 +638,7 @@ html[data-theme] .ds-results .perf-metric-card:nth-child(2) { background: var(--
 
 /* ---------- 8. sign-in pages (login.html, reset-password.html) ---------- */
 .auth-page { background: var(--ds-bg); padding: 24px; position: relative; }
-.auth-page::before { content: ""; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(60% 46% at 50% 0%, var(--ds-brand-soft), transparent 72%); }
+.auth-page::before { display: none; }
 .auth-page .auth-card, .auth-page .card {
   background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: var(--ds-r-xl); box-shadow: var(--ds-shadow-3);
   padding: 34px 32px 26px; animation: ds-rise var(--ds-t-slow) var(--ds-ease) both;
@@ -643,24 +663,24 @@ html[data-theme] .ds-results .perf-metric-card:nth-child(2) { background: var(--
   font: 600 13px var(--ds-font-body); letter-spacing: 0; text-transform: none; color: var(--ds-text); margin-bottom: 7px;
 }
 .auth-page .field-row {
-  background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: var(--ds-r-md); min-height: 50px; padding: 3px 4px 3px 14px;
-  box-shadow: inset 0 1px 1px rgba(16, 24, 48, 0.03);
+  background: var(--ds-surface); border: 1px solid var(--ds-field-line); border-radius: var(--ds-r-md); min-height: 50px; padding: 3px 4px 3px 14px;
+  box-shadow: var(--ds-inset);
 }
-.auth-page .field-row:hover, .auth-page .field input:hover { border-color: color-mix(in srgb, var(--ds-text-faint) 55%, var(--ds-line)); }
+.auth-page .field-row:hover, .auth-page .field input:hover { border-color: var(--ds-text-faint); }
 .auth-page .field-row:focus-within, .auth-page .field input:focus { border-color: var(--ds-brand); box-shadow: 0 0 0 3px var(--ds-brand-soft); }
 .auth-page .field-row input { font: 400 15px var(--ds-font-body); color: var(--ds-text); }
 .auth-page .field-row input::placeholder, .auth-page .field input::placeholder { color: var(--ds-text-faint); opacity: 1; }
 .auth-page .field input {
-  background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: var(--ds-r-md); min-height: 50px; padding: 12px 14px; font: 400 15px var(--ds-font-body);
-  box-shadow: inset 0 1px 1px rgba(16, 24, 48, 0.03);
+  background: var(--ds-surface); border: 1px solid var(--ds-field-line); border-radius: var(--ds-r-md); min-height: 50px; padding: 12px 14px; font: 400 15px var(--ds-font-body);
+  box-shadow: var(--ds-inset);
 }
 .auth-page .go-btn, .auth-page .submit-btn {
-  background: var(--ds-brand); color: var(--ds-on-brand); border: 1px solid var(--ds-brand); box-shadow: 0 1px 2px rgba(28, 59, 196, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  background: var(--ds-brand); color: var(--ds-on-brand); border: 1px solid var(--ds-brand); box-shadow: var(--ds-shadow-btn);
   transition: background-color var(--ds-t-base) var(--ds-ease), transform var(--ds-t-fast) var(--ds-ease), opacity var(--ds-t-base) var(--ds-ease);
 }
 .auth-page .go-btn { width: 42px; height: 42px; min-width: 42px; border-radius: 10px; font: 700 16px var(--ds-font-body); filter: none; }
 .auth-page .submit-btn { min-height: 48px; border-radius: var(--ds-r-md); font: 600 15px var(--ds-font-body); letter-spacing: 0; padding: 0; filter: none; margin-top: 8px; }
-.auth-page .go-btn:hover:not(:disabled), .auth-page .submit-btn:hover:not(:disabled) { background: var(--ds-brand-strong); border-color: var(--ds-brand-strong); filter: none; box-shadow: 0 1px 2px rgba(28, 59, 196, 0.35); }
+.auth-page .go-btn:hover:not(:disabled), .auth-page .submit-btn:hover:not(:disabled) { background: var(--ds-brand-hover); border-color: var(--ds-brand-hover); filter: none; box-shadow: var(--ds-shadow-btn); }
 .auth-page .go-btn:active:not(:disabled), .auth-page .submit-btn:active:not(:disabled) { transform: translateY(1px); }
 .auth-page .go-btn:disabled, .auth-page .submit-btn:disabled { opacity: 0.5; box-shadow: none; }
 /* waiting for the server: a small spinner replaces the label, the button ignores clicks (it is disabled) */
@@ -730,8 +750,8 @@ html[data-theme] .ds-results .perf-metric-card:nth-child(2) { background: var(--
 .ds-ws .btn:active:not(:disabled), .ds-ws .dt-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
 .ds-ws .btn:disabled, .ds-ws .dt-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 .ds-ws .btn-sm, .ds-ws .dt-btn.sm { min-height: 30px; padding: 4px 10px; font-size: 12.5px; border-radius: 8px; }
-.ds-ws .btn-primary { background: var(--ds-brand); border-color: var(--ds-brand); color: var(--ds-on-brand); box-shadow: 0 1px 2px rgba(28, 59, 196, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14); }
-.ds-ws .btn-primary:hover:not(:disabled) { background: var(--ds-brand-strong); border-color: var(--ds-brand-strong); }
+.ds-ws .btn-primary { background: var(--ds-brand); border-color: var(--ds-brand); color: var(--ds-on-brand); box-shadow: var(--ds-shadow-btn); }
+.ds-ws .btn-primary:hover:not(:disabled) { background: var(--ds-brand-hover); border-color: var(--ds-brand-hover); }
 .ds-ws .btn-danger { background: var(--ds-down); border-color: var(--ds-down); color: #fff; }
 html[data-theme="dark"].ds-ws .btn-danger { color: #1a0509; }
 .ds-ws .btn-danger:hover:not(:disabled) { background: var(--ds-down); border-color: var(--ds-down); filter: brightness(0.94); }
@@ -747,21 +767,21 @@ html[data-theme="dark"].ds-ws .dt-btn.short { color: #1a0509; }
 
 /* fields */
 .ds-ws .inp, .ds-ws .sel {
-  background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: 10px; color: var(--ds-text);
-  font: 500 14.5px var(--ds-font-body); min-height: 42px; padding: 9px 12px; box-shadow: inset 0 1px 1px rgba(16, 24, 48, 0.03);
+  background: var(--ds-surface); border: 1px solid var(--ds-field-line); border-radius: 10px; color: var(--ds-text);
+  font: 500 14.5px var(--ds-font-body); min-height: 42px; padding: 9px 12px; box-shadow: var(--ds-inset);
   transition: border-color var(--ds-t-base) var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease);
 }
-.ds-ws .inp:hover, .ds-ws .sel:hover { border-color: color-mix(in srgb, var(--ds-text-faint) 55%, var(--ds-line)); }
+.ds-ws .inp:hover, .ds-ws .sel:hover { border-color: var(--ds-text-faint); }
 .ds-ws .inp:focus, .ds-ws .sel:focus { border-color: var(--ds-brand); box-shadow: 0 0 0 3px var(--ds-brand-soft); outline: none; }
 .ds-ws .inp::placeholder { color: var(--ds-text-faint); opacity: 1; }
 .ds-ws .inp.bad { border-color: var(--ds-down); box-shadow: 0 0 0 3px var(--ds-down-soft); }
 .ds-ws textarea.inp { font: 400 14px/1.55 var(--ds-font-body); min-height: 84px; }
 .ds-ws .sel {
   -webkit-appearance: none; appearance: none; padding-right: 36px; background-repeat: no-repeat; background-position: right 12px center; background-size: 12px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23646d82' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a948d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 }
-.ds-ws .inp-wrap { background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: 10px; box-shadow: inset 0 1px 1px rgba(16, 24, 48, 0.03); transition: border-color var(--ds-t-base) var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease); }
-.ds-ws .inp-wrap:hover { border-color: color-mix(in srgb, var(--ds-text-faint) 55%, var(--ds-line)); }
+.ds-ws .inp-wrap { background: var(--ds-surface); border: 1px solid var(--ds-field-line); border-radius: 10px; box-shadow: var(--ds-inset); transition: border-color var(--ds-t-base) var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease); }
+.ds-ws .inp-wrap:hover { border-color: var(--ds-text-faint); }
 .ds-ws .inp-wrap:focus-within { border-color: var(--ds-brand); box-shadow: 0 0 0 3px var(--ds-brand-soft); }
 .ds-ws .inp-wrap .inp, .ds-ws .inp-wrap .inp:focus { border: 0; box-shadow: none; background: transparent; border-radius: 0; font-weight: 600; font-size: 15px; }
 .ds-ws .inp-wrap .suffix { font: 600 12.5px var(--ds-font-body); color: var(--ds-text-faint); background: var(--ds-surface-2); border-left: 1px solid var(--ds-line-soft); padding: 0 11px; }
@@ -905,8 +925,8 @@ html[data-theme="dark"].ds-ws .switch[aria-checked="true"]::after { background: 
 @keyframes ds-modal-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
 @keyframes ds-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes ds-term-flash { 0% { background: var(--ds-brand-soft); } 100% { background: transparent; } }
-.ds-ws .dt-btn.primary { background: var(--ds-brand); border-color: var(--ds-brand); color: var(--ds-on-brand); box-shadow: 0 1px 2px rgba(28, 59, 196, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14); }
-.ds-ws .dt-btn.primary:hover:not(:disabled) { background: var(--ds-brand-strong); border-color: var(--ds-brand-strong); filter: none; }
+.ds-ws .dt-btn.primary { background: var(--ds-brand); border-color: var(--ds-brand); color: var(--ds-on-brand); box-shadow: var(--ds-shadow-btn); }
+.ds-ws .dt-btn.primary:hover:not(:disabled) { background: var(--ds-brand-hover); border-color: var(--ds-brand-hover); filter: none; }
 .ds-ws .btn-long { background: var(--ds-up); border-color: var(--ds-up); color: var(--ds-on-brand); }
 .ds-ws .btn-long:hover:not(:disabled) { background: var(--ds-up); border-color: var(--ds-up); filter: brightness(0.93); }
 /* a trade button that cannot be used yet is a quiet tinted outline, not a faded solid */
@@ -917,14 +937,16 @@ html[data-theme="dark"].ds-ws .switch[aria-checked="true"]::after { background: 
 @media (max-width: 520px) { .ds-ws .settings-grid > .field:has(#s-market) { grid-column: auto; } }
 .ds-ws .dt-btn.long:disabled { background: var(--ds-up-soft); color: var(--ds-up); border-color: color-mix(in srgb, var(--ds-up) 28%, var(--ds-line)); opacity: 0.8; }
 .ds-ws .dt-btn.short:disabled { background: var(--ds-down-soft); color: var(--ds-down); border-color: color-mix(in srgb, var(--ds-down) 28%, var(--ds-line)); opacity: 0.8; }
-/* the logo is dark navy: on dark surfaces it sits on a light chip so it stays readable */
-html[data-theme="dark"] img[src*="logo.png"] { background: #eef1f8; border-radius: 8px; padding: 3px 5px; box-sizing: content-box; }
+/* two logo files: the original (blue) for the light theme, a green recolour of it for the dark one. Only one is shown. */
+img.lg-dark { display: none !important; }
+html[data-theme="dark"] img.lg-light { display: none !important; }
+html[data-theme="dark"] img.lg-dark { display: inline-block !important; }
 
 /* every native dropdown gets the same chevron, so no page shows a different browser arrow */
 select:not([multiple]):not([size]) {
   -webkit-appearance: none !important; appearance: none !important; padding-right: 36px !important;
   background-repeat: no-repeat !important; background-position: right 12px center !important; background-size: 12px !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23646d82' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a948d' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") !important;
 }
 /* file pickers */
 input[type="file"] { font: 400 13.5px var(--ds-font-body); color: var(--ds-text-dim); max-width: 100%; }
@@ -973,3 +995,114 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ds-brand); }
 
 /* headline numbers that count up once (ds.js): same digit width the whole time, so nothing jumps */
 [data-ds-count] { font-variant-numeric: tabular-nums; }
+
+/* ---------- 11. figures: prices and market data in IBM Plex Mono ----------
+   Interface text stays in Inter and Manrope. Anything a trader reads as a number (price, percent, size, R-multiple,
+   timeframe, clock) uses IBM Plex Mono with tabular figures, so columns line up and a changing price does not shift
+   the layout. Weights stop at 600 (the weights the pages load). */
+.mono, .num, .tnum, [data-num], .px, time.clock,
+.lp .ex-plan dd, .lp .res-card dd, .lp .facts b, .lp .live-n b, .lp .tf span, .lp .spec dd b, .lp .live-chip span:last-child,
+.price b, .tools td, table.mini td, dl.rows dd, .result .big, .res .big, .tbox td,
+.terminal .hero-price, .terminal .hero-sub b, .terminal .channel-main, .terminal .dual-value, .terminal .perf-metric-value,
+.terminal .accuracy-score-pct, .terminal .live-clock, .terminal .gauge-confidence, .terminal .channel-id,
+.ptable td.num, .gtable td.num, .perf-metric-value, .accuracy-score-pct,
+.coin-picker-option-price, .skeleton-box-price, .skeleton-box-change, .empty-ticker-change,
+.cc-now span, .foot .likes, .stat .v, .chipset label,
+.ds-ws .tfs button, .ds-ws .slider-marks button, .ds-ws .quick button, .ds-ws .presets button, .ds-ws .acct-kv b,
+.ds-ws .symbar .last, .ds-ws .sb-kv b, .ds-ws .kpi b, .ds-ws table.tbl td, .ds-ws .dt-mbar .px, .ds-ws .summary b,
+.ds-ws .inp-wrap input, .ds-ws .inp-wrap .suffix, .ds-ws .maxline b, .ds-ws .stat .v, .ds-ws .mk-seg button,
+.ds-num input, .ds-num-affix {
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 0;
+}
+/* the big display numbers keep their size and lose the heavy display weight, which mono does not ship */
+.lp .res-card dd, .lp .facts b, .terminal .hero-price, .terminal .channel-main, .terminal .perf-metric-value, .terminal .accuracy-score-pct,
+.result .big, .res .big, .ds-ws .stat .v, .price b { font-weight: 600; letter-spacing: -0.02em; }
+.lp .res-card dd { font-size: 28px; }
+.lp .res-card dd small { font-family: var(--ds-font-body); }
+.lp .facts b { font-size: 24px; }
+.terminal .hero-price { font-size: 34px; }
+.terminal .channel-main { font-size: 22px; }
+.terminal .dual-value, .terminal .perf-metric-value { font-weight: 600; }
+.lp .ex-plan dd { font-weight: 600; font-size: 16.5px; }
+.lp .tf span { font-weight: 500; font-size: 12.5px; }
+.lp .ex-tag { color: var(--ds-warn); border-color: color-mix(in srgb, var(--ds-warn) 60%, transparent); background: var(--ds-warn-soft); }
+
+/* ---------- 12. market strip (market-strip.js) ----------
+   Last price, 24-hour change and a 24-hour line for the main coins. Loading shows grey placeholders (no numbers);
+   a failed load says so; an old reading is marked as out of date. Direction is always shown as a sign and an arrow as well as a colour. */
+.mstrip { position: relative; min-width: 0; }
+.mstrip-list {
+  list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(140px, 1fr);
+  overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; overscroll-behavior-x: contain;
+  background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: var(--ds-r-lg); box-shadow: var(--ds-shadow-1);
+}
+.mstrip-list::-webkit-scrollbar { display: none; }
+.mi {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "sym ch" "px line"; align-items: center; gap: 5px 10px;
+  padding: 11px 12px 10px; min-width: 0; border-right: 1px solid var(--ds-line-soft); scroll-snap-align: start;
+}
+.mi:last-child { border-right: 0; }
+.mi-sym { grid-area: sym; font: 600 12.5px/1.2 var(--ds-font-body); letter-spacing: 0.02em; color: var(--ds-text-dim); }
+.mi-ch { grid-area: ch; justify-self: end; font: 500 12px/1.2 var(--ds-font-mono); font-variant-numeric: tabular-nums; color: var(--ds-text-faint); white-space: nowrap; }
+.mi-ch i { font-style: normal; font-size: 8.5px; margin-right: 4px; vertical-align: 1px; }
+.mi-ch.up { color: var(--ds-up); } .mi-ch.down { color: var(--ds-down); }
+.mi-px {
+  grid-area: px; font: 500 14px/1.3 var(--ds-font-mono); font-variant-numeric: tabular-nums; color: var(--ds-text);
+  border-radius: 5px; margin: 0 -3px; padding: 0 3px; white-space: nowrap; min-width: 0;
+}
+.mi-line { grid-area: line; justify-self: end; display: flex; align-items: center; height: 20px; min-width: 44px; }
+.mi-spark { display: block; overflow: visible; } .mi-spark.up { color: var(--ds-up); } .mi-spark.down { color: var(--ds-down); }
+@keyframes mi-up { 0% { background-color: var(--ds-up-soft); color: var(--ds-up); } 100% { background-color: transparent; color: var(--ds-text); } }
+@keyframes mi-down { 0% { background-color: var(--ds-down-soft); color: var(--ds-down); } 100% { background-color: transparent; color: var(--ds-text); } }
+.mi-px.ds-tick-up { animation: mi-up 900ms var(--ds-ease); } .mi-px.ds-tick-down { animation: mi-down 900ms var(--ds-ease); }
+/* placeholders keep the strip's height steady while the first prices load */
+.mi.is-skel .sk { display: block; border-radius: 5px; background: linear-gradient(100deg, var(--ds-surface-2) 30%, var(--ds-surface-3) 50%, var(--ds-surface-2) 70%); background-size: 220% 100%; animation: ds-shimmer 1.4s linear infinite; }
+.mi.is-skel .sk-a { grid-area: sym; width: 34px; height: 11px; } .mi.is-skel .sk-b { grid-area: px; width: 92px; height: 15px; } .mi.is-skel .sk-c { grid-area: line; justify-self: end; width: 44px; height: 14px; }
+.mstrip-note { margin: 8px 2px 0; min-height: 18px; font: 400 12px/1.5 var(--ds-font-body); color: var(--ds-text-faint); }
+.mstrip.is-stale .mi-px, .mstrip.is-stale .mi-spark { opacity: 0.6; }
+.mstrip.is-stale .mstrip-note { color: var(--ds-warn); }
+.mstrip.is-failed .mstrip-list { display: none; }
+.mstrip.is-failed .mstrip-note { margin: 0; padding: 14px 16px; background: var(--ds-surface); border: 1px dashed var(--ds-field-line); border-radius: var(--ds-r-md); color: var(--ds-text-dim); font-size: 13.5px; }
+.mstrip-retry { font: 600 13px var(--ds-font-body); color: var(--ds-brand-strong); background: none; border: 0; padding: 4px 6px; margin: -4px 0; min-height: 28px; border-radius: 6px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.mstrip-retry:hover { background: var(--ds-brand-soft); }
+.terminal .mstrip { margin: 0 0 12px; }
+.terminal .mstrip-note { margin-top: 6px; }
+@media (max-width: 560px) { .mi { padding: 10px 12px 9px; } .mstrip-list { grid-auto-columns: minmax(142px, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .mi-px.ds-tick-up, .mi-px.ds-tick-down, .mi.is-skel .sk { animation: none; } }
+/* data tables and value strips on Signals, Pro insights and the calculators */
+.lv b, .strip dd, .res, .prog-line span, .gtable td:not(.wrap), .calc dd { font-family: var(--ds-font-mono); font-variant-numeric: tabular-nums; }
+.strip dd { font-weight: 600; letter-spacing: -0.02em; }
+.lv b { font-size: 13.5px; }
+
+/* premium yellow: labels that mean "beta", "example", "demo" or "pro" (never a price direction) */
+.plan-tag, .tag-new { background: var(--ds-gold); color: var(--ds-on-gold); border-color: transparent; }
+.lp .mkt .mstrip.is-failed .mstrip-note { border: 0; background: none; padding: 0; color: var(--ds-text-faint); }
+@media (max-width: 720px) { .lp .facts b { font-size: 17px; white-space: nowrap; } .lp .res-card dd { font-size: 20px; } }
+
+/* terminal "ready for analysis" state: same palette, no glow */
+.radar-ring { border-color: color-mix(in srgb, var(--ds-brand) 22%, transparent); }
+.radar-ring-3 { border-color: color-mix(in srgb, var(--ds-brand) 38%, transparent); }
+.radar-sweep { background: conic-gradient(from 0deg, color-mix(in srgb, var(--ds-brand) 28%, transparent), transparent 28%); }
+.radar-blip { background: var(--ds-brand); box-shadow: none; }
+.empty-title { font: 800 22px var(--ds-font-display); letter-spacing: -0.015em; }
+.empty-subtitle { font: 400 14px/1.6 var(--ds-font-body); color: var(--ds-text-dim); }
+.empty-ticker { border-color: var(--ds-line); background: var(--ds-surface); border-radius: var(--ds-r-pill); }
+.empty-ticker-symbol { font: 600 12px var(--ds-font-body); color: var(--ds-text-dim); }
+.empty-ticker-change.text-long, .empty-ticker-change.up { color: var(--ds-up); } .empty-ticker-change.text-short, .empty-ticker-change.down { color: var(--ds-down); }
+.skeleton-box.is-filled { background: var(--ds-surface); border: 1px solid var(--ds-line); opacity: 1; }
+.skeleton-box-symbol { font: 600 10.5px var(--ds-font-body); color: var(--ds-text-dim); }
+.skeleton-box-price { font-size: 10px; color: var(--ds-text); }
+.skeleton-box-change { font-size: 10px; font-weight: 500; }
+/* the market strip above already shows these prices, so the pill inside the empty state is not repeated; the grid cells read as quiet panels */
+.terminal:has(.mstrip) .empty-ticker { display: none; }
+.skeleton-box.is-filled { padding: 16px 18px; gap: 6px; align-items: flex-start; border-radius: var(--ds-r-md); }
+.skeleton-box-icon { width: 18px; height: 18px; }
+.skeleton-box-symbol { font-size: 12.5px; }
+.skeleton-box-price { font: 500 17px var(--ds-font-mono); }
+.skeleton-box-change { font: 500 12px var(--ds-font-mono); }
+.empty-state { background: var(--ds-surface); border-color: var(--ds-line); border-radius: var(--ds-r-lg); min-height: 520px; }
+.empty-core { background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: var(--ds-r-xl); padding: 26px 40px 28px; box-shadow: var(--ds-shadow-2); text-align: center; }
+.empty-radar { margin-bottom: 14px; }
+.ds-ws .symbar .last, .ds-ws .acct-kv b, .ds-ws .kpi b, .ds-ws .stat .v, .ds-ws table.tbl td b, .ds-ws .summary b { font-weight: 600; }
