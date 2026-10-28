@@ -17,8 +17,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 {% block head %}{% endblock %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
 </head>
 <body class="info{% if logged_in %} an-shell in-app{% endif %}">
 {% if logged_in %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
