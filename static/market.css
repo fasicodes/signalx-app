@@ -397,11 +397,9 @@ kbd { display: inline-block; min-width: 20px; padding: 1px 5px; border-radius: 5
 .lq-tag { font: 600 10.5px var(--body); padding: 1px 6px; border-radius: 999px; white-space: nowrap; background: var(--surface-2); color: var(--dim); }
 .lq-tag.wall-b { background: var(--long-bg); color: var(--long); }
 .lq-tag.wall-a { background: var(--short-bg); color: var(--short); }
-.lq-tag.liq { background: color-mix(in srgb, #a78bfa 18%, transparent); color: #a78bfa; }
+.lq-tag.liq { background: var(--ds-down-soft); color: var(--ds-down); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ds-down) 35%, transparent); }
 .lq-tag.pool { background: var(--amber-bg); color: var(--amber); }
-.lq-tag.mag { background: color-mix(in srgb, #60a5fa 18%, transparent); color: #60a5fa; }
-html[data-theme="light"] .lq-tag.liq { color: #6d28d9; }
-html[data-theme="light"] .lq-tag.mag { color: #1d4ed8; }
+.lq-tag.mag { background: var(--ds-surface-3); color: var(--ds-text); box-shadow: inset 0 0 0 1px var(--ds-line); }
 
 /* key levels list */
 .lq-levels { display: grid; gap: 0; }
