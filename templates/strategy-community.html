@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,8 +13,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='strategies.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
 </head>
 <body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
 {% set active = 'strategies' %}
