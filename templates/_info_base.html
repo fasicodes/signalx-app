@@ -3,7 +3,7 @@
    Child pages set `active` and fill the blocks: title, description, seo, head, content, scripts. #}
 {%- set logged_in = session.get('user_id') -%}
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,8 +17,8 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 {% block head %}{% endblock %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
 </head>
 <body class="info{% if logged_in %} an-shell in-app{% endif %}">
 {% if logged_in %}{% include '_app_nav.html' %}{% else %}{% include '_public_nav.html' %}{% endif %}
