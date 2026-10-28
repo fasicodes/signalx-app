@@ -302,8 +302,8 @@
     const add = (p, label, sub, color, strength) => { if (num(p) && Math.abs(p / price - 1) <= 0.15) items.push({ p, label, sub, color, strength }); };
     const b = d.book, sc = d.scanner || {}, sw = d.levels && d.levels.swing;
     if (b && b.available) b.walls.filter((w) => w.is_wall).slice(0, 6).forEach((w) => add(w.price, w.side === "BID" ? "Buy wall" : "Sell wall", `${F.usd(w.usd)} · ${w.x_median}× a normal level`, w.side === "BID" ? "var(--long)" : "var(--short)"));
-    if (sc.magnet) add(sc.magnet.price, "Liquidity magnet", `${F.usd(sc.magnet.usd_size)} cluster, ${sc.magnet.side === "SUPPORT" ? "support" : "resistance"}`, "#60a5fa");
-    if (sc.likely_target) add(sc.likely_target.price, "Likely target", `${sc.likely_target.type}, score ${Math.round(sc.likely_target.score)}/100`, "#60a5fa");
+    if (sc.magnet) add(sc.magnet.price, "Liquidity magnet", `${F.usd(sc.magnet.usd_size)} cluster, ${sc.magnet.side === "SUPPORT" ? "support" : "resistance"}`, "var(--text)");
+    if (sc.likely_target) add(sc.likely_target.price, "Likely target", `${sc.likely_target.type}, score ${Math.round(sc.likely_target.score)}/100`, "var(--text)");
     if (sw && sw.available) { add(sw.swing_high, "Range high", `top of the last ${sw.lookback} candles · stops above`, "var(--amber)"); add(sw.swing_low, "Range low", `bottom of the last ${sw.lookback} candles · stops below`, "var(--amber)"); }
     (d.levels.pools || []).forEach((p) => add(p.price, p.type === "EQH" ? "Equal highs" : "Equal lows", `${p.touches} touches · ${p.type === "EQH" ? "buy stops above" : "sell stops below"}`, "var(--amber)"));
     const q = d.liquidations;
