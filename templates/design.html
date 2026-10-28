@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,8 +13,9 @@
 
 <link rel="stylesheet" href="{{ url_for('static', filename='premium-ui.css') }}?v=20261028b">
 {% include '_analytics.html' ignore missing %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
+<script src="{{ url_for('static', filename='market-strip.js') }}" defer></script>
 </head>
 <body>
 
@@ -26,7 +27,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
       <a class="brand-row" href="/" aria-label="Signals FM home">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="brand-logo" width="32" height="32">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="lg-light brand-logo" width="32" height="32"><img src="{{ url_for('static', filename='logo-green.png') }}" alt="" class="lg-dark brand-logo" width="32" height="32">
         <span class="brand-name">Signals FM</span>
       </a>
       <span class="tb-badge">Pro terminal</span>
@@ -101,7 +102,7 @@
           icon.innerHTML = t === 'dark' ? sunPath : moonPath;
           localStorage.setItem('signalsfm-theme', t);
         }
-        applyTheme(localStorage.getItem('signalsfm-theme') || 'light');
+        applyTheme(localStorage.getItem('signalsfm-theme') || 'dark');
         btn.addEventListener('click', () => {
           applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
         });
@@ -114,13 +115,15 @@
     </script>
   </header>
 
+  <div class="mstrip" data-market-strip role="group" aria-label="Market prices"><ul class="mstrip-list" role="list"><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li><li class="mi is-skel" aria-hidden="true"><span class="sk sk-a"></span><span class="sk sk-b"></span><span class="sk sk-c"></span></li></ul><p class="mstrip-note" role="status"></p></div>
+
   <!-- Slide-out menu drawer: opens from the hamburger icon next to the
        Signals FM logo. Fully independent of the tabs-layout inside
        #result-box, so it never touches the RUN ANALYSIS flow. -->
   <div class="side-drawer-backdrop" id="side-drawer-backdrop"></div>
   <nav class="side-drawer" id="home-info-nav">
     <div class="side-drawer-brand">
-      <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="side-drawer-brand-logo">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="lg-light side-drawer-brand-logo"><img src="{{ url_for('static', filename='logo-green.png') }}" alt="" class="lg-dark side-drawer-brand-logo">
       <div class="side-drawer-brand-text">
         <span class="side-drawer-brand-name">Signals FM</span>
         <span class="side-drawer-brand-tag">Pro terminal</span>
