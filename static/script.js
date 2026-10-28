@@ -2230,7 +2230,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
     if (d.type === "vertical") {
       const x = timeX(d.time);
       if (!okXY(x)) return;
-      el("line", { x1: x, x2: x, y1: 0, y2: height, stroke: "#4dabf7", "stroke-width": isSel ? "2.4" : "1.4", "stroke-dasharray": "4 3" });
+      el("line", { x1: x, x2: x, y1: 0, y2: height, stroke: "#e2b93b", "stroke-width": isSel ? "2.4" : "1.4", "stroke-dasharray": "4 3" });
       if (isSel) selectedAnchor = { x, y: 20 };
       return;
     }
@@ -2282,7 +2282,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       const pts = d.points.map((p) => ({ x: timeX(p.time), y: priceY(p.price) })).filter((p) => okXY(p.x, p.y));
       if (pts.length < 2) return;
       const pointsAttr = pts.map((p) => `${p.x},${p.y}`).join(" ");
-      const color = d.type === "brush" ? "#c084fc" : "#4dabf7";
+      const color = d.type === "brush" ? "#c084fc" : "#e2b93b";
       el("polyline", { points: pointsAttr, fill: "none", stroke: color, "stroke-width": isSel ? "3.2" : "2", "stroke-linejoin": "round", "stroke-linecap": "round" });
       if (d.type === "path") pts.forEach((p) => el("circle", { cx: p.x, cy: p.y, r: "2.5", fill: color }));
       if (isSel) selectedAnchor = pts[0];
@@ -2294,9 +2294,9 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       const x = Math.min(P1.x, P2.x), y = Math.min(P1.y, P2.y);
       const w = Math.abs(P2.x - P1.x), h = Math.abs(P2.y - P1.y);
       if (d.type === "rectangle") {
-        el("rect", { x, y, width: w, height: h, fill: "rgba(77,171,247,0.12)", stroke: "#4dabf7", "stroke-width": isSel ? "2.6" : "1.4", ...(isSel ? { "stroke-dasharray": "5 3" } : {}) });
+        el("rect", { x, y, width: w, height: h, fill: "rgba(226,185,59,0.12)", stroke: "#e2b93b", "stroke-width": isSel ? "2.6" : "1.4", ...(isSel ? { "stroke-dasharray": "5 3" } : {}) });
       } else {
-        el("ellipse", { cx: x + w / 2, cy: y + h / 2, rx: w / 2, ry: h / 2, fill: "rgba(77,171,247,0.12)", stroke: "#4dabf7", "stroke-width": isSel ? "2.6" : "1.4" });
+        el("ellipse", { cx: x + w / 2, cy: y + h / 2, rx: w / 2, ry: h / 2, fill: "rgba(226,185,59,0.12)", stroke: "#e2b93b", "stroke-width": isSel ? "2.6" : "1.4" });
       }
       if (isSel) selectedAnchor = { x: Math.max(P1.x, P2.x), y };
       return;
@@ -2320,10 +2320,10 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       const pts = [P1, P2, P3].filter(Boolean);
       if (pts.length < 2) return;
       if (pts.length === 3 && okXY(P3.x, P3.y)) {
-        el("polygon", { points: pts.map((p) => `${p.x},${p.y}`).join(" "), fill: "rgba(77,171,247,0.12)", stroke: "#4dabf7", "stroke-width": isSel ? "2.4" : "1.5" });
+        el("polygon", { points: pts.map((p) => `${p.x},${p.y}`).join(" "), fill: "rgba(226,185,59,0.12)", stroke: "#e2b93b", "stroke-width": isSel ? "2.4" : "1.5" });
         if (isSel) selectedAnchor = P1;
       } else if (ok2) {
-        el("line", { x1: P1.x, y1: P1.y, x2: P2.x, y2: P2.y, stroke: "#4dabf7", "stroke-width": "1.2", "stroke-dasharray": "3 3" });
+        el("line", { x1: P1.x, y1: P1.y, x2: P2.x, y2: P2.y, stroke: "#e2b93b", "stroke-width": "1.2", "stroke-dasharray": "3 3" });
       }
       return;
     }
@@ -2351,7 +2351,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
         }
       }
       const up = d.p2.price >= d.p1.price;
-      const color = d.type === "measure" ? (up ? "#36e0a0" : "#ff526b") : (d.type === "callout" ? "#f5a623" : "#4dabf7");
+      const color = d.type === "measure" ? (up ? "#36e0a0" : "#ff526b") : (d.type === "callout" ? "#f5a623" : "#e2b93b");
       el("line", { x1, y1, x2, y2, stroke: color, "stroke-width": isSel ? "2.8" : "1.8" });
       if (d.type === "trendline" || d.type === "extended") {
         el("circle", { cx: P1.x, cy: P1.y, r: "2.6", fill: color });
@@ -2418,7 +2418,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       if (!ok3) return;
       const offsetY = P3.y - lerpY(P1, P2, P3.x);
       FIB_LEVELS.forEach((lvl) => {
-        el("line", { x1: P1.x, y1: P1.y + offsetY * lvl, x2: P2.x, y2: P2.y + offsetY * lvl, stroke: "#4dabf7", "stroke-width": lvl === 0 || lvl === 1 ? "1.6" : "1", opacity: "0.85" });
+        el("line", { x1: P1.x, y1: P1.y + offsetY * lvl, x2: P2.x, y2: P2.y + offsetY * lvl, stroke: "#e2b93b", "stroke-width": lvl === 0 || lvl === 1 ? "1.6" : "1", opacity: "0.85" });
       });
       if (isSel) selectedAnchor = P3;
       return;
@@ -2431,8 +2431,8 @@ function renderDrawings(previewPoint, liveBrushPoints) {
       FIB_SEQUENCE.forEach((n) => {
         const x0 = timeX(d.p1.time + n * unit);
         if (!okXY(x0)) return;
-        el("line", { x1: x0, x2: x0, y1: 0, y2: height, stroke: "#4dabf7", "stroke-width": "1", opacity: "0.75" });
-        el("text", { x: x0 + 3, y: 14, fill: "#4dabf7", "font-size": "9", "font-family": "IBM Plex Mono, monospace" }).textContent = n;
+        el("line", { x1: x0, x2: x0, y1: 0, y2: height, stroke: "#e2b93b", "stroke-width": "1", opacity: "0.75" });
+        el("text", { x: x0 + 3, y: 14, fill: "#e2b93b", "font-size": "9", "font-family": "IBM Plex Mono, monospace" }).textContent = n;
       });
       if (isSel) selectedAnchor = P1;
       return;
@@ -2441,9 +2441,9 @@ function renderDrawings(previewPoint, liveBrushPoints) {
     if (d.type === "daterange") {
       if (!ok2) return;
       const yMid = (P1.y + P2.y) / 2;
-      el("line", { x1: P1.x, x2: P2.x, y1: yMid, y2: yMid, stroke: "#4dabf7", "stroke-width": "1.6" });
+      el("line", { x1: P1.x, x2: P2.x, y1: yMid, y2: yMid, stroke: "#e2b93b", "stroke-width": "1.6" });
       const bars = Math.round(Math.abs((d.p2.time - d.p1.time)) / 60);
-      el("text", { x: (P1.x + P2.x) / 2, y: yMid - 8, "text-anchor": "middle", fill: "#4dabf7", "font-size": "10", "font-family": "IBM Plex Mono, monospace" }).textContent = `${bars} bars`;
+      el("text", { x: (P1.x + P2.x) / 2, y: yMid - 8, "text-anchor": "middle", fill: "#e2b93b", "font-size": "10", "font-family": "IBM Plex Mono, monospace" }).textContent = `${bars} bars`;
       if (isSel) selectedAnchor = { x: (P1.x + P2.x) / 2, y: yMid };
       return;
     }
@@ -2553,7 +2553,7 @@ function renderDrawings(previewPoint, liveBrushPoints) {
     }
   } else if (activeChartTool === "path" && pendingPoints.length) {
     const pts = pendingPoints.map((p) => ({ x: timeX(p.time), y: priceY(p.price) })).filter((p) => okXY(p.x, p.y));
-    if (pts.length) el("polyline", { points: pts.map((p) => `${p.x},${p.y}`).join(" "), fill: "none", stroke: "#4dabf7", "stroke-width": "1.6", "stroke-dasharray": "3 3" });
+    if (pts.length) el("polyline", { points: pts.map((p) => `${p.x},${p.y}`).join(" "), fill: "none", stroke: "#e2b93b", "stroke-width": "1.6", "stroke-dasharray": "3 3" });
   }
 
   if (liveBrushPoints && liveBrushPoints.length > 1) {
@@ -2885,7 +2885,7 @@ let noMoreHistoryKey = null;  // `${coin}|${timeframe}` once the exchange has no
 let activeIndicators = {};    // key -> true (toggled ON)
 let indicatorSeries = {};     // key -> [ISeriesApi] (series-type indicators)
 const IND_PALETTE = {
-  up: "#36e0a0", down: "#ff526b", gold: "#e2b93b", blue: "#4dabf7",
+  up: "#36e0a0", down: "#ff526b", gold: "#e2b93b", blue: "#8fa39a",
   purple: "#c084fc", cyan: "#2dd4bf", orange: "#f5a623", pink: "#f472b6",
   gray: "#7d8ea3", red: "#ff6b6b", green: "#2ecc71",
 };
@@ -3232,7 +3232,7 @@ const INDICATOR_LIB = [
     color: IND_PALETTE.gold, type: "overlay",
     compute(bars) {
       const closes = bars.map((b) => b.close);
-      const colors = ["#e2b93b", "#4dabf7", "#c084fc"];
+      const colors = ["#e2b93b", "#e2b93b", "#c084fc"];
       return {
         series: [20, 50, 200].map((p, i) => ({
           kind: "line",
@@ -3322,8 +3322,8 @@ const INDICATOR_LIB = [
       }
       const aShift = new Array(n).fill(null), bShift = new Array(n).fill(null);
       for (let i = 0; i + 26 < n; i++) { aShift[i + 26] = senkouA[i]; bShift[i + 26] = senkouB[i]; }
-      ctx.fillBand(aShift, bShift, "rgba(77, 171, 247, 0.10)");
-      ctx.polyline(tenkan, "#4dabf7", 1.1);
+      ctx.fillBand(aShift, bShift, "rgba(143, 163, 154, 0.10)");
+      ctx.polyline(tenkan, "#e2b93b", 1.1);
       ctx.polyline(kijun, "#ff526b", 1.1);
       const chikou = new Array(n).fill(null);
       for (let i = 26; i < n; i++) chikou[i] = closes[i - 26];
@@ -3379,7 +3379,7 @@ const INDICATOR_LIB = [
       return {
         series: [
           { kind: "histogram", options: { base: 0, priceLineVisible: false, lastValueVisible: false }, data: hist },
-          { kind: "line", options: { color: "#4dabf7", lineWidth: 1.4, priceLineVisible: false, crosshairMarkerVisible: false }, data: toPoints(bars, m.macd) },
+          { kind: "line", options: { color: "#e2b93b", lineWidth: 1.4, priceLineVisible: false, crosshairMarkerVisible: false }, data: toPoints(bars, m.macd) },
           { kind: "line", options: { color: "#f5a623", lineWidth: 1.4, priceLineVisible: false, crosshairMarkerVisible: false }, data: toPoints(bars, m.signal) },
         ],
         paneHeight: 140,
@@ -3424,7 +3424,7 @@ const INDICATOR_LIB = [
       return {
         series: [{
           kind: "line",
-          options: { color: "#4dabf7", lineWidth: 1.8, priceLineVisible: false, crosshairMarkerVisible: false },
+          options: { color: "#e2b93b", lineWidth: 1.8, priceLineVisible: false, crosshairMarkerVisible: false },
           data: toPoints(bars, atrVals(bars, 14)),
         }],
         paneHeight: 110,
@@ -3489,7 +3489,7 @@ const INDICATOR_LIB = [
         if (bucket[i] <= 0) continue;
         const pMid = lo + bw * (i + 0.5);
         const w = Math.max(6, (bucket[i] / maxV) * ctx.width * 0.22);
-        ctx.hBar(pMid, bw / 2, w, "rgba(77, 171, 247, 0.45)", i === 0 || i === N - 1 ? "#2dd4bf" : null);
+        ctx.hBar(pMid, bw / 2, w, "rgba(143, 163, 154, 0.45)", i === 0 || i === N - 1 ? "#2dd4bf" : null);
       }
     },
   },
@@ -3562,7 +3562,7 @@ const INDICATOR_LIB = [
         const bar = bars[ev.i];
         if (!bar) return;
         const price = ev.type === "BOS" ? bar.high : bar.low;
-        ctx.marker(ev.i, price, ev.type, ev.type === "BOS" ? "#4dabf7" : "#f5a623");
+        ctx.marker(ev.i, price, ev.type, ev.type === "BOS" ? "#e2b93b" : "#f5a623");
       });
     },
   },
