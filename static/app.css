@@ -5,7 +5,7 @@
   --ink: #0a100e; --surface: #111a17; --surface-2: #172320; --line: #22322c; --line-soft: #1a2823;
   --text: #e8f1ec; --dim: #93a89e; --faint: #66796f;
   --long: #34d399; --long-bg: rgba(52, 211, 153, 0.12); --short: #f4566c; --short-bg: rgba(244, 86, 108, 0.12);
-  --amber: #f2b84b; --amber-bg: rgba(242, 184, 75, 0.13); --accent: #22c55e; --on-accent: #03140b;
+  --amber: #f2b84b; --amber-bg: rgba(242, 184, 75, 0.13); --accent: #22c55e; --on-accent: var(--on-accent);
   --display: "Syne", "Segoe UI", sans-serif;
   --body: "Inter", "Segoe UI", system-ui, sans-serif;
   --tab-h: 64px;
