@@ -1,7 +1,7 @@
 {# Shared top navigation for public pages (logged-out visitors). Set `active` before including. #}
 <header class="wrap phead-bar">
   <nav class="pnav" aria-label="Main">
-    <a href="/" class="brand"><img src="{{ url_for('static', filename='logo.png') }}" alt="" width="35" height="30"><span>Signals FM</span></a>
+    <a href="/" class="brand"><img class="lg-light" src="{{ url_for('static', filename='logo.png') }}" alt="" width="35" height="30"><img class="lg-dark" src="{{ url_for('static', filename='logo-green.png') }}" alt="" width="35" height="30"><span>Signals FM</span></a>
     <div class="links">
       <a href="/"{% if active == 'home' %} aria-current="page"{% endif %}>Home</a>
       {% if track_record_public or session.get('user_id') %}<a href="/track-record"{% if active == 'track' %} aria-current="page"{% endif %}>Track record</a>{% endif %}
