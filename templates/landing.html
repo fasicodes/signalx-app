@@ -210,8 +210,8 @@
     .lp .cta ul.checks { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
-<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
-<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
 </head>
 <body class="lp">
 {% set active = 'home' %}
@@ -246,7 +246,7 @@
           <a class="pbtn xl" href="#how">How it works</a>
         </div>
         <ul class="facts">
-          {% if WIN %}<li><b>{{ WIN }}%</b><span>reached the target in testing</span></li>{% endif %}
+          {% if WIN %}<li><b data-ds-count>{{ WIN }}%</b><span>reached the target in testing</span></li>{% endif %}
           {% if PERDAY %}<li><b>{{ PERDAY }} a day</b><span>signals on average</span></li>{% endif %}
           <li><b>Fees</b><span>included in every result</span></li>
         </ul>
@@ -365,9 +365,9 @@
         <article class="res-card">
           <h3>{{ '1-hour' if s.timeframe == '1h' else '4-hour' }} model<span>{{ s.period }}</span></h3>
           <dl>
-            <div><dt>Signals in the test</dt><dd>{{ "{:,}".format(s.signals) }}<small>about {{ s.per_day | round(1) }} a day</small></dd></div>
-            <div><dt>Reached the target</dt><dd class="pos">{{ s.win_rate }}%</dd></div>
-            <div><dt>Average per signal</dt><dd>{{ "%+.2f" | format(s.avg_r) }}R<small>after fees</small></dd></div>
+            <div><dt>Signals in the test</dt><dd data-ds-count>{{ "{:,}".format(s.signals) }}<small>about {{ s.per_day | round(1) }} a day</small></dd></div>
+            <div><dt>Reached the target</dt><dd class="pos" data-ds-count>{{ s.win_rate }}%</dd></div>
+            <div><dt>Average per signal</dt><dd data-ds-count>{{ "%+.2f" | format(s.avg_r) }}R<small>after fees</small></dd></div>
           </dl>
           {% if s.extra_coins %}
           <p class="res-extra">Also tested on <b>{{ s.extra_coins.coins }} more coins</b> it was never trained on, in the same year:
@@ -380,9 +380,9 @@
         <article class="res-card total">
           <h3>Both models together<span>the same year, all coins</span></h3>
           <dl>
-            <div><dt>Signals in the test</dt><dd>{{ "{:,}".format(T.signals) }}<small>about {{ T.per_day }} a day</small></dd></div>
-            <div><dt>Reached the target</dt><dd class="pos">{{ T.win_rate }}%</dd></div>
-            <div><dt>Average per signal</dt><dd>{{ "%+.2f" | format(T.avg_r) }}R<small>after fees</small></dd></div>
+            <div><dt>Signals in the test</dt><dd data-ds-count>{{ "{:,}".format(T.signals) }}<small>about {{ T.per_day }} a day</small></dd></div>
+            <div><dt>Reached the target</dt><dd class="pos" data-ds-count>{{ T.win_rate }}%</dd></div>
+            <div><dt>Average per signal</dt><dd data-ds-count>{{ "%+.2f" | format(T.avg_r) }}R<small>after fees</small></dd></div>
           </dl>
         </article>
         {% endif %}
