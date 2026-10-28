@@ -1,6 +1,6 @@
 /* Strategies pages (library + community). Uses the tokens of public.css. */
-:root { --ov1: #f5a524; --ov2: #6b9bff; --ov3: #c58cff; --ov4: #2fd4bf; --chart-price: #9fb8ad; }
-html[data-theme="light"] { --ov1: #b86e00; --ov2: #2f62d9; --ov3: #8a3fd1; --ov4: #0f8f80; --chart-price: #4c5f56; }
+:root { --ov1: #f5a524; --ov2: #d9e2dc; --ov3: #c58cff; --ov4: #2fd4bf; --chart-price: #9fb8ad; }
+html[data-theme="light"] { --ov1: #b86e00; --ov2: #4f6458; --ov3: #8a3fd1; --ov4: #0f8f80; --chart-price: #4c5f56; }
 
 .st-head { padding: 48px 0 18px; }
 .st-head h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 4.6vw, 46px); line-height: 1.08;
