@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pro insights | Signals FM</title>
+<meta name="description" content="What a professional checks before and after taking a signal: funding, spread, signals that move together, position size, how sure the numbers are, market conditions, sessions and losing streaks.">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
+<style>
+  .sec { margin: 34px 0 0; }
+  .sec > h2 { font-family: var(--display); font-size: 24px; margin: 0 0 4px; }
+  .sec > p.lead { color: var(--text-dim); font-size: 15px; margin: 0 0 16px; max-width: 70ch; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+  .box h3 { margin: 0 0 4px; font-size: 16px; }
+  .box .why { margin: 0 0 12px; color: var(--text-dim); font-size: 13.5px; line-height: 1.55; }
+  .box.wide { grid-column: 1 / -1; }
+  .scroll { overflow-x: auto; }
+  .gtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .gtable th, .gtable td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .gtable th { color: var(--text-faint); font-weight: 500; font-size: 12.5px; }
+  .gtable td { font-variant-numeric: tabular-nums; }
+  .gtable td.wrap { white-space: normal; min-width: 180px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .pos { color: var(--long); } .neg { color: var(--short); } .dim { color: var(--text-dim); } .faint { color: var(--text-faint); }
+  .side { font: 600 12.5px var(--body); padding: 2px 8px; border-radius: 6px; }
+  .side.LONG { background: var(--long-dim); color: var(--long); }
+  .side.SHORT { background: var(--short-dim); color: var(--short); }
+  .pill { font: 600 12px var(--body); padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-dim); white-space: nowrap; }
+  .pill.ok { color: var(--long); border-color: var(--long); }
+  .pill.watch { color: var(--wait); border-color: var(--wait); }
+  .pill.bad { color: var(--short); border-color: var(--short); }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 4px 0 14px; }
+  .tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .tabs button { background: transparent; border: 0; color: var(--text-dim); font: 600 14px var(--body); padding: 9px 16px; cursor: pointer; min-height: 40px; }
+  .tabs button + button { border-left: 1px solid var(--line); }
+  .tabs button[aria-selected="true"] { background: var(--long-dim); color: var(--text); }
+  .strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 12px; }
+  .strip > div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .strip dt { font-size: 12.5px; color: var(--text-faint); margin-bottom: 4px; }
+  .strip dd { margin: 0; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .strip small { display: block; font-size: 12px; color: var(--text-dim); font-weight: 400; margin-top: 3px; }
+  @media (max-width: 760px) { .strip { grid-template-columns: 1fr 1fr; } }
+  .verdict { border-radius: 10px; padding: 11px 14px; font-size: 14px; line-height: 1.55; border: 1px solid var(--line); background: var(--panel-raised); margin: 0 0 12px; }
+  .verdict.positive { border-color: var(--long); } .verdict.negative { border-color: var(--short); }
+  .verdict.likely_positive, .verdict.too_early, .verdict.unclear { border-color: var(--wait); }
+  .note { color: var(--text-faint); font-size: 12.5px; line-height: 1.6; max-width: 820px; }
+  .loading, .empty { color: var(--text-dim); padding: 18px 0; font-size: 14px; }
+  .warn { font-size: 13px; background: var(--wait-dim); border-radius: 8px; padding: 7px 10px; margin: 8px 0 0; line-height: 1.5; }
+  .calc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin-bottom: 12px; }
+  .calc label { display: grid; gap: 4px; font-size: 12.5px; color: var(--text-faint); }
+  .calc input, .calc select { background: var(--void, #05080a); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; font: 15px var(--body); min-height: 40px; width: 100%; box-sizing: border-box; }
+  .calc .full { grid-column: 1 / -1; }
+  .res dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+  .res dt { color: var(--text-dim); } .res dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .range { font-size: 12.5px; color: var(--text-dim); font-weight: 400; }
+  .ev { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .ev time { color: var(--text-faint); font-size: 12.5px; min-width: 112px; font-variant-numeric: tabular-nums; }
+  .disclaimer { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; color: var(--text-dim); font-size: 13px; line-height: 1.6; margin: 18px 0; }
+  .src { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-dim); }
+  .src select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: 14px var(--body); }
+</style>
+{% include '_analytics.html' ignore missing %}
+</head>
+<body class="app an-shell">
+{% set active = 'insights' %}
+{% include '_app_nav.html' %}
+
+<main class="wrap">
+  <div class="phead">
+    <h1>Pro insights</h1>
+    <p>The checks a professional makes before taking a signal, and how far to trust the results afterwards. The first part is about the signals open right now. The second part is about the record of one stream.</p>
+  </div>
+
+  <div class="disclaimer" role="note"><b>Risk warning:</b> these are tools for judging risk, not advice to trade. They use past results and live market data,
+    which can be late or wrong. Risk only a small, fixed part of your account on each signal.</div>
+
+  <section class="sec" id="live-part">
+    <h2>Before you take a signal</h2>
+    <p class="lead">Live checks on the signals that are open now. They refresh about once a minute.</p>
+    <div id="live-state" class="loading">Loading live checks…</div>
+    <div class="grid2" id="live-grid" hidden>
+      <div class="box wide">
+        <h3>Signals that move together</h3>
+        <p class="why">Five long signals on coins that rise and fall together are really one bet. This shows how many independent bets your open signals are.</p>
+        <div id="cluster"></div>
+      </div>
+      <div class="box wide">
+        <h3>Funding rate and open interest</h3>
+        <p class="why">When funding is high, most traders are on one side and a sharp move against them is more likely. Crypto only.</p>
+        <div class="scroll" id="funding"></div>
+      </div>
+      <div class="box wide">
+        <h3>Spread and cost to get in</h3>
+        <p class="why">What a market order really costs on the live order book, as a part of your risk (R). Above 0.12 R the cost starts to eat the edge.</p>
+        <div class="scroll" id="liquidity"></div>
+      </div>
+      <div class="box">
+        <h3>Events in the next 48 hours</h3>
+        <p class="why">High-impact news can hit a stop in seconds. Open signals whose holding time contains an event are listed first.</p>
+        <div id="events"></div>
+      </div>
+      <div class="box">
+        <h3>Position size</h3>
+        <p class="why">How much to buy so that hitting the stop loses exactly the share of your account you chose. Fees are included.</p>
+        <form class="calc" id="calc" autocomplete="off">
+          <label class="full">Open signal (optional)<select id="k-sig"><option value="">Enter the prices yourself</option></select></label>
+          <label>Account balance<input id="k-bal" type="number" min="0" step="any" inputmode="decimal" value="1000"></label>
+          <label>Risk per trade, %<input id="k-risk" type="number" min="0" max="10" step="0.1" inputmode="decimal" value="1"></label>
+          <label>Entry price<input id="k-entry" type="number" min="0" step="any" inputmode="decimal"></label>
+          <label>Stop-loss price<input id="k-stop" type="number" min="0" step="any" inputmode="decimal"></label>
+          <label>Leverage (optional)<input id="k-lev" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 5"></label>
+        </form>
+        <div class="res" id="calc-out"><p class="empty">Enter an entry and a stop price.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="perf-part">
+    <h2>How far to trust the numbers</h2>
+    <p class="lead">Results of one stream, from its real closed signals. Small samples look better or worse than the truth, so every number comes with its range.</p>
+    <div class="bar">
+      <div class="tabs" role="tablist" aria-label="Market" id="mk">
+        <button type="button" role="tab" data-v="crypto" aria-selected="true">Crypto</button>
+        <button type="button" role="tab" data-v="forex" aria-selected="false">Forex</button>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Timeframe" id="tf">
+        <button type="button" role="tab" data-v="15m" aria-selected="false">15m</button>
+        <button type="button" role="tab" data-v="1h" aria-selected="false">1h</button>
+        <button type="button" role="tab" data-v="4h" aria-selected="true">4h</button>
+      </div>
+      <label class="src" id="src-wrap" hidden>Results from
+        <select id="src"><option value="live">Real signals</option><option value="backtest">Past-data simulation</option></select>
+      </label>
+    </div>
+    <div id="perf-state" class="loading">Loading…</div>
+    <div id="perf" hidden>
+      <div id="sure"></div>
+      <div class="grid2">
+        <div class="box">
+          <h3>Live record against the test</h3>
+          <p class="why">The test on data the model never saw promised a result. Is the real record in line with it?</p>
+          <div id="drift"></div>
+        </div>
+        <div class="box">
+          <h3>Losing streaks and drawdown</h3>
+          <p class="why">Even a good system loses several times in a row. Knowing how bad it normally gets stops you quitting at the wrong time.</p>
+          <div id="streaks"></div>
+        </div>
+        <div class="box">
+          <h3>Results by market condition</h3>
+          <p class="why" id="regime-why">Trend and volatility of the benchmark when each signal came.</p>
+          <div class="scroll" id="regimes"></div>
+        </div>
+        <div class="box">
+          <h3>Results by trading session</h3>
+          <p class="why">Which part of the day the signals came in, in UTC. Forex behaves very differently in Asia, London and New York.</p>
+          <div class="scroll" id="sessions"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="{{ url_for('static', filename='insights.js') }}?v=20261028a"></script>
+</body>
+</html>
