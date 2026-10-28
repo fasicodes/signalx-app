@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,10 +8,12 @@
 {% set seo_title = "Trading strategies tested on real data" %}{% set seo_path = "/strategies" %}{% set seo_description = "Well-known trading strategies backtested on real candles after costs, updated every day, plus strategies shared by traders." %}
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='strategies.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028d">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028d" defer></script>
 </head>
 <body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
 {% set active = 'strategies' %}
