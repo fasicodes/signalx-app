@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,59 +10,76 @@
 {% set seo_path = "/tools" %}
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <style>
-  .layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 40px; align-items: start; }
-  .toc { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--line); }
-  .toc a { text-decoration: none; color: var(--text-dim); font-size: 14px; padding: 6px 0 6px 14px; margin-left: -1px; border-left: 2px solid transparent; }
-  .toc a:hover { color: var(--text); }
-  .toc a.on { color: var(--text); border-left-color: var(--accent); }
-  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { position: static; flex-direction: row; flex-wrap: wrap; border-left: none; gap: 8px; }
-    .toc a { border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px; margin: 0; } .toc a.on { border-color: var(--accent); } }
-  .tool { padding: 34px 0; border-top: 1px solid var(--line); scroll-margin-top: 16px; }
-  .tool:first-child { border-top: none; padding-top: 0; }
+  /* Calculators. Colours, type and shapes come from ds.css; numeric fields are built by ds.js. */
+  .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
+  .toc { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 2px; padding: 8px; background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: 16px; box-shadow: var(--ds-shadow-1); }
+  .toc a { text-decoration: none; color: var(--ds-text-dim); font: 500 14.5px var(--ds-font-body); padding: 10px 12px; border-radius: 10px; transition: background-color var(--ds-t-fast) var(--ds-ease), color var(--ds-t-fast) var(--ds-ease); }
+  .toc a:hover { color: var(--ds-text); background: var(--ds-surface-2); }
+  .toc a.on { color: var(--ds-brand-strong); background: var(--ds-brand-soft); font-weight: 600; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; gap: 20px; }
+    .toc { position: sticky; top: 8px; z-index: 5; flex-direction: row; overflow-x: auto; scrollbar-width: none; padding: 6px; gap: 4px; }
+    .toc::-webkit-scrollbar { display: none; } .toc a { white-space: nowrap; padding: 9px 14px; } }
+
+  .tool { padding: 28px; margin: 0 0 20px; background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: 22px; box-shadow: var(--ds-shadow-1); scroll-margin-top: 16px; }
+  .tool h2 { font: 800 24px var(--ds-font-display); letter-spacing: -0.02em; margin: 0 0 6px; }
+  .tool .sec-sub { color: var(--ds-text-dim); font-size: 15px; margin: 0 0 22px; max-width: 70ch; }
   .tool-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
-  @media (max-width: 760px) { .tool-grid { grid-template-columns: 1fr; } }
-  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 1120px) { .tool-grid { grid-template-columns: 1fr; gap: 22px; } }
+  @media (max-width: 760px) { .tool { padding: 20px 16px; border-radius: 18px; } .tool-grid { grid-template-columns: 1fr; gap: 20px; } }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px 14px; align-content: start; }
   .fields .full { grid-column: 1 / -1; }
-  .unit { position: relative; }
-  .unit .pinput { padding-right: 52px; }
-  .unit span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 12.5px; color: var(--text-faint); pointer-events: none; }
-  .result { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
-  .result .big { font-family: var(--mono); font-size: 30px; font-weight: 600; line-height: 1.15; }
-  .result .big-sub { color: var(--text-dim); font-size: 14px; margin: 4px 0 14px; }
-  .rows { display: grid; grid-template-columns: 1fr auto; gap: 7px 16px; font-size: 14px; margin: 0; }
-  .rows dt { color: var(--text-dim); }
-  .rows dd { margin: 0; font-family: var(--mono); text-align: right; }
-  .callout { margin-top: 14px; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; line-height: 1.5; }
-  .callout.bad { background: var(--short-dim); border: 1px solid var(--short); }
-  .callout.warn { background: var(--wait-dim); border: 1px solid var(--wait); }
-  .callout.ok { background: var(--long-dim); border: 1px solid var(--long); }
-  .explain { color: var(--text-dim); font-size: 14px; max-width: 68ch; margin: 14px 0 0; }
+  .pfield label { display: block; margin: 0 0 7px; font: 500 13.5px var(--ds-font-body); color: var(--ds-text-dim); }
+  .pfield > .pinput { width: 100%; box-sizing: border-box; }
+  @media (max-width: 420px) { .fields { grid-template-columns: 1fr; } }
+
+  /* the result panel: one headline number, then the working */
+  .result { background: var(--ds-surface-2); border: 1px solid var(--ds-line); border-radius: 18px; padding: 22px; position: sticky; top: 16px; }
+  .result .big { font: 800 36px/1.1 var(--ds-font-display); letter-spacing: -0.025em; font-variant-numeric: tabular-nums; border-radius: 8px; width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
+  .result .big.is-empty { color: var(--ds-text-faint); }
+  .result .big-sub { color: var(--ds-text-dim); font-size: 14.5px; margin: 6px 0 16px; min-height: 1.4em; }
+  .rows { display: grid; grid-template-columns: 1fr auto; gap: 0; font-size: 14.5px; margin: 0; }
+  .rows dt, .rows dd { padding: 0; min-height: 42px; display: flex; align-items: center; border-top: 1px solid var(--ds-line); box-sizing: border-box; }
+  .rows dt { color: var(--ds-text-dim); }
+  .rows dd { margin: 0; font: 600 14.5px var(--ds-font-body); font-variant-numeric: tabular-nums; justify-content: flex-end; text-align: right; padding-left: 14px; }
+  .pos { color: var(--ds-up); } .neg { color: var(--ds-down); }
+  .callout { margin-top: 14px; padding: 11px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; animation: ds-rise var(--ds-t-base) var(--ds-ease) both; }
+  .callout b { font-weight: 700; }
+  .callout.bad { background: var(--ds-down-soft); border: 1px solid color-mix(in srgb, var(--ds-down) 40%, transparent); color: var(--ds-text); }
+  .callout.warn { background: var(--ds-warn-soft); border: 1px solid color-mix(in srgb, var(--ds-warn) 40%, transparent); color: var(--ds-text); }
+  .callout.ok { background: var(--ds-up-soft); border: 1px solid color-mix(in srgb, var(--ds-up) 35%, transparent); color: var(--ds-text); }
+  .callout.bad b { color: var(--ds-down); } .callout.warn b { color: var(--ds-warn); } .callout.ok b { color: var(--ds-up); }
+  .explain { color: var(--ds-text-dim); font-size: 14.5px; max-width: 70ch; margin: 18px 0 0; }
+  .ds-changed-text { animation: ds-text-flash 700ms var(--ds-ease); }
+  @keyframes ds-text-flash { 0% { background-color: var(--ds-brand-soft); } 100% { background-color: transparent; } }
 
   /* price ladder */
-  .ladder-wrap { margin-top: 16px; }
+  .ladder-wrap { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--ds-line); }
   #ladder { display: block; width: 100%; height: 230px; }
-  #ladder .rail { stroke: var(--line); stroke-width: 2; }
-  #ladder .zone-loss { fill: var(--short-dim); } #ladder .zone-win { fill: var(--long-dim); }
-  #ladder .tick { stroke-width: 2; }
-  #ladder .t-entry { stroke: var(--text); } #ladder .t-stop { stroke: var(--short); } #ladder .t-target { stroke: var(--long); } #ladder .t-liq { stroke: var(--wait); stroke-dasharray: 5 4; }
-  #ladder text { font: 12.5px var(--body); fill: var(--text-dim); }
-  #ladder text.v { font-family: var(--mono); fill: var(--text); }
-  #ladder text.liq { fill: var(--wait); }
+  #ladder .rail { stroke: var(--ds-line); stroke-width: 2; }
+  #ladder .zone-loss { fill: var(--ds-down-soft); } #ladder .zone-win { fill: var(--ds-up-soft); }
+  #ladder .tick { stroke-width: 3; stroke-linecap: round; }
+  #ladder .t-entry { stroke: var(--ds-text); } #ladder .t-stop { stroke: var(--ds-down); } #ladder .t-target { stroke: var(--ds-up); } #ladder .t-liq { stroke: var(--ds-warn); stroke-dasharray: 5 4; }
+  #ladder text { font: 500 12.5px var(--ds-font-body); fill: var(--ds-text-dim); }
+  #ladder text.v { font-weight: 600; fill: var(--ds-text); font-variant-numeric: tabular-nums; }
+  #ladder text.liq { fill: var(--ds-warn); }
 
-  table.mini { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
-  table.mini th { text-align: left; color: var(--text-faint); font-weight: 600; font-size: 12.5px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  table.mini td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); }
-  table.mini td:first-child { font-family: var(--body); }
-  table.mini tr.hl td { background: var(--panel-raised); }
-  .cta { margin-top: 56px; display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap;
-         border: 1px solid var(--line); border-radius: 14px; padding: 24px; background: var(--panel); }
-  .cta h2 { font-family: var(--display); font-size: 22px; margin: 0 0 4px; }
-  .cta p { margin: 0; color: var(--text-dim); max-width: 60ch; }
+  table.mini { width: 100%; border-collapse: collapse; font-size: 14.5px; margin-top: 6px; }
+  table.mini th { text-align: left; color: var(--ds-text-faint); font: 600 12.5px var(--ds-font-body); padding: 8px 8px 8px 0; border-bottom: 1px solid var(--ds-line); }
+  table.mini td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--ds-line-soft); font-variant-numeric: tabular-nums; }
+  table.mini tr.hl td { background: var(--ds-brand-soft); font-weight: 600; }
+  table.mini tr.hl td:first-child { border-radius: 8px 0 0 8px; padding-left: 8px; }
+
+  .cta { margin-top: 40px; display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; border-radius: 22px; padding: 28px; background: var(--ds-brand-soft); border: 1px solid color-mix(in srgb, var(--ds-brand) 25%, var(--ds-line)); }
+  .cta h2 { font: 800 22px var(--ds-font-display); margin: 0 0 4px; }
+  .cta p { margin: 0; color: var(--ds-text-dim); max-width: 60ch; }
+  @media (max-width: 760px) { .result { position: static; } .result .big { font-size: 30px; } }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}?v=20261028c">
+<script src="{{ url_for('static', filename='ds.js') }}?v=20261028c" defer></script>
 </head>
 <body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
 {% set active = 'tools' %}
@@ -90,15 +107,15 @@
         <p class="sec-sub">Size the trade from where you'd be wrong, not from how confident you feel. Direction is taken from the stop: a stop below entry is a long.</p>
         <div class="tool-grid">
           <div class="fields">
-            <div class="pfield"><label for="ps-bal">Account balance</label><div class="unit"><input class="pinput" id="ps-bal" inputmode="decimal" value="10000"><span>USDT</span></div></div>
-            <div class="pfield"><label for="ps-risk">Risk per trade</label><div class="unit"><input class="pinput" id="ps-risk" inputmode="decimal" value="1"><span>%</span></div></div>
-            <div class="pfield"><label for="ps-entry">Entry price</label><input class="pinput" id="ps-entry" inputmode="decimal" value="60000"></div>
-            <div class="pfield"><label for="ps-stop">Stop-loss price</label><input class="pinput" id="ps-stop" inputmode="decimal" value="58800"></div>
-            <div class="pfield"><label for="ps-tp">Take-profit price (optional)</label><input class="pinput" id="ps-tp" inputmode="decimal" value="62400"></div>
-            <div class="pfield"><label for="ps-lev">Leverage</label><div class="unit"><input class="pinput" id="ps-lev" inputmode="decimal" value="5"><span>x</span></div></div>
-            <div class="pfield full"><label for="ps-fee">Fee per side</label><div class="unit"><input class="pinput" id="ps-fee" inputmode="decimal" value="0.05"><span>%</span></div></div>
+            <div class="pfield"><label for="ps-bal">Account balance</label><input class="pinput" id="ps-bal" inputmode="decimal" value="10000" data-ds-num data-suffix="USDT" data-ds-stepper="100" min="0"></div>
+            <div class="pfield"><label for="ps-risk">Risk per trade</label><input class="pinput" id="ps-risk" inputmode="decimal" value="1" data-ds-num data-suffix="%" data-ds-stepper="0.25" data-ds-slider="0.25,5,0.25" min="0.01" max="100"></div>
+            <div class="pfield"><label for="ps-entry">Entry price</label><input class="pinput" id="ps-entry" inputmode="decimal" value="60000" data-ds-num data-prefix="$" min="0"></div>
+            <div class="pfield"><label for="ps-stop">Stop-loss price</label><input class="pinput" id="ps-stop" inputmode="decimal" value="58800" data-ds-num data-prefix="$" min="0"></div>
+            <div class="pfield"><label for="ps-tp">Take-profit price (optional)</label><input class="pinput" id="ps-tp" inputmode="decimal" value="62400" data-ds-num data-prefix="$" min="0"></div>
+            <div class="pfield"><label for="ps-lev">Leverage</label><input class="pinput" id="ps-lev" inputmode="decimal" value="5" data-ds-num data-suffix="x" data-ds-stepper="1" data-ds-slider="1,50,1" min="1" max="125"></div>
+            <div class="pfield full"><label for="ps-fee">Fee per side</label><input class="pinput" id="ps-fee" inputmode="decimal" value="0.05" data-ds-num data-suffix="%" data-ds-stepper="0.01" min="0" max="5"></div>
           </div>
-          <div class="result" aria-live="polite">
+          <div class="result" aria-live="polite" data-ds-live>
             <div class="big" id="ps-size">—</div>
             <div class="big-sub" id="ps-size-sub">&nbsp;</div>
             <dl class="rows" id="ps-rows"></dl>
@@ -110,18 +127,18 @@
       </section>
 
       <!-- Liquidation -->
-      <section class="tool" id="liquidation" aria-labelledby="lq-h">
+      <section class="tool" data-reveal id="liquidation" aria-labelledby="lq-h">
         <h2 class="sec" id="lq-h">Liquidation price calculator</h2>
         <p class="sec-sub">For an isolated-margin futures position. Maintenance margin is usually 0.4% to 0.5% for small positions and rises for large ones.</p>
         <div class="tool-grid">
           <div class="fields">
             <div class="pfield full"><label>Direction</label>
               <div class="pseg" role="group" aria-label="Direction" id="lq-side"><button type="button" data-v="LONG" aria-pressed="true">Long</button><button type="button" data-v="SHORT" aria-pressed="false">Short</button></div></div>
-            <div class="pfield"><label for="lq-entry">Entry price</label><input class="pinput" id="lq-entry" inputmode="decimal" value="60000"></div>
-            <div class="pfield"><label for="lq-lev">Leverage</label><div class="unit"><input class="pinput" id="lq-lev" inputmode="decimal" value="10"><span>x</span></div></div>
-            <div class="pfield full"><label for="lq-mmr">Maintenance margin rate</label><div class="unit"><input class="pinput" id="lq-mmr" inputmode="decimal" value="0.5"><span>%</span></div></div>
+            <div class="pfield"><label for="lq-entry">Entry price</label><input class="pinput" id="lq-entry" inputmode="decimal" value="60000" data-ds-num data-prefix="$" min="0"></div>
+            <div class="pfield"><label for="lq-lev">Leverage</label><input class="pinput" id="lq-lev" inputmode="decimal" value="10" data-ds-num data-suffix="x" data-ds-stepper="1" data-ds-slider="1,100,1" min="1" max="125"></div>
+            <div class="pfield full"><label for="lq-mmr">Maintenance margin rate</label><input class="pinput" id="lq-mmr" inputmode="decimal" value="0.5" data-ds-num data-suffix="%" data-ds-stepper="0.1" min="0" max="50"></div>
           </div>
-          <div class="result" aria-live="polite">
+          <div class="result" aria-live="polite" data-ds-live>
             <div class="big" id="lq-price">—</div>
             <div class="big-sub" id="lq-sub">&nbsp;</div>
             <table class="mini" id="lq-table"></table>
@@ -130,16 +147,16 @@
       </section>
 
       <!-- Risk / reward -->
-      <section class="tool" id="risk-reward" aria-labelledby="rr-h">
+      <section class="tool" data-reveal id="risk-reward" aria-labelledby="rr-h">
         <h2 class="sec" id="rr-h">Risk / reward and break-even win rate</h2>
         <p class="sec-sub">How often you need to be right depends on how much you win when you're right compared with what you lose when you're wrong.</p>
         <div class="tool-grid">
           <div class="fields">
-            <div class="pfield"><label for="rr-reward">Average win</label><div class="unit"><input class="pinput" id="rr-reward" inputmode="decimal" value="2"><span>R</span></div></div>
-            <div class="pfield"><label for="rr-risk">Average loss</label><div class="unit"><input class="pinput" id="rr-risk" inputmode="decimal" value="1"><span>R</span></div></div>
-            <div class="pfield full"><label for="rr-wr">Your win rate</label><div class="unit"><input class="pinput" id="rr-wr" inputmode="decimal" value="40"><span>%</span></div></div>
+            <div class="pfield"><label for="rr-reward">Average win</label><input class="pinput" id="rr-reward" inputmode="decimal" value="2" data-ds-num data-suffix="R" data-ds-stepper="0.5" min="0"></div>
+            <div class="pfield"><label for="rr-risk">Average loss</label><input class="pinput" id="rr-risk" inputmode="decimal" value="1" data-ds-num data-suffix="R" data-ds-stepper="0.5" min="0"></div>
+            <div class="pfield full"><label for="rr-wr">Your win rate</label><input class="pinput" id="rr-wr" inputmode="decimal" value="40" data-ds-num data-suffix="%" data-ds-stepper="1" data-ds-slider="0,100,1" min="0" max="100"></div>
           </div>
-          <div class="result" aria-live="polite">
+          <div class="result" aria-live="polite" data-ds-live>
             <div class="big" id="rr-be">—</div>
             <div class="big-sub">win rate needed to break even</div>
             <dl class="rows" id="rr-rows"></dl>
@@ -149,15 +166,15 @@
       </section>
 
       <!-- Drawdown -->
-      <section class="tool" id="drawdown" aria-labelledby="dd-h">
+      <section class="tool" data-reveal id="drawdown" aria-labelledby="dd-h">
         <h2 class="sec" id="dd-h">Drawdown recovery</h2>
         <p class="sec-sub">Losses and gains aren't symmetric. After a 50% loss you need a 100% gain just to get back to where you started.</p>
         <div class="tool-grid">
           <div class="fields">
-            <div class="pfield"><label for="dd-risk">Risk per trade</label><div class="unit"><input class="pinput" id="dd-risk" inputmode="decimal" value="2"><span>%</span></div></div>
-            <div class="pfield"><label for="dd-streak">Losses in a row</label><input class="pinput" id="dd-streak" inputmode="numeric" value="8"></div>
+            <div class="pfield"><label for="dd-risk">Risk per trade</label><input class="pinput" id="dd-risk" inputmode="decimal" value="2" data-ds-num data-suffix="%" data-ds-stepper="0.25" data-ds-slider="0.25,10,0.25" min="0.01" max="99"></div>
+            <div class="pfield"><label for="dd-streak">Losses in a row</label><input class="pinput" id="dd-streak" inputmode="numeric" value="8" data-ds-num data-ds-stepper="1" data-ds-slider="1,20,1" min="0"></div>
           </div>
-          <div class="result" aria-live="polite">
+          <div class="result" aria-live="polite" data-ds-live>
             <div class="big" id="dd-left">—</div>
             <div class="big-sub" id="dd-sub">&nbsp;</div>
             <table class="mini" id="dd-table"></table>
@@ -166,20 +183,20 @@
       </section>
 
       <!-- PnL -->
-      <section class="tool" id="pnl" aria-labelledby="pn-h">
+      <section class="tool" data-reveal id="pnl" aria-labelledby="pn-h">
         <h2 class="sec" id="pn-h">Profit and ROE calculator</h2>
         <p class="sec-sub">Profit after fees, and the return on the margin you used. With leverage, ROE moves much faster than the price.</p>
         <div class="tool-grid">
           <div class="fields">
             <div class="pfield full"><label>Direction</label>
               <div class="pseg" role="group" aria-label="Direction" id="pn-side"><button type="button" data-v="LONG" aria-pressed="true">Long</button><button type="button" data-v="SHORT" aria-pressed="false">Short</button></div></div>
-            <div class="pfield"><label for="pn-entry">Entry price</label><input class="pinput" id="pn-entry" inputmode="decimal" value="3000"></div>
-            <div class="pfield"><label for="pn-exit">Exit price</label><input class="pinput" id="pn-exit" inputmode="decimal" value="3150"></div>
-            <div class="pfield"><label for="pn-qty">Size (coins)</label><input class="pinput" id="pn-qty" inputmode="decimal" value="1"></div>
-            <div class="pfield"><label for="pn-lev">Leverage</label><div class="unit"><input class="pinput" id="pn-lev" inputmode="decimal" value="10"><span>x</span></div></div>
-            <div class="pfield full"><label for="pn-fee">Fee per side</label><div class="unit"><input class="pinput" id="pn-fee" inputmode="decimal" value="0.05"><span>%</span></div></div>
+            <div class="pfield"><label for="pn-entry">Entry price</label><input class="pinput" id="pn-entry" inputmode="decimal" value="3000" data-ds-num data-prefix="$" min="0"></div>
+            <div class="pfield"><label for="pn-exit">Exit price</label><input class="pinput" id="pn-exit" inputmode="decimal" value="3150" data-ds-num data-prefix="$" min="0"></div>
+            <div class="pfield"><label for="pn-qty">Size (coins)</label><input class="pinput" id="pn-qty" inputmode="decimal" value="1" data-ds-num data-ds-stepper="1" min="0"></div>
+            <div class="pfield"><label for="pn-lev">Leverage</label><input class="pinput" id="pn-lev" inputmode="decimal" value="10" data-ds-num data-suffix="x" data-ds-stepper="1" data-ds-slider="1,50,1" min="1" max="125"></div>
+            <div class="pfield full"><label for="pn-fee">Fee per side</label><input class="pinput" id="pn-fee" inputmode="decimal" value="0.05" data-ds-num data-suffix="%" data-ds-stepper="0.01" min="0" max="5"></div>
           </div>
-          <div class="result" aria-live="polite">
+          <div class="result" aria-live="polite" data-ds-live>
             <div class="big" id="pn-pnl">—</div>
             <div class="big-sub" id="pn-sub">&nbsp;</div>
             <dl class="rows" id="pn-rows"></dl>
@@ -214,7 +231,8 @@
   }
   const qty = (q) => q == null || !isFinite(q) ? "—" : q.toLocaleString("en-US", { maximumFractionDigits: q >= 100 ? 2 : q >= 1 ? 4 : 6 });
   const rows = (pairs) => pairs.map(([k, v, c]) => `<dt>${k}</dt><dd class="${c || ""}">${v}</dd>`).join("");
-  const callout = (kind, text) => `<div class="callout ${kind}">${text}</div>`;
+  const LABEL = { bad: "Problem", warn: "Careful", ok: "Looks fine" };
+  const callout = (kind, text) => `<div class="callout ${kind}" role="${kind === "bad" ? "alert" : "status"}"><b>${LABEL[kind]}.</b> ${text}</div>`;
   const cls = (v) => v > 0 ? "pos" : v < 0 ? "neg" : "";
   function liqPrice(side, entry, lev, mmr) {
     return side === "LONG" ? entry * (1 - 1 / lev) / (1 - mmr) : entry * (1 + 1 / lev) / (1 + mmr);
