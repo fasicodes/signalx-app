@@ -9,7 +9,7 @@
   var MAX_KEEP = 20;
   var css = "" +
     ".sfa-btn{position:fixed;right:18px;bottom:18px;z-index:70;width:56px;height:56px;border-radius:50%;border:0;cursor:pointer;" +
-    "background:var(--accent,#16a34a);color:#03140b;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center}" +
+    "background:var(--accent,#16a34a);color:var(--on-accent);box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center}" +
     ".sfa-btn svg{width:26px;height:26px}" +
     "@media (max-width:760px){.sfa-btn{bottom:78px;right:14px;width:52px;height:52px}}" +
     ".sfa-panel{position:fixed;right:18px;bottom:86px;z-index:71;width:min(400px,calc(100vw - 24px));height:min(600px,calc(100vh - 120px));" +
@@ -29,7 +29,7 @@
     ".sfa-sugg button{border:1px solid var(--line,#1f2a25);background:transparent;color:var(--text-dim,#9fb1a8);border-radius:14px;padding:5px 10px;cursor:pointer;font:12.5px var(--body,inherit)}" +
     ".sfa-form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line,#1f2a25)}" +
     ".sfa-form textarea{flex:1;resize:none;height:42px;max-height:120px;background:var(--void,#05080a);color:var(--text,#e8f0ec);border:1px solid var(--line,#1f2a25);border-radius:10px;padding:10px;font:14px var(--body,inherit)}" +
-    ".sfa-form button{border:0;border-radius:10px;padding:0 14px;background:var(--accent,#16a34a);color:#03140b;font-weight:600;cursor:pointer}" +
+    ".sfa-form button{border:0;border-radius:10px;padding:0 14px;background:var(--accent,#16a34a);color:var(--on-accent);font-weight:600;cursor:pointer}" +
     ".sfa-form button:disabled{opacity:.5;cursor:default}" +
     ".sfa-foot{padding:0 14px 10px;font-size:11.5px;color:var(--text-faint,#7d8f86)}" +
     ".sfa-ctx{padding:6px 14px;font-size:12.5px;color:var(--text-dim,#9fb1a8);border-bottom:1px solid var(--line,#1f2a25)}";
