@@ -1106,3 +1106,32 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ds-brand); }
 .empty-core { background: var(--ds-surface); border: 1px solid var(--ds-line); border-radius: var(--ds-r-xl); padding: 26px 40px 28px; box-shadow: var(--ds-shadow-2); text-align: center; }
 .empty-radar { margin-bottom: 14px; }
 .ds-ws .symbar .last, .ds-ws .acct-kv b, .ds-ws .kpi b, .ds-ws .stat .v, .ds-ws table.tbl td b, .ds-ws .summary b { font-weight: 600; }
+
+/* ---------- 14. 3D background and card tilt (static/scene3d.js) ---------- */
+.ds3d { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100lvh; z-index: -1; pointer-events: none;
+  opacity: 0; transition: opacity 420ms var(--ds-ease); }
+.ds3d.is-on { opacity: var(--ds3d-alpha, 0.6); }
+/* fade the scene where headings and body copy usually sit (left on wide screens, top on phones) */
+.ds3d { -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.32) 0%, rgba(0,0,0,.45) 35%, #000 62%); mask-image: linear-gradient(90deg, rgba(0,0,0,.32) 0%, rgba(0,0,0,.45) 35%, #000 62%); }
+@media (max-width: 760px) { .ds3d { -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,.5), rgba(0,0,0,.4) 50%, rgba(0,0,0,.7)); mask-image: linear-gradient(180deg, rgba(0,0,0,.5), rgba(0,0,0,.4) 50%, rgba(0,0,0,.7)); } }
+html.has-3d { background: var(--ds-bg); }
+html.has-3d body { background: transparent; }
+/* keep text readable: a soft shade on the side where the hero copy sits */
+html.has-3d .lp .hero { background: linear-gradient(90deg, color-mix(in srgb, var(--ds-bg) 88%, transparent) 0%, color-mix(in srgb, var(--ds-bg) 55%, transparent) 45%, transparent 75%); }
+html.has-3d .lp .live, html.has-3d .lp .term { background: color-mix(in srgb, var(--ds-surface) 72%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+html.has-3d .lp .sec-head p, html.has-3d .lp .lead { text-shadow: 0 1px 12px var(--ds-bg); }
+@media (max-width: 760px) {
+  html.has-3d .lp .hero { background: linear-gradient(180deg, color-mix(in srgb, var(--ds-bg) 80%, transparent), color-mix(in srgb, var(--ds-bg) 45%, transparent)); }
+}
+
+/* cards lean toward the pointer (only with a mouse, never with reduced motion) */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .lp .ex-card, .lp .res-card, .lp .feat, .lp .coins-demo, .lp .spec, .lp .steps li, .plan, .icard, .scard, [data-tilt] {
+    transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+    transition: transform 380ms var(--ds-ease), box-shadow var(--ds-t-base) var(--ds-ease), background-color var(--ds-t-base) var(--ds-ease), border-color var(--ds-t-base) var(--ds-ease);
+    will-change: transform;
+  }
+  .ds-tilt { transition-duration: 90ms, var(--ds-t-base), var(--ds-t-base), var(--ds-t-base) !important; box-shadow: var(--ds-shadow-3); position: relative; }
+  .ds-tilt::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(420px circle at var(--glare-x, 50%) var(--glare-y, 50%), color-mix(in srgb, var(--ds-brand) 9%, transparent), transparent 60%); }
+}
