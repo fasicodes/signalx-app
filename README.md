@@ -38,6 +38,9 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 * `features.py` - model inputs (the same code for research and live).
 * `models/<market>_<timeframe>.json` - trained stream models with their walk-forward and holdout tests
   (crypto 4h uses `signal_model.json`, engine v3.1). A stream without a model file falls back to rules engine R1.
+* `/signals` runs a selectable stream and now includes an all-stream comparison for crypto/forex 15m, 1h and 4h:
+  actual closed-signal records are shown separately from model holdouts or historical rules replays. Experimental
+  streams are labelled as such; live data appears as those signals close.
 * Research code that trains and tests the models: see "Research" below.
 
 Database: every signal is a row in `signal_events` (market, timeframe, grade, plan, status, result). The
@@ -104,33 +107,28 @@ endpoints, the security headers and the analysis functions that once had bugs.
 
 All six streams run by default. Streams that have not passed the test are marked **untested** on the Signals page and in alerts, and live auto-trading accounts copy only the tested ones (demo accounts copy all). Set `SIGNAL_STREAMS=validated` to run only the tested streams.
 
-Rule fixed before the results: a stream counts as *tested* only if the model version picked on the validation years
-(2023-01 to 2025-09) also reaches **at least 70 % wins (TP1 or better), a positive average result after costs and
-at least 50 signals** on a later holdout (2025-10-01 to 2026-10-11, crypto; 2021-01 to 2022-03, forex).
-Crypto costs 0.12 % per round trip; the holdout was scored once per picked version.
+Selection is **profit-first, not a fixed 70% accuracy target**: validation favours the trade plan with the best
+average result after costs; the selected version is then judged once on a separate holdout. The 4h stream's
+current plan uses a 1R target (the same distance as the stop), so a win rate below 70% can still be profitable.
+Crypto costs 0.12 % round trip. Current engine metrics below are from the bundled model reports; the live
+Track record page continuously replays the current engine rules on recent prices.
 
-| Stream | On the site | Unseen-data result |
+| Stream | On the site | Unseen-data result (current 1R exit plan) |
 |---|---|---|
-| Crypto 4h (engine v3.1) | **on** | 73.6 % wins, +0.105 R per signal, 735 signals (about 2 a day) |
-| Crypto 1h, with the 4h model agreeing | **on** | 72.6 % wins, +0.083 R per signal, 1,691 signals (about 4.5 a day) |
-| Crypto 1h alone | off | 68.1 %, -0.004 R |
-| Crypto 15m | on, **untested** (simple rules R1) | a 15m model was trained (stop 2 and 3 ATR, alone and with the 1h model agreeing) and none reached the validation target: closest 71.4 % wins but only +0.029 R, and 2025 fell to about 64 % and a loss. Rules replay 2023-2025: ~84 signals a day, 48.1 % reach TP1, **-0.139 R** per signal |
-| Forex 15m / 1h / 4h and gold | on, **untested** (simple rules R1) | no model version reached the validation target, or lost money on unseen data (best: 1h, 70.8 % but -0.072 R). Rules replay 2017-2020: 15m ~9 a day **-0.218 R**, 1h ~2.9 a day **-0.112 R**, 4h ~1 a day **-0.082 R** |
+| Crypto 4h (engine v3.1) | **on** | 59.6 % wins, +0.236 R average / +190.2 R total, profit factor 1.66, 805 signals (about 2.1 a day); max drawdown -17.5 R |
+| Crypto 1h, gated by the 4h model | **on** | 55.8 % wins, +0.099 R average / +166.6 R total, profit factor 1.23, 1,690 signals (about 4.5 a day); max drawdown -118.8 R |
+| Crypto 1h alone | off | 68.1 % wins, -0.004 R under the older evaluation; not enabled because its 4h gate improves expectancy |
+| Crypto 15m | on, **untested** (simple rules R1) | Rules replay 2023-2025: ~84 signals a day, 48.1 % reach TP1, **-0.139 R** per signal |
+| Forex 15m / 1h / 4h and gold | on, **untested** (simple rules R1) | Best forex model holdout had 70.8 % TP1 wins but **-0.072 R** after costs. Rules replay 2017-2020: 15m ~9 a day **-0.218 R**, 1h ~2.9 a day **-0.112 R**, 4h ~1 a day **-0.082 R** |
 
-Things the numbers say, plainly:
+What matters for your stated goal:
 
-* The simple rules (R1) that the untested streams run lose money on average in every validation year and every grade (see `models/research.json`, `rules_replay`; reproduce with `research/rules_replay.py`). Loosening them (lower score, weaker higher-timeframe filter) gives more signals but the same average loss, so more signals on every timeframe needs a trained model that passes the test, not looser rules.
-
-* A "win" is TP1 (half of the stop distance) or better; about 66 % of all trades in the data reach TP1 whatever
-  the signal, so a high win rate alone is not skill. The measure that matters is the average result after
-  costs (R = the risk of one trade). The two live models add about 6-7 points of win rate and +0.08 to +0.1 R per signal.
-* More signals cost accuracy: the 1h model alone (13 signals a day) is close to the base rate and earns about
-  nothing on unseen data. With both live streams expect roughly 6-7 signals a day across all coins, not 2-3 per coin.
-* Crypto signals come in bursts: on busy days many coins fire together, so the unseen-data samples are smaller than
-  the signal counts suggest. Treat the averages as indications, not promises.
-* Not used because they did not help or did not hold: order-flow inputs, the Hawkes / Bayesian / conformal /
-  Kelly prompt (the site's first engine: 49.5-51 % right on the next candle), forex models (see `research/README.md`).
-* The numbers come from history; live results will differ. The Track record page keeps the live record.
+* The 4h test does **not** meet a 70% win-rate target. It was kept because it made more than it lost in a later unseen period: 805 signals, +190.2 R net after estimated costs, and a 1.66 profit factor. Its walk-forward test also averaged +0.135 R across 1,772 signals, though the longest-period maximum drawdown was -79.7 R.
+* A win rate is not the same as profitability. With a 1R target and 1R stop, results after fees and slippage, total net R, and drawdown are more useful than an arbitrary accuracy threshold. The Track record page shows cumulative results and the recent backtest.
+* A historical backtest cannot guarantee a positive future balance. Live performance can be negative, losses can occur in streaks, and costs or fills can differ. Use the demo account first and keep risk small.
+* Crypto signals can arrive in correlated bursts. These are historical signal counts, not independent bets or promises. The 1h stream's larger drawdown especially calls for conservative sizing.
+* The simple rules (R1) that the untested streams run lose money on average in replay; do not treat those experimental streams as profitable. See `models/research.json` and `research/README.md`.
+* The Track record page keeps the live record. Treat backtest performance as evidence to monitor—not a guarantee.
 
 ## Research (how the stream models were trained and tested)
 

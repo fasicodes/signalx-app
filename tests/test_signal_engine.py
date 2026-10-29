@@ -51,7 +51,7 @@ m = se.model()
 check(len(m.features) == 82 and len(m.trees) == 250, "82 features, 250 trees")
 check(m.sl_atr == 2.0 and m.targets_r == [1.0] and m.fractions == [1.0] and m.max_bars == 54 and m.be_after == 0,
       "plan: 2x ATR stop, one target at 1R (the whole position), the stop never moves, 54 candles")
-check(abs(sum(m.fractions) - 1) < 1e-9 and len(set(round(x, 9) for x in m.fractions)) == 1, "a third closes at each target")
+check(m.fractions == [1.0], "one target closes the whole position")
 check(0.5 < m.floor < m.watch_threshold < m.threshold < 0.95 and m.gap_hours == 24,
       f"levels: standard {m.floor:.3f} < forming {m.watch_threshold:.3f} < strong {m.threshold:.3f}, 24h rule")
 check(len(m.signal_coins) == 62 and set(se.UNIVERSE) <= set(se.signal_coins()), "62 signal coins of the test incl. the 16-coin universe")
@@ -60,8 +60,9 @@ check(se.signal_coins() == m.signal_coins + markets.CRYPTO_4H_ONLY and len(se.si
       "plus the coins added after the coin test (4h only), no duplicates")
 check(m.max_per_bar == 5, "at most 5 new signals per candle")
 t = se.test_stats()
-check(t["signals"] > 300 and 50 < t["win_rate"] < 90 and t["avg_net_r"] > 0 and t["period"].startswith("2025-10"),
-      "out-of-sample test stats bundled (Oct 2025 onward, data the model never saw)")
+check(t["signals"] >= 500 and 50 < t["win_rate"] < 90 and t["avg_net_r"] > 0 and t["total_net_r"] > 0
+      and t["profit_factor"] > 1 and t["period"].startswith("2025-10"),
+      "profit-first holdout: positive average and total net R after costs, independent of a fixed win-rate target")
 wf = se.walk_forward_stats()
 check(wf["signals"] > 1000 and all(v["avg_net_r"] > 0 for v in wf["years"].values()), "walk-forward 2023-2026: every year positive")
 p = m.raw_proba(np.full((3, 82), np.nan))

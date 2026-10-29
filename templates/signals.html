@@ -87,6 +87,16 @@
   .tabs button:not([hidden]) ~ button { border-left: 1px solid var(--line); }
   .tabs button[aria-selected="true"] { background: var(--long-dim); color: var(--text); }
   .stream-info { font-size: 13px; color: var(--text-dim); flex: 1 1 260px; }
+  .overview-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .overview-table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 13px; }
+  .overview-table th, .overview-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .overview-table th { color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+  .overview-table td { font-variant-numeric: tabular-nums; }
+  .overview-table tr:last-child td { border-bottom: 0; }
+  .overview-table .dim { color: var(--text-faint); }
+  .overview-market { font-weight: 650; white-space: nowrap; }
+  .overview-status { display: block; margin-top: 4px; color: var(--text-faint); font-size: 11.5px; }
+  .overview-view { min-height: 32px; padding: 5px 9px; white-space: nowrap; }
   .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
   .filters select, .filters input { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 14px var(--body); min-height: 38px; }
   .filters .chip { min-height: 34px; }
@@ -155,7 +165,18 @@
   <div class="disclaimer" role="note"><b>Risk warning:</b> trading involves risk and you can lose money. Past performance does not
     guarantee future results. Signals are information, not financial advice. Risk only a small, fixed part of your account on each signal.</div>
 
-  <div class="bar">
+  <section class="block" id="all-stream-overview">
+    <h2 class="sec">All markets and timeframes</h2>
+    <p class="sec-sub">Live results use real, closed signals. Backtests are shown separately and use each stream’s published test or historical rules replay. Untested streams are marked experimental.</p>
+    <div class="overview-wrap">
+      <table class="overview-table">
+        <thead><tr><th>Stream</th><th>Live record</th><th>Backtest / historical replay</th><th></th></tr></thead>
+        <tbody id="overview-body"><tr><td colspan="4" class="dim">Loading stream records…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="bar" id="stream-controls">
     <div class="tabs" role="tablist" aria-label="Market" id="mk">
       <button type="button" role="tab" data-v="crypto" aria-selected="true">Crypto</button>
       <button type="button" role="tab" data-v="forex" aria-selected="false">Forex</button>
@@ -574,6 +595,55 @@
       $("c-active-sub").textContent = "Could not load the statistics.";
     }
   }
+  function rText(v) {
+    if (v == null || !isFinite(Number(v))) return "—";
+    const n = Number(v);
+    return `${n > 0 ? "+" : ""}${n.toFixed(2)}R`;
+  }
+  function percent(v) { return v == null || !isFinite(Number(v)) ? "—" : `${Number(v).toFixed(1)}%`; }
+  function overviewBacktest(s, d) {
+    const mt = d && d.model_test, h = mt && mt.holdout;
+    if (h && h.signals) {
+      const total = h.total_net_r != null ? ` · total ${rText(h.total_net_r)}` : "";
+      const pf = h.profit_factor != null ? ` · PF ${Number(h.profit_factor).toFixed(2)}` : "";
+      return `<b>Model holdout</b> · ${esc(h.period || "")}: ${h.signals} signals, ${percent(h.win_rate)} wins, ${rText(h.avg_net_r)} avg${total}${pf}`;
+    }
+    const replay = s.research && s.research.rules_replay;
+    if (replay) {
+      return `<b>Rules replay · experimental</b> · ${esc(replay.period || "")}: ${percent(replay.win_rate)} reached TP1, ${rText(replay.avg_net_r)} avg after costs`;
+    }
+    const sim = d && d.simulated;
+    if (sim && sim.signals) return `<b>Recent replay</b> · ${sim.signals} signals, ${percent(sim.win_rate)} wins, ${rText(sim.avg_r)} avg / ${rText(sim.total_r)} total`;
+    return `<span class="dim">No published backtest for this stream yet</span>`;
+  }
+  async function loadOverview() {
+    const body = $("overview-body");
+    if (!body) return;
+    const rows = await Promise.all(STREAMS.map(async (s) => {
+      let d = null, err = false;
+      try { d = await getJSON(`/api/signals/stats?market=${encodeURIComponent(s.market)}&timeframe=${encodeURIComponent(s.timeframe)}`); }
+      catch (e) { err = true; }
+      const live = d && d.windows && d.windows.all;
+      let liveText = err ? `<span class="dim">Live record unavailable</span>`
+        : live && live.closed ? `${live.closed} closed · ${percent(live.win_rate)} wins · ${rText(live.total_r)} total (${rText(live.avg_r)} avg)`
+        : `No closed signals yet · ${(d && d.active) || 0} active`;
+      const status = !s.enabled ? "Off in settings" : (s.validated === false ? "Experimental · not validated" : "Validated model");
+      const action = s.enabled
+        ? `<button type="button" class="pbtn overview-view" data-overview-market="${esc(s.market)}" data-overview-timeframe="${esc(s.timeframe)}">View signals</button>`
+        : `<span class="dim">Off</span>`;
+      return `<tr><td><span class="overview-market">${s.market === "forex" ? "Forex" : "Crypto"} · ${esc(s.timeframe)}</span><span class="overview-status">${status}</span></td>`
+        + `<td>${liveText}</td><td>${d ? overviewBacktest(s, d) : `<span class="dim">Could not load results</span>`}</td><td>${action}</td></tr>`;
+    }));
+    body.innerHTML = rows.join("");
+  }
+  $("overview-body").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-overview-market]");
+    if (!b) return;
+    market = b.dataset.overviewMarket; tf = b.dataset.overviewTimeframe;
+    fixChoice(); setTabs(); reload();
+    $("stream-controls").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
   function reload() { page = 1; loadList(); loadStats(); }
 
   $("mk").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; market = b.dataset.v; fixChoice(); setTabs(); reload(); });
@@ -774,9 +844,10 @@
 
   setTabs();
   reload();
+  loadOverview();
   pollNew();
   loadAlerts().then(loadTelegram);
-  setInterval(() => { loadList(); loadStats(); pollNew(); }, 60000);
+  setInterval(() => { loadList(); loadStats(); loadOverview(); pollNew(); }, 60000);
 })();
 </script>
 </body>
