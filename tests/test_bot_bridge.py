@@ -21,6 +21,7 @@ from cryptography.fernet import Fernet  # noqa: E402
 
 os.environ["AUTOTRADE_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
 os.environ.pop("FOREX_PAPER_BALANCE", None)
+os.environ["SIGNAL_STREAMS"] = "all"           # the bridge test uses 1h and forex signals
 
 import autotrade as at  # noqa: E402
 import fxbroker  # noqa: E402
