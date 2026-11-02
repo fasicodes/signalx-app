@@ -229,7 +229,10 @@ def passed_test(test):
 
 
 def validated(key):
-    """crypto 4h (signal engine v3.1, tested separately) or a stream model whose holdout test passed."""
+    """crypto 4h (signal engine v3.1, tested separately) or a stream model whose holdout test passed.
+    While SIGNAL_PROVIDER=tauric nothing is validated: those signals have no backtest, so live accounts skip them."""
+    if (os.environ.get("SIGNAL_PROVIDER") or "").strip().lower() == "tauric":
+        return False
     if key == "crypto_4h":
         return True
     m = load_model(key)
@@ -261,6 +264,10 @@ def engine_name(key):
 def plan_for(market, tf):
     """The trade plan stored with every signal (the tracker follows it)."""
     key = stream_key(market, tf)
+    if (os.environ.get("SIGNAL_PROVIDER") or "").strip().lower() == "tauric":
+        cfg = stream_cfg(market, tf)
+        return {"targets_r": list(TARGETS_R), "fractions": list(FRACTIONS), "be_after": BE_AFTER,
+                "max_bars": cfg["max_bars"], "tf_sec": markets.TF_SEC[tf], "engine": "tauric"}
     if key == "crypto_4h":
         import signal_engine as se
         m = se.model()
