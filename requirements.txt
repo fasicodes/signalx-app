@@ -17,3 +17,6 @@ requests>=2.31
 gunicorn>=21.2
 # pandas-ta is optional and not published for every Python version: main.py has its own RSI/MACD, so it is
 # not listed. Add "pandas-ta" here only if you want the library itself.
+
+# Tauric Research TradingAgents (only used when SIGNAL_PROVIDER=tauric)
+tradingagents
