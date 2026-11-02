@@ -34,6 +34,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 
 import markets
 import streams
+import tauric_engine
 from db import get_db_connection
 
 hub_bp = Blueprint("signal_hub", __name__)
@@ -289,8 +290,11 @@ def engine(key):
         e = _engines.get(key)
         if e is None:
             cfg = streams.STREAMS[key]
-            e = streams.StreamEngine(cfg["market"], cfg["tf"], store(), markets.stream_coins(cfg["market"], cfg["tf"]),
-                                     blocked=_blocked)
+            if tauric_engine.active():
+                e = tauric_engine.TauricEngine(cfg["market"], cfg["tf"], store(), blocked=_blocked)
+            else:
+                e = streams.StreamEngine(cfg["market"], cfg["tf"], store(),
+                                         markets.stream_coins(cfg["market"], cfg["tf"]), blocked=_blocked)
             _engines[key] = e
         return e
 
@@ -339,7 +343,7 @@ def due_streams(now=None):
     out = []
     for key in enabled_streams():
         cfg = streams.STREAMS[key]
-        if key == "crypto_4h":
+        if key == "crypto_4h" and not tauric_engine.active():
             continue                      # crypto 4h: signalboard.py (engine v3.1)
         bar = streams.last_closed_bar(cfg["tf"], now)
         if _state["scanned"].get(key) == bar:
