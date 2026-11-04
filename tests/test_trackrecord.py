@@ -116,7 +116,7 @@ check(o["status"] == "SL" and close_to(o["r"], -1.0), "one target: the stop does
 # the ladder rules (still used by older signals and the experimental streams)
 _live_plan = (m.targets_r, m.fractions, m.be_after, m.tp_atr)
 m.targets_r, m.fractions, m.be_after, m.tp_atr = [0.5, 1.0, 2.0], [1 / 3] * 3, 1, 4.0
-check(close_to(tr.net_r(1.5, 100, 98), 1.5 - 0.0012 * 100 / 2), "fees taken off in R (0.12% round trip)")
+check(close_to(tr.net_r(1.5, 100, 98), 1.5 - se.COST_ROUND_TRIP * 100 / 2), "fees taken off in R (real round-trip cost)")
 # LONG entry 100, stop 98 -> TP1 101, TP2 102, TP3 104
 o = tr.evaluate("LONG", 100, 98, 104, [bar(T0, 100, 100.6, 99, 100.5), bar(T0, 100.5, 104.2, 100.2, 104)])
 check(o["resolved"] and o["status"] == "TP3" and o["hits"] == 3 and close_to(o["r"], 3.5 / 3) and o["bars_held"] == 2,
@@ -350,7 +350,7 @@ LIVE[("BTC/USDT", "4h")] = ext
 tr.meta_set("last_eval_epoch", 0)
 tr.engine_step((t_last + pd.Timedelta(hours=12, minutes=1)).to_pydatetime())
 q = Conn().cursor(); q.execute("SELECT * FROM track_signals WHERE id=?", (r["id"],)); r2 = q.fetchone()
-check(r2["status"] == "TP1" and r2["hits"] == 1 and close_to(r2["r_multiple"], 1.0 - 0.0012 / 0.03) and r2["bars_held"] == 2,
+check(r2["status"] == "TP1" and r2["hits"] == 1 and close_to(r2["r_multiple"], 1.0 - se.COST_ROUND_TRIP / 0.03) and r2["bars_held"] == 2,
       "live signal: the target (1R) reached in the second candle closes it, R after fees")
 n = 0
 print("\n[5] page + API")
