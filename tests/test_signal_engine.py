@@ -130,7 +130,7 @@ r = run("LONG", 100, 98, flat)
 check(r["status"] == "EXPIRED" and r["bars"] == 54 and close_to(r["r_gross"], 0.1), "time limit after 54 candles at the close")
 r = run("LONG", 100, 98, [(100, 101.2, 99.8, 101)] + [(100.6, 100.9, 100.3, 100.6)] * 5)
 check(r["status"] is None and r["hits"] == 1 and close_to(r["stop_now"], 100) and r["bars"] == 6, "still running: TP1 reached, stop at entry")
-check(abs(se.cost_r(100, 98) - 0.0012 * 100 / 2) < 1e-12, "fees in R")
+check(abs(se.cost_r(100, 98) - se.COST_ROUND_TRIP * 100 / 2) < 1e-12, "fees in R")
 
 m.targets_r, m.fractions, m.be_after, m.tp_atr = _live_plan
 print("\n[4] signal rules (replay_all)")
