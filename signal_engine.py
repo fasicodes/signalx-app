@@ -46,6 +46,8 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
+import markets
+
 ENGINE_VERSION = "3.1"
 TIMEFRAME = "4h"
 TF_SEC = 4 * 3600
@@ -54,7 +56,7 @@ REPLAY_BARS = 300             # candles replayed to find each coin's running tra
 WARMUP_BARS = 240             # first candles of a series are only used to warm up the features
 UNIVERSE = ["ADA/USDT", "ATOM/USDT", "AVAX/USDT", "BCH/USDT", "BNB/USDT", "BTC/USDT", "DOGE/USDT", "DOT/USDT",
             "ETH/USDT", "LINK/USDT", "LTC/USDT", "NEAR/USDT", "SOL/USDT", "TRX/USDT", "XLM/USDT", "XRP/USDT"]
-COST_ROUND_TRIP = 0.0012      # 0.05% taker in + 0.05% out + 0.02% slippage
+COST_ROUND_TRIP = markets.CRYPTO_COST_ROUND_TRIP   # see markets.py (real VIP 0 fees + slippage)
 EPS = 1e-12
 RECENT_KEYS = ("side", "entry", "stop_loss", "take_profit", "targets", "confidence", "tier", "signal_at", "closed_at",
                "status", "exit_price", "r", "hits")
