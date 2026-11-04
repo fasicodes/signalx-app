@@ -250,7 +250,9 @@ signal_hub.record("BTC/USDT", "crypto", "4h", {"side": "LONG", "entry": 63120.5,
                                               "targets": [64680.75, 66241.0, 69361.5], "confidence": 78, "bar_time": _bt})
 signal_hub.record("EUR/USD", "forex", "1h", {"side": "SHORT", "entry": 1.08123, "stop_loss": 1.0832, "take_profit": 1.0753,
                                             "targets": [1.0793, 1.0773, 1.0753], "grade": "A", "bar_time": _bt})
+os.environ["SIGNAL_STREAMS"] = "all"      # forex 1h is an untested stream: off by default since the cost fix
 hook(update(555, "/signals"))
+os.environ.pop("SIGNAL_STREAMS")
 txt = sent_to(555)[-1]
 check("Active signals (2)" in txt and "BTC</b> 4h Long" in txt and "EUR/USD</b> 1h Short" in txt and "1.08123" in txt
       and "grade" not in txt.lower(), "/signals lists active signals of every stream from the database (no grade jargon)")
