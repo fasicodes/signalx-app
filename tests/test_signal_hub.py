@@ -85,7 +85,7 @@ check(list(mask) == [False, False, True], "weekend exit: the last candle before 
 r = streams.follow("LONG", 100.0, 99.0, np.array([100, 100.2, 100.3]), np.array([100.4, 100.5, 100.6]),
                    np.array([99.9, 99.9, 99.9]), np.array([100.2, 100.3, 100.5]), 0, plan, exit_mask=mask)
 check(r["status"] == "EXPIRED" and abs(r["exit_price"] - 100.5) < 1e-9, "forex trade closed at the weekly close, no weekend gap")
-check(abs(streams.cost_r("EUR/USD", 1.1000, 1.0980) - 1.2 * 0.0001 / 0.002) < 1e-9, "forex costs in R from the pair's spread")
+check(abs(streams.cost_r("EUR/USD", 1.1000, 1.0980) - (1.2 + markets.FOREX_SLIPPAGE_PIPS) * 0.0001 / 0.002) < 1e-9, "forex costs in R from the pair's spread")
 check(streams.grade_of(85) == "A" and streams.grade_of(72) == "B" and streams.grade_of(61) == "C", "grades A/B/C from the score")
 
 # ---------------------------------------------------------------------------
@@ -249,7 +249,7 @@ df = pd.DataFrame({"timestamp": [bt + timedelta(hours=k) for k in range(4)],
                    "open": [99.5, 100.0, 101.0, 100.6], "high": [100.2, 101.3, 101.4, 100.7],
                    "low": [99.3, 99.6, 100.5, 99.9], "close": [100.0, 101.0, 100.6, 100.1], "volume": 1.0})
 upd = hub.evaluate_row(row, df, now=bt + timedelta(hours=5))
-exp_r = 1 / 3 - streams.cost_r("SOL/USDT", 100.0, 99.0)
+exp_r = 1 / 3 - streams.cost_r("SOL/USDT", 100.0, 99.0, hours=3, side=row["side"])   # longs pay funding
 check(upd["status"] == "TP1" and abs(upd["r_multiple"] - round(exp_r, 3)) < 1e-6 and upd["closed_at"] == bt + timedelta(hours=4),
       "tracker: TP1 reached, then stopped at entry; result after costs and close time")
 running = hub.evaluate_row(row, df.iloc[:2], now=bt + timedelta(hours=3))
@@ -291,14 +291,14 @@ again = hub.scan_stream("crypto_1h", NOW)
 fresh = [k for k, v in hub.engine("crypto_1h").board(NOW).items() if v.get("fresh")]
 check(len(evs) == len(fresh) and again == [], f"scanner stores each fresh signal once ({len(evs)} new)")
 os.environ.pop("SIGNAL_STREAMS")
-check(len(hub.enabled_streams()) == 6 and hub.enabled_streams() == hub.ALL_STREAMS,
-      "default: all six streams run (the ones that have not passed the test are marked untested)")
+check(hub.enabled_streams() == hub.validated_streams() == ["crypto_4h"],
+      "default: only the streams that passed their test with real costs run (the losing rules streams are off)")
 os.environ["SIGNAL_STREAMS"] = "validated"
 check(hub.enabled_streams() == hub.validated_streams() and "crypto_4h" in hub.enabled_streams(),
       "SIGNAL_STREAMS=validated: only the streams whose model passed its test on unseen data (crypto 4h always)")
 check(hub.validated_streams() == ["crypto_4h"], "no model file -> only crypto 4h counts as tested")
 os.environ["SIGNAL_STREAMS"] = "bogus"
-check(len(hub.enabled_streams()) == 6, "SIGNAL_STREAMS with only unknown names falls back to all six")
+check(hub.enabled_streams() == hub.validated_streams(), "SIGNAL_STREAMS with only unknown names falls back to the tested streams")
 os.environ.pop("SIGNAL_STREAMS")
 check(hub.stream_tested("crypto", "4h") and not hub.stream_tested("crypto", "15m") and not hub.stream_tested("forex", "1h")
       and not hub.stream_tested("forex", "15m") and not hub.stream_tested("forex", "4h"),
@@ -349,8 +349,9 @@ for key in hub.enabled_streams():
         continue                      # produced by signalboard.py (signal engine v3.1), tested elsewhere
     sec = markets.TF_SEC[streams.STREAMS[key]["tf"]]
     made[key] = 0
+    close = streams.last_closed_bar(streams.STREAMS[key]["tf"], NOW) + timedelta(seconds=sec + 60)   # scanned 1 min after the close
     for k in range(60):
-        made[key] += len(hub.scan_stream(key, NOW - timedelta(seconds=sec * k)))
+        made[key] += len(hub.scan_stream(key, close - timedelta(seconds=sec * k)))
     if hub.engine(key).errors:
         scan_errors.append(key)
 check(not scan_errors, "every default stream scans every symbol without errors")
@@ -575,5 +576,18 @@ with sb._board_lock:
 os.environ.pop("SIGNAL_STREAMS", None)
 
 print()
+# late signals: re-anchored to the live price, or dropped when the move is gone
+_a = {"side": "LONG", "entry": 100.0, "stop_loss": 98.0, "stop_now": 98.0, "take_profit": 106.0,
+      "targets": [102.0, 104.0, 106.0], "signal_at": datetime(2026, 10, 13, 12, 0)}
+_on_time = datetime(2026, 10, 13, 12, 1)
+_late = datetime(2026, 10, 13, 13, 30)
+check(hub._freshen("BTC/USDT", "4h", _a, None, _on_time) is _a, "on-time signal without a live price is kept as is")
+check(hub._freshen("BTC/USDT", "1h", _a, None, _late) is None, "late signal without a live price is dropped")
+check(hub._freshen("BTC/USDT", "1h", _a, 101.0, _late) is None, "price already +0.5R toward the target: dropped")
+_b = hub._freshen("BTC/USDT", "1h", _a, 100.4, _late)
+check(_b and _b["entry"] == 100.4 and abs(_b["stop_loss"] - 98.4) < 1e-9 and abs(_b["targets"][0] - 102.4) < 1e-9,
+      "late signal re-anchored to the live price with the same stop distance")
+check(hub._freshen("BTC/USDT", "1h", _a, 98.5, _late) is None, "price already near the stop: dropped")
+
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
