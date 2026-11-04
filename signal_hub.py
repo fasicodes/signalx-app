@@ -34,15 +34,16 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 
 import markets
 import streams
-import tauric_engine
 from db import get_db_connection
 
 hub_bp = Blueprint("signal_hub", __name__)
 
 ALL_STREAMS = ["crypto_15m", "crypto_1h", "crypto_4h", "forex_15m", "forex_1h", "forex_4h"]
-# Default: all six streams. The ones whose model has not passed the test on unseen data are marked untested
-# (experimental) on the site, in alerts and for live auto-trading.
-DEFAULT_STREAMS = list(ALL_STREAMS)
+# Default: only the streams that passed their test on unseen data with real costs. The rules streams lose money after costs (models/research.json: crypto 15m
+# -0.14R, forex 15m -0.22R, forex 1h -0.11R, forex 4h -0.08R per signal), so they need SIGNAL_STREAMS=all to run.
+DEFAULT_STREAMS = list(ALL_STREAMS)   # the universe; enabled_streams() decides what runs
+MAX_LATE_SHARE = 0.25          # a signal published later than 25% of its candle after the close...
+MAX_ENTRY_DRIFT_R = (-0.5, 0.3)  # ...or whose price already moved past these R from the entry is not published
 DELAY_SEC = {"crypto": 45, "forex": 90}
 LOOP_SEC = 20
 CLOSED = ("TP1", "TP2", "TP3", "SL", "EXPIRED")
@@ -109,18 +110,17 @@ def stream_tested(market, tf):
 
 
 def enabled_streams():
-    """SIGNAL_STREAMS: empty or 'all' (default) = all six streams (the ones that have not passed the test on unseen
-    data run simple rules and are marked 'untested' on the site, in alerts and for live auto-trading);
-    'validated' = only the streams whose model passed that test; or a comma-separated list."""
+    """SIGNAL_STREAMS: empty or 'validated' (default) = only the streams whose model passed its test on unseen
+    data with real costs; 'all' = all six
+    (the losing rules streams too, marked untested/experimental); or a comma-separated list."""
     raw = (os.environ.get("SIGNAL_STREAMS") or "").strip().lower()
-    if not raw:
-        return list(DEFAULT_STREAMS)
     if raw == "all":
         return list(ALL_STREAMS)
-    if raw == "validated":
-        return validated_streams()
-    out = [s.strip() for s in raw.split(",") if s.strip() in ALL_STREAMS]
-    return out or list(DEFAULT_STREAMS)
+    if raw and raw != "validated":
+        out = [s.strip() for s in raw.split(",") if s.strip() in ALL_STREAMS]
+        if out:
+            return out
+    return validated_streams()
 
 
 def symbols_for(market):
@@ -290,11 +290,8 @@ def engine(key):
         e = _engines.get(key)
         if e is None:
             cfg = streams.STREAMS[key]
-            if tauric_engine.active():
-                e = tauric_engine.TauricEngine(cfg["market"], cfg["tf"], store(), blocked=_blocked)
-            else:
-                e = streams.StreamEngine(cfg["market"], cfg["tf"], store(),
-                                         markets.stream_coins(cfg["market"], cfg["tf"]), blocked=_blocked)
+            e = streams.StreamEngine(cfg["market"], cfg["tf"], store(),
+                                     markets.stream_coins(cfg["market"], cfg["tf"]), blocked=_blocked)
             _engines[key] = e
         return e
 
@@ -325,10 +322,15 @@ def scan_stream(key, now=None):
     cfg = streams.STREAMS[key]
     board = engine(key).board(now, force=True)
     events = []
+    prices = None
     for sym, res in board.items():
         if res.get("error") or not res.get("fresh") or not res.get("active"):
             continue
-        a = res["active"]
+        if prices is None:
+            prices = _prices_for([s for s, r in board.items() if r.get("active") and r.get("fresh")])
+        a = _freshen(sym, cfg["tf"], res["active"], prices.get(sym), now)
+        if a is None:
+            continue
         ev = record(sym, cfg["market"], cfg["tf"], a, news=_news_for(sym, _parse(a.get("signal_at"))))
         if ev:
             events.append(ev)
@@ -337,13 +339,50 @@ def scan_stream(key, now=None):
     return events
 
 
+def _prices_for(symbols):
+    try:
+        return live_prices([{"symbol": s} for s in symbols])
+    except Exception:
+        return {}
+
+
+def _freshen(symbol, tf, a, price, now):
+    """A signal is entered at the close of its candle, but it reaches people later (scan delay, slow data
+    feeds). When the live price is known the entry, stop and targets move to it (same stop distance); when the
+    price already ran too far toward the target or the stop, or the signal is late and no price is known, it is
+    not published - nobody could get that entry any more."""
+    entry, stop = float(a["entry"]), float(a["stop_loss"])
+    risk = abs(entry - stop)
+    if not risk > 0:
+        return None
+    signal_at = _parse(a.get("signal_at")) or now
+    late = (now - signal_at).total_seconds() > MAX_LATE_SHARE * markets.TF_SEC[tf]
+    if price is None or not price > 0:
+        return None if late else a
+    sgn = 1 if a["side"] == "LONG" else -1
+    drift = sgn * (float(price) - entry) / risk
+    if drift < MAX_ENTRY_DRIFT_R[0] or drift > MAX_ENTRY_DRIFT_R[1]:
+        return None
+    if not late:
+        return a
+    shift = float(price) - entry
+    b = dict(a)
+    b["entry"] = float(price)
+    for k in ("stop_loss", "stop_now", "take_profit"):
+        if b.get(k) is not None:
+            b[k] = float(b[k]) + shift
+    b["targets"] = [float(t) + shift for t in (a.get("targets") or [])]
+    b["late_entry"] = True
+    return b
+
+
 def due_streams(now=None):
     """Streams whose newest candle has closed (plus the publish delay) and was not scanned yet."""
     now = now or _utcnow()
     out = []
     for key in enabled_streams():
         cfg = streams.STREAMS[key]
-        if key == "crypto_4h" and not tauric_engine.active():
+        if key == "crypto_4h":
             continue                      # crypto 4h: signalboard.py (engine v3.1)
         bar = streams.last_closed_bar(cfg["tf"], now)
         if _state["scanned"].get(key) == bar:
@@ -422,8 +461,9 @@ def evaluate_row(row, df, now=None):
     upd = {"hits": int(res["hits"]), "stop_now": float(res["stop_now"]), "updated_at": now or _utcnow()}
     if res["status"] is None:
         return upd
-    r = float(res["r_gross"]) - streams.cost_r(row["symbol"], entry, sl)
     j = min(start + res["bars"] - 1, len(ts) - 1)
+    hours = res["bars"] * sec / 3600.0
+    r = float(res["r_gross"]) - streams.cost_r(row["symbol"], entry, sl, hours=hours, side=row["side"])
     closed_at = pd.Timestamp(ts.iloc[j]).to_pydatetime() + timedelta(seconds=sec)
     units = streams.result_units(row["symbol"], entry, sl, round(r, 3))
     upd.update({"status": res["status"], "exit_price": res["exit_price"], "r_multiple": round(r, 3),
