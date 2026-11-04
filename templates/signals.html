@@ -520,7 +520,8 @@
   function closeTrade() { $("tmodal").classList.remove("open"); TRADE = null; }
 
   function wr(w) { return w && w.win_rate != null ? `${w.win_rate}%` : "--"; }
-  function nTxt(w) { return w ? `${w.wins} of ${w.closed} closed` : "no closed signals"; }
+  // a high win rate means nothing when the losses are bigger than the wins: always show the average result next to it
+  function nTxt(w) { return w && w.closed ? `${w.wins} of ${w.closed} closed · avg ${w.avg_r > 0 ? "+" : ""}${w.avg_r != null ? w.avg_r : "--"}R per signal` : "no closed signals"; }
   async function loadStats() {
     try {
       const d = await getJSON(`/api/signals/stats?market=${market}&timeframe=${tf}`);
