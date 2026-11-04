@@ -115,3 +115,14 @@ s3 with the 1h model 71.4 % / +0.029 R at 6.9 a day; s2 alone 71.3 % / -0.033 R;
 The target was 73 % and +0.03 R with every year above 70 % and positive. In the best version 2023 and 2024 were about 72 %
 and +0.04 R, and 2025 fell to 62-64 % and -0.1 R, so the edge is small and shrinking. Not used; the stream runs rules R1
 and is labelled untested.
+
+## Costs and when a stream counts as tested (Nov 2026)
+
+* Costs are now real VIP 0 values (`markets.py`): crypto 0.30% per round trip plus futures funding for longs
+  (0.00125% per hour), forex the pair's spread + 0.3 pip slippage. The shipped models were tested with 0.12%;
+  `streams.passed_test()` re-prices their holdout results with the real cost before a stream may go live.
+* A stream also fails when its worst drawdown is larger than half of its total result, or when its test ended more
+  than two years ago. With these rules crypto 1h (+0.099R at 0.12% cost, drawdown -118.8R) is no longer tested;
+  crypto 4h (engine v3.1) still is.
+* The forex data above ends in March 2022. Re-test forex on recent data before switching it on: Dukascopy gives
+  free bid/ask candles (so the real spread is in the data); HistData has free 1-minute bid candles.
