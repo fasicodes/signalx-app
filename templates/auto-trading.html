@@ -299,7 +299,7 @@
           <div class="field"><label for="s-market">Market</label>
             <select class="sel" id="s-market"><option value="spot">Spot (LONG only, no leverage)</option><option value="futures">USDT-M Futures (LONG + SHORT)</option></select></div>
           <div class="field"><label for="s-leverage">Leverage</label><select class="sel" id="s-leverage"></select>
-            <span class="hint">Server cap: 20x. 1–3x is safer to start.</span></div>
+            <span class="hint">Server cap: 10x. The bot lowers it by itself when the stop would sit too close to liquidation. 1–3x is safer.</span></div>
           <div class="field" style="grid-column:1/-1"><label>Signals to take</label>
             <div class="chipset" id="s-markets"><label><input type="checkbox" value="crypto"> Crypto</label><label><input type="checkbox" value="forex"> Forex</label></div>
             <div class="chipset" id="s-tfs" style="margin-top:6px"><label><input type="checkbox" value="15m"> 15m</label><label><input type="checkbox" value="1h"> 1h</label><label><input type="checkbox" value="4h"> 4h</label></div>
