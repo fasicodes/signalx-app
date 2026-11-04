@@ -37,6 +37,7 @@ reward:risk >= 1.5 to the next level, an ATR stop behind the 5-candle swing.
 import json
 import math
 import os
+import re
 import threading
 import time
 from datetime import datetime, timedelta
@@ -74,6 +75,9 @@ TARGETS_R = [1.0, 2.0, 3.0]
 FRACTIONS = [1 / 3, 1 / 3, 1 / 3]
 BE_AFTER = 1
 MAX_PER_BAR = 5
+# rules engine (untested streams): fewer signals per candle on short timeframes - 15m produced ~84 signals a day,
+# and costs ate every one of them
+RULES_MAX_PER_BAR = {"15m": 1, "1h": 2, "4h": 3}
 SL_ATR_MIN, SL_ATR_MAX = 1.0, 2.5
 MIN_RR = 1.5
 
@@ -217,26 +221,70 @@ def reset_models():
 PASS_MIN_SIGNALS = 50
 PASS_MIN_AVG_R = 0.05
 PASS_MIN_PF = 1.1
+# a test whose period ended more than this many years ago does not count any more (markets change: the forex
+# research data ends in March 2022, before the 2022-2024 rate cycle)
+PASS_MAX_TEST_AGE_YEARS = 2
+# the worst losing run may not be larger than half of everything the test earned
+PASS_MAX_DD_SHARE = 0.5
+# typical stop size (% of price) per timeframe, used when a crypto test does not report its own
+STOP_PCT_GUESS = {"15m": 0.8, "1h": 1.5, "4h": 4.0}
 _research = {"t": 0.0, "data": None}
 
 
-def passed_test(test):
+def _test_end_year(test):
+    """Last year of a test's period ('2025-10-01 to 2026-10-11' -> 2026), or None."""
+    per = str(test.get("period") or "")
+    years = [int(y) for y in re.findall(r"(?:19|20)\d\d", per)]
+    if years:
+        return max(years)
+    ys = [int(y) for y in (test.get("years") or {}) if str(y).isdigit()]
+    return max(ys) if ys else None
+
+
+def cost_adjusted_avg_r(test, key=None):
+    """The test's average result per signal after re-pricing crypto with the real cost (markets.py): the models
+    were tested with 0.12% per round trip, a real VIP 0 account pays about 0.30%."""
+    avg = float(test.get("avg_net_r") or 0)
+    if not key or not key.startswith("crypto_"):
+        return avg
+    extra = markets.CRYPTO_COST_ROUND_TRIP - markets.TEST_CRYPTO_COST_ROUND_TRIP
+    if extra <= 0:
+        return avg
+    stop_pct = test.get("avg_stop_pct") or STOP_PCT_GUESS.get(key.split("_", 1)[1], 1.5)
+    return avg - extra * 100.0 / float(stop_pct)
+
+
+def passed_test(test, key=None):
+    """A stream counts as tested only when its test on unseen data has enough signals, earns enough per signal
+    (crypto: after re-pricing with the real cost), a profit factor above 1.1, a drawdown smaller than half of the
+    total result and is not older than PASS_MAX_TEST_AGE_YEARS. The win rate is NOT part of the rule."""
     if not test:
         return False
     pf = test.get("profit_factor")
-    return ((test.get("signals") or 0) >= PASS_MIN_SIGNALS and (test.get("avg_net_r") or 0) >= PASS_MIN_AVG_R
-            and (pf is None or pf >= PASS_MIN_PF))
+    if (test.get("signals") or 0) < PASS_MIN_SIGNALS or (pf is not None and pf < PASS_MIN_PF):
+        return False
+    if cost_adjusted_avg_r(test, key) < PASS_MIN_AVG_R:
+        return False
+    dd, total = test.get("max_drawdown_r"), test.get("total_net_r")
+    if dd is not None and total is not None and abs(float(dd)) > PASS_MAX_DD_SHARE * max(float(total), 0.0):
+        return False
+    end = _test_end_year(test)
+    if key and end is not None and end < datetime.utcnow().year - PASS_MAX_TEST_AGE_YEARS:
+        return False
+    return True
 
 
 def validated(key):
-    """crypto 4h (signal engine v3.1, tested separately) or a stream model whose holdout test passed.
-    While SIGNAL_PROVIDER=tauric nothing is validated: those signals have no backtest, so live accounts skip them."""
-    if (os.environ.get("SIGNAL_PROVIDER") or "").strip().lower() == "tauric":
-        return False
+    """crypto 4h (signal engine v3.1) or a stream model whose holdout test passed passed_test() with the real
+    costs."""
     if key == "crypto_4h":
-        return True
+        try:
+            import signal_engine as se
+            return passed_test(se.test_stats(), key)
+        except Exception:
+            return False
     m = load_model(key)
-    return m is not None and passed_test(m.meta.get("test"))
+    return m is not None and passed_test(m.meta.get("test"), key)
 
 
 def research_summary():
@@ -264,10 +312,6 @@ def engine_name(key):
 def plan_for(market, tf):
     """The trade plan stored with every signal (the tracker follows it)."""
     key = stream_key(market, tf)
-    if (os.environ.get("SIGNAL_PROVIDER") or "").strip().lower() == "tauric":
-        cfg = stream_cfg(market, tf)
-        return {"targets_r": list(TARGETS_R), "fractions": list(FRACTIONS), "be_after": BE_AFTER,
-                "max_bars": cfg["max_bars"], "tf_sec": markets.TF_SEC[tf], "engine": "tauric"}
     if key == "crypto_4h":
         import signal_engine as se
         m = se.model()
@@ -291,7 +335,8 @@ def policy_for(market, tf):
     if m is not None:
         return {"max_per_bar": m.max_per_bar, "cooldown": m.cooldown, "sessions": m.sessions,
                 "no_new_before_close_h": m.no_new_before_close_h}
-    return {"max_per_bar": MAX_PER_BAR, "cooldown": int(cfg.get("cooldown") or 0), "sessions": cfg.get("sessions"),
+    return {"max_per_bar": RULES_MAX_PER_BAR.get(cfg["tf"], MAX_PER_BAR), "cooldown": int(cfg.get("cooldown") or 0),
+            "sessions": cfg.get("sessions"),
             "no_new_before_close_h": float(cfg.get("no_new_before_close_h") or 0)}
 
 
@@ -596,13 +641,17 @@ def weekend_exit_mask(ts, tf_sec, now=None):
     return mask
 
 
-def cost_r(symbol, entry, stop):
+def cost_r(symbol, entry, stop, hours=0.0, side=None):
+    """Round-trip cost in R. Crypto longs also pay futures funding for the hours held (pass hours and side)."""
     risk = abs(entry - stop)
     if risk <= 0:
         return 0.0
     if markets.is_forex(symbol):
         return markets.cost_price(symbol) / risk
-    return markets.CRYPTO_COST_ROUND_TRIP * entry / risk
+    cost = markets.CRYPTO_COST_ROUND_TRIP
+    if side == "LONG" and hours and hours > 0:
+        cost += markets.CRYPTO_FUNDING_PER_HOUR * float(hours)
+    return cost * entry / risk
 
 
 def price_round(x, symbol=None):
