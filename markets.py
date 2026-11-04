@@ -81,14 +81,35 @@ FOREX_PAIRS = [
 DEFAULT_FOREX_SIGNAL_PAIRS = FOREX_MAJORS + ["EUR/JPY", "GBP/JPY", "EUR/GBP", "AUD/JPY", "EUR/AUD", "EUR/CHF",
                                              "XAU/USD"]
 
-# typical round-trip cost in pips (spread + slippage) used for results; real brokers vary
+# typical round-trip cost in pips (spread + commission) used for results; real brokers vary. Retail standard
+# accounts pay about 1.0-2.2 pips on majors; raw accounts ~0.1-0.3 pip spread + $7/lot commission (~0.7 pip).
 FOREX_COST_PIPS = {
     "EUR/USD": 1.2, "GBP/USD": 1.6, "USD/JPY": 1.4, "USD/CHF": 1.8, "AUD/USD": 1.5, "USD/CAD": 1.9,
     "NZD/USD": 2.0, "EUR/JPY": 2.0, "GBP/JPY": 3.0, "EUR/GBP": 1.6, "AUD/JPY": 2.2, "EUR/AUD": 2.6,
     "EUR/CHF": 2.0, "GBP/CHF": 3.0, "CAD/JPY": 2.4, "XAU/USD": 3.5, "XAG/USD": 3.0,
 }
 DEFAULT_COST_PIPS = 3.0
-CRYPTO_COST_ROUND_TRIP = 0.0012   # 0.05% taker in + 0.05% out + 0.02% slippage
+
+
+def _env_float(name, default):
+    try:
+        return float(os.environ.get(name) or default)
+    except ValueError:
+        return default
+
+
+# Market orders also slip: added on top of the table above (spreads widen at rollover and around news).
+FOREX_SLIPPAGE_PIPS = _env_float("FOREX_SLIPPAGE_PIPS", 0.3)
+
+# Crypto round trip as a share of the price. Binance VIP 0 (2026): spot 0.10% taker each side (0.075% with BNB),
+# USDT-M futures 0.05% taker each side; plus slippage (BTC/ETH ~1-3 bp per side, mid-cap alts 5-15 bp).
+# 0.30% is a conservative blend for a ~50-coin universe on spot; set CRYPTO_COST_ROUND_TRIP to change it.
+CRYPTO_COST_ROUND_TRIP = _env_float("CRYPTO_COST_ROUND_TRIP", 0.0030)
+# The models in models/*.json and signal_model.json were tested with this (too low) cost: used to stress their
+# published results with the real cost before a stream may count as tested.
+TEST_CRYPTO_COST_ROUND_TRIP = 0.0012
+# Futures funding paid by longs: Binance baseline 0.01% per 8 hours = 0.00125% per hour (shorts: assume 0).
+CRYPTO_FUNDING_PER_HOUR = _env_float("CRYPTO_FUNDING_PER_HOUR", 0.0000125)
 
 MARKETS = ("crypto", "forex")
 TIMEFRAMES = ("15m", "1h", "4h")
@@ -153,7 +174,7 @@ def price_decimals(symbol):
 
 
 def cost_pips(symbol):
-    return FOREX_COST_PIPS.get((symbol or "").upper(), DEFAULT_COST_PIPS)
+    return FOREX_COST_PIPS.get((symbol or "").upper(), DEFAULT_COST_PIPS) + FOREX_SLIPPAGE_PIPS
 
 
 def cost_price(symbol):
