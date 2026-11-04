@@ -83,7 +83,11 @@ ENTRY_WINDOW_BARS = 2        # the bot takes a signal up to 2 candles of its tim
 MAX_ENTRY_DRIFT_R = 0.35     # ...while the price is still within 0.35 R of the signal's entry
 RETRY_BACKOFF_SEC = (20, 40, 80, 160, 320)   # waits between attempts on a retryable problem
 SL_MIN_PCT_SIGNAL = {"crypto": 0.15, "forex": 0.02}   # floor for a stop that comes from a site signal
-ALLOWED_LEVERAGE = (1, 2, 3, 5, 10, 20)
+ALLOWED_LEVERAGE = (1, 2, 3, 5, 10)
+# Binance USDT-M maintenance margin (lowest tier, Aug 2025): BTC/ETH 0.40%, most other coins 1.00%. Liquidation sits
+# at about 1/leverage - maintenance margin from the entry, so the stop must be well inside that distance.
+MAINT_MARGIN_PCT = {"BTC/USDT": 0.4, "ETH/USDT": 0.4}
+MAINT_MARGIN_DEFAULT_PCT = 1.0
 TIMEFRAME_SCAN_SEC = {"15m": 180, "1h": 300, "4h": 600}
 TIMEFRAME_MINUTES = {"15m": 15, "1h": 60, "4h": 240}
 MAX_COINS = 20          # coins one bot account can watch (signals come for every coin in the list)
@@ -528,7 +532,7 @@ def _row_to_settings(row):
     s["symbols_mode"] = row.get("symbols_mode") if row.get("symbols_mode") in ("all", "list") else (
         "list" if legacy else "all")
     s["enabled"] = int(s["enabled"] or 0)
-    s["leverage"] = int(s["leverage"] or 1)
+    s["leverage"] = min(int(s["leverage"] or 1), max(ALLOWED_LEVERAGE))   # old rows may still say 20x
     s["max_open_positions"] = int(s["max_open_positions"] or 1)
     for k in ("risk_pct", "max_position_usdt", "daily_loss_limit_pct", "min_confidence", "reward_risk"):
         s[k] = float(s[k])
@@ -707,7 +711,7 @@ def plan_levels(side, entry_price, volatility_pct, reward_risk, leverage, min_pc
     sl_pct = _clamp(vol if vol and vol > 0 else SL_FALLBACK_PCT, SL_MIN_PCT if min_pct is None else min_pct, SL_MAX_PCT)
     leverage = int(leverage or 1)
     if leverage > 1:
-        liq_pct = 100.0 / leverage
+        liq_pct = liquidation_pct(leverage)
         if sl_pct > liq_pct * LIQ_SAFETY_FRACTION:
             return None, (f"At {leverage}x leverage the stop-loss ({sl_pct:.2f}%) is too close to liquidation. "
                           f"Lower the leverage.")
@@ -719,6 +723,23 @@ def plan_levels(side, entry_price, volatility_pct, reward_risk, leverage, min_pc
         sl = entry_price * (1 + sl_pct / 100)
         tp = entry_price * (1 - tp_pct / 100)
     return {"sl_pct": round(sl_pct, 3), "tp_pct": round(tp_pct, 3), "stop_loss": sl, "take_profit": tp}, None
+
+
+def liquidation_pct(leverage, symbol=None):
+    """Distance (%) from the entry to the isolated-margin liquidation price: 100/leverage - maintenance margin."""
+    mmr = MAINT_MARGIN_PCT.get((symbol or "").upper(), MAINT_MARGIN_DEFAULT_PCT)
+    return max(0.0, 100.0 / max(1, int(leverage)) - mmr)
+
+
+def safe_leverage(sl_pct, wanted, symbol=None):
+    """The highest allowed leverage <= wanted whose liquidation sits far enough beyond the stop
+    (stop <= LIQ_SAFETY_FRACTION x liquidation distance). 1 when nothing higher is safe."""
+    sl_pct = _f(sl_pct, 0.0)
+    best = 1
+    for lev in ALLOWED_LEVERAGE:
+        if lev <= int(wanted or 1) and sl_pct <= liquidation_pct(lev, symbol) * LIQ_SAFETY_FRACTION:
+            best = max(best, lev)
+    return best
 
 
 def ladder_levels(side, entry, stop, targets_r):
@@ -1382,6 +1403,11 @@ def open_position(user_id, account, settings, symbol, side, signal=None, source=
     vol = sig.get("sl_pct") or sig.get("volatility_pct")
     rr = sig.get("reward_risk") or settings["reward_risk"]  # engine levels when the signal has them
     min_pct = SL_MIN_PCT_SIGNAL["forex" if fx else "crypto"] if sig.get("sl_pct") else SL_MIN_PCT
+    if leverage > 1:
+        # lower the leverage when the stop would sit too close to liquidation, instead of refusing the trade
+        probe, _ = plan_levels(side, price, vol, rr, 1, min_pct=min_pct)
+        if probe:
+            leverage = safe_leverage(probe["sl_pct"], leverage, symbol)
     plan, err = plan_levels(side, price, vol, rr, leverage, min_pct=min_pct)
     if err:
         raise TradeError(err)
