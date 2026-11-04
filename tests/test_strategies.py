@@ -24,6 +24,7 @@ import db  # noqa: E402
 
 db.get_db_connection = Conn
 import strategy_library as SL  # noqa: E402
+import markets  # noqa: E402
 import strategies as ST  # noqa: E402
 
 ST.get_db_connection = Conn
@@ -94,8 +95,8 @@ d = base.copy()
 d.loc[3, "low"] = 97.5                                   # long from candle 1 (stop 98) is stopped at candle 3
 tr = SL.simulate("BTC/USDT", d, sig(le=[1]), spec, 1, 3600)
 cost = SL.CRYPTO_COST if hasattr(SL, "CRYPTO_COST") else 0.0012
-check(len(tr) == 1 and tr[0]["why"] == "stop" and tr[0]["exit"] == 98.0 and abs(tr[0]["r"] - (-1 - 0.0012 * 100 / 2)) < 1e-9,
-      "stop: exit at the stop, -1R minus costs (crypto 0.12% of the position)")
+check(len(tr) == 1 and tr[0]["why"] == "stop" and tr[0]["exit"] == 98.0 and abs(tr[0]["r"] - (-1 - markets.CRYPTO_COST_ROUND_TRIP * 100 / 2)) < 1e-9,
+      "stop: exit at the stop, -1R minus costs (crypto round trip of the position)")
 d = base.copy()
 d.loc[2, "open"] = 97.0
 d.loc[2, "low"] = 96.5                                   # opens beyond the stop -> exits at the worse open
@@ -105,7 +106,7 @@ d = base.copy()
 d.loc[4, "close"] = 103.0
 d.loc[4, "high"] = 103.2
 tr = SL.simulate("BTC/USDT", d, sig(le=[1], lx=[4]), spec, 1, 3600)
-check(tr and tr[0]["why"] == "exit" and tr[0]["j"] == 4 and abs(tr[0]["r"] - (1.5 - 0.0012 * 100 / 2)) < 1e-9,
+check(tr and tr[0]["why"] == "exit" and tr[0]["j"] == 4 and abs(tr[0]["r"] - (1.5 - markets.CRYPTO_COST_ROUND_TRIP * 100 / 2)) < 1e-9,
       "exit rule: exit at that candle's close (+1.5R before costs)")
 d = base.copy()
 d.loc[3, "low"] = 97.0
@@ -130,7 +131,7 @@ fx["high"] = 1.1005
 fx["low"] = 1.0995
 fx["atr"] = 0.001
 tr = SL.simulate("EUR/USD", fx, sig(le=[1]), spec, 1, 3600)
-check(tr and abs(tr[0]["r"] - (0 - 0.00012 / 0.002)) < 1e-9, "forex costs: the pair's spread in R")
+check(tr and abs(tr[0]["r"] - (0 - markets.cost_price("EUR/USD") / 0.002)) < 1e-9, "forex costs: the pair's spread in R")
 
 r = [{"symbol": "A", "side": "LONG", "r": x, "bars": 3, "exit_time": np.datetime64("2026-01-01") + np.timedelta64(i, "h")}
      for i, x in enumerate([1.0, -1.0, -1.0, 2.0, -0.5])]
