@@ -43,6 +43,7 @@ import traceback
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, session
+from jsonbody import json_body, as_text
 
 from db import get_db_connection
 
@@ -1931,7 +1932,7 @@ def _require_login():
 def _json_body():
     if not request.is_json:
         return None, _err("A JSON request is required.", 415)
-    return request.get_json(silent=True) or {}, None
+    return json_body(), None
 
 
 @paper_bp.route("/api/paper/bootstrap", methods=["GET"])
@@ -2051,7 +2052,7 @@ def cancel_all():
     uid, bad = _require_login()
     if bad:
         return bad
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     symbol = str(data.get("symbol") or "").upper() or None
     try:
         with _UserLock(uid) as cur:

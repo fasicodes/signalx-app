@@ -36,6 +36,7 @@ from datetime import datetime, timedelta
 from xml.etree import ElementTree as ET
 
 from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, session
+from jsonbody import json_body, as_text
 
 import markets
 from db import get_db_connection
@@ -1068,7 +1069,7 @@ def admin_preview():
     bad = _need_admin()
     if bad:
         return bad
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     body = str(data.get("body_md") or "")[:200_000]
     return jsonify({"ok": True, "html": markdown_to_html(body)})
 

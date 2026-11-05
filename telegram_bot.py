@@ -33,6 +33,7 @@ import traceback
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, session
+from jsonbody import json_body, as_text
 
 from db import get_db_connection
 
@@ -596,7 +597,7 @@ def api_toggle():
     uid = _uid()
     if not uid:
         return jsonify({"ok": False, "error": "Login required."}), 401
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     on = bool(data.get("enabled"))
     with _Cursor() as cur:
         cur.execute("UPDATE telegram_links SET enabled=%s WHERE user_id=%s", (1 if on else 0, uid))

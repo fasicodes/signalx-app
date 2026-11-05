@@ -17,6 +17,7 @@ Routes:
 import re
 
 from flask import Blueprint, request, jsonify, session
+from jsonbody import json_body, as_text
 
 from db import get_db_connection
 
@@ -109,8 +110,8 @@ def add_to_watchlist():
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data = request.get_json(silent=True) or {}
-    symbol = (data.get("symbol") or "").strip().upper()
+    data = json_body()
+    symbol = as_text(data.get("symbol")).strip().upper()
     if not SYMBOL_RE.match(symbol):
         return jsonify({"error": "A valid symbol (e.g. BTC/USDT) is required"}), 400
 
@@ -167,7 +168,7 @@ def toggle_favorite(symbol):
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     favorite = bool(data.get("favorite"))
     symbol = symbol.strip().upper()
 
@@ -191,7 +192,7 @@ def reorder_watchlist():
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     symbols = data.get("symbols")
     if not isinstance(symbols, list) or not symbols:
         return jsonify({"error": "symbols must be a non-empty list"}), 400

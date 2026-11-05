@@ -34,6 +34,7 @@ import re
 from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify, session
+from jsonbody import json_body, as_text, iso_z
 
 from db import get_db_connection
 
@@ -162,8 +163,8 @@ def _serialize_alert(a):
         "is_enabled": bool(a["is_enabled"]),
         "status": a["status"],
         "last_checked_value": a.get("last_checked_value"),
-        "created_at": a["created_at"].isoformat() if a.get("created_at") else None,
-        "triggered_at": a["triggered_at"].isoformat() if a.get("triggered_at") else None,
+        "created_at": iso_z(a["created_at"]) if a.get("created_at") else None,
+        "triggered_at": iso_z(a["triggered_at"]) if a.get("triggered_at") else None,
     }
 
 
@@ -177,9 +178,9 @@ def create_alert():
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data = request.get_json(silent=True) or {}
-    symbol = (data.get("symbol") or "").strip().upper()
-    alert_type = (data.get("alert_type") or "").strip().upper()
+    data = json_body()
+    symbol = as_text(data.get("symbol")).strip().upper()
+    alert_type = as_text(data.get("alert_type")).strip().upper()
     target_value = data.get("target_value")
 
     if not SYMBOL_RE.match(symbol):
@@ -246,7 +247,7 @@ def update_alert(alert_id):
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -545,7 +546,7 @@ def list_notifications():
             "title": n["title"],
             "message": n["message"],
             "is_read": bool(n["is_read"]),
-            "created_at": n["created_at"].isoformat() if n.get("created_at") else None,
+            "created_at": iso_z(n["created_at"]) if n.get("created_at") else None,
         } for n in rows]
         return jsonify({"notifications": out})
     finally:

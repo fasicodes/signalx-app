@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 from flask import Blueprint, jsonify, redirect, render_template, request, session
+from jsonbody import json_body, as_text
 
 import markets
 import streams
@@ -1105,7 +1106,7 @@ def api_cancel(sid):
     fn = _hooks.get("is_admin")
     if not fn or not fn():
         return jsonify({"ok": False, "error": "Only the site admin can cancel a signal."}), 403
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     reason = str(data.get("reason") or "").strip()[:200]
     if len(reason) < 3:
         return jsonify({"ok": False, "error": "Please give a short reason."}), 400

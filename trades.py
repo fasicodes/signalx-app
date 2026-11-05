@@ -20,6 +20,7 @@ import json
 from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify, session
+from jsonbody import json_body, as_text, iso_z
 
 from db import get_db_connection
 import condition_engine
@@ -277,9 +278,9 @@ def _serialize_trade(t, include_journal=False):
         "last_price": t.get("last_price"),
         "estimated_pnl": t.get("estimated_pnl"),
         "estimated_pnl_percent": t.get("estimated_pnl_percent"),
-        "created_at": t["created_at"].isoformat() if t.get("created_at") else None,
-        "last_updated": t["last_updated"].isoformat() if t.get("last_updated") else None,
-        "closed_at": t["closed_at"].isoformat() if t.get("closed_at") else None,
+        "created_at": iso_z(t["created_at"]) if t.get("created_at") else None,
+        "last_updated": iso_z(t["last_updated"]) if t.get("last_updated") else None,
+        "closed_at": iso_z(t["closed_at"]) if t.get("closed_at") else None,
         "exit_price": t.get("exit_price"),
         "exit_reason": t.get("exit_reason"),
         "outcome_class": t.get("outcome_class"),
@@ -287,14 +288,14 @@ def _serialize_trade(t, include_journal=False):
         # Signal FM - stable primary guidance (see condition_engine.py)
         "trade_condition": t.get("trade_condition"),
         "condition_message": t.get("condition_message"),
-        "condition_started_at": t["condition_started_at"].isoformat() if t.get("condition_started_at") else None,
+        "condition_started_at": iso_z(t["condition_started_at"]) if t.get("condition_started_at") else None,
     }
     if include_journal:
         result.update({
             "notes": t.get("notes"),
             "tags": _parse_tags(t.get("tags")),
             "setup_type": t.get("setup_type"),
-            "journal_updated_at": t["journal_updated_at"].isoformat() if t.get("journal_updated_at") else None,
+            "journal_updated_at": iso_z(t["journal_updated_at"]) if t.get("journal_updated_at") else None,
             "result": _journal_result(t),
             "risk_reward": _risk_reward(t),
             "duration_seconds": _duration_seconds(t),
@@ -309,7 +310,7 @@ def track_trade():
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     asset = data.get("asset")
     direction = data.get("direction")
     entry_price = data.get("entry_price")
@@ -534,7 +535,7 @@ def get_trade_detail(trade_id):
             )
             events = cursor.fetchall()
             for e in events:
-                e["timestamp"] = e["timestamp"].isoformat()
+                e["timestamp"] = iso_z(e["timestamp"])
 
         # include_journal=True: adds notes/tags/setup_type/result/risk_reward/
         # duration_seconds/confidence to the response. Purely additive keys -
@@ -557,7 +558,7 @@ def close_trade(trade_id):
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     exit_price = data.get("exit_price")
 
     conn = get_db_connection()
@@ -630,7 +631,7 @@ def update_trade_journal(trade_id):
     if not user_id:
         return jsonify({"error": "Not logged in"}), 401
 
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     if not isinstance(data, dict):
         return jsonify({"error": "Invalid request body"}), 400
 

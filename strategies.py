@@ -33,6 +33,7 @@ import traceback
 from datetime import datetime, timedelta
 
 from flask import Blueprint, Response, jsonify, redirect, render_template, request, session
+from jsonbody import json_body, as_text
 
 from db import get_db_connection
 import strategy_library as SL
@@ -767,7 +768,7 @@ def api_create():
     uid = _uid()
     if not uid:
         return _need_login()
-    form = request.form if request.form else (request.get_json(silent=True) or {})
+    form = request.form if request.form else (json_body())
     clean, err = validate_post(form, uid)
     if err:
         return _json_error(err)
@@ -800,7 +801,7 @@ def api_like():
     uid = _uid()
     if not uid:
         return _need_login()
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     target = str(data.get("target") or "")
     m = re.fullmatch(r"lib:([a-z0-9-]{3,80})|com:(\d{1,10})", target)
     if not m or (m.group(1) and m.group(1) not in SL.BY_SLUG):
@@ -872,7 +873,7 @@ def api_moderate(pid):
         return _need_login()
     if not _is_admin():
         return _json_error("Admins only.", 403)
-    action = str((request.get_json(silent=True) or {}).get("action") or "")
+    action = str((json_body()).get("action") or "")
     r = _post_row(pid)
     if not r or r["status"] == "deleted":
         return _json_error("Unknown strategy.", 404)

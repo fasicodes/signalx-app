@@ -53,11 +53,11 @@ def _require_login():
 
 
 def _clean_symbol(raw):
-    return (raw or "").strip().upper()[:30]
+    return (raw if isinstance(raw, str) else "").strip().upper()[:30]
 
 
 def _clean_timeframe(raw):
-    return (raw or "").strip().lower()[:10]
+    return (raw if isinstance(raw, str) else "").strip().lower()[:10]
 
 
 def _row_to_json(row):
@@ -119,7 +119,7 @@ def create_drawing():
 
     symbol = _clean_symbol(body.get("symbol"))
     timeframe = _clean_timeframe(body.get("timeframe"))
-    drawing_type = (body.get("type") or "").strip()
+    drawing_type = (body.get("type") if isinstance(body.get("type"), str) else "").strip()
     coordinates = body.get("data")
     style = body.get("style")
 

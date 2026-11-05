@@ -27,6 +27,7 @@ import time
 from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify, session, redirect
+from jsonbody import json_body, as_text
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from db import get_db_connection
@@ -201,9 +202,9 @@ def _email_html(title, body_html, button_text, button_url, note_html=""):
 
 @auth_bp.route("/api/register", methods=["POST"])
 def register():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
+    data = json_body()
+    email = as_text(data.get("email")).strip().lower()
+    password = as_text(data.get("password"))
 
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
@@ -295,9 +296,9 @@ def verify_email():
 
 @auth_bp.route("/api/login", methods=["POST"])
 def login():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
+    data = json_body()
+    email = as_text(data.get("email")).strip().lower()
+    password = as_text(data.get("password"))
     verify_token = str(data.get("verify_token") or "")
 
     if len(email) > MAX_EMAIL_LEN or len(password) > MAX_PASSWORD_LEN:
@@ -360,8 +361,8 @@ def me():
 
 @auth_bp.route("/api/forgot-password", methods=["POST"])
 def forgot_password():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
+    data = json_body()
+    email = as_text(data.get("email")).strip().lower()
     generic_response = jsonify({
         "message": "If an account with that email exists, we sent a reset link. Check your spam folder too."
     }), 200
@@ -409,9 +410,9 @@ def forgot_password():
 
 @auth_bp.route("/api/reset-password", methods=["POST"])
 def reset_password():
-    data = request.get_json(silent=True) or {}
-    token = data.get("token") or ""
-    password = data.get("password") or ""
+    data = json_body()
+    token = as_text(data.get("token"))
+    password = as_text(data.get("password"))
 
     if not token or not isinstance(token, str) or len(token) > 200:
         return jsonify({"error": "Invalid or missing reset token"}), 400

@@ -50,6 +50,7 @@ import traceback
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+from jsonbody import json_body, as_text
 
 from db import get_db_connection
 import fxbroker
@@ -2524,7 +2525,7 @@ def connect():
     bad = _require_json_post()
     if bad:
         return bad
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     mode = _req_mode(data)
     if not mode:
         return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
@@ -2620,7 +2621,7 @@ def disconnect():
     uid = _user_id()
     if not uid:
         return _err("Login required.", 401)
-    mode = _req_mode(request.get_json(silent=True) or {})
+    mode = _req_mode(json_body())
     if not mode:
         return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
     if mode == "paper":
@@ -2643,7 +2644,7 @@ def update_settings():
     bad = _require_json_post()
     if bad:
         return bad
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     mode = _req_mode(data)
     if not mode:
         return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
@@ -2669,7 +2670,7 @@ def toggle_bot():
     bad = _require_json_post()
     if bad:
         return bad
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     mode = _req_mode(data)
     if not mode:
         return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
@@ -2719,7 +2720,7 @@ def panic():
     uid = _user_id()
     if not uid:
         return _err("Login required.", 401)
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     requested = str(data.get("account") or request.args.get("account") or "").lower()
     modes = MODES if requested == "all" else ((requested,) if requested in MODES else None)
     if not modes:
@@ -2754,7 +2755,7 @@ def manual_trade():
     bad = _require_json_post()
     if bad:
         return bad
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     mode = _req_mode(data)
     if not mode:
         return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
@@ -2893,7 +2894,7 @@ def assistant_route():
     bad = _require_json_post()
     if bad:
         return bad
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     mode = _req_mode(data) or "paper"
     question = str(data.get("message") or "").strip()[:600]
     history = data.get("history") if isinstance(data.get("history"), list) else []
@@ -2925,7 +2926,7 @@ def trade_signal_route():
     bad = _require_json_post()
     if bad:
         return bad
-    data = request.get_json(silent=True) or {}
+    data = json_body()
     mode = _req_mode(data)
     if not mode:
         return _err("Unknown account. Choose Site demo, Binance demo, Binance live, OANDA demo or OANDA live.")
