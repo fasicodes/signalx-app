@@ -135,7 +135,7 @@ def refresh_board(now=None, only=None):
 
 
 def record_event(sym, res):
-    """Stores a new crypto 4h signal (engine v3.1) as a crypto/4h stream event."""
+    """Stores a new crypto 4h signal (engine v3.2) as a crypto/4h stream event."""
     import signal_hub
     try:
         return signal_hub.record(sym, "crypto", "4h", res["active"])
