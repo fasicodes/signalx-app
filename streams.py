@@ -8,7 +8,7 @@ can run at the same time).
 
 Engines
 -------
-* crypto_4h: signal engine v3.1 (signal_engine.py, unchanged).
+* crypto_4h: signal engine v3.2 (signal_engine.py, unchanged).
 * every other stream: a trained model in models/<market>_<timeframe>.json
   (features.py builds its inputs; research/lab.py trains it and writes the
   walk-forward and holdout tests into the same file). The model scores the
@@ -242,12 +242,13 @@ def _test_end_year(test):
 
 
 def cost_adjusted_avg_r(test, key=None):
-    """The test's average result per signal after re-pricing crypto with the real cost (markets.py): the models
-    were tested with 0.12% per round trip, a real VIP 0 account pays about 0.30%."""
+    """The test's average result per signal after re-pricing crypto with the real cost (markets.py): older models
+    were tested with 0.12% per round trip (a test that records its own "cost_round_trip" is taken as is)."""
     avg = float(test.get("avg_net_r") or 0)
     if not key or not key.startswith("crypto_"):
         return avg
-    extra = markets.CRYPTO_COST_ROUND_TRIP - markets.TEST_CRYPTO_COST_ROUND_TRIP
+    tested_cost = float(test.get("cost_round_trip") or markets.TEST_CRYPTO_COST_ROUND_TRIP)
+    extra = markets.CRYPTO_COST_ROUND_TRIP - tested_cost
     if extra <= 0:
         return avg
     stop_pct = test.get("avg_stop_pct") or STOP_PCT_GUESS.get(key.split("_", 1)[1], 1.5)
@@ -275,7 +276,7 @@ def passed_test(test, key=None):
 
 
 def validated(key):
-    """crypto 4h (signal engine v3.1) or a stream model whose holdout test passed passed_test() with the real
+    """crypto 4h (signal engine v3.2) or a stream model whose holdout test passed passed_test() with the real
     costs."""
     if key == "crypto_4h":
         try:
@@ -358,7 +359,7 @@ def grade_of(score):
 
 
 def grade_from_confidence(conf, tier=None):
-    """Grade for crypto 4h (engine v3.1) signals: from the calibrated chance of TP1."""
+    """Grade for crypto 4h (engine v3.2) signals: from the calibrated chance of TP1."""
     if conf is None:
         return "C"
     if tier == "strong" and conf >= 80:
