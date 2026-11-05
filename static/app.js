@@ -247,7 +247,8 @@
     const untested = a.tested === false ? `<p class="d-copy c-dim"><b>Experimental:</b> simple rules that have not passed our test on unseen data.</p>` : "";
     $("sig-body").innerHTML = `
       <div class="d-tiles" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr))">
-        <div><span class="c-dim">Entry</span> <b class="tnum">${px(a.entry)}</b></div>
+        <div><span class="c-dim">Entry</span> <b class="tnum">${px(a.entry)}</b></div>${a.better_entry != null && a.better_entry_until && new Date(a.better_entry_until) > new Date()
+          ? `<div><span class="c-dim">Patient entry (15m)</span> <b class="tnum">${px(a.better_entry)}</b></div>` : ""}
         <div><span class="c-dim">Stop</span> <b class="tnum c-short">${px(a.stop_now != null ? a.stop_now : a.stop_loss)}</b></div>${tps}
       </div>
       ${now}${more}${fourH}${untested}
