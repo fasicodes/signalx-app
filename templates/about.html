@@ -55,7 +55,7 @@
   <dl class="figs4" style="margin-top:14px">
     <div><dt>Signals tested</dt><dd>{{ stats.signals }}<small>on {{ stats.coins }} coins</small></dd></div>
     <div><dt>Signals won{{ tip('win_rate', 'win rate') }}</dt><dd>{{ stats.win_rate }}%<small>closed in profit after fees</small></dd></div>
-    <div><dt>Average per signal{{ tip('avg_r', 'average result') }}</dt><dd>{{ '%+.3f' % stats.avg_net_r }}R<small>after 0.12% fees</small></dd></div>
+    <div><dt>Average per signal{{ tip('avg_r', 'average result') }}</dt><dd>{{ '%+.3f' % stats.avg_net_r }}R<small>after 0.30% costs</small></dd></div>
     <div><dt>Worst drawdown{{ tip('drawdown', 'drawdown') }}</dt><dd>{{ stats.max_drawdown_r }}R<small>the deepest losing streak</small></dd></div>
   </dl>
   <p class="meta-line">A win (+1R) and a full loss (&minus;1R) are the same size, so a stream makes money only if clearly more than half
