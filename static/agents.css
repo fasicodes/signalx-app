@@ -1,0 +1,79 @@
+/* Dashboard: AI agents card, live chart analysis card and the single-candle background (agents.js, bg-candle.js). */
+
+.ag-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--long); margin-right: 8px; vertical-align: 2px;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--long) 70%, transparent); animation: agPing 1.6s infinite; }
+@keyframes agPing { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--long) 60%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+
+.ag-card, .la-card { position: relative; overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--surface) 92%, #0d3b2b) 0%, var(--surface) 55%);
+  border-color: color-mix(in srgb, var(--long) 22%, var(--line-soft)); backdrop-filter: blur(6px); }
+.ag-card::before, .la-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--long) 80%, transparent), transparent); animation: agSweep 4s linear infinite; }
+@keyframes agSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+.ag-list { display: grid; gap: 8px; }
+.ag-row { display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 70%, #000); border: 1px solid var(--line-soft); transition: border-color .3s, background .3s; }
+.ag-row[data-st="work"], .ag-row[data-st="think"] { border-color: hsl(var(--h) 80% 55% / .55); background: hsl(var(--h) 70% 40% / .09); }
+.ag-av { position: relative; width: 42px; height: 42px; flex: none; }
+.ag-av svg { width: 42px; height: 42px; display: block; filter: drop-shadow(0 0 6px hsl(var(--h) 90% 55% / .45)); }
+.ag-ring { position: absolute; inset: -4px; border-radius: 50%; border: 2px solid transparent; }
+.ag-row[data-st="work"] .ag-ring, .ag-row[data-st="think"] .ag-ring { border-top-color: hsl(var(--h) 95% 65%); border-right-color: hsl(var(--h) 95% 65% / .4); animation: agSpin .8s linear infinite; }
+@keyframes agSpin { to { transform: rotate(360deg); } }
+.ag-eye { transform-box: fill-box; transform-origin: center; animation: agBlink 4.5s infinite; }
+.ag-row[data-st="think"] .ag-eye { animation: agScan .5s ease-in-out infinite alternate; }
+@keyframes agBlink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes agScan { from { transform: translateX(-2px); } to { transform: translateX(2px); } }
+.ag-ant { animation: agAnt 1.2s ease-in-out infinite; }
+.ag-row[data-st="idle"] .ag-ant { animation: none; opacity: .5; }
+@keyframes agAnt { 50% { opacity: .3; } }
+
+.ag-txt { min-width: 0; flex: 1; }
+.ag-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ag-top b { font-size: 14px; color: hsl(var(--h) 90% 72%); }
+.ag-role { font-size: 12px; color: var(--dim); }
+.ag-st { margin-left: auto; font: 600 11px var(--ds-font-body, Inter, sans-serif); padding: 2px 8px; border-radius: 999px;
+  background: var(--line-soft); color: var(--dim); }
+.ag-row[data-st="work"] .ag-st, .ag-row[data-st="think"] .ag-st { background: hsl(var(--h) 80% 50% / .18); color: hsl(var(--h) 95% 72%); }
+.ag-row[data-st="done"] .ag-st { background: var(--long-bg); color: var(--long); }
+.ag-row[data-st="err"] .ag-st { background: var(--short-bg); color: var(--short); }
+.ag-bar { height: 3px; border-radius: 3px; background: var(--line-soft); margin: 6px 0 5px; overflow: hidden; }
+.ag-bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: hsl(var(--h) 90% 60%); transition: width .4s; }
+.ag-row[data-st="work"] .ag-bar i, .ag-row[data-st="think"] .ag-bar i { width: 40%; animation: agLoad 1s ease-in-out infinite; }
+.ag-row[data-st="done"] .ag-bar i { width: 100%; }
+@keyframes agLoad { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+.ag-out { display: block; font-size: 12.5px; color: var(--text, inherit); line-height: 1.4; overflow-wrap: anywhere; }
+
+.ag-feed { margin-top: 12px; height: 150px; overflow-y: auto; padding: 10px 12px; border-radius: 12px; background: #030806;
+  border: 1px solid color-mix(in srgb, var(--long) 18%, transparent); font: 500 11.5px/1.55 "IBM Plex Mono", ui-monospace, monospace;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px); mask-image: linear-gradient(180deg, transparent 0, #000 22px); }
+.ag-line { display: flex; gap: 8px; color: #b7c9c0; animation: agIn .35s ease-out; }
+.ag-line .t { color: #4d6a5d; flex: none; }
+.ag-line b { color: hsl(var(--h) 90% 68%); flex: none; }
+.ag-line b.c-long, .ag-line .c-long { color: var(--long); } .ag-line .c-short { color: var(--short); }
+.ag-line span:last-child b { color: #e6fff4; }
+@keyframes agIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.la-stage { position: relative; height: 260px; border-radius: 12px; overflow: hidden; background: #030806;
+  border: 1px solid color-mix(in srgb, var(--long) 18%, transparent); }
+.la-stage canvas { width: 100%; height: 100%; display: block; }
+.la-badge { position: absolute; top: 10px; right: 72px; font: 700 11px var(--ds-font-body, Inter, sans-serif); padding: 4px 10px; border-radius: 999px;
+  background: rgba(255,255,255,.08); color: #cfe; backdrop-filter: blur(4px); }
+.la-badge[data-b="long"] { background: var(--long-bg); color: var(--long); }
+.la-badge[data-b="short"] { background: var(--short-bg); color: var(--short); }
+.la-read { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.la-read div { padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--surface) 70%, #000); border: 1px solid var(--line-soft); min-width: 0; }
+.la-read span { display: block; font-size: 11px; color: var(--dim); }
+.la-read b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+@media (max-width: 560px) {
+  .la-read { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .la-stage { height: 220px; }
+  .ag-role { display: none; }
+}
+
+/* single animated candle behind the page */
+.bgc { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ag-live, .ag-card::before, .la-card::before, .ag-ring, .ag-eye, .ag-ant, .ag-bar i, .ag-line { animation: none !important; }
+}
