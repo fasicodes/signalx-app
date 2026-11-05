@@ -177,7 +177,7 @@
     $("sig-pill").hidden = true;
     $("sig-prob").hidden = true;
     $("sig-body").innerHTML = "";
-    $("brief-card").hidden = true;
+    if ($("brief-card")) $("brief-card").hidden = true;
   }
 
   async function loadEngine(quiet) {
@@ -187,6 +187,7 @@
     catch (e) { if (sym === S.coin && !quiet) renderError("Could not reach the server. Check your connection; this page retries every 30 seconds."); return; }
     if (sym !== S.coin) return;
     S.eng = d;
+    try { window.dispatchEvent(new CustomEvent("sfm:engine", { detail: { coin: sym, kind: S.kind, data: d } })); } catch (e) {}
     renderHeaderPrice(d);
     const other = (d.other_active || []).filter((x) => x && x.status === "ACTIVE");
     if (d.asset === "forex") (other.length ? renderOther(d, other) : renderForex(d));
@@ -394,6 +395,7 @@
   }
 
   function renderBrief(b) {
+    if (!$("brief-card")) return;
     if (!b) { $("brief-card").hidden = true; return; }
     $("brief-card").hidden = false;
     $("brief-time").textContent = b.bar_time ? `4h close ${clock(new Date(toDate(b.bar_time).getTime() + 4 * 3600e3).toISOString())}` : "";
@@ -412,6 +414,7 @@
   }
 
   function renderProof(t) {
+    if (!$("proof")) return;
     if (!t || !t.signals || S.kind !== "crypto") { $("proof").hidden = true; return; }
     $("proof").hidden = false;
     const mon = (x) => { const d = new Date(x + "T00:00:00Z"); return isNaN(d) ? x : d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }); };
@@ -457,6 +460,7 @@
   }
   async function loadChart() {
     const sym = S.coin, tf = S.tf;
+    try { window.dispatchEvent(new CustomEvent("sfm:coin", { detail: { coin: sym, tf } })); } catch (e) {}
     const msg = $("chart-msg");
     msg.hidden = false; msg.textContent = "Loading chart…";
     if (!ensureChart()) { msg.textContent = "The chart library could not load. Check your connection and refresh."; return; }
@@ -511,6 +515,7 @@
   // ---------------------------------------------------------------- other signals (board)
   async function loadBoard() {
     try { S.board = await getJSON("/api/signals/board"); } catch (e) { return; }
+    try { window.dispatchEvent(new CustomEvent("sfm:board", { detail: S.board })); } catch (e) {}
     renderOthers();
     if (S.board && S.board.loading) setTimeout(loadBoard, 6000);
   }
@@ -539,7 +544,7 @@
   function renderOthers() {
     const box = $("others-list");
     const b = S.board;
-    if (!b) return;
+    if (!b || !box) return;
     if (b.loading) { box.innerHTML = `<p class="d-empty">Checking every coin. This takes a few seconds after a restart.</p>`; return; }
     const rows = b.rows || [];
     const act = rows.filter((r) => r.state === "ACTIVE");
