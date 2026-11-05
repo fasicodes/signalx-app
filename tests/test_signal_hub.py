@@ -220,8 +220,20 @@ sb.init_tables()   # twice: the migration must be safe to repeat
 with hub._Cursor() as cur:
     cur.execute("SELECT * FROM signal_events")
     rows = cur.fetchall()
+check(rows == [], "engine 3.2 reset: the old signals are removed once (the migration still runs safely twice)")
+with hub._Cursor() as cur:
+    cur.execute("SELECT name FROM app_migrations")
+    check(any(r["name"].startswith("2026-11-04-signal-events-reset") for r in cur.fetchall()), "the reset is remembered")
+hub.record("BTC/USDT", "crypto", "4h", {"side": "LONG", "entry": 60000.0, "stop_loss": 59000.0, "take_profit": 61000.0,
+                                        "targets": [61000.0], "bar_time": datetime(2026, 10, 1, 8, 0),
+                                        "better_entry": 59875.0, "better_entry_until": datetime(2026, 10, 1, 16, 0)})
+sb.init_tables()
+with hub._Cursor() as cur:
+    cur.execute("SELECT * FROM signal_events")
+    rows = cur.fetchall()
 check(len(rows) == 1 and rows[0]["market"] == "crypto" and rows[0]["timeframe"] == "4h" and rows[0]["status"] == "ACTIVE"
-      and rows[0]["entry"] == 60000, "migration keeps the old signal and gives it crypto / 4h / active")
+      and rows[0]["better_entry"] == 59875.0, "a new signal survives later restarts (the reset runs only once) and keeps its better entry")
+check(hub.signal_json(rows[0])["better_entry"] == 59875.0, "signal JSON carries the patient-entry price")
 with hub._Cursor() as cur:
     cols = hub._columns(cur, "signal_alert_subs")
 check({"markets", "timeframes"} <= cols, "alert settings get market and timeframe columns")
@@ -280,7 +292,7 @@ check(s15["active"] == 1 and s15["windows"]["all"]["closed"] == 0 and s15["windo
 hub._hooks["get_candles"] = fake_candles
 hub._store = streams.CandleStore(fake_candles, sleep=0)
 hub._engines.clear()
-os.environ["SIGNAL_STREAMS"] = "crypto_1h"
+hub._FORCE_STREAMS = ["crypto_1h"]
 hub.symbols_for = lambda market: ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"]
 due = hub.due_streams(datetime(2026, 10, 13, 12, 0, 30))
 check(due == [], "scanner waits for the publish delay after the close")
@@ -290,7 +302,7 @@ evs = hub.scan_stream("crypto_1h", NOW)
 again = hub.scan_stream("crypto_1h", NOW)
 fresh = [k for k, v in hub.engine("crypto_1h").board(NOW).items() if v.get("fresh")]
 check(len(evs) == len(fresh) and again == [], f"scanner stores each fresh signal once ({len(evs)} new)")
-os.environ.pop("SIGNAL_STREAMS")
+hub._FORCE_STREAMS = None
 check(hub.enabled_streams() == hub.validated_streams() == ["crypto_4h"],
       "default: only the streams that passed their test with real costs run (the losing rules streams are off)")
 os.environ["SIGNAL_STREAMS"] = "validated"
@@ -299,7 +311,7 @@ check(hub.enabled_streams() == hub.validated_streams() and "crypto_4h" in hub.en
 check(hub.validated_streams() == ["crypto_4h"], "no model file -> only crypto 4h counts as tested")
 os.environ["SIGNAL_STREAMS"] = "bogus"
 check(hub.enabled_streams() == hub.validated_streams(), "SIGNAL_STREAMS with only unknown names falls back to the tested streams")
-os.environ.pop("SIGNAL_STREAMS")
+hub._FORCE_STREAMS = None
 check(hub.stream_tested("crypto", "4h") and not hub.stream_tested("crypto", "15m") and not hub.stream_tested("forex", "1h")
       and not hub.stream_tested("forex", "15m") and not hub.stream_tested("forex", "4h"),
       "stream_tested: only crypto 4h (and a stream with a passed test) is tested")
@@ -343,7 +355,7 @@ with hub._Cursor() as cur:
     cur.execute("SELECT COALESCE(MAX(id), 0) AS m FROM signal_events")
     keep_id = cur.fetchone()["m"]
 made, scan_errors = {}, []
-os.environ["SIGNAL_STREAMS"] = "all"
+hub._FORCE_STREAMS = list(hub.ALL_STREAMS)
 for key in hub.enabled_streams():
     if key == "crypto_4h":
         continue                      # produced by signalboard.py (signal engine v3.1), tested elsewhere
@@ -367,11 +379,13 @@ with hub._Cursor() as cur:
 hub._engines.clear()
 hub._hooks["get_candles"] = fake_candles
 hub._store = streams.CandleStore(fake_candles, sleep=0)
+hub._FORCE_STREAMS = None
 os.environ["SIGNAL_STREAMS"] = "all"
-check(len(hub.enabled_streams()) == 6, "SIGNAL_STREAMS=all turns on all six streams")
+check(hub.enabled_streams() == hub.validated_streams(), "SIGNAL_STREAMS=all no longer switches on untested streams")
 os.environ["SIGNAL_STREAMS"] = "crypto_1h,bogus"
-check(hub.enabled_streams() == ["crypto_1h"], "SIGNAL_STREAMS list: unknown names ignored")
-os.environ.pop("SIGNAL_STREAMS")
+check(hub.enabled_streams() == hub.validated_streams(), "SIGNAL_STREAMS cannot switch on an untested stream (crypto 1h)")
+hub._FORCE_STREAMS = None
+hub._FORCE_STREAMS = list(hub.ALL_STREAMS)
 import streams as _st  # noqa: E402
 check(not _st.passed_test({"signals": 400, "win_rate": 71.0, "avg_net_r": -0.01})
       and not _st.passed_test({"signals": 400, "win_rate": 72.6, "avg_net_r": 0.03, "profit_factor": 1.1})
@@ -410,12 +424,12 @@ cl = app.test_client()
 check(cl.get("/api/signals").status_code == 401, "API needs a login")
 with cl.session_transaction() as ss:
     ss["user_id"] = 1
-os.environ["SIGNAL_STREAMS"] = "crypto_4h"
+hub._FORCE_STREAMS = ["crypto_4h"]
 d = cl.get("/api/signals?market=crypto&timeframe=1h").get_json()
 check(d["ok"] and d["total"] == 0, "SIGNAL_STREAMS=crypto_4h: signals of a switched-off stream (crypto 1h) are not listed")
 check(all(r["timeframe"] == "4h" for r in hub.active_for("SOL/USDT")) and all(r["timeframe"] == "4h" for r in hub.bot_feed()),
       "SIGNAL_STREAMS=crypto_4h: dashboard and auto-trade feed only get crypto 4h signals")
-os.environ["SIGNAL_STREAMS"] = "all"
+hub._FORCE_STREAMS = list(hub.ALL_STREAMS)
 d = cl.get("/api/signals?market=crypto&timeframe=1h").get_json()
 check(d["ok"] and d["total"] >= 1 and all(x["timeframe"] == "1h" and x["market"] == "crypto" for x in d["signals"]),
       "GET /api/signals filters by market and timeframe")
@@ -430,10 +444,10 @@ d = cl.get("/api/signals?grade=A&timeframe=1h&market=crypto").get_json()
 check(all(x["grade"] == "A" for x in d["signals"]), "grade filter")
 d = cl.get("/api/signals/stats?market=crypto&timeframe=1h").get_json()
 check(d["ok"] and "windows" in d and set(d["windows"]) == {"all", "30d", "7d"}, "GET /api/signals/stats")
-os.environ["SIGNAL_STREAMS"] = "all"
+hub._FORCE_STREAMS = list(hub.ALL_STREAMS)
 d = cl.get("/api/signals/latest").get_json()
 check(d["ok"] and "crypto_1h" in d["streams"], "GET /api/signals/latest per stream")
-os.environ.pop("SIGNAL_STREAMS")
+hub._FORCE_STREAMS = None
 d = cl.get("/api/signals/streams").get_json()
 check(d["ok"] and len(d["streams"]) == 6, "GET /api/signals/streams lists the six streams")
 hub._hooks["is_admin"] = lambda: False
@@ -458,7 +472,7 @@ check(r.status_code == 400, "alerts: invalid market rejected")
 # ---------------------------------------------------------------------------
 # Coins page: every coin, every moment (tested crypto streams only)
 # ---------------------------------------------------------------------------
-os.environ["SIGNAL_STREAMS"] = "all"
+hub._FORCE_STREAMS = list(hub.ALL_STREAMS)
 hub.symbols_for = lambda market: (["EUR/USD"] if market == "forex" else ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"])
 with hub._Cursor() as cur:
     cur.execute("UPDATE signal_events SET status='EXPIRED' WHERE status='ACTIVE'")
@@ -499,9 +513,9 @@ ts = hub.tested_summary()
 check([x["timeframe"] for x in ts["streams"]] == ["4h"] and ts["signals"] == ts["streams"][0]["signals"] > 0
       and ts["win_rate"] == ts["streams"][0]["win_rate"], "landing: test numbers of the switched-on tested models")
 check(hub._period_label("2025-10-01 to 2026-10-11") == "Oct 2025 to Oct 2026", "landing: readable test period")
-os.environ["SIGNAL_STREAMS"] = "forex_1h"
+hub._FORCE_STREAMS = ["forex_1h"]
 check(hub.public_summary() == {"ok": False} and hub.tested_summary()["signals"] == 0, "landing: no tested stream switched on -> no numbers")
-os.environ.pop("SIGNAL_STREAMS", None)
+hub._FORCE_STREAMS = None
 
 # ---------------------------------------------------------------------------
 # more coins for the 4h stream (research/coin_expansion.py) and the 1h per-candle limit (research/cap_test.py)
@@ -519,20 +533,12 @@ check(hub.engine("crypto_1h").symbols == c1, "the 1h engine scans only the coins
 hub._engines.pop("crypto_1h", None)
 if _had is None:
     hub._hooks.pop("get_candles", None)
-shutil.copy(os.path.join(os.path.dirname(HERE), "models", "coin_test.json"), _MD)
-hub._coin_test.update(t=0.0, data=None)
-x4 = hub.coin_test("crypto_4h")
-check(x4 and x4["coins"] == len(markets.CRYPTO_4H_ONLY) and x4["signals"] >= 50 and x4["win_rate"] >= 70 and x4["avg_r"] > 0,
-      "coin test: the added 4h coins passed on the year the model never saw (shown with the 4h numbers)")
-check(hub.coin_test("crypto_1h") is None, "coin test: the 1h stream got no new coins")
-ship = json.load(open(os.path.join(os.path.dirname(HERE), "models", "crypto_1h.json")))
-check(ship["selection"]["max_per_bar"] == 4 and ship["test"]["avg_net_r"] >= 0.05 and ship["test"]["win_rate"] >= 50,
-      "1h: at most 4 new signals per candle (8 passed the test but made the results swing more, see research/cap_test.py)")
-check(ship["levels"]["targets_r"] == [1.0] and ship["levels"]["be_after"] == 0 and ship["exit_change"]["holdout_new_plan"]["avg_net_r"]
-      > ship["exit_change"]["holdout_old_plan"]["avg_net_r"], "1h: one target at 1R, chosen on validation, better on the holdout too")
+check(not os.path.exists(os.path.join(os.path.dirname(HERE), "models", "coin_test.json"))
+      and not os.path.exists(os.path.join(os.path.dirname(HERE), "models", "crypto_1h.json")),
+      "engine 3.2: the old coin test and the old crypto 1h model are gone")
 
 # coins page: 4h "getting close" from the signal board, coins without data left out, joinable signals first
-os.environ["SIGNAL_STREAMS"] = "all"
+hub._FORCE_STREAMS = list(hub.ALL_STREAMS)
 hub.symbols_for = lambda market: (["EUR/USD"] if market == "forex" else ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "ADA/USDT"])
 with hub._Cursor() as cur:
     cur.execute("UPDATE signal_events SET status='EXPIRED' WHERE status='ACTIVE'")
@@ -573,7 +579,7 @@ streams.MODELS_DIR = _md_before
 streams.reset_models()
 with sb._board_lock:
     sb._board["rows"] = _rows_before or {}
-os.environ.pop("SIGNAL_STREAMS", None)
+hub._FORCE_STREAMS = None
 
 print()
 # late signals: re-anchored to the live price, or dropped when the move is gone

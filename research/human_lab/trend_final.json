@@ -1,0 +1,319 @@
+{
+ "variant": {
+  "tf": "4h",
+  "n": 55,
+  "leaders": false,
+  "k_atr": 3.0,
+  "target_r": 2.0,
+  "trail": false,
+  "max_bars": 40
+ },
+ "pre_registered": "loop_log.json try 71",
+ "test_A_research_coins_2025_2026": {
+  "pass": false,
+  "signals": 715,
+  "win_rate": 41.1,
+  "target_rate": 17.6,
+  "stop_rate": 45.2,
+  "avg_net_r": -0.051,
+  "total_net_r": -36.8,
+  "profit_factor": 0.9,
+  "max_drawdown_r": -49.8,
+  "avg_win_r": 1.16,
+  "avg_loss_r": -0.9,
+  "years": {
+   "2025": {
+    "signals": 391,
+    "avg_net_r": -0.055,
+    "win_rate": 41.9
+   },
+   "2026": {
+    "signals": 324,
+    "avg_net_r": -0.047,
+    "win_rate": 40.1
+   }
+  },
+  "quarters": {
+   "2025-Q1": {
+    "signals": 105,
+    "avg_net_r": -0.236
+   },
+   "2025-Q2": {
+    "signals": 96,
+    "avg_net_r": -0.109
+   },
+   "2025-Q3": {
+    "signals": 95,
+    "avg_net_r": 0.227
+   },
+   "2025-Q4": {
+    "signals": 95,
+    "avg_net_r": -0.083
+   },
+   "2026-Q1": {
+    "signals": 94,
+    "avg_net_r": 0.085
+   },
+   "2026-Q2": {
+    "signals": 105,
+    "avg_net_r": -0.125
+   },
+   "2026-Q3": {
+    "signals": 106,
+    "avg_net_r": -0.053
+   },
+   "2026-Q4": {
+    "signals": 19,
+    "avg_net_r": -0.227
+   }
+  },
+  "signals_per_day": 1.09,
+  "period": "2025-01-01 to 2026-10-21",
+  "cost_round_trip": 0.003
+ },
+ "test_B_fresh_coins": {
+  "pass": false,
+  "coins": [
+   "1INCH",
+   "ALGO",
+   "APE",
+   "AXS",
+   "BAT",
+   "CHZ",
+   "COMP",
+   "CRV",
+   "DASH",
+   "DYDX",
+   "EGLD",
+   "ENJ",
+   "FET",
+   "FLOW",
+   "GALA",
+   "GMT",
+   "GRT",
+   "IMX",
+   "IOTA",
+   "KSM",
+   "LDO",
+   "MANA",
+   "MINA",
+   "NEO",
+   "ONE",
+   "RVN",
+   "SAND",
+   "SEI",
+   "SNX",
+   "STX",
+   "SUSHI",
+   "THETA",
+   "TIA",
+   "WOO",
+   "XTZ",
+   "YFI",
+   "ZEN",
+   "ZIL"
+  ],
+  "positive_years": 4,
+  "signals": 2254,
+  "win_rate": 43.3,
+  "target_rate": 20.2,
+  "stop_rate": 41.5,
+  "avg_net_r": 0.038,
+  "total_net_r": 85.6,
+  "profit_factor": 1.08,
+  "max_drawdown_r": -48.3,
+  "avg_win_r": 1.2,
+  "avg_loss_r": -0.85,
+  "years": {
+   "2021": {
+    "signals": 343,
+    "avg_net_r": 0.024,
+    "win_rate": 41.1
+   },
+   "2022": {
+    "signals": 397,
+    "avg_net_r": -0.004,
+    "win_rate": 42.8
+   },
+   "2023": {
+    "signals": 411,
+    "avg_net_r": 0.154,
+    "win_rate": 47.4
+   },
+   "2024": {
+    "signals": 380,
+    "avg_net_r": 0.042,
+    "win_rate": 43.2
+   },
+   "2025": {
+    "signals": 373,
+    "avg_net_r": -0.031,
+    "win_rate": 41.6
+   },
+   "2026": {
+    "signals": 350,
+    "avg_net_r": 0.033,
+    "win_rate": 43.4
+   }
+  },
+  "quarters": {
+   "2021-Q1": {
+    "signals": 38,
+    "avg_net_r": 0.113
+   },
+   "2021-Q2": {
+    "signals": 90,
+    "avg_net_r": 0.172
+   },
+   "2021-Q3": {
+    "signals": 103,
+    "avg_net_r": 0.045
+   },
+   "2021-Q4": {
+    "signals": 112,
+    "avg_net_r": -0.144
+   },
+   "2022-Q1": {
+    "signals": 95,
+    "avg_net_r": 0.161
+   },
+   "2022-Q2": {
+    "signals": 99,
+    "avg_net_r": 0.073
+   },
+   "2022-Q3": {
+    "signals": 90,
+    "avg_net_r": -0.249
+   },
+   "2022-Q4": {
+    "signals": 113,
+    "avg_net_r": -0.016
+   },
+   "2023-Q1": {
+    "signals": 100,
+    "avg_net_r": 0.166
+   },
+   "2023-Q2": {
+    "signals": 106,
+    "avg_net_r": 0.032
+   },
+   "2023-Q3": {
+    "signals": 97,
+    "avg_net_r": 0.098
+   },
+   "2023-Q4": {
+    "signals": 108,
+    "avg_net_r": 0.311
+   },
+   "2024-Q1": {
+    "signals": 95,
+    "avg_net_r": -0.076
+   },
+   "2024-Q2": {
+    "signals": 92,
+    "avg_net_r": 0.093
+   },
+   "2024-Q3": {
+    "signals": 108,
+    "avg_net_r": 0.02
+   },
+   "2024-Q4": {
+    "signals": 85,
+    "avg_net_r": 0.144
+   },
+   "2025-Q1": {
+    "signals": 82,
+    "avg_net_r": -0.075
+   },
+   "2025-Q2": {
+    "signals": 87,
+    "avg_net_r": 0.029
+   },
+   "2025-Q3": {
+    "signals": 103,
+    "avg_net_r": 0.057
+   },
+   "2025-Q4": {
+    "signals": 101,
+    "avg_net_r": -0.136
+   },
+   "2026-Q1": {
+    "signals": 108,
+    "avg_net_r": -0.033
+   },
+   "2026-Q2": {
+    "signals": 108,
+    "avg_net_r": -0.02
+   },
+   "2026-Q3": {
+    "signals": 111,
+    "avg_net_r": 0.144
+   },
+   "2026-Q4": {
+    "signals": 23,
+    "avg_net_r": 0.058
+   }
+  }
+ },
+ "test_B_fresh_coins_2025_2026": {
+  "signals": 723,
+  "win_rate": 42.5,
+  "target_rate": 18.3,
+  "stop_rate": 43.3,
+  "avg_net_r": 0.0,
+  "total_net_r": 0.1,
+  "profit_factor": 1.0,
+  "max_drawdown_r": -48.3,
+  "avg_win_r": 1.18,
+  "avg_loss_r": -0.87,
+  "years": {
+   "2025": {
+    "signals": 373,
+    "avg_net_r": -0.031,
+    "win_rate": 41.6
+   },
+   "2026": {
+    "signals": 350,
+    "avg_net_r": 0.033,
+    "win_rate": 43.4
+   }
+  },
+  "quarters": {
+   "2025-Q1": {
+    "signals": 82,
+    "avg_net_r": -0.075
+   },
+   "2025-Q2": {
+    "signals": 87,
+    "avg_net_r": 0.029
+   },
+   "2025-Q3": {
+    "signals": 103,
+    "avg_net_r": 0.057
+   },
+   "2025-Q4": {
+    "signals": 101,
+    "avg_net_r": -0.136
+   },
+   "2026-Q1": {
+    "signals": 108,
+    "avg_net_r": -0.033
+   },
+   "2026-Q2": {
+    "signals": 108,
+    "avg_net_r": -0.02
+   },
+   "2026-Q3": {
+    "signals": 111,
+    "avg_net_r": 0.144
+   },
+   "2026-Q4": {
+    "signals": 23,
+    "avg_net_r": 0.058
+   }
+  },
+  "cost_round_trip": 0.003,
+  "period": "2025-01-01 to 2026-10-21"
+ },
+ "passed": false
+}

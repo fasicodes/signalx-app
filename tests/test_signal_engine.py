@@ -62,8 +62,8 @@ check(m.max_per_bar == 5, "at most 5 new signals per candle")
 t = se.test_stats()
 check(t["signals"] > 300 and 50 < t["win_rate"] < 90 and t["avg_net_r"] > 0 and t["period"].startswith("2025-10"),
       "out-of-sample test stats bundled (Oct 2025 onward, data the model never saw)")
-wf = se.walk_forward_stats()
-check(wf["signals"] > 1000 and all(v["avg_net_r"] > 0 for v in wf["years"].values()), "walk-forward 2023-2026: every year positive")
+check(se.walk_forward_stats() == {} and t.get("cost_round_trip") == markets.CRYPTO_COST_ROUND_TRIP,
+      "engine 3.2: old walk-forward (0.12% cost) removed, the test uses the real cost")
 p = m.raw_proba(np.full((3, 82), np.nan))
 check(np.all((p > 0) & (p < 1)) and np.allclose(p, p[0]), "all-missing input is handled (NaN-aware trees)")
 cal = m.calibrate(np.array([0.0, 0.5, 0.7, 0.99]))

@@ -1,0 +1,469 @@
+{
+ "note": "Signal logic of popular GitHub trading bots (gekko, zenbot, OctoBot, Haehnchen crypto-trading-bot, quant-trading, bennycode trading-signals, WolfBot, intelligent-trading-bot ML) with default settings, same protocol as results.json. None passes on unseen data.",
+ "generated": "2026-11-04",
+ "streams": {
+  "crypto_15m": {
+   "rules_tested": 36,
+   "plans_tested": 144,
+   "passed_validation": [],
+   "chosen": {},
+   "combined_holdout": {
+    "trades": 0,
+    "win_rate": null,
+    "avg_r": null,
+    "profit_factor": null,
+    "max_drawdown_r": null,
+    "total_r": null,
+    "years": null
+   },
+   "live": false,
+   "best_on_validation": [
+    {
+     "strategy": "qt_dual_thrust",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 5452,
+     "avg_r": -0.1621,
+     "profit_factor": 0.738,
+     "holdout_avg_r": -0.186
+    },
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 2.5,
+     "tp": 1.0,
+     "trades": 22758,
+     "avg_r": -0.167,
+     "profit_factor": 0.684,
+     "holdout_avg_r": -0.2084
+    },
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 20609,
+     "avg_r": -0.1738,
+     "profit_factor": 0.704,
+     "holdout_avg_r": -0.2287
+    },
+    {
+     "strategy": "qt_dual_thrust",
+     "sl": 2.5,
+     "tp": 1.0,
+     "trades": 5464,
+     "avg_r": -0.1803,
+     "profit_factor": 0.662,
+     "holdout_avg_r": -0.2383
+    },
+    {
+     "strategy": "zb_ta_ema",
+     "sl": 2.5,
+     "tp": 1.0,
+     "trades": 55725,
+     "avg_r": -0.211,
+     "profit_factor": 0.62,
+     "holdout_avg_r": -0.2433
+    }
+   ]
+  },
+  "crypto_1h": {
+   "rules_tested": 41,
+   "plans_tested": 164,
+   "passed_validation": [],
+   "chosen": {},
+   "combined_holdout": {
+    "trades": 0,
+    "win_rate": null,
+    "avg_r": null,
+    "profit_factor": null,
+    "max_drawdown_r": null,
+    "total_r": null,
+    "years": null
+   },
+   "live": false,
+   "best_on_validation": [
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 1.5,
+     "tp": 2.0,
+     "trades": 1,
+     "avg_r": 1.8346,
+     "profit_factor": null,
+     "holdout_avg_r": null
+    },
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 1,
+     "avg_r": 1.0114,
+     "profit_factor": null,
+     "holdout_avg_r": null
+    },
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 2.5,
+     "tp": 1.0,
+     "trades": 1,
+     "avg_r": 0.9008,
+     "profit_factor": null,
+     "holdout_avg_r": null
+    },
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 1.5,
+     "tp": 1.0,
+     "trades": 1,
+     "avg_r": 0.8346,
+     "profit_factor": null,
+     "holdout_avg_r": null
+    },
+    {
+     "strategy": "itb_lc_t10",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 1699,
+     "avg_r": -0.0318,
+     "profit_factor": 0.939,
+     "holdout_avg_r": 0.0046
+    }
+   ]
+  },
+  "crypto_4h": {
+   "rules_tested": 35,
+   "plans_tested": 140,
+   "passed_validation": [],
+   "chosen": {},
+   "combined_holdout": {
+    "trades": 0,
+    "win_rate": null,
+    "avg_r": null,
+    "profit_factor": null,
+    "max_drawdown_r": null,
+    "total_r": null,
+    "years": null
+   },
+   "live": false,
+   "best_on_validation": [
+    {
+     "strategy": "hc_ao_cross_zero",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 1668,
+     "avg_r": 0.0717,
+     "profit_factor": 1.151,
+     "holdout_avg_r": -0.0735
+    },
+    {
+     "strategy": "qt_dual_thrust",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 2548,
+     "avg_r": 0.0671,
+     "profit_factor": 1.133,
+     "holdout_avg_r": -0.0389
+    },
+    {
+     "strategy": "bc_sma_crossover",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 2397,
+     "avg_r": 0.0418,
+     "profit_factor": 1.09,
+     "holdout_avg_r": -0.0366
+    },
+    {
+     "strategy": "hc_ao_cross_zero",
+     "sl": 1.5,
+     "tp": 2.0,
+     "trades": 1915,
+     "avg_r": 0.0396,
+     "profit_factor": 1.063,
+     "holdout_avg_r": -0.1551
+    },
+    {
+     "strategy": "zb_trend_ema",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 3126,
+     "avg_r": 0.0293,
+     "profit_factor": 1.058,
+     "holdout_avg_r": -0.0659
+    }
+   ]
+  },
+  "forex_15m": {
+   "rules_tested": 37,
+   "plans_tested": 148,
+   "passed_validation": [],
+   "chosen": {},
+   "combined_holdout": {
+    "trades": 0,
+    "win_rate": null,
+    "avg_r": null,
+    "profit_factor": null,
+    "max_drawdown_r": null,
+    "total_r": null,
+    "years": null
+   },
+   "live": false,
+   "best_on_validation": [
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 6,
+     "avg_r": 0.5632,
+     "profit_factor": 2.605,
+     "holdout_avg_r": -0.0257
+    },
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 1.5,
+     "tp": 1.0,
+     "trades": 6,
+     "avg_r": 0.3011,
+     "profit_factor": 1.876,
+     "holdout_avg_r": -0.0489
+    },
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 1.5,
+     "tp": 1.0,
+     "trades": 9,
+     "avg_r": 0.147,
+     "profit_factor": 1.393,
+     "holdout_avg_r": -0.3472
+    },
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 2.5,
+     "tp": 1.0,
+     "trades": 6,
+     "avg_r": 0.1376,
+     "profit_factor": 1.392,
+     "holdout_avg_r": -0.0398
+    },
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 1.5,
+     "tp": 2.0,
+     "trades": 6,
+     "avg_r": 0.1182,
+     "profit_factor": 1.221,
+     "holdout_avg_r": -0.0532
+    }
+   ]
+  },
+  "forex_1h": {
+   "rules_tested": 42,
+   "plans_tested": 168,
+   "passed_validation": [
+    "hc_cci",
+    "itb_lc_t4",
+    "itb_lc_t6"
+   ],
+   "chosen": {
+    "hc_cci": {
+     "sl": 1.5,
+     "tp": 2.0,
+     "val_avg_r": 0.0949,
+     "val_trades": 432,
+     "holdout": {
+      "trades": 482,
+      "win_rate": 30.9,
+      "avg_r": -0.2318,
+      "profit_factor": 0.694,
+      "total_r": -111.7,
+      "max_drawdown_r": -143.2
+     }
+    },
+    "itb_lc_t4": {
+     "sl": 2.5,
+     "tp": 2.0,
+     "val_avg_r": 0.1912,
+     "val_trades": 124,
+     "holdout": {
+      "trades": 159,
+      "win_rate": 38.4,
+      "avg_r": -0.1262,
+      "profit_factor": 0.78,
+      "total_r": -20.1,
+      "max_drawdown_r": -31.3
+     }
+    },
+    "itb_lc_t6": {
+     "sl": 2.5,
+     "tp": 1.0,
+     "val_avg_r": 0.1322,
+     "val_trades": 84,
+     "holdout": {
+      "trades": 145,
+      "win_rate": 47.6,
+      "avg_r": -0.0944,
+      "profit_factor": 0.813,
+      "total_r": -13.7,
+      "max_drawdown_r": -23.5
+     }
+    }
+   },
+   "combined_holdout": {
+    "trades": 650,
+    "win_rate": 34.0,
+    "avg_r": -0.1915,
+    "profit_factor": 0.726,
+    "max_drawdown_r": -158.8,
+    "total_r": -124.5,
+    "years": {
+     "2025": -0.334,
+     "2026": 0.003
+    }
+   },
+   "live": false,
+   "best_on_validation": [
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 1.5,
+     "tp": 2.0,
+     "trades": 2,
+     "avg_r": 1.9024,
+     "profit_factor": null,
+     "holdout_avg_r": null
+    },
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 2.5,
+     "tp": 2.0,
+     "trades": 2,
+     "avg_r": 1.4046,
+     "profit_factor": null,
+     "holdout_avg_r": null
+    },
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 2.5,
+     "tp": 1.0,
+     "trades": 2,
+     "avg_r": 0.9415,
+     "profit_factor": null,
+     "holdout_avg_r": null
+    },
+    {
+     "strategy": "bc_multi_confluence",
+     "sl": 1.5,
+     "tp": 1.0,
+     "trades": 2,
+     "avg_r": 0.9024,
+     "profit_factor": null,
+     "holdout_avg_r": null
+    },
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 1.5,
+     "tp": 2.0,
+     "trades": 29,
+     "avg_r": 0.4514,
+     "profit_factor": 1.952,
+     "holdout_avg_r": -0.1097
+    }
+   ]
+  },
+  "forex_4h": {
+   "rules_tested": 35,
+   "plans_tested": 140,
+   "passed_validation": [
+    "ob_EMADivergence",
+    "zb_srsi_macd"
+   ],
+   "chosen": {
+    "ob_EMADivergence": {
+     "sl": 1.5,
+     "tp": 2.0,
+     "val_avg_r": 0.2417,
+     "val_trades": 84,
+     "holdout": {
+      "trades": 119,
+      "win_rate": 37.0,
+      "avg_r": 0.0098,
+      "profit_factor": 1.015,
+      "total_r": 1.2,
+      "max_drawdown_r": -19.1
+     }
+    },
+    "zb_srsi_macd": {
+     "sl": 1.5,
+     "tp": 2.0,
+     "val_avg_r": 0.1792,
+     "val_trades": 465,
+     "holdout": {
+      "trades": 459,
+      "win_rate": 35.9,
+      "avg_r": -0.0435,
+      "profit_factor": 0.935,
+      "total_r": -20.0,
+      "max_drawdown_r": -60.4
+     }
+    }
+   },
+   "combined_holdout": {
+    "trades": 542,
+    "win_rate": 36.2,
+    "avg_r": -0.0323,
+    "profit_factor": 0.951,
+    "max_drawdown_r": -54.0,
+    "total_r": -17.5,
+    "years": {
+     "2025": -0.118,
+     "2026": 0.074
+    }
+   },
+   "live": false,
+   "best_on_validation": [
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 1.5,
+     "tp": 2.0,
+     "trades": 84,
+     "avg_r": 0.2417,
+     "profit_factor": 1.433,
+     "holdout_avg_r": 0.0098
+    },
+    {
+     "strategy": "zb_srsi_macd",
+     "sl": 1.5,
+     "tp": 2.0,
+     "trades": 465,
+     "avg_r": 0.1792,
+     "profit_factor": 1.302,
+     "holdout_avg_r": -0.0435
+    },
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 2.5,
+     "tp": 1.0,
+     "trades": 79,
+     "avg_r": 0.1147,
+     "profit_factor": 1.286,
+     "holdout_avg_r": 0.0088
+    },
+    {
+     "strategy": "zb_srsi_macd",
+     "sl": 2.5,
+     "tp": 1.0,
+     "trades": 446,
+     "avg_r": 0.1011,
+     "profit_factor": 1.242,
+     "holdout_avg_r": -0.0456
+    },
+    {
+     "strategy": "ob_EMADivergence",
+     "sl": 1.5,
+     "tp": 1.0,
+     "trades": 88,
+     "avg_r": 0.0808,
+     "profit_factor": 1.176,
+     "holdout_avg_r": 0.0191
+    }
+   ]
+  }
+ }
+}
