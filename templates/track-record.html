@@ -150,7 +150,7 @@
       <li><b>One signal per coin at a time.</b> New signals are ignored until the open one closes.</li>
       <li><b>Pessimistic fills.</b> If one candle touches the stop and a target, the stop counts first. If a candle opens past the stop, the exit is that worse price. A moved stop only works from the next candle.</li>
       <li><b>Time limit.</b> After 54 candles (9 days), whatever is left closes at that candle's close.</li>
-      <li><b>After costs.</b> Every result already has 0.12% of the position taken off for fees and slippage (round trip). Funding payments on futures are not included.</li>
+      <li><b>After costs.</b> Every result already has 0.30% of the position taken off for fees and slippage (round trip). Funding payments on futures are not included.</li>
       <li><b>Backtest</b> replays the same engine over the last 365 days and is refreshed every week. At each candle the engine only uses data that had closed by then, and the outcome comes only from the candles after it. The model was trained on data up to September 2025, so this year is data it never saw.</li>
       <li><b>How the model was checked.</b> <span id="model-test">see below</span></li>
     </ul>
