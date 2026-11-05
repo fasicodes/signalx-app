@@ -8,7 +8,7 @@ Signal hub - the 15m / 1h / 4h signal streams for crypto and forex.
   existed) and get that market and timeframe.
 * Scanner: after every candle close of each timeframe it runs the stream's
   engine on every symbol (streams.py; crypto 4h is still produced by
-  signalboard.py with signal engine v3.1), stores the new signals and sends the
+  signalboard.py with signal engine v3.2), stores the new signals and sends the
   alerts (signalboard.notify: bell, email, Telegram; users choose markets and
   timeframes).
 * Tracker: follows every ACTIVE signal on closed candles with the plan stored
@@ -102,25 +102,29 @@ def validated_streams():
 
 
 def stream_tested(market, tf):
-    """True when the stream passed its test on data it never saw (crypto 4h: signal engine v3.1)."""
+    """True when the stream passed its test on data it never saw (crypto 4h: signal engine v3.2)."""
     try:
         return bool(streams.validated(f"{market}_{tf}"))
     except Exception:
         return False
 
 
+_FORCE_STREAMS = None     # set by tests only; the site never switches on an untested stream
+
+
 def enabled_streams():
-    """SIGNAL_STREAMS: empty or 'validated' (default) = only the streams whose model passed its test on unseen
-    data with real costs; 'all' = all six
-    (the losing rules streams too, marked untested/experimental); or a comma-separated list."""
+    """Only the streams whose model passed its test on unseen data with real costs (Nov 2026: crypto 4h, engine
+    3.2). The old rules streams and the crypto 1h model were removed from the site. SIGNAL_STREAMS can only narrow
+    this down (a comma-separated list); untested streams are never switched on."""
+    if _FORCE_STREAMS is not None:          # tests only (the rules engine code is still exercised there)
+        return list(_FORCE_STREAMS)
+    tested = validated_streams()
     raw = (os.environ.get("SIGNAL_STREAMS") or "").strip().lower()
-    if raw == "all":
-        return list(ALL_STREAMS)
-    if raw and raw != "validated":
-        out = [s.strip() for s in raw.split(",") if s.strip() in ALL_STREAMS]
+    if raw and raw not in ("validated", "all"):
+        out = [s.strip() for s in raw.split(",") if s.strip() in tested]
         if out:
             return out
-    return validated_streams()
+    return tested
 
 
 def symbols_for(market):
@@ -154,7 +158,12 @@ NEW_COLUMNS = [
     ("news", "TEXT NULL"),
     ("cancel_reason", "VARCHAR(200) NULL"),
     ("updated_at", "DATETIME NULL"),
+    ("better_entry", "DOUBLE NULL"),
+    ("better_entry_until", "DATETIME NULL"),
 ]
+# One-time clean-ups of the signal record (name -> SQL), run once per database and remembered in app_migrations.
+# Nov 2026: engine 3.2 (real costs) replaces every older signal model; the old signals are removed.
+RESETS = [("2026-11-04-signal-events-reset-engine-3.2", "DELETE FROM signal_events")]
 
 
 def _is_sqlite(cur):
@@ -222,11 +231,23 @@ def init_tables():
             cur.execute("SHOW INDEX FROM signal_events WHERE Key_name = 'idx_stream_status'")
             if not cur.fetchall():
                 cur.execute("ALTER TABLE signal_events ADD INDEX idx_stream_status (market, timeframe, status, bar_time)")
+        _run_resets(cur)
         have = _columns(cur, "signal_alert_subs") if _table_exists(cur, "signal_alert_subs") else None
         if have is not None:
             for name in ("markets", "timeframes"):
                 if name not in have:
                     cur.execute(f"ALTER TABLE signal_alert_subs ADD COLUMN {name} TEXT NULL")
+
+
+def _run_resets(cur):
+    cur.execute("CREATE TABLE IF NOT EXISTS app_migrations (name VARCHAR(80) PRIMARY KEY, ran_at DATETIME NOT NULL)")
+    for name, sql in RESETS:
+        cur.execute("SELECT name FROM app_migrations WHERE name = %s", (name,))
+        if cur.fetchone():
+            continue
+        cur.execute(sql)
+        cur.execute("INSERT INTO app_migrations (name, ran_at) VALUES (%s, %s)", (name, _utcnow()))
+        print(f"[signal_hub] {name}: done")
 
 
 def _table_exists(cur, table):
@@ -257,11 +278,12 @@ def record(symbol, market, tf, a, news=None):
             cur.execute(
                 """INSERT INTO signal_events (symbol, side, bar_time, entry, stop_loss, take_profit, confidence,
                        created_at, market, timeframe, grade, setup, tier, targets, plan, status, hits, stop_now,
-                       expires_at, hold_minutes, engine, news, updated_at)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',0,%s,%s,%s,%s,%s,%s)""",
+                       expires_at, hold_minutes, engine, news, updated_at, better_entry, better_entry_until)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',0,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (symbol, a["side"], bar_time, entry, stop, float(a["take_profit"]), a.get("confidence"), now,
                  market, tf, grade, a.get("setup"), a.get("tier"), json.dumps(tps), json.dumps(plan), stop,
-                 expires, hold, plan["engine"], json.dumps(news) if news else None, now),
+                 expires, hold, plan["engine"], json.dumps(news) if news else None, now,
+                 a.get("better_entry"), _parse(a.get("better_entry_until"))),
             )
     except Exception as e:
         if "uniq" in str(e).lower() or "duplicate" in str(e).lower() or "constraint" in str(e).lower():
@@ -270,7 +292,8 @@ def record(symbol, market, tf, a, news=None):
     return {"symbol": symbol, "market": market, "timeframe": tf, "side": a["side"], "bar_time": bar_time,
             "entry": entry, "stop_loss": stop, "take_profit": float(a["take_profit"]), "targets": tps,
             "confidence": a.get("confidence"), "grade": grade, "setup": a.get("setup"), "tier": a.get("tier"),
-            "expires_at": expires, "hold_minutes": hold, "news": news}
+            "expires_at": expires, "hold_minutes": hold, "news": news,
+            "better_entry": a.get("better_entry"), "better_entry_until": _parse(a.get("better_entry_until"))}
 
 
 # ===========================================================================
@@ -383,7 +406,7 @@ def due_streams(now=None):
     for key in enabled_streams():
         cfg = streams.STREAMS[key]
         if key == "crypto_4h":
-            continue                      # crypto 4h: signalboard.py (engine v3.1)
+            continue                      # crypto 4h: signalboard.py (engine v3.2)
         bar = streams.last_closed_bar(cfg["tf"], now)
         if _state["scanned"].get(key) == bar:
             continue
@@ -618,6 +641,9 @@ def signal_json(r, price=None):
         "r": r.get("r_multiple"), "pips": r.get("pips"), "pct": r.get("result_pct"),
         "engine": r.get("engine") or "v3", "cancel_reason": r.get("cancel_reason"), "decimals": _dec(sym),
         "tested": stream_tested(r.get("market") or "crypto", tf),
+        # optional: a limit order at a better price on the 15m chart, valid until better_entry_until
+        "better_entry": streams.price_round(float(r["better_entry"]), sym) if r.get("better_entry") is not None else None,
+        "better_entry_until": _iso(_parse(r.get("better_entry_until"))),
     }
     if markets.is_forex(sym):
         out["sl_pips"] = round(markets.to_pips(sym, risk), 1)
@@ -972,7 +998,7 @@ def stream_info():
         plan = streams.plan_for(cfg["market"], cfg["tf"])
         last = _state["last_scan"].get(key)
         kind = streams.engine_name(key)
-        label = {"ml_v3": "Model v3.1", "model": f"Model {plan['engine']}",
+        label = {"ml_v3": f"Model v{__import__('signal_engine').ENGINE_VERSION}", "model": f"Model {plan['engine']}",
                  "rules": f"Rules {streams.RULES_VERSION} (did not pass the test)"}[kind]
         res = (streams.research_summary().get("streams") or {}).get(key)
         out.append({"key": key, "market": cfg["market"], "timeframe": cfg["tf"], "enabled": key in enabled_streams(),
@@ -1128,7 +1154,7 @@ def coins_status(now=None):
         if board:
             boards.append((streams.STREAMS[key]["tf"], board))
     if "crypto_4h" in tested and _engines.get("crypto_4h") is None:
-        # the 4h stream is engine v3.1, run by signalboard.py: its board has the same fields
+        # the 4h stream is engine v3.2, run by signalboard.py: its board has the same fields
         try:
             import signalboard
             with signalboard._board_lock:
