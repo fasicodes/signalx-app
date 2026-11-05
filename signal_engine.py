@@ -22,13 +22,14 @@ What it does
     trade at a time per coin; everything else is WAIT.
   * Trade plan (signal_model.json "levels"): stop = 2 x ATR(14) from entry
     (1R), one target at 1R; the whole position closes there and the stop never
-    moves. Time limit 54 candles (9 days). Fees are counted as 0.12% round
-    trip. (Until Oct 2026: targets 0.5R / 1R / 2R, a third at each, stop to the
+    moves. Time limit 54 candles (9 days). Fees are counted as 0.30% round
+    trip (markets.CRYPTO_COST_ROUND_TRIP). (Until Oct 2026: targets 0.5R / 1R / 2R, a third at each, stop to the
     entry after TP1 - see "exit_change" in the model file.)
 
-Measured on data the model never saw (Oct 2025 - Oct 2026, 53 coins, 32 of
-them never used in training) and in a walk-forward test (Jan 2023 - Oct 2026,
-21 coins): see MODEL["test"] and MODEL["walk_forward"] / signal_model.json.
+Engine 3.2 (Nov 2026): the same trees as 3.1, re-tested with the real cost on data the model never saw
+(Oct 2025 - Oct 2026, 52 coins): MODEL["test"] / signal_model.json. The old 3.1 results (0.12% cost) and
+the old track record were removed. Each signal also carries a better-entry zone for the 15m chart
+(BETTER_ENTRY_ATR below).
 
 This module is pure numpy/pandas (no sklearn at runtime). main.py, the
 auto-trade bot and the track record all call it, so every surface shows the
@@ -48,7 +49,12 @@ import pandas as pd
 
 import markets
 
-ENGINE_VERSION = "3.1"
+ENGINE_VERSION = "3.2"
+# Optional better entry on the 15-minute chart: a limit order this many ATR(4h) better than the signal's entry,
+# valid for one 4h candle. Tested Nov 2026 on the holdout: +0.20R per filled trade instead of +0.15R, but only
+# ~62% of the signals fill, so the signal itself keeps the market entry (more total profit).
+BETTER_ENTRY_ATR = 0.25
+BETTER_ENTRY_SEC = 4 * 3600
 TIMEFRAME = "4h"
 TF_SEC = 4 * 3600
 HISTORY_BARS = 600            # 4h candles fetched per coin (100 days; features need ~230)
@@ -505,11 +511,14 @@ def _trade(side, i, c, atr, cl, cs, ts, tier):
     sl = entry - m.sl_atr * atr[i] if side == "LONG" else entry + m.sl_atr * atr[i]
     tps = targets(side, entry, sl)
     bar_time = pd.Timestamp(ts[i]).to_pydatetime()
+    signal_at = bar_time + timedelta(seconds=TF_SEC)
+    better = entry - BETTER_ENTRY_ATR * atr[i] if side == "LONG" else entry + BETTER_ENTRY_ATR * atr[i]
     return {
         "side": side, "entry": entry, "stop_loss": float(sl), "take_profit": float(tps[-1]),
+        "better_entry": float(better), "better_entry_until": signal_at + timedelta(seconds=BETTER_ENTRY_SEC),
         "targets": [float(x) for x in tps], "targets_r": list(m.targets_r), "fractions": list(m.fractions),
         "atr": float(atr[i]), "confidence": round(float(cl[i] if side == "LONG" else cs[i]) * 100, 1), "tier": tier,
-        "bar_time": bar_time, "signal_at": bar_time + timedelta(seconds=TF_SEC),
+        "bar_time": bar_time, "signal_at": signal_at,
     }
 
 
