@@ -254,7 +254,7 @@
   <p class="note">How to use a signal: enter near the entry price and place the stop loss. Tested 1h and 4h signals have one target
     (as far as the stop): close the whole position there. Experimental signals have three: close a third at each, and after TP1
     move the stop to the entry, after TP2 to TP1. If no level is reached before the time limit, the rest is closed.
-    Results include typical costs (0.12% per crypto trade, the usual spread per forex pair). Forex trades are closed before the
+    Results include typical costs (0.30% per crypto trade, the usual spread per forex pair). Forex trades are closed before the
     weekend, and no new forex signals start shortly before the weekly close.</p>
 </main>
 
@@ -341,7 +341,8 @@
     const off = $("off-note"), r = s.research;
     if (s.enabled === false) {
       off.hidden = false;
-      off.innerHTML = "<b>This stream is switched off.</b> Signals start here when a model for it passes our test on data it never saw.";
+      off.innerHTML = "<b>This stream is switched off.</b> Signals start here when a model for it passes our test on data it never saw."
+        + (r && r.reason ? " " + esc(r.reason) : "");
     } else if (s.validated === false) {
       off.hidden = false;
       off.innerHTML = '<span class="exp-tag">Experimental</span> Simple rules that have not passed our test on unseen data. '
@@ -399,8 +400,13 @@
         ${(s.targets || []).map((t, k) => `<div><span>Target ${k + 1}</span><b>${price(t, d)}</b>${pip(k)}</div>`).join("")}
       </div>`;
     const plan = s.status === "ACTIVE" ? `<div class="plain">${buy ? "Buy" : "Sell"} ${coin(s.symbol)} near ${price(s.entry, d)}. If the price `
-      + `${buy ? "falls" : "rises"} to ${price(s.stop_now != null ? s.stop_now : s.stop_loss, d)}, close the trade. Take a third off at each target. `
+      + `${buy ? "falls" : "rises"} to ${price(s.stop_now != null ? s.stop_now : s.stop_loss, d)}, close the trade. `
+      + `${(s.targets || []).length > 1 ? "Take a part off at each target. " : "Close the whole trade at the target. "}`
       + `Risk only 1% of your account.</div>` : "";
+    // optional better entry on the 15m chart (tested: better price per trade, but about 4 in 10 signals never reach it)
+    const better = s.status === "ACTIVE" && s.better_entry != null && s.better_entry_until && new Date(s.better_entry_until) > new Date()
+      ? `<div class="plain dim">Patient entry (15m chart): a limit order at ${price(s.better_entry, d)} until ${dayTime(s.better_entry_until)} gets a better price, `
+        + `but about 4 in 10 signals never come back to it. Same stop-loss and target.</div>` : "";
     const news = s.news && s.news.title ? `<div class="news-warn">High-impact news: ${esc(s.news.title)}${s.news.at ? " · " + dayTime(s.news.at) : ""}</div>` : "";
     const admin = IS_ADMIN && s.status === "ACTIVE" ? `<button class="pbtn admin-x" type="button" data-cancel="${s.id}">Cancel signal</button>` : "";
     const trade = s.status === "ACTIVE" && !s.hits ? `<button class="pbtn primary" type="button" data-trade="${s.id}">Trade this signal</button>` : "";
@@ -416,7 +422,7 @@
         ${s.setup ? `<span class="badge">${esc(SETUP[s.setup] || s.setup)}</span>` : ""}
         </div>
       ${lv}
-      ${plan}
+      ${plan}${better}
       ${nowTxt(s)}
       ${news}
       <div class="meta"><span>Expected hold ${dur(s.hold_minutes)}</span><span>${s.status === "ACTIVE" ? "Expires " + dayTime(s.expires_at) : ""}</span></div>
@@ -552,18 +558,12 @@
         if (X && X.signals) html += `<br>Added coins: this stream also covers ${X.coins} coins the model was never trained on. On the same unseen year `
           + `(${esc(X.period || "")}) they gave ${X.signals} signals, ${X.win_rate}% reached TP1, average ${X.avg_r > 0 ? "+" : ""}${X.avg_r}R after costs.`;
         if (mt.baseline && mt.baseline.signals) html += `<br>Before (rules R1) on the same data: win rate ${mt.baseline.win_rate}%, average ${mt.baseline.avg_net_r}R.`;
-        if (market === "crypto" && tf === "1h") html += "<br><b>This stream swings a lot.</b> Its signals come in groups (many coins in the same hour), so they often win or lose together: "
-          + "in the test year about half of the weeks lost money, even though the year as a whole made money. The 4-hour stream was much steadier "
-          + "(about 85% of its months in profit). For steadier results use the 4-hour signals or only the strongest ones on the Coins page.";
         html += "<br>A backtest is not a promise: live results are shown separately above.";
         $("sim").innerHTML = html;
       } else if ((STREAMS.find((x) => x.market === market && x.timeframe === tf) || {}).research) {
         const r = STREAMS.find((x) => x.market === market && x.timeframe === tf).research;
-        const x = r.rules_replay;
-        $("sim-title").textContent = "Experimental rules on past data";
-        $("sim").innerHTML = x ? `${esc(x.period || "")}: about ${x.signals_per_day >= 10 ? Math.round(x.signals_per_day) : x.signals_per_day} signals a day, `
-          + `${x.win_rate}% reached TP1, average ${x.avg_net_r > 0 ? "+" : ""}${x.avg_net_r}R per signal after costs. These rules have not passed our test, so treat them as an experiment.`
-          : "These rules have not passed our test on unseen data yet.";
+        $("sim-title").textContent = "What we tested";
+        $("sim").innerHTML = esc(r.reason || "Nothing has passed our test on unseen data for this stream yet.");
       } else if (sim && sim.signals) {
         $("sim-title").textContent = `Recent replay (last ${sim.window_days} days)`;
         $("sim").innerHTML = `The same rules replayed on real ${tf} candles of ${sim.symbols} symbols: ${sim.signals} signals, win rate ${sim.win_rate}% (${sim.wins} of ${sim.signals}), avg ${sim.avg_r}R, total ${sim.total_r}R after costs. A replay is a simulation, shown separately from the live record.`;
