@@ -3,7 +3,7 @@ Signals FM - main application (Flask)
 ---------------------------------------------------------------------------
 What decides a signal
   The verdict (LONG / SHORT / WAIT), the confidence, the stop-loss and the
-  three targets come from the signal engine (signal_engine.py, v3.1): a model
+  three targets come from the signal engine (signal_engine.py, v3.2): a model
   trained on 2020-2025 candles and tested on data it never saw (see
   signal_model.json for the test results, README.md for how to read them).
 
