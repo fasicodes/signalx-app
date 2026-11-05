@@ -75,7 +75,7 @@ GROUPS = [
          "The model learned from July 2020 to September 2025 and was then tested once on October 2025 to October 2026, "
          "data it had never seen. A walk-forward test on 2023 to 2025 (re-trained every 6 months) was positive every year."),
         ("fees", "Fees",
-         "What the exchange charges to open and close a trade. Every tested result already takes off 0.12% per trade for fees and slippage."),
+         "What the exchange charges to open and close a trade. Every tested result already takes off 0.30% per trade for fees and slippage."),
         ("leverage", "Leverage",
          "Borrowed money that makes a position bigger. At 10x, a 10% move against you wipes out the margin. Keep leverage low."),
     ]),
