@@ -73,17 +73,15 @@ FAQ = [
          "average score) becomes a <b>standard</b> signal. At most 5 new signals start on one candle (the highest scores), because "
          "many coins at once usually means one market move.</p>"),
         ("Which coins have signals?",
-         "<p>All 102 crypto coins in the list, against USDT. The 4-hour model was trained on 21 of them and then tested on 53 coins over a "
-         "year it had never seen, 32 of which it had never seen at all; the results held up on those as well. In October 2026 we "
-         "tested it the same way on 63 more coins and kept the 40 that OKX lists: on that year 77.8% of their signals reached the "
-         "first target (+0.21R on average after costs), so they get 4-hour signals too. The 1-hour model did not pass that test "
-         "(68.6% wins, about 0R), so it stays on the first 62 coins. The newest coins "
-         "(such as HYPE, TAO, ONDO and ASTER) have a short history, so check their results on the "
-         "<a href=\"/track-record\">Track record</a>. Forex pairs and gold have their own signal streams, which are marked untested "
-         "(see the forex question below).</p>"),
+         "<p>All 102 crypto coins in the list, against USDT. The 4-hour model was trained on 21 of them. In November 202"
+         "6 we re-tested it with real trading costs on the year after its training data (October 2025 to October 2026) o"
+         "n the 94 coins that have enough history; most of them were never used in training, and the results held up on "
+         'them. The newest coins have a short history, so check their results on the <a href="/track-record">Track recor'
+         "d</a>. Forex, gold and the 15-minute and 1-hour timeframes have no signals: nothing we tested for them made mo"
+         "ney after costs on data it had never seen.</p>"),
         ("How often do new signals come?",
-         "<p>In the 12-month test there were 805 signals across 93 coins, about 2 a day, a new signal on 380 of 381 days, and the "
-         "longest wait between two new signals was 1.3 days. A signal can only start right after a 4-hour candle closes.</p>"),
+         "<p>In the 12-month test there were 813 signals across 94 coins, about 2 a day, and the longest wait between tw"
+         "o new signals was 1.3 days. A signal can only start right after a 4-hour candle closes.</p>"),
         ("Why does a coin say Wait?",
          "<p>Each coin has at most one signal at a time, and it only gets one when its setup is good enough, so a single coin often "
          "says Wait. Across all the coins there is almost always at least one signal running. The <a href=\"/signals\">Signals "
@@ -92,9 +90,10 @@ FAQ = [
          "<p>The entry is the close of the 4-hour candle that gave the signal. The stop loss is 2 times the coin's average 4-hour "
          "move (ATR) away from the entry; that distance is 1R. There is <b>one target at 1R</b>, as far from the entry as the stop. "
          "Close the whole position there; the stop does not move. A win (+1R) and a loss (&minus;1R) are the same size, so about "
-         "4 in 10 signals lose and the stream still made money in testing because about 6 in 10 won. (Until October 2026 there "
-         "were three targets at 0.5R, 1R and 2R; that plan won more often but earned less per signal: +0.17R against +0.24R on "
-         "the same test.)</p>"),
+         "4 in 10 signals lose and the stream still made money in testing because about 6 in 10 won. Each signal also shows an optional <b>patient entry</b> for the 15-minute chart: a "
+         "limit order a quarter of the ATR better than the entry, valid for 4 hours. In the test it earned more per filled trade "
+         "(+0.20R against +0.15R) but about 4 in 10 signals never came back to it, so the signal itself keeps the market "
+         "entry.</p>"),
         ("How long does a signal last?",
          "<p>Until the stop or the target is hit, or for at most 54 four-hour candles (9 days). After 9 days the trade closes at "
          "that candle's close.</p>"),
@@ -106,37 +105,32 @@ FAQ = [
          "card shows how far the price has moved and how close it is to the next target or the stop. If the price is already near "
          "the target, little reward is left for the same risk.</p>"),
         ("Are there signals for forex or gold?",
-         "<p>Yes, but they are marked <b>experimental</b>. We built and tested a separate model for forex pairs and gold, and after "
-         "spreads it did not make money: the best version reached 70.8% wins (TP1 or better) on data it had never seen, but the "
-         "average result after costs was slightly below zero (-0.072 R per trade). The forex, gold and 15-minute signals therefore "
-         "come from simple rules that have not passed our test, and every one of them carries an \"Experimental\" label on the "
-         "Signals page and in alerts. When we replayed those rules on history (forex 2017 to 2020, crypto 15m 2023 to 2025) they lost "
-         "money on average: about -0.08 to -0.22 R per signal after costs, in every year. Their real results are tracked like every "
-         "other signal, and live auto-trading accounts do not copy them (demo accounts do). Treat them with extra care.</p>"),
+         "<p>No, not any more. In November 2026 we tested the forex and gold models again on new data (2023 to 2026), mo"
+         "re than 40 strategies from public GitHub repositories and the signal logic of the most popular open-source tra"
+         "ding bots. None of them made money after spreads on data it had never seen, so the forex, gold, 15-minute and "
+         "1-hour signals were removed. The forex and gold charts and market briefs are still there. A stream comes back "
+         "only when a model for it passes the same test.</p>"),
     ]),
     ("results", "Results and risk", [
         ("How accurate are the signals?",
-         "<p>The model was trained on July 2020 to September 2025 and then tested once on October 2025 to October 2026, data it "
-         "had never seen, on 93 coins (most of them never used in training). In that test, with today's one-target plan: <b>805 signals, 59.6% "
-         "reached the target, +0.236R average per signal after fees</b>, profit factor 1.66, a worst drawdown of &minus;17.5R, "
-         "and 1 of the 12 full months lost money (&minus;0.2R). Coins the model trained on (+0.25R) and new ones (+0.23R) did about "
-         "the same. A walk-forward test of the same kind of model on January 2023 to October 2025 (re-trained every 6 months, "
-         "tested on the next 6) gave 1,772 signals, 56.1% won, +0.135R average, and every year was above zero (2023 only just, "
-         "+0.05R). Past results do not guarantee future results.</p>"
-         "<p>Read the win rate with care: the target is as far as the stop, so a random entry would reach it about half the "
-         "time. The model adds roughly 10 points on top of that, and the average result after fees (+0.24R per signal) is the "
-         "better measure of what it earns.</p>"
-         "<p>Strong and standard signals are not equal. In the 12-month test the strong ones (467 signals) won 62.3% with "
-         "+0.322R on average; the standard ones (338 signals, given when no coin has had a signal for 24 hours) won 55.9% with "
-         "+0.118R. Treat a standard signal as lower conviction: use a smaller size or skip it.</p>"),
+         "<p>The model was trained on July 2020 to September 2025. In November 2026 it was re-tested once on October 202"
+         "5 to October 2026, data it had never seen, on 94 coins, with real trading costs (0.30% per round trip): <b>813"
+         " signals, 59.4% reached the target, +0.196R average per signal after costs</b>, profit factor 1.52, a worst dr"
+         "awdown of &minus;19.2R. Every quarter of that year made money; the weakest (April to June 2026) made +0.09R pe"
+         "r signal. Past results do not guarantee future results.</p><p>Read the win rate with care: the target is as fa"
+         "r as the stop, so a random entry would reach it about half the time, and costs come off every trade. The avera"
+         "ge result after costs is the better measure of what it earns.</p><p>Strong and standard signals are not equal."
+         " In the test the strong ones (469 signals) won 62.5% with +0.294R on average; the standard ones (344 signals, "
+         "given when no coin has had a signal for 24 hours) won 55.2% with +0.063R. Treat a standard signal as lower con"
+         "viction: use a smaller size or skip it.</p>"),
         ("If about 4 in 10 signals lose, how can it make money?",
-         "<p>Because a win and a loss are about the same size. In the test the average win was +0.94R and the average loss "
-         "&minus;0.99R (after fees), and about 6 in 10 signals won, so 10 signals made about +2.4R together. Losses often come "
-         "in a row, so keep the risk per signal small.</p>"),
+         "<p>Because a win and a loss are about the same size (the target is as far as the stop), and about 6 in 10 sign"
+         "als won in the test, so 10 signals made about +2R together after costs. Losses often come in a row, so keep th"
+         "e risk per signal small.</p>"),
         ("How much should I risk on each signal?",
-         "<p>Keep it small and the same every time; that amount is 1R. Losing streaks happen: the worst drop was 17.5R in the "
-         "12-month test and about 80R in the longer walk-forward test (2023 was a weak year). At 1% per signal, 80R would be most of "
-         "an account, so keep it well below that. There are often four or more signals open at once and they "
+         "<p>Keep it small and the same every time; that amount is 1R. Losing streaks happen: the worst drop was 19.2R in the "
+         "12-month test, and a longer bad stretch can be deeper. At 1% per signal, a 20R drop is a fifth of the account, so keep "
+         "the risk well below that. There are often four or more signals open at once and they "
          "usually move together with Bitcoin, so 0.25% to 0.5% per signal (and a limit on open trades) is a sensible start. Only trade money you can afford to lose. The <a href=\"/tools\">position size "
          "calculator</a> works out the size for you.</p>"),
         ("Where can I see the live results?",
