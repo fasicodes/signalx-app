@@ -1137,7 +1137,7 @@ html.has-3d .lp .sec-head p, html.has-3d .lp .lead { text-shadow: 0 1px 12px var
 }
 
 /* ---------- 12. futuristic AI layer ----------
-   Applied on every page that loads ds.css: glass surfaces, neon edges, an aurora behind the page and mono "system" labels.
+   Applied on every page that loads ds.css: glass surfaces, neon edges, an aurora behind the page and mono "system" labels (no scanline overlay).
    Glow and glass only in the dark theme; the light theme keeps flat surfaces so text stays crisp. */
 ::selection { background: color-mix(in srgb, var(--ds-brand) 35%, transparent); color: var(--ds-text); }
 .fx-eyebrow { display: inline-flex; align-items: center; gap: 10px; margin: 0 0 14px; font: 500 12px/1 "IBM Plex Mono", ui-monospace, monospace;
@@ -1157,8 +1157,6 @@ html[data-theme="dark"] body::before { content: ""; position: fixed; inset: -20v
               radial-gradient(36vmax 28vmax at 85% 30%, rgba(94, 234, 212, .06), transparent 60%),
               radial-gradient(44vmax 32vmax at 60% 95%, rgba(167, 139, 250, .07), transparent 60%);
   animation: fxAurora 24s ease-in-out infinite alternate; }
-html[data-theme="dark"] body::after { content: ""; position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; opacity: .035;
-  background: repeating-linear-gradient(0deg, #fff 0 1px, transparent 1px 3px); }
 @keyframes fxAurora { 0% { transform: translate3d(0, 0, 0) rotate(0deg); } 100% { transform: translate3d(3vmax, -2vmax, 0) rotate(6deg); } }
 
 html[data-theme="dark"] :is(.d-card, .res-card, .coins-demo, .spec, .feat-grid, .icard, .scard, .plan, .ex-card, .mstrip) {
