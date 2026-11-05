@@ -14,7 +14,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
 <style>
   /* Landing page. Colours, type, radii and motion come from ds.css; this file only lays the page out. */
-  .lp main { overflow: hidden; }
+  .lp main { overflow: hidden; overflow: clip; }
   .lp .wrap { max-width: 1180px; }
   .lp h1, .lp h2, .lp h3 { font-family: var(--ds-font-display); }
   .lp .pos { color: var(--ds-up); } .lp .neg { color: var(--ds-down); }
@@ -168,6 +168,37 @@
   html[data-theme="dark"] .lp .cta .pbtn.primary { background: var(--ds-brand); color: var(--ds-on-brand); border-color: var(--ds-brand); }
   .lp .pfoot { margin-top: 0; }
 
+
+  /* story: scroll-driven chapters with a sticky animated stage (story.js) */
+  .lp .story { position: relative; padding: 40px 0 20px;
+    background: linear-gradient(180deg, transparent, rgba(2, 6, 5, .88) 8%, rgba(2, 6, 5, .88) 92%, transparent); }
+  html[data-theme="light"] .lp .story { background: none; }
+  .lp .story-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 56px; }
+  .lp .story-stage { position: sticky; top: 12vh; align-self: start; height: 76vh; max-height: 640px; border-radius: 28px; overflow: hidden;
+    background: radial-gradient(120% 90% at 50% 40%, rgba(0, 255, 136, .07), transparent 60%), #030a07;
+    border: 1px solid color-mix(in srgb, var(--ds-brand) 20%, var(--ds-line)); box-shadow: 0 40px 120px -50px rgba(0, 255, 136, .35); }
+  .lp .story-stage canvas { width: 100%; height: 100%; display: block; }
+  .lp .story-hud { position: absolute; left: 18px; top: 16px; right: 18px; display: flex; justify-content: space-between; gap: 12px;
+    font: 500 11.5px "IBM Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: #7fe9b8; }
+  .lp .story-hud span:last-child { color: #e9fff5; }
+  .lp .story-bar { position: absolute; left: 18px; right: 18px; bottom: 16px; height: 2px; background: rgba(255, 255, 255, .08); border-radius: 2px; }
+  .lp .story-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #00ff88, #5eead4, #a78bfa); box-shadow: 0 0 10px #00ff88; border-radius: 2px; }
+  .lp .chap { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; opacity: .25; transform: translateY(18px);
+    transition: opacity .6s var(--ds-ease, ease), transform .6s var(--ds-ease, ease); }
+  .lp .chap.on { opacity: 1; transform: none; }
+  .lp .chap h2 { font-size: clamp(30px, 3.8vw, 48px); }
+  .lp .chap p:not(.fx-eyebrow) { color: var(--ds-text-dim); font-size: 18px; line-height: 1.65; max-width: 46ch; margin: 0; }
+  .lp .chap p b { color: var(--ds-text); }
+  .lp .hero .fx-eyebrow { display: flex; }
+  .fx-progress { position: fixed; top: 0; left: 0; height: 2px; width: 100%; transform-origin: 0 50%; transform: scaleX(0); z-index: 1000;
+    background: linear-gradient(90deg, #00ff88, #5eead4, #a78bfa); box-shadow: 0 0 12px rgba(0, 255, 136, .7); pointer-events: none; }
+  @media (max-width: 980px) {
+    .lp .story-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .lp .story-stage { top: 60px; height: 40vh; z-index: 3; border-radius: 22px; }
+    .lp .chap { min-height: 64vh; justify-content: center; padding: 3vh 0; position: relative; z-index: 1; }
+    .lp .chap p:not(.fx-eyebrow) { font-size: 16.5px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .lp .chap { opacity: 1; transform: none; transition: none; } }
   @media (prefers-reduced-motion: reduce) { .lp .live-badge .dot { animation: none; } }
   @media (max-width: 980px) {
     .lp .hero-grid, .lp .split, .lp .faq-wrap, .lp .term-grid { grid-template-columns: minmax(0, 1fr); gap: 44px; }
@@ -215,6 +246,7 @@
 <script src="{{ url_for('static', filename='ds.js') }}" defer></script>
 <script src="{{ url_for('static', filename='scene3d.js') }}" defer></script>
 <script src="{{ url_for('static', filename='market-strip.js') }}" defer></script>
+<script src="{{ url_for('static', filename='story.js') }}?v=20261105a" defer></script>
 </head>
 <body class="lp">
 {% set active = 'home' %}
@@ -240,8 +272,9 @@
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
+        <p class="fx-eyebrow">AI trading agents &middot; online</p>
         <p class="badge"><span class="dot"></span>Free during the beta &middot; no card needed</p>
-        <h1>Know what to buy, where to stop and when to take profit.</h1>
+        <h1>Know what to buy, where to stop and <span class="fx-grad">when to take profit.</span></h1>
         <p class="lead">Our tested models check {{ CHECK }}. When a coin has a good trade, you get a simple
           plan in plain words. When none does, we tell you to wait.</p>
         <div class="ctas">
@@ -294,6 +327,49 @@
       {% else %}
         <span class="live-n">Our models check {{ CHECK }}. Log in to see the signals as they start.</span>
       {% endif %}
+    </div>
+  </section>
+
+  <section class="story" id="story" aria-label="How Signals FM finds a trade" data-win="{{ WIN or '' }}">
+    <div class="wrap story-grid">
+      <div class="story-stage" aria-hidden="true">
+        <canvas id="story-canvas"></canvas>
+        <div class="story-hud"><span id="story-ch">CH 01 / 05</span><span id="story-name">The noise</span></div>
+        <div class="story-bar"><i id="story-prog"></i></div>
+      </div>
+      <div class="story-text">
+        <article class="chap" data-ch="0">
+          <p class="fx-eyebrow">Chapter 01 &middot; The noise</p>
+          <h2>Every hour, the market shouts.</h2>
+          <p>Hundreds of coins move at once. Thousands of new candles, fake breakouts and sudden wicks. Most of it means nothing,
+            and reading it by eye is how beginners lose money.</p>
+        </article>
+        <article class="chap" data-ch="1">
+          <p class="fx-eyebrow">Chapter 02 &middot; The agents wake up</p>
+          <h2>Five AI agents split the work.</h2>
+          <p><b>Scout</b> collects live candles. <b>Atlas</b> reads the trend. <b>Pulse</b> measures momentum.
+            <b>Guard</b> checks risk and volatility. <b>Core</b> brings it together with the signal engine.</p>
+        </article>
+        <article class="chap" data-ch="2">
+          <p class="fx-eyebrow">Chapter 03 &middot; The pattern</p>
+          <h2>Out of the noise, a shape appears.</h2>
+          <p>Our models check {{ CHECK }}. They were trained on five years of history and look only for setups
+            that worked on data they had never seen.</p>
+        </article>
+        <article class="chap" data-ch="3">
+          <p class="fx-eyebrow">Chapter 04 &middot; The signal</p>
+          <h2>One clear plan, in plain words.</h2>
+          <p>When enough agrees, you get a buy or sell with an entry, a stop-loss and a target. When nothing agrees,
+            the answer is <b>wait</b>, and that is a real answer too.</p>
+        </article>
+        <article class="chap" data-ch="4">
+          <p class="fx-eyebrow">Chapter 05 &middot; The truth</p>
+          <h2>It loses too. We show every one.</h2>
+          <p>{% if WIN %}In testing, {{ WIN }}% of signals reached the target and the rest hit the stop.{% else %}Some signals hit the stop.{% endif %}
+            Fees are included in every result, and every signal stays on the track record, wins and losses.</p>
+          <div class="ctas" style="margin:22px 0 0"><a class="pbtn primary xl" href="/login">Meet the agents</a><a class="pbtn xl" href="/track-record">See the track record</a></div>
+        </article>
+      </div>
     </div>
   </section>
 
