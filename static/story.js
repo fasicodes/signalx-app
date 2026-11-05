@@ -18,9 +18,8 @@
   const WIN = parseFloat(sec.dataset.win) || 60;
 
   // top-of-page reading progress
-  const bar = document.createElement("div");
-  bar.className = "fx-progress"; bar.setAttribute("aria-hidden", "true");
-  document.body.appendChild(bar);
+  let bar = document.querySelector(".fx-progress");          // fx.js usually made it already
+  if (!bar) { bar = document.createElement("div"); bar.className = "fx-progress"; bar.setAttribute("aria-hidden", "true"); document.body.appendChild(bar); }
 
   const G = [0, 255, 136], R = [255, 70, 90];
   const AG = [["Scout", 160], ["Atlas", 200], ["Pulse", 275], ["Guard", 35], ["Core", 330]];
