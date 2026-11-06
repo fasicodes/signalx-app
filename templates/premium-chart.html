@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#050505">
+<title>Premium chart Access | Signals FM</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
+<link rel="stylesheet" href="{{ url_for('static', filename='market.css') }}?v=20261010a">
+<link rel="stylesheet" href="{{ url_for('static', filename='premium-access.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='premium-chart.css') }}">
+<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
+{% include '_analytics.html' ignore missing %}
+<link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
+<script src="{{ url_for('static', filename='ds.js') }}" defer></script>
+<script src="{{ url_for('static', filename='scene3d.js') }}" defer></script>
+</head>
+<body class="app an-shell mk-page pc-page">
+{% set active = 'premium' %}
+{% include '_app_nav.html' %}
+
+<main class="pc-wrap" id="main">
+  <header class="pc-top">
+    <div class="pc-title">
+      <svg class="pa-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/><path d="M5 19h14"/></svg>
+      <h1>Premium chart Access</h1>
+      <span class="pa-free">Free now</span>
+    </div>
+    <p class="pc-lead">Every premium chart feature, free for members right now: up to 16 live charts, custom, second and tick intervals, range and price-based charts, bar replay, spread charts, data export and a bond screener.</p>
+    <div class="mk-seg pc-views" role="tablist" aria-label="Workspace">
+      <button type="button" role="tab" id="tab-charts" aria-selected="true" aria-pressed="true" aria-controls="pc-charts">Charts</button>
+      <button type="button" role="tab" id="tab-bonds" aria-selected="false" aria-pressed="false" aria-controls="pc-bonds">Bond screener</button>
+    </div>
+  </header>
+
+  <section class="pc-charts" id="pc-charts" role="tabpanel" aria-labelledby="tab-charts">
+    <div class="pc-bar" role="toolbar" aria-label="Workspace controls">
+      <div class="mk-pop-wrap">
+        <button class="mk-btn" id="layout-btn" type="button" aria-expanded="false" aria-controls="layout-pop" title="Charts per tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+          <span>Layout</span><span class="mk-count" id="layout-count">1</span>
+        </button>
+        <div class="mk-pop pc-layout-pop" id="layout-pop" hidden>
+          <div class="mk-pop-head"><b>Charts per tab</b><button type="button" class="mk-x" data-close aria-label="Close">&times;</button></div>
+          <div class="pc-layouts" id="layouts"></div>
+          <p class="mk-pop-foot">Up to 16 charts in one tab, each with its own coin, interval and chart type. All of them stay live.</p>
+        </div>
+      </div>
+      <div class="mk-pop-wrap">
+        <button class="mk-btn" id="sync-btn" type="button" aria-expanded="false" aria-controls="sync-pop" title="Link the charts">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg>
+          <span>Sync</span>
+        </button>
+        <div class="mk-pop mk-menu pc-sync-pop" id="sync-pop" hidden>
+          <label class="pc-check"><input type="checkbox" data-sync="symbol"> <span>Same coin on every chart</span></label>
+          <label class="pc-check"><input type="checkbox" data-sync="interval"> <span>Same interval on every chart</span></label>
+          <label class="pc-check"><input type="checkbox" data-sync="crosshair"> <span>Crosshair on every chart</span></label>
+          <label class="pc-check"><input type="checkbox" data-sync="time"> <span>Scroll and zoom together</span></label>
+        </div>
+      </div>
+      <span class="mk-sep" aria-hidden="true"></span>
+      <button class="mk-btn" id="replay-btn" type="button" aria-pressed="false" title="Bar replay">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 108-8"/><path d="M4 4v5h5"/><path d="M10.5 9.5v5l4-2.5z"/></svg>
+        <span>Bar replay</span>
+      </button>
+      <button class="mk-btn" id="export-btn" type="button" title="Download chart data (CSV)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        <span>Export</span>
+      </button>
+      <span class="mk-sep" aria-hidden="true"></span>
+      {% set pa_id = "pa-ws" %}
+      {% include '_premium_access.html' %}
+      <button type="button" class="pc-live" id="pc-live" aria-controls="live-pop" aria-expanded="false" title="Live connections">
+        <span class="mk-live" id="pc-live-dot"></span><span id="pc-live-text">Connecting…</span>
+      </button>
+      <div class="mk-pop pc-live-pop" id="live-pop" hidden>
+        <div class="mk-pop-head"><b>Live connections</b><button type="button" class="mk-x" data-close aria-label="Close">&times;</button></div>
+        <p class="mk-note" id="live-detail"></p>
+        <p class="mk-pop-foot">Every live chart in every open tab of this workspace shares one price connection, up to 200 charts at the same time. Second and tick charts also follow the exchange's trades.</p>
+      </div>
+    </div>
+
+    <div class="pc-replay" id="pc-replay" hidden role="group" aria-label="Bar replay">
+      <span class="pc-replay-tag">Replay</span>
+      <span class="pc-replay-info" id="replay-info">Click a candle on the chart where the replay should start.</span>
+      <div class="pc-replay-ctl">
+        <button class="mk-btn mk-icon-only" type="button" id="rp-back" title="One bar back (←)" aria-label="One bar back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="mk-btn mk-icon-only primary" type="button" id="rp-play" title="Play / pause (space)" aria-label="Play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="mk-btn mk-icon-only" type="button" id="rp-step" title="One bar forward (→)" aria-label="One bar forward"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        <div class="mk-seg mk-seg-sm" id="rp-speed" role="group" aria-label="Replay speed">
+          <button type="button" data-speed="0.5">0.5x</button><button type="button" data-speed="1" aria-pressed="true">1x</button>
+          <button type="button" data-speed="3">3x</button><button type="button" data-speed="10">10x</button>
+        </div>
+        <button class="mk-btn" type="button" id="rp-pick" title="Choose another start">Start point</button>
+        <label class="pc-check pc-check-inline"><input type="checkbox" id="rp-all"> <span>All charts</span></label>
+        <button class="mk-btn" type="button" id="rp-exit">Back to live</button>
+      </div>
+    </div>
+
+    <div class="pc-grid" id="pc-grid" data-layout="1" aria-label="Charts"></div>
+  </section>
+
+  <section class="pc-bonds" id="pc-bonds" role="tabpanel" aria-labelledby="tab-bonds" hidden>
+    <div class="mk-card pc-bond-card">
+      <div class="pc-bond-head">
+        <h2 class="mk-h2">Bond screener</h2>
+        <span class="pa-free">Free now</span>
+        <p class="mk-note" id="bond-asof"></p>
+      </div>
+      <div class="pc-bond-filters">
+        <div class="pc-chips" id="bond-countries" role="group" aria-label="Countries"></div>
+        <div class="mk-seg mk-seg-sm" id="bond-mat" role="group" aria-label="Maturity">
+          <button type="button" data-mat="" aria-pressed="true">All</button><button type="button" data-mat="short">Up to 2Y</button>
+          <button type="button" data-mat="medium">2Y–10Y</button><button type="button" data-mat="long">Over 10Y</button>
+        </div>
+        <input type="search" class="mk-input pc-bond-q" id="bond-q" placeholder="Search bonds" aria-label="Search bonds" autocomplete="off">
+      </div>
+      <div class="pc-table-wrap">
+        <table class="pc-bond-table" id="bond-table">
+          <thead><tr>
+            <th scope="col"><button type="button" data-sort="name">Bond</button></th>
+            <th scope="col"><button type="button" data-sort="years">Maturity</button></th>
+            <th scope="col" class="num"><button type="button" data-sort="yield">Yield</button></th>
+            <th scope="col" class="num"><button type="button" data-sort="chg_1d">1D</button></th>
+            <th scope="col" class="num"><button type="button" data-sort="chg_1w">1W</button></th>
+            <th scope="col" class="num"><button type="button" data-sort="chg_1m">1M</button></th>
+            <th scope="col" class="num"><button type="button" data-sort="chg_1y">1Y</button></th>
+            <th scope="col">52-week range</th>
+            <th scope="col">3 months</th>
+          </tr></thead>
+          <tbody id="bond-rows"><tr><td colspan="9" class="pc-empty">Loading bond yields…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="mk-note" id="bond-note"></p>
+      <div class="pc-sources" id="bond-sources"></div>
+    </div>
+    <div class="pc-bond-side">
+      <div class="mk-card">
+        <div class="mk-head"><h2 class="mk-h2">Yield curves</h2></div>
+        <div class="pc-curve" id="bond-curve" aria-label="Yield curves"></div>
+      </div>
+      <div class="mk-card">
+        <div class="mk-head"><h2 class="mk-h2" id="bond-hist-title">History</h2></div>
+        <div class="pc-bond-hist" id="bond-hist"><p class="mk-empty">Choose a bond in the table.</p></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="mk-pop pc-float pc-iv-pop" id="iv-pop" hidden role="dialog" aria-label="Interval">
+  <div class="mk-pop-head"><b>Interval</b><button type="button" class="mk-x" data-close aria-label="Close">&times;</button></div>
+  <div id="iv-groups"></div>
+  <form class="pc-custom" id="iv-form" autocomplete="off">
+    <b>Custom interval</b>
+    <div class="pc-custom-row">
+      <input class="mk-input tnum" id="iv-n" type="number" min="1" max="10000" step="1" value="7" aria-label="Number">
+      <select class="mk-input" id="iv-unit" aria-label="Unit">
+        <option value="T">ticks</option><option value="s">seconds</option><option value="m" selected>minutes</option>
+        <option value="h">hours</option><option value="D">days</option><option value="W">weeks</option><option value="M">months</option>
+      </select>
+      <button class="mk-btn primary" type="submit">Apply</button>
+    </div>
+    <p class="mk-note" id="iv-hint">Seconds 1–300, minutes 1–1440, hours 1–168, days 1–365, weeks 1–52, months 1, 2, 3, 4, 6 or 12, ticks 1–10,000.</p>
+  </form>
+</div>
+
+<div class="mk-pop pc-float pc-type-pop" id="type-pop" hidden role="dialog" aria-label="Chart type">
+  <div class="mk-pop-head"><b>Chart type</b><button type="button" class="mk-x" data-close aria-label="Close">&times;</button></div>
+  <div id="type-list"></div>
+  <div class="pc-type-set" id="type-set"></div>
+</div>
+
+<div class="mk-modal" id="spread-dlg" hidden>
+  <form class="mk-modal-box pc-spread-box" id="spread-form" role="dialog" aria-modal="true" aria-labelledby="spread-title">
+    <h2 class="mk-h2" id="spread-title">Spread chart</h2>
+    <p class="mk-note">Chart one market against another. Each bar is worked out from the two markets' bars of the same time.</p>
+    <div class="pc-spread-row">
+      <button type="button" class="mk-btn pc-spread-sym" id="spread-a">BTC/USDT</button>
+      <select class="mk-input" id="spread-op" aria-label="Operation">
+        <option value="/">÷ divided by</option><option value="-">− minus</option><option value="+">+ plus</option><option value="*">× times</option>
+      </select>
+      <button type="button" class="mk-btn pc-spread-sym" id="spread-b">ETH/USDT</button>
+    </div>
+    <div class="mk-modal-btns">
+      <button type="button" class="mk-btn danger" id="spread-off">Remove spread</button>
+      <button type="button" class="mk-btn" id="spread-cancel">Cancel</button>
+      <button type="submit" class="mk-btn primary">Show spread</button>
+    </div>
+  </form>
+</div>
+
+<div class="mk-modal" id="export-dlg" hidden>
+  <form class="mk-modal-box" id="export-form" role="dialog" aria-modal="true" aria-labelledby="export-title">
+    <h2 class="mk-h2" id="export-title">Chart data export</h2>
+    <p class="mk-note" id="export-note">Download the bars of a chart as a CSV file (opens in Excel, Google Sheets, Python…). Times are in UTC.</p>
+    <label class="pc-check"><input type="radio" name="exp" value="active" checked> <span id="export-active-label">Active chart</span></label>
+    <label class="pc-check"><input type="radio" name="exp" value="all"> <span>All charts in this tab (one file each)</span></label>
+    <label class="pc-check"><input type="checkbox" id="export-visible"> <span>Only the bars I can see</span></label>
+    <div class="mk-modal-btns">
+      <button type="button" class="mk-btn" id="export-cancel">Cancel</button>
+      <button type="submit" class="mk-btn primary">Download CSV</button>
+    </div>
+  </form>
+</div>
+
+<script src="{{ url_for('static', filename='market-common.js') }}?v=20261010a" defer></script>
+<script src="{{ url_for('static', filename='premium-chart-core.js') }}" defer></script>
+<script src="{{ url_for('static', filename='premium-access.js') }}" defer></script>
+<script src="{{ url_for('static', filename='premium-chart.js') }}" defer></script>
+</body>
+</html>

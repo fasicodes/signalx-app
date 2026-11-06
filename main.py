@@ -2870,6 +2870,18 @@ signal_hub.init_hub(app, get_candles=_stream_candles, notify=__import__("signalb
                     crypto_prices=_ticker_prices, forex_price=_hub_forex_price, is_admin=lambda: _is_admin(),
                     blocked=news.blackout_reason, news_for=news.upcoming_for_symbol)
 
+# Premium chart workspace - premium_chart.py (/premium-chart), opened by the "Premium chart Access" button (free
+# for every member right now): 16 charts per tab, custom / second / tick intervals, range and price-based charts,
+# bar replay, spread charts, CSV export and the bond screener (bonds.py). The workspace polls a few light
+# endpoints (one shared price feed for all its charts), so its per-member limit is higher than the other pages'.
+import premium_chart
+from market_tools import fetch_tickers as _all_tickers   # one exchange call for every coin's price
+app.register_blueprint(premium_chart.premium_bp)
+limiter.limit("600 per minute", key_func=_rate_key)(premium_chart.premium_bp)
+premium_chart.init_premium(app, exchange=exchange, get_candles=get_candles, clean_coin=_clean_coin,
+                           is_forex=_is_forex_pair, tickers=_all_tickers,
+                           forex_price=lambda s: _live_price_cached(s, ttl=20))
+
 # ============================================================
 # PRO INSIGHTS - insights.py (/pro-insights): the ten things a professional checks - funding / open interest, spread and
 # slippage, signals that move together, position size, confidence range, results by market condition and session,
