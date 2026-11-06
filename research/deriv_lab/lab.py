@@ -13,6 +13,7 @@ W = os.path.join(HERE, "work")
 COST = 0.003
 TF = {"15m": ("15min", 32), "1h": ("1h", 36), "4h": ("4h", 30)}
 SL_ATR, TARGET_R, MAX_PER_BAR = 2.0, 2.0, 3
+MIN_STOP_PCT = 0.3        # Amendment 1: a stop closer than 0.3% of the price is not tradable (cost alone > 1R)
 VAL_START, HOLD_START = pd.Timestamp("2022-01-01"), pd.Timestamp("2025-01-01")
 FOLDS = pd.date_range("2022-01-01", "2025-01-01", freq="6MS")
 PARAMS = dict(n_estimators=300, learning_rate=0.03, num_leaves=31, min_child_samples=200, subsample=0.8,
@@ -136,6 +137,10 @@ def build(tf):
             r, e = label(*arr, atr.values, mb, side, COST, fc)
             x[f"y{nm}"], x[f"ex{nm}"] = r, e
         x["stop_pct"] = SL_ATR * atr / c.shift(-1).reindex(b.index) * 100
+        # Amendment 1 (PROTOCOL.md): no trade on a bar without volume or with a stop under MIN_STOP_PCT of the
+        # price - flat candles (ICP 2022: ATR -> 1e-64) gave -1e62 R "trades"
+        untradable = (b["volume"] <= 0) | ~(x["stop_pct"] >= MIN_STOP_PCT)
+        x.loc[untradable, ["yL", "yS"]] = np.nan
         x["coin"] = coin
         x["i"] = np.arange(len(x))
         x["t_exitL"] = pd.Series(b.index).reindex(x["exL"].clip(lower=0)).values

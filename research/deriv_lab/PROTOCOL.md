@@ -41,6 +41,12 @@ signals. If none qualifies, M is not tested on the holdout for that timeframe. H
 they meet the same validation bar. Among qualifying candidates for a timeframe, the one with the highest
 validation avg R is the ONE sent to the holdout.
 
+## Amendment 1 (2026-11-06, after the first validation run, BEFORE any holdout number was computed)
+A data bug, not a rule change: ICP's futures candles are flat for weeks in 2022 (no trading), the ATR decays to
+~1e-64 and a "trade" there loses ~-1e62 R (1h M top10% showed -346R per signal). Fix: no trade on a bar without
+volume or whose 2-ATR stop is under 0.3% of the price (the cost alone would be more than 1R). The selection rules
+above are unchanged; validation is re-run for every timeframe with the fix and the holdout still runs once.
+
 ## Going live
 The holdout result must pass `streams.passed_test()` (>= 50 signals, >= +0.05R per signal after costs, profit
 factor >= 1.1, drawdown < half of the total). Fail = the stream stays off, and that is written down.
