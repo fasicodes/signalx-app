@@ -88,9 +88,6 @@ body.an-lock { overflow: hidden; }
 .an-item svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .an-side .an-item:hover, .an-side .an-item[aria-current="page"] { background: var(--an-surface-2); color: var(--an-text); }
 .an-item[aria-current="page"] svg { stroke: var(--an-accent); }
-.an-free { margin-left: auto; padding: 2px 5px; border-radius: 6px; background: var(--an-accent, #22c55e); color: #04130a; font: 800 8.5px/1.2 var(--an-body, sans-serif);
-  letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap; flex: none; }
-.an-side .an-item:has(.an-free) span { white-space: nowrap; }
 .an-side-email { margin: 4px 10px; color: var(--an-faint); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .an-side-logout { margin: 8px 10px 0; padding: 9px 0; background: none; border: none; color: var(--an-short); font: 500 14px var(--an-body); cursor: pointer; }
 
