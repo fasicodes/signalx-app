@@ -1,0 +1,62 @@
+{
+ "4h": {
+  "chosen": "H2",
+  "validation": {
+   "signals": 1822,
+   "avg_net_r": 0.123,
+   "total_net_r": 224.1,
+   "profit_factor": 1.22,
+   "max_drawdown_r": -62.1,
+   "win_rate": 42.8,
+   "avg_stop_pct": 5.33,
+   "years": {
+    "2022": {
+     "signals": 584,
+     "avg_net_r": 0.135
+    },
+    "2023": {
+     "signals": 722,
+     "avg_net_r": 0.129
+    },
+    "2024": {
+     "signals": 516,
+     "avg_net_r": 0.101
+    }
+   },
+   "cost_round_trip": 0.003
+  },
+  "holdout": {
+   "signals": 1152,
+   "avg_net_r": 0.002,
+   "total_net_r": 2.6,
+   "profit_factor": 1.0,
+   "max_drawdown_r": -57.4,
+   "win_rate": 39.2,
+   "avg_stop_pct": 5.38,
+   "years": {
+    "2025": {
+     "signals": 529,
+     "avg_net_r": -0.002
+    },
+    "2026": {
+     "signals": 623,
+     "avg_net_r": 0.006
+    }
+   },
+   "cost_round_trip": 0.003,
+   "period": "2025-01-01 to 2026-10-31",
+   "pass": false
+  },
+  "pass": false
+ },
+ "1h": {
+  "chosen": null,
+  "pass": false,
+  "reason": "no candidate met the validation bar"
+ },
+ "15m": {
+  "chosen": null,
+  "pass": false,
+  "reason": "no candidate met the validation bar"
+ }
+}

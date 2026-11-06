@@ -1,0 +1,47 @@
+{# "Premium chart Access" button and its menu: the 12 premium chart features, all free for members right now
+   (the FREE NOW label). Include it where a chart is shown, with static/premium-access.css and premium-access.js.
+   Every item opens the Premium chart workspace (/premium-chart, premium_chart.py) with that feature switched on,
+   for the chart's current coin and interval. On the workspace itself the items switch the feature on in place.
+   Before including, set:
+     pa_id        a unique id for the menu on the page
+     pa_coin_from (optional) CSS selector of the element whose text is the chart's coin, e.g. "#coin-sym"
+     pa_tf_from   (optional) CSS selector of the pressed timeframe button (its data-tf is the interval)
+     pa_compact   (optional) true: icon + FREE NOW only on narrow cards #}
+{% set pa_features = [
+  ("multi", "16 charts per tab", "Up to 16 live charts side by side, each with its own coin, interval and style"),
+  ("live", "200 parallel chart connections", "Up to 200 live charts across your open tabs, all fed by one shared connection"),
+  ("custom", "Custom intervals", "Any number of minutes, hours, days, weeks or months: 7m, 45m, 3h, 2D, 2W, 6M"),
+  ("range", "Custom range bars", "Each bar covers the same price range, however long it takes"),
+  ("replay", "Bar replay", "Go back to any moment and play the market forward bar by bar"),
+  ("seconds", "Predefined second intervals", "Live 1s, 5s, 10s, 15s, 30s and 45s charts"),
+  ("pricebased", "Intraday price-based charts", "Renko, Kagi, Line break and Point & figure built from minute candles"),
+  ("spread", "Spread charts", "One market against another: BTC ÷ ETH, A − B, A + B or A × B"),
+  ("export", "Chart data export", "Download the bars of any chart as a CSV file"),
+  ("ticks", "Tick-based intervals", "Bars of 10, 100 or 1,000 trades, or any number you choose"),
+  ("customsec", "Custom second intervals", "Any number of seconds, such as 7s, 20s or 90s"),
+  ("bonds", "Bond screener", "Government bond yields of 5 countries with changes, ranges and history"),
+] %}
+<div class="pa{% if pa_compact %} pa-compact{% endif %}" data-pa{% if pa_coin_from %} data-coin-from="{{ pa_coin_from }}"{% endif %}{% if pa_tf_from %} data-tf-from="{{ pa_tf_from }}"{% endif %}>
+  <button type="button" class="pa-btn" aria-haspopup="true" aria-expanded="false" aria-controls="{{ pa_id }}" title="Premium chart Access: free now">
+    <svg class="pa-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/><path d="M5 19h14"/></svg>
+    <span class="pa-txt">Premium chart Access</span>
+    <span class="pa-free">Free now</span>
+  </button>
+  <div class="pa-pop" id="{{ pa_id }}" role="menu" aria-label="Premium chart Access" hidden>
+    <div class="pa-head">
+      <svg class="pa-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/><path d="M5 19h14"/></svg>
+      <b>Premium chart Access</b><span class="pa-free">Free now</span>
+      <button type="button" class="pa-x" data-pa-close aria-label="Close">&times;</button>
+    </div>
+    <p class="pa-lead">Every premium chart feature is free for members right now. Pick one to open it.</p>
+    <div class="pa-list">
+      {% for key, name, desc in pa_features %}
+      <a class="pa-item" role="menuitem" href="/premium-chart?feature={{ key }}" data-feature="{{ key }}">
+        <svg class="pa-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>
+        <span><b>{{ name }}</b><small>{{ desc }}</small></span>
+      </a>
+      {% endfor %}
+    </div>
+    <a class="pa-open" href="/premium-chart" data-feature="">Open the Premium chart workspace</a>
+  </div>
+</div>

@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
 <link rel="stylesheet" href="{{ url_for('static', filename='market.css') }}?v=20261010a">
+<link rel="stylesheet" href="{{ url_for('static', filename='premium-access.css') }}">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
 {% include '_analytics.html' ignore missing %}
 <link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
@@ -44,6 +45,8 @@
         <div><dt>24h volume</dt><dd class="tnum" id="q-vol">--</dd></div>
       </dl>
       <div class="mk-top-right">
+        {% set pa_id = "pa-chart" %}{% set pa_coin_from = "#coin-sym" %}{% set pa_tf_from = "#tf-seg [aria-pressed='true']" %}
+        {% include '_premium_access.html' %}
         <div class="mk-recent" id="recent" aria-label="Recent coins"></div>
         <a class="mk-sig" id="sig-chip" href="/" hidden></a>
         <button class="mk-icon-btn" id="star-btn" type="button" aria-pressed="false" aria-label="Add to watchlist" title="Watchlist">
@@ -230,5 +233,6 @@
 
 <script src="{{ url_for('static', filename='market-common.js') }}?v=20261010a" defer></script>
 <script src="{{ url_for('static', filename='chart-page.js') }}?v=20261012b" defer></script>
+<script src="{{ url_for('static', filename='premium-access.js') }}" defer></script>
 </body>
 </html>

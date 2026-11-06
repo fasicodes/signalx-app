@@ -108,6 +108,7 @@
     setIcon($("coin-icon"), sym);
     document.title = `${sym} | Signals FM`;
     $("chart-title").textContent = `${base(sym)} chart`;
+    $("chart-title").dataset.coin = sym;          // the "Premium chart Access" menu opens the workspace on this coin
     renderLoading();
     updateProLinks();
     loadEngine();
