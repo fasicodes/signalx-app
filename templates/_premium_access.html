@@ -1,7 +1,7 @@
 {# "Premium chart Access" button and its menu: the 12 premium chart features, all free for members right now
    (the FREE NOW label). Include it where a chart is shown, with static/premium-access.css and premium-access.js.
-   Every item opens the Premium chart workspace (/premium-chart, premium_chart.py) with that feature switched on,
-   for the chart's current coin and interval. On the workspace itself the items switch the feature on in place.
+   Every item switches the feature on, on the Live chart (/chart) for the chart's current coin and interval; on the
+   Live chart itself it happens in place (window.PremiumWorkspace in chart-page.js).
    Before including, set:
      pa_id        a unique id for the menu on the page
      pa_coin_from (optional) CSS selector of the element whose text is the chart's coin, e.g. "#coin-sym"
@@ -36,12 +36,12 @@
     <p class="pa-lead">Every premium chart feature is free for members right now. Pick one to open it.</p>
     <div class="pa-list">
       {% for key, name, desc in pa_features %}
-      <a class="pa-item" role="menuitem" href="/premium-chart?feature={{ key }}" data-feature="{{ key }}">
+      <a class="pa-item" role="menuitem" href="/chart?feature={{ key }}" data-feature="{{ key }}">
         <svg class="pa-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>
         <span><b>{{ name }}</b><small>{{ desc }}</small></span>
       </a>
       {% endfor %}
     </div>
-    <a class="pa-open" href="/premium-chart" data-feature="">Open the Premium chart workspace</a>
+    <a class="pa-open" href="/chart" data-feature="">Open the Live chart</a>
   </div>
 </div>

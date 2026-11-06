@@ -1,7 +1,7 @@
 /* "Premium chart Access" button (templates/_premium_access.html): opens its menu of premium chart features.
-   An item opens /premium-chart?feature=<key> for the chart's current coin and interval (read from the page via
-   data-coin-from / data-tf-from); on the workspace itself (window.PremiumWorkspace) it switches the feature on
-   in place. */
+   An item opens the Live chart, /chart?feature=<key>, for the current coin and interval (read from the page via
+   data-coin-from / data-tf-from); on the Live chart itself (window.PremiumWorkspace) it switches the feature on in
+   place. */
 (function () {
   "use strict";
   if (window.__sfmPremiumAccess) return;
@@ -54,8 +54,8 @@
     const { coin, tf } = current(root), q = new URLSearchParams();
     if (key) q.set("feature", key);
     if (coin) q.set("coin", coin);
-    if (tf) q.set("interval", tf);
-    location.href = "/premium-chart" + (q.toString() ? "?" + q.toString() : "");
+    if (tf) q.set("tf", tf);
+    location.href = "/chart" + (q.toString() ? "?" + q.toString() : "");
     return true;
   }
 

@@ -221,17 +221,13 @@ def login(on=True):
             s.clear()
 
 
-r = c.get("/premium-chart")
-check(r.status_code == 302 and r.headers["Location"].endswith("/login"), "workspace page needs login")
+r = c.get("/premium-chart?coin=ETH/USDT&interval=7m&feature=replay")
+check(r.status_code == 302 and r.headers["Location"] == "/chart?coin=ETH%2FUSDT&tf=7m&feature=replay",
+      "the old workspace link opens the Live chart with the same coin, interval and feature")
 for path in ("/api/premium/bars?coin=BTC/USDT&interval=7m", "/api/premium/trades?coin=BTC/USDT",
              "/api/premium/prices?coins=BTC/USDT", "/api/premium/bonds", "/api/premium/bonds/history?id=US10Y"):
     check(c.get(path).status_code == 401, f"{path.split('?')[0]} -> 401 for a visitor")
 login()
-r = c.get("/premium-chart?coin=ETH/USDT&interval=7m&feature=replay")
-html = r.get_data(as_text=True)
-check(r.status_code == 200 and "Premium chart Access" in html and "FREE NOW" in html.upper(), "workspace page renders with its title and FREE NOW label")
-check("premium-chart-core.js" in html and "premium-chart.js" in html and "lightweight-charts@5.2.0" in html, "page loads its scripts")
-check('aria-current="page"' in html and 'href="/premium-chart"' in html, "menu marks the workspace")
 r = c.get("/api/premium/bars?coin=BTC/USDT&interval=2h&limit=50")
 d = r.get_json()
 check(r.status_code == 200 and d["ok"] and len(d["bars"]) == 50 and d["interval"]["native"] == "2h", "bars for a native interval")
@@ -269,7 +265,7 @@ import re  # noqa: E402
 with app.test_request_context("/"):
     from flask import render_template_string  # noqa: E402
     menu = render_template_string("{% set pa_id = 'pa-x' %}{% set pa_coin_from = '#coin-sym' %}{% include '_premium_access.html' %}")
-items = re.findall(r'href="/premium-chart\?feature=(\w+)" data-feature="\w+"', menu)
+items = re.findall(r'href="/chart\?feature=(\w+)" data-feature="\w+"', menu)
 check(len(items) == 12 and len(set(items)) == 12, f"12 premium features in the menu ({', '.join(items)})")
 for key in ("multi", "live", "custom", "range", "replay", "seconds", "pricebased", "spread", "export", "ticks", "customsec", "bonds"):
     check(key in items, f"menu item: {key}")
@@ -286,11 +282,17 @@ check("include '_premium_access.html'" in tpl("chart.html") and "premium-access.
 check("include '_premium_access.html'" in tpl("dashboard.html") and "premium-access.js" in tpl("dashboard.html")
       and 'pa_coin_from = "#chart-title"' in tpl("dashboard.html"), "Home chart card: the button")
 check("dataset.coin = sym" in open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read(), "Home chart title carries the coin")
-nav = tpl("_app_nav.html")
-check('href="/premium-chart" class="an-item"' in nav and "Free now" in nav and "active == 'premium'" in nav, "side menu: Premium charts with its label")
-ws = tpl("premium-chart.html")
-check("include '_premium_access.html'" in ws and 'id="pc-bonds"' in ws and 'id="pc-replay"' in ws and 'id="export-dlg"' in ws,
-      "workspace: menu, replay bar, export dialog, bond screener")
+check("/premium-chart" not in tpl("_app_nav.html") and not os.path.exists(os.path.join(ROOT, "templates", "premium-chart.html")),
+      "no separate premium page: everything is on the Live chart")
+ch = tpl("chart.html")
+for id_ in ("iv-btn", "iv-pop", "type-body", "type-set", "replay-btn", "ch-replay", "layout-btn", "layout-pop", "ch-grid", "export-btn",
+            "spread-btn", "bonds-btn", "export-all-btn"):
+    check(f'id="{id_}"' in ch, f"Live chart has #{id_}")
+check(ch.index("premium-chart-core.js") < ch.index("chart-premium.js") < ch.index("chart-page.js"), "Live chart loads the premium scripts first")
+cp = open(os.path.join(ROOT, "static", "chart-page.js"), encoding="utf-8").read()
+for name in ("function buildView", "function replayStart", "function exportMain", "function setSpread", "window.PremiumWorkspace = { feature }",
+             "/api/premium/bars?coin=", "PR.Trades.sub(", "PR.Grid.init("):
+    check(name in cp, f"chart-page.js: {name}")
 
 print("\n[7] bond screener")
 FIX = os.path.join(ROOT, "tests", "fixtures", "bonds")

@@ -1,9 +1,7 @@
 """
-Premium chart workspace - the page behind the "Premium chart Access" button (free for every member right now).
-
-Page (login required):
-  GET /premium-chart      templates/premium-chart.html + static/premium-chart-core.js + static/premium-chart.js
-                          ?coin=ETH/USDT&interval=7m&layout=4&feature=replay (all optional)
+Premium chart features - the data behind the "Premium chart Access" button (free for every member right now).
+They all live on the Live chart (/chart: templates/chart.html, static/chart-page.js + chart-premium.js +
+premium-chart-core.js). GET /premium-chart (an older link) redirects there, keeping coin, interval and feature.
 
 What it offers (each one is a button in the "Premium chart Access" menu):
   up to 16 charts per tab, many live charts at once (one shared price feed for every chart in every tab), custom
@@ -377,10 +375,14 @@ def all_prices(symbols):
 # ================================================================================================ routes
 @premium_bp.route("/premium-chart", methods=["GET"])
 def premium_page():
-    if not session.get("user_id"):
-        return redirect("/login")
-    return render_template("premium-chart.html", active="premium", user_email=session.get("email", ""),
-                           user_avatar=session.get("avatar_url"))
+    """The premium features live on the Live chart now; old links land there with the same coin and feature."""
+    q = {}
+    for src, dst in (("coin", "coin"), ("interval", "tf"), ("tf", "tf"), ("feature", "feature")):
+        v = (request.args.get(src) or "").strip()
+        if v and dst not in q:
+            q[dst] = v[:40]
+    from urllib.parse import urlencode
+    return redirect("/chart" + ("?" + urlencode(q) if q else ""))
 
 
 @premium_bp.route("/api/premium/bars", methods=["GET"])
