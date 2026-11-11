@@ -768,7 +768,14 @@ def run_policy(data, market, tf, plan, policy, start_time=None, end_time=None, l
                 active[sym] = tr
                 busy[sym] = 10 ** 12
                 continue
-            r = float(res["r_gross"]) - cost_r(sym, tr["entry"], tr["stop_loss"])
+            # costs like the live tracker (signal_hub.evaluate_row): fees / spread, plus funding for crypto longs
+            r = float(res["r_gross"]) - cost_r(sym, tr["entry"], tr["stop_loss"],
+                                               hours=res["bars"] * tf_sec / 3600.0, side=tr["side"])
+            slip = v.get("slip")
+            if slip is not None and np.isfinite(slip[i]):
+                # research only: the follower's real fill (shortly after the close) instead of the close itself;
+                # the stop and the targets stay where the signal put them
+                r -= (1 if tr["side"] == "LONG" else -1) * float(slip[i]) / abs(tr["entry"] - tr["stop_loss"])
             jx = min(i + res["bars"], len(v["ts"]) - 1)
             tr.update({"status": res["status"], "exit_price": res["exit_price"], "r": round(r, 3),
                        "closed_at": pd.Timestamp(v["ts"][jx]).to_pydatetime() + timedelta(seconds=tf_sec)})
