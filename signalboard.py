@@ -198,12 +198,13 @@ def _untested(e):
 
 def event_text(e):
     msg = f"Entry {_fmt(e['entry'], e['symbol'])} · stop {_fmt(e['stop_loss'], e['symbol'])} · {_targets_txt(e)}"
-    if (e.get("timeframe") or "4h") == "4h" and (e.get("market") or "crypto") == "crypto" and e.get("confidence") is not None:
+    untested = _untested(e)
+    if e.get("confidence") is not None and not untested:     # a tested model's calibrated chance of target 1
         msg += f" · model confidence {float(e['confidence']):.0f}%"
     news = e.get("news")
     if isinstance(news, dict) and news.get("title"):
         msg += f" · high-impact news soon: {news['title']}"
-    if _untested(e):
+    if untested:
         msg += " · experimental: simple rules that have not passed our test on unseen data"
     return msg
 

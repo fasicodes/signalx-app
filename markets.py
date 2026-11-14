@@ -2,7 +2,8 @@
 Markets, symbols and forex rules for SignalX - the one place to configure them.
 
 * CRYPTO_COINS / FOREX_PAIRS: every symbol the site knows (charts, pickers).
-* CRYPTO_4H_ONLY: the coins added after the coin test, which get 4-hour signals only;
+* CRYPTO_4H_ONLY: the coins added after the coin test of the 4-hour engine (the name is historical: the engine 5
+  1-hour stream reads 4-hour candles too and covers them as well);
   stream_coins(market, timeframe) is the list each signal stream scans.
 * FOREX_SIGNAL_PAIRS: the forex symbols that get trade signals. The default is
   the 7 majors, the popular crosses and gold; override it with the env var
@@ -41,9 +42,9 @@ CRYPTO_COINS = [
     "CFX/USDT", "MINA/USDT",
 ]
 
-# 63-102: coins added for the 4-hour signals after the coin test (research/coin_expansion.py, models/coin_test.json).
-# On a year neither model had seen (Oct 2025 - Oct 2026) the 4h engine kept its quality on these coins it was never
-# trained on; the 1h model did not (68.6% wins, about 0R), so these coins get 4h signals only. All on OKX spot.
+# 63-102: coins added for the 4-hour signals after the coin test (research/coin_expansion.py). On a year the model
+# had not seen (Oct 2025 - Oct 2026) the 4h engine kept its quality on these coins it was never trained on. The
+# engine 5 research trains and tests its 4-hour model on every coin of the list with enough history. All on OKX spot.
 CRYPTO_4H_ONLY = [
     "PEPE/USDT", "ENA/USDT", "WLD/USDT", "JUP/USDT", "BONK/USDT",
     "FLOKI/USDT", "ORDI/USDT", "PENDLE/USDT", "ENS/USDT", "ETHFI/USDT",
@@ -129,11 +130,12 @@ def forex_signal_pairs():
 
 
 def stream_coins(market, tf):
-    """Symbols a signal stream scans. Forex: the forex signal pairs. Crypto 4h: every coin. Crypto 15m and 1h: every
-    coin except CRYPTO_4H_ONLY (the 1h model did not pass the coin test on them; 15m runs experimental rules)."""
+    """Symbols a signal stream scans. Forex: the forex signal pairs. Crypto 4h and 1h: every coin (both streams read
+    4-hour candles; their models were tested on every coin with enough history). Crypto 15m (no model, switched
+    off): every coin except CRYPTO_4H_ONLY."""
     if market == "forex":
         return forex_signal_pairs()
-    if tf == "4h":
+    if tf in ("4h", "1h"):
         return list(CRYPTO_COINS)
     return [c for c in CRYPTO_COINS if c not in CRYPTO_4H_ONLY]
 

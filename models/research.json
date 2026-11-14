@@ -1,36 +1,719 @@
 {
- "generated": "2026-11-04",
- "rule": "A stream goes live only when its one test on data it never saw has at least 50 signals, earns at least +0.05R per signal after real costs, has a profit factor of at least 1.1 and a drawdown smaller than half of its total result.",
+ "generated": "2026-11-14",
+ "engine": "5.0",
+ "rule": "A stream goes live only when its one test on data it never saw has at least 50 signals, earns at least +0.05R per signal after real costs, has a profit factor of at least 1.1 and a drawdown smaller than half of its total result, and at least 70% of its signals reach their first target.",
+ "protocol": "Engine 5 research (research/v5): gradient-boosted models on the site's own features; label = the first target (0.5R) before the stop; stops wide enough for the costs (crypto 15m 6 ATR, 1h 3 ATR, 4h 2 ATR; forex 4 / 2.5 / 2 ATR). Walk-forward: every fold is scored by a model trained only on candles from before it. Plan, score level, cost cap and higher-timeframe check are chosen on the validation years only (crypto 2023-01 to 2025-09, forex 2017-01 to 2022-02), then the choice is scored once on the unseen period (crypto 2025-10 to 2026-11; forex 2023-04 to 2026-10). Costs: crypto 0.30% per round trip plus funding for longs, forex the pair's spread plus slippage; entries at the price one or two minutes after the signal candle closed. Data: Binance spot candles of 94 coins; forex candles of 12 pairs and gold.",
+ "validation_rule": "validation: win rate >= 73%, average >= +0.05R after costs, profit factor >= 1.15, at least 150 signals, every validation year (30+ signals) >= 68% wins with a positive average, and the next stricter score level holds up too (so the strictest level tried can never be chosen). Among the settings that pass and give at least one signal a day: the steadiest one (highest Sharpe ratio of the daily results), preferring the simplest plan (one target, no cost cap, no higher-timeframe check) when its Sharpe ratio is within 10% of the best",
+ "daily_signal_rule": "daily signal (when the stream gave no signal for 24 hours, the best candidate from a lower score level gets one): used only when those 'standard' signals alone reach >= 70% wins and a positive average on the validation years with no year below -0.03R, and the whole stream still passes the validation rule; among the levels that pass, the one with the best average of the standard signals",
+ "fixed_before_the_test": {
+  "written_utc": "2026-11-14 07:42:58",
+  "note": "Written BEFORE any holdout score of the engine 5 models was computed.",
+  "go_live_rule": "streams.passed_test() on the one holdout test (>= 50 signals, >= +0.05R per signal after costs, profit factor >= 1.1, drawdown <= half of the total result) AND a holdout win rate >= 70%",
+  "streams": {
+   "crypto_15m": {
+    "plan": "p1",
+    "cost_cap_r": 0.07,
+    "score_level": 0.8013878464698792,
+    "score_quantile": 0.995,
+    "gate": null,
+    "daily_tier": false,
+    "validation": {
+     "signals": 1990,
+     "signals_per_day": 1.98,
+     "win_rate": 77.7,
+     "avg_net_r": 0.134,
+     "profit_factor": 1.65,
+     "max_drawdown_r": -30.3,
+     "sharpe_daily": 2.2
+    }
+   },
+   "crypto_1h": {
+    "plan": "p1",
+    "cost_cap_r": 0.09,
+    "score_level": 0.7510396242141724,
+    "score_quantile": 0.9,
+    "gate": {
+     "stream": "crypto_4h",
+     "name": "g93",
+     "level": 0.8014477491378784
+    },
+    "daily_tier": false,
+    "validation": {
+     "signals": 3896,
+     "signals_per_day": 3.88,
+     "win_rate": 77.0,
+     "avg_net_r": 0.097,
+     "profit_factor": 1.4,
+     "max_drawdown_r": -64.2,
+     "sharpe_daily": 2.06
+    }
+   },
+   "crypto_4h": {
+    "plan": "p1",
+    "cost_cap_r": null,
+    "score_level": 0.8467250466346741,
+    "score_quantile": 0.98,
+    "gate": null,
+    "daily_tier": false,
+    "validation": {
+     "signals": 2185,
+     "signals_per_day": 2.18,
+     "win_rate": 78.1,
+     "avg_net_r": 0.125,
+     "profit_factor": 1.56,
+     "max_drawdown_r": -32.3,
+     "sharpe_daily": 2.38
+    },
+    "deployment": "information only: the live 4h stream keeps the trees of engine 3.1 (already tested on this period) with the three-target plan; this model is the 1h stream's higher-timeframe check"
+   },
+   "forex_15m": {
+    "choice": null,
+    "closest_on_validation": {
+     "plan": "p1",
+     "cap": 0.07,
+     "q": 0.99,
+     "gate": null,
+     "signals": 1442,
+     "win_rate": 70.0,
+     "avg_net_r": 0.016,
+     "profit_factor": 1.05
+    },
+    "holdout": "not opened"
+   },
+   "forex_1h": {
+    "choice": null,
+    "closest_on_validation": {
+     "plan": "p3",
+     "cap": 0.08,
+     "q": 0.99,
+     "gate": "g93",
+     "signals": 482,
+     "win_rate": 70.7,
+     "avg_net_r": 0.032,
+     "profit_factor": 1.11
+    },
+    "holdout": "not opened"
+   },
+   "forex_4h": {
+    "choice": null,
+    "closest_on_validation": {
+     "plan": "p1",
+     "cap": 0.07,
+     "q": 0.985,
+     "gate": null,
+     "signals": 1049,
+     "win_rate": 66.3,
+     "avg_net_r": 0.006,
+     "profit_factor": 1.02
+    },
+    "holdout": "not opened"
+   }
+  }
+ },
  "streams": {
+  "crypto_4h": {
+   "live": true,
+   "chosen": "the 4-hour engine (the trees of engine 3.1) with three targets",
+   "reason": "Live: the 4-hour engine with targets at 0.5R / 1R / 2R. On data it never saw (2025-10-01 to 2026-11-08): 852 signals on 94 coins (about 2.1 a day), 75.5% reached target 1 or better, +0.12R per signal after costs, profit factor 1.48. With the single 1R target used from Oct to Nov 2026 the same signals won 59.4% of the time and earned +0.19R per signal: more per signal, but 4 in 10 hit the stop.",
+   "test": {
+    "period": "2025-10-01 to 2026-11-08",
+    "signals": 852,
+    "signals_per_day": 2.11,
+    "win_rate": 75.5,
+    "stop_rate": 22.4,
+    "avg_net_r": 0.118,
+    "total_net_r": 100.3,
+    "profit_factor": 1.48,
+    "max_drawdown_r": -14.3,
+    "avg_stop_pct": 6.93,
+    "years": {
+     "2025": {
+      "signals": 168,
+      "avg_net_r": 0.156,
+      "win_rate": 76.8
+     },
+     "2026": {
+      "signals": 684,
+      "avg_net_r": 0.108,
+      "win_rate": 75.1
+     }
+    }
+   },
+   "tiers": {
+    "strong": {
+     "signals": 496,
+     "avg_net_r": 0.167,
+     "win_rate": 78.6
+    },
+    "standard": {
+     "signals": 356,
+     "avg_net_r": 0.049,
+     "win_rate": 71.1
+    }
+   },
+   "also_tested": [
+    {
+     "label": "the same signals with one target at 1R (engine 3.2)",
+     "holdout": {
+      "signals": 848,
+      "signals_per_day": 2.1,
+      "win_rate": 59.4,
+      "avg_net_r": 0.186,
+      "total_net_r": 157.9,
+      "profit_factor": 1.49,
+      "max_drawdown_r": -18.7
+     }
+    },
+    {
+     "label": "the same signals with one target at 0.5R",
+     "holdout": {
+      "signals": 859,
+      "signals_per_day": 2.13,
+      "win_rate": 76.1,
+      "avg_net_r": 0.087,
+      "total_net_r": 74.5,
+      "profit_factor": 1.35,
+      "max_drawdown_r": -14.5
+     }
+    },
+    {
+     "label": "a new 4-hour model of the engine 5 research (one target at 0.5R, score in the model's top 2%); it is the model the 1-hour stream reads",
+     "validation": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 2185,
+      "signals_per_day": 2.18,
+      "days_with_signal_pct": 19.8,
+      "win_rate": 78.1,
+      "stop_rate": 21.0,
+      "avg_net_r": 0.125,
+      "total_net_r": 272.8,
+      "profit_factor": 1.56,
+      "max_drawdown_r": -32.3,
+      "sharpe_daily": 2.38,
+      "avg_stop_pct": 7.6,
+      "years": {
+       "2023": {
+        "signals": 998,
+        "avg_net_r": 0.085,
+        "win_rate": 76.1
+       },
+       "2024": {
+        "signals": 781,
+        "avg_net_r": 0.18,
+        "win_rate": 81.6
+       },
+       "2025": {
+        "signals": 406,
+        "avg_net_r": 0.117,
+        "win_rate": 76.4
+       }
+      }
+     },
+     "holdout": {
+      "period": "2025-10-01 to 2026-11-08",
+      "signals": 370,
+      "signals_per_day": 0.92,
+      "days_with_signal_pct": 7.7,
+      "win_rate": 81.6,
+      "stop_rate": 18.1,
+      "avg_net_r": 0.174,
+      "total_net_r": 64.4,
+      "profit_factor": 1.91,
+      "max_drawdown_r": -14.4,
+      "sharpe_daily": 2.17,
+      "avg_stop_pct": 7.62,
+      "years": {
+       "2025": {
+        "signals": 94,
+        "avg_net_r": 0.324,
+        "win_rate": 90.4
+       },
+       "2026": {
+        "signals": 276,
+        "avg_net_r": 0.123,
+        "win_rate": 78.6
+       }
+      },
+      "folds": {
+       "2025-10-01 to 2026-04-01": {
+        "signals": 206,
+        "signals_per_day": 1.13,
+        "win_rate": 83.0,
+        "avg_net_r": 0.202,
+        "profit_factor": 2.16,
+        "max_drawdown_r": -14.4,
+        "sharpe_daily": 3.03
+       },
+       "2026-04-01 to 2026-11-08": {
+        "signals": 164,
+        "signals_per_day": 0.74,
+        "win_rate": 79.9,
+        "avg_net_r": 0.139,
+        "profit_factor": 1.65,
+        "max_drawdown_r": -13.6,
+        "sharpe_daily": 1.43
+       }
+      }
+     },
+     "passed": true
+    }
+   ]
+  },
+  "crypto_1h": {
+   "live": true,
+   "chosen": "the 4-hour model of the engine 5 research, read at every hourly close",
+   "reason": "Live: the 4-hour model read at every hourly close (one target at 0.5R). On data it never saw (2025-10-01 to 2026-11-08): 781 signals on 94 coins (about 1.9 a day on average, in bursts: a signal on about 12% of the days), 82.5% reached the target, +0.19R per signal after costs, profit factor 2.03. A separate 1-hour model was tested first and failed (68.7% wins, -0.03R per signal on the same unseen period), so this was the second 1-hour variant scored on that period.",
+   "validation": {
+    "period": "2023-01-01 to 2025-10-01",
+    "signals": 4597,
+    "signals_per_day": 4.58,
+    "days_with_signal_pct": 31.0,
+    "win_rate": 75.7,
+    "stop_rate": 23.6,
+    "avg_net_r": 0.088,
+    "total_net_r": 404.4,
+    "profit_factor": 1.35,
+    "max_drawdown_r": -83.9,
+    "sharpe_daily": 1.75,
+    "avg_stop_pct": 7.41,
+    "years": {
+     "2023": {
+      "signals": 2121,
+      "avg_net_r": 0.065,
+      "win_rate": 74.8
+     },
+     "2024": {
+      "signals": 1600,
+      "avg_net_r": 0.116,
+      "win_rate": 77.4
+     },
+     "2025": {
+      "signals": 876,
+      "avg_net_r": 0.093,
+      "win_rate": 74.9
+     }
+    }
+   },
+   "test": {
+    "period": "2025-10-01 to 2026-11-08",
+    "signals": 781,
+    "signals_per_day": 1.94,
+    "days_with_signal_pct": 11.7,
+    "win_rate": 82.5,
+    "stop_rate": 17.2,
+    "avg_net_r": 0.187,
+    "total_net_r": 146.3,
+    "profit_factor": 2.03,
+    "max_drawdown_r": -31.9,
+    "sharpe_daily": 2.69,
+    "avg_stop_pct": 7.56,
+    "years": {
+     "2025": {
+      "signals": 198,
+      "avg_net_r": 0.225,
+      "win_rate": 84.3
+     },
+     "2026": {
+      "signals": 583,
+      "avg_net_r": 0.174,
+      "win_rate": 81.8
+     }
+    },
+    "folds": {
+     "2025-10-01 to 2026-04-01": {
+      "signals": 400,
+      "signals_per_day": 2.2,
+      "win_rate": 81.8,
+      "avg_net_r": 0.183,
+      "profit_factor": 1.98,
+      "max_drawdown_r": -14.9,
+      "sharpe_daily": 3.42
+     },
+     "2026-04-01 to 2026-11-08": {
+      "signals": 381,
+      "signals_per_day": 1.72,
+      "win_rate": 83.2,
+      "avg_net_r": 0.192,
+      "profit_factor": 2.09,
+      "max_drawdown_r": -31.9,
+      "sharpe_daily": 2.24
+     }
+    }
+   },
+   "by_hour_offset": {
+    "validation": {
+     "0": {
+      "signals": 1252,
+      "win_rate": 78.0,
+      "avg_net_r": 0.124,
+      "profit_factor": 1.55
+     },
+     "1": {
+      "signals": 1143,
+      "win_rate": 76.2,
+      "avg_net_r": 0.095,
+      "profit_factor": 1.39
+     },
+     "2": {
+      "signals": 1078,
+      "win_rate": 72.9,
+      "avg_net_r": 0.044,
+      "profit_factor": 1.16
+     },
+     "3": {
+      "signals": 1124,
+      "win_rate": 75.4,
+      "avg_net_r": 0.083,
+      "profit_factor": 1.32
+     }
+    },
+    "holdout": {
+     "0": {
+      "signals": 224,
+      "win_rate": 81.2,
+      "avg_net_r": 0.171,
+      "profit_factor": 1.88
+     },
+     "1": {
+      "signals": 220,
+      "win_rate": 83.6,
+      "avg_net_r": 0.202,
+      "profit_factor": 2.2
+     },
+     "2": {
+      "signals": 148,
+      "win_rate": 81.1,
+      "avg_net_r": 0.163,
+      "profit_factor": 1.81
+     },
+     "3": {
+      "signals": 189,
+      "win_rate": 83.6,
+      "avg_net_r": 0.209,
+      "profit_factor": 2.26
+     }
+    }
+   },
+   "also_tested": [
+    {
+     "label": "a separate 1-hour model, stop 3 ATR (one target at 0.5R, score in the model's top 10%, own cost at most 0.09R, the 4-hour model in its top 7% for the same side)",
+     "validation": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 3896,
+      "signals_per_day": 3.88,
+      "days_with_signal_pct": 31.3,
+      "win_rate": 77.0,
+      "stop_rate": 22.4,
+      "avg_net_r": 0.097,
+      "total_net_r": 377.4,
+      "profit_factor": 1.4,
+      "max_drawdown_r": -64.2,
+      "sharpe_daily": 2.06,
+      "avg_stop_pct": 5.78,
+      "years": {
+       "2023": {
+        "signals": 1696,
+        "avg_net_r": 0.128,
+        "win_rate": 79.3
+       },
+       "2024": {
+        "signals": 1351,
+        "avg_net_r": 0.086,
+        "win_rate": 76.1
+       },
+       "2025": {
+        "signals": 849,
+        "avg_net_r": 0.052,
+        "win_rate": 73.9
+       }
+      }
+     },
+     "holdout": {
+      "period": "2025-10-01 to 2026-11-08",
+      "signals": 916,
+      "signals_per_day": 2.27,
+      "days_with_signal_pct": 16.4,
+      "win_rate": 68.7,
+      "stop_rate": 30.7,
+      "avg_net_r": -0.031,
+      "total_net_r": -28.8,
+      "profit_factor": 0.9,
+      "max_drawdown_r": -90.4,
+      "sharpe_daily": -0.43,
+      "avg_stop_pct": 5.47,
+      "years": {
+       "2025": {
+        "signals": 223,
+        "avg_net_r": -0.182,
+        "win_rate": 58.3
+       },
+       "2026": {
+        "signals": 693,
+        "avg_net_r": 0.017,
+        "win_rate": 72.0
+       }
+      },
+      "folds": {
+       "2025-10-01 to 2026-04-01": {
+        "signals": 501,
+        "signals_per_day": 2.75,
+        "win_rate": 62.3,
+        "avg_net_r": -0.129,
+        "profit_factor": 0.68,
+        "max_drawdown_r": -84.2,
+        "sharpe_daily": -1.83
+       },
+       "2026-04-01 to 2026-11-08": {
+        "signals": 415,
+        "signals_per_day": 1.88,
+        "win_rate": 76.4,
+        "avg_net_r": 0.087,
+        "profit_factor": 1.35,
+        "max_drawdown_r": -24.0,
+        "sharpe_daily": 1.14
+       }
+      }
+     },
+     "passed": false
+    },
+    {
+     "label": "a daily signal for quiet days (the best candidate after 24 hours without a signal)",
+     "validation_standard_signals": [
+      {
+       "score_quantile": 0.5,
+       "signals": 171,
+       "win_rate": 69.0,
+       "avg_net_r": -0.016
+      },
+      {
+       "score_quantile": 0.6,
+       "signals": 164,
+       "win_rate": 69.5,
+       "avg_net_r": -0.017
+      },
+      {
+       "score_quantile": 0.7,
+       "signals": 145,
+       "win_rate": 70.3,
+       "avg_net_r": -0.005
+      },
+      {
+       "score_quantile": 0.8,
+       "signals": 100,
+       "win_rate": 69.0,
+       "avg_net_r": -0.021
+      },
+      {
+       "score_quantile": 0.85,
+       "signals": 68,
+       "win_rate": 69.1,
+       "avg_net_r": -0.019
+      }
+     ],
+     "passed": false
+    }
+   ]
+  },
   "crypto_15m": {
    "live": false,
    "chosen": null,
-   "reason": "Switched off (Nov 2026). Costs are too large for 15-minute trades (about 0.4R per trade). 47 strategies from public GitHub repositories, the signal logic of the most popular open-source trading bots (freqtrade, gekko, jesse, zenbot, OctoBot, Crypto-Signal, intelligent-trading-bot and others) and combinations of the best ones were tested with real costs; none made money on data it had never seen (research/repo_lab)."
-  },
-  "crypto_1h": {
-   "live": false,
-   "chosen": null,
-   "reason": "Switched off (Nov 2026). The old 1-hour model fell below zero once real costs (0.30%) were counted. 47 strategies from public GitHub repositories, the signal logic of the most popular open-source trading bots (freqtrade, gekko, jesse, zenbot, OctoBot, Crypto-Signal, intelligent-trading-bot and others) and combinations of the best ones were tested with real costs; none made money on data it had never seen (research/repo_lab)."
+   "reason": "Switched off. A 15-minute model with a stop wide enough for the costs (6 ATR; one target at 0.5R, score in the model's top 0.5%, own cost at most 0.07R) passed the validation years 2023-2025 (77.7% wins, +0.13R per signal) but not its one test on data it never saw (2025-10-01 to 2026-11-08): 284 signals, 69.4% wins, +0.01R per signal after costs, with heavy losses in the crash of October 2025. A daily signal for quiet days lost money on the validation years too. A 15-minute stream comes back only when a model for it passes the same test.",
+   "variants": [
+    {
+     "label": "15-minute model, stop 6 ATR (one target at 0.5R, score in the model's top 0.5%, own cost at most 0.07R)",
+     "validation_period": "2023-01 to 2025-09",
+     "validation": {
+      "period": "2023-01-01 to 2025-10-01",
+      "signals": 1990,
+      "signals_per_day": 1.98,
+      "days_with_signal_pct": 27.6,
+      "win_rate": 77.7,
+      "stop_rate": 18.5,
+      "avg_net_r": 0.134,
+      "total_net_r": 265.8,
+      "profit_factor": 1.65,
+      "max_drawdown_r": -30.3,
+      "sharpe_daily": 2.2,
+      "avg_stop_pct": 6.0,
+      "years": {
+       "2023": {
+        "signals": 923,
+        "avg_net_r": 0.163,
+        "win_rate": 79.4
+       },
+       "2024": {
+        "signals": 673,
+        "avg_net_r": 0.079,
+        "win_rate": 75.5
+       },
+       "2025": {
+        "signals": 394,
+        "avg_net_r": 0.157,
+        "win_rate": 77.7
+       }
+      }
+     },
+     "holdout": {
+      "period": "2025-10-01 to 2026-11-08",
+      "signals": 284,
+      "signals_per_day": 0.7,
+      "days_with_signal_pct": 11.9,
+      "win_rate": 69.4,
+      "stop_rate": 28.5,
+      "avg_net_r": 0.006,
+      "total_net_r": 1.7,
+      "profit_factor": 1.02,
+      "max_drawdown_r": -35.2,
+      "sharpe_daily": 0.05,
+      "avg_stop_pct": 6.91,
+      "years": {
+       "2025": {
+        "signals": 119,
+        "avg_net_r": -0.229,
+        "win_rate": 53.8
+       },
+       "2026": {
+        "signals": 165,
+        "avg_net_r": 0.175,
+        "win_rate": 80.6
+       }
+      },
+      "folds": {
+       "2025-10-01 to 2026-04-01": {
+        "signals": 205,
+        "signals_per_day": 1.13,
+        "win_rate": 65.9,
+        "avg_net_r": -0.044,
+        "profit_factor": 0.87,
+        "max_drawdown_r": -35.2,
+        "sharpe_daily": -0.44
+       },
+       "2026-04-01 to 2026-11-08": {
+        "signals": 79,
+        "signals_per_day": 0.36,
+        "win_rate": 78.5,
+        "avg_net_r": 0.135,
+        "profit_factor": 1.63,
+        "max_drawdown_r": -5.5,
+        "sharpe_daily": 1.55
+       }
+      }
+     },
+     "passed": false
+    },
+    {
+     "label": "a daily signal for quiet days",
+     "validation_standard_signals": [
+      {
+       "score_quantile": 0.5,
+       "signals": 799,
+       "win_rate": 67.5,
+       "avg_net_r": -0.028
+      },
+      {
+       "score_quantile": 0.6,
+       "signals": 795,
+       "win_rate": 66.8,
+       "avg_net_r": -0.032
+      },
+      {
+       "score_quantile": 0.7,
+       "signals": 785,
+       "win_rate": 69.3,
+       "avg_net_r": 0.01
+      },
+      {
+       "score_quantile": 0.8,
+       "signals": 770,
+       "win_rate": 66.0,
+       "avg_net_r": -0.044
+      },
+      {
+       "score_quantile": 0.85,
+       "signals": 747,
+       "win_rate": 65.7,
+       "avg_net_r": -0.058
+      },
+      {
+       "score_quantile": 0.9,
+       "signals": 706,
+       "win_rate": 67.3,
+       "avg_net_r": -0.023
+      },
+      {
+       "score_quantile": 0.95,
+       "signals": 592,
+       "win_rate": 68.6,
+       "avg_net_r": -0.014
+      }
+     ],
+     "passed": false
+    }
+   ]
   },
   "forex_15m": {
    "live": false,
    "chosen": null,
-   "reason": "Switched off (Nov 2026). Machine-learning models on new 2023-2026 data did not pass even the validation years. 47 strategies from public GitHub repositories, the signal logic of the most popular open-source trading bots (freqtrade, gekko, jesse, zenbot, OctoBot, Crypto-Signal, intelligent-trading-bot and others) and combinations of the best ones were tested with real costs; none made money on data it had never seen (research/repo_lab)."
+   "reason": "Switched off. A new 15-minute model was trained on 2013-2021 candles of 12 pairs and gold and checked year by year on 2017 to early 2022 with each pair's spread. No setting reached the validation target (73% wins and +0.05R per signal); the closest had 70.0% wins and +0.02R per signal, so the unseen years 2023-2026 were not opened. Rule strategies and public trading bots tested on 2023-2026 lost money as well (research/repo_lab). Forex and gold signals come back only when a model passes the same test.",
+   "variants": [
+    {
+     "label": "15-minute model, stop 4 ATR (plain and with the 4-hour model agreeing)",
+     "validation_period": "2017-01 to 2022-02",
+     "validation": null,
+     "closest": {
+      "signals": 1442,
+      "signals_per_day": 0.76,
+      "win_rate": 70.0,
+      "avg_net_r": 0.016,
+      "profit_factor": 1.05
+     },
+     "holdout": null,
+     "passed": false
+    }
+   ]
   },
   "forex_1h": {
    "live": false,
    "chosen": null,
-   "reason": "Switched off (Nov 2026). Machine-learning models on new 2023-2026 data did not pass even the validation years. 47 strategies from public GitHub repositories, the signal logic of the most popular open-source trading bots (freqtrade, gekko, jesse, zenbot, OctoBot, Crypto-Signal, intelligent-trading-bot and others) and combinations of the best ones were tested with real costs; none made money on data it had never seen (research/repo_lab)."
+   "reason": "Switched off. A new 1-hour model was trained on 2013-2021 candles of 12 pairs and gold and checked year by year on 2017 to early 2022 with each pair's spread. No setting reached the validation target (73% wins and +0.05R per signal); the closest with the 4-hour model agreeing had 70.7% wins and +0.03R per signal, so the unseen years 2023-2026 were not opened. Rule strategies and public trading bots tested on 2023-2026 lost money as well (research/repo_lab). Forex and gold signals come back only when a model passes the same test.",
+   "variants": [
+    {
+     "label": "1-hour model, stop 2.5 ATR (plain and with the 4-hour model agreeing)",
+     "validation_period": "2017-01 to 2022-02",
+     "validation": null,
+     "closest": {
+      "signals": 482,
+      "signals_per_day": 0.26,
+      "win_rate": 70.7,
+      "avg_net_r": 0.032,
+      "profit_factor": 1.11
+     },
+     "holdout": null,
+     "passed": false
+    }
+   ]
   },
   "forex_4h": {
    "live": false,
    "chosen": null,
-   "reason": "Switched off (Nov 2026). Machine-learning models on new 2023-2026 data did not pass the validation years; the best rule passed them but earned only +0.01R per trade on the unseen year. 47 strategies from public GitHub repositories, the signal logic of the most popular open-source trading bots (freqtrade, gekko, jesse, zenbot, OctoBot, Crypto-Signal, intelligent-trading-bot and others) and combinations of the best ones were tested with real costs; none made money on data it had never seen (research/repo_lab)."
-  },
-  "crypto_4h": {
-   "live": true,
-   "chosen": "engine 3.2",
-   "reason": "Engine 3.2 (the 4-hour model) re-tested Nov 2026 with real costs on 2025-10-01 to 2026-10-23: 813 signals on 94 coins, 59.4% reached the target, +0.196R per signal, profit factor 1.52."
+   "reason": "Switched off. A new 4-hour model was trained on 2013-2021 candles of 12 pairs and gold and checked year by year on 2017 to early 2022 with each pair's spread. No setting reached the validation target (73% wins and +0.05R per signal); the closest had 66.3% wins and +0.01R per signal, so the unseen years 2023-2026 were not opened. Rule strategies and public trading bots tested on 2023-2026 lost money as well (research/repo_lab). Forex and gold signals come back only when a model passes the same test.",
+   "variants": [
+    {
+     "label": "4-hour model, stop 2 ATR (plain and with the 4-hour model agreeing)",
+     "validation_period": "2017-01 to 2022-02",
+     "validation": null,
+     "closest": {
+      "signals": 1049,
+      "signals_per_day": 0.56,
+      "win_rate": 66.3,
+      "avg_net_r": 0.006,
+      "profit_factor": 1.02
+     },
+     "holdout": null,
+     "passed": false
+    }
+   ]
   }
- }
+ },
+ "live_check": "The site's engine was run on the research candles at 14 moments of the unseen period: all 1,190 signals of the compared candles were the research's signals, with the same side, entry and stop (research/v5/live_check.py)."
 }

@@ -35,31 +35,33 @@
       <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M17 4v16"/><rect x="4" y="8" width="6" height="7" rx="1"/><rect x="14" y="6" width="6" height="9" rx="1"/></svg></div>
       <h3>Reads closed 4-hour candles{{ tip('candle_4h', '4-hour candle') }}</h3>
       <p>The engine only uses candles that have finished. For each of the 102 crypto coins it checks, it reads the coin's own price action,
-        its daily trend, Bitcoin and the market of 16 large coins: 82 measurements in all.</p>
+        its daily trend, Bitcoin and the whole market: 82 measurements in all. The 4-hour stream reads them at every 4-hour
+        close; the 1-hour stream reads the last four hours at every hourly close.</p>
     </div>
     <div class="icard">
       <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg></div>
       <h3>Strong setups first, and no long waits</h3>
-      <p>A machine-learning model estimates each trade's chance of reaching its first target before its stop. Setups in its top 3%
-        become strong signals; if no coin has had a signal for 24 hours, the best setup gets a standard one. Every signal has a stop
-        and a target.</p>
+      <p>A machine-learning model estimates each trade's chance of reaching its first target before its stop. Only its best
+        setups become signals; on the 4-hour stream, if no coin has had a signal for 24 hours, the best setup gets a standard
+        one. Every signal has a stop and its targets.</p>
     </div>
     <div class="icard">
       <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></div>
       <h3>Tested on data it never saw{{ tip('unseen_data', 'tested on unseen data') }}</h3>
-      <p>The model learned from July 2020 to September 2025 and was then tested once on October 2025 to October 2026, with every
-        fee included and losses counted the pessimistic way.</p>
+      <p>Each model learned from older data and was then tested on October 2025 to November 2026, with every fee included and
+        losses counted the pessimistic way. Timeframes and markets whose models failed that test (15-minute, forex, gold)
+        give no signals.</p>
     </div>
   </div>
   {% if stats and stats.signals %}
   <dl class="figs4" style="margin-top:14px">
     <div><dt>Signals tested</dt><dd>{{ stats.signals }}<small>on {{ stats.coins }} coins</small></dd></div>
-    <div><dt>Signals won{{ tip('win_rate', 'win rate') }}</dt><dd>{{ stats.win_rate }}%<small>closed in profit after fees</small></dd></div>
+    <div><dt>Signals won{{ tip('win_rate', 'win rate') }}</dt><dd>{{ stats.win_rate }}%<small>reached target 1 or better</small></dd></div>
     <div><dt>Average per signal{{ tip('avg_r', 'average result') }}</dt><dd>{{ '%+.3f' % stats.avg_net_r }}R<small>after 0.30% costs</small></dd></div>
     <div><dt>Worst drawdown{{ tip('drawdown', 'drawdown') }}</dt><dd>{{ stats.max_drawdown_r }}R<small>the deepest losing streak</small></dd></div>
   </dl>
-  <p class="meta-line">A win (+1R) and a full loss (&minus;1R) are the same size, so a stream makes money only if clearly more than half
-    of its signals win; about 4 in 10 lose, and some months lose. Past results do not guarantee future results.</p>
+  <p class="meta-line">These are the 4-hour stream's numbers. The first target is half as far as the stop, so a full loss (&minus;1R) is
+    bigger than most wins: about 1 signal in 4 hits the stop, and some weeks lose. Past results do not guarantee future results.</p>
   {% endif %}
 </section>
 

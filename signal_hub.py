@@ -354,12 +354,25 @@ def scan_stream(key, now=None):
         a = _freshen(sym, cfg["tf"], res["active"], prices.get(sym), now)
         if a is None:
             continue
+        if _has_active(sym, cfg["market"], cfg["tf"]):
+            continue          # one signal at a time per symbol and stream, whatever the engine's replay remembers
         ev = record(sym, cfg["market"], cfg["tf"], a, news=_news_for(sym, _parse(a.get("signal_at"))))
         if ev:
             events.append(ev)
     _state["last_scan"][key] = {"at": now, "symbols": len(board),
                                 "errors": sum(1 for r in board.values() if r.get("error")), "new": len(events)}
     return events
+
+
+def _has_active(symbol, market, tf):
+    """True when the stream already has a running signal on this symbol in the database."""
+    try:
+        with _Cursor() as cur:
+            cur.execute("SELECT id FROM signal_events WHERE symbol=%s AND market=%s AND timeframe=%s AND status='ACTIVE' "
+                        "LIMIT 1", (symbol, market, tf))
+            return cur.fetchone() is not None
+    except Exception:
+        return False
 
 
 def _prices_for(symbols):
@@ -809,8 +822,7 @@ def model_test(market, tf):
     if key == "crypto_4h":
         try:
             import signal_engine as se
-            return {"holdout": se.test_stats(), "walk_forward": se.walk_forward_stats(), "engine": "v" + se.ENGINE_VERSION,
-                    "extra_coins": coin_test(key)}
+            return {"holdout": se.test_stats(), "walk_forward": se.walk_forward_stats(), "engine": "v" + se.ENGINE_VERSION}
         except Exception:
             return None
     m = streams.load_model(key)
@@ -934,32 +946,6 @@ def _period_label(period):
         return str(period or "")
 
 
-_coin_test = {"t": 0.0, "data": None}
-
-
-def coin_test(key):
-    """The coin test of a stream (models/coin_test.json, research/coin_expansion.py) when coins were added to it from
-    it: the added coins' result on the year the model never saw. None for a stream that got no coins."""
-    now = time.time()
-    if _coin_test["data"] is None or now - _coin_test["t"] > 600:
-        try:
-            with open(os.path.join(streams.MODELS_DIR, "coin_test.json"), encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, ValueError):
-            data = {}
-        _coin_test.update(t=now, data=data)
-    d = _coin_test["data"] or {}
-    s = d.get(key) or {}
-    added = [c for c in markets.CRYPTO_4H_ONLY] if key == "crypto_4h" else []
-    if not s.get("passes") or not added:
-        return None
-    r = ((d.get("okx") or {}).get(key) or {}).get("new_coins") or s.get("new_coins") or {}
-    if not r.get("signals"):
-        return None
-    return {"coins": len(added), "period": _period_label(d.get("period")), "signals": int(r["signals"]),
-            "per_day": r.get("signals_per_day"), "win_rate": r.get("win_rate"), "avg_r": r.get("avg_net_r")}
-
-
 def _test_of(key):
     """The published test on unseen data of a stream (crypto 4h: the engine's model file; others: models/<key>.json)."""
     try:
@@ -986,9 +972,6 @@ def tested_summary():
                "win_rate": float(t["win_rate"]), "avg_r": float(t.get("avg_net_r") or 0),
                "profit_factor": t.get("profit_factor"), "max_drawdown_r": t.get("max_drawdown_r"),
                "coins": len(markets.stream_coins(market, tf))}
-        extra = coin_test(key)
-        if extra:
-            row["extra_coins"] = extra
         out.append(row)
     if not out:
         return {"streams": [], "signals": 0}

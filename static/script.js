@@ -655,7 +655,7 @@ function renderTier1(data) {
           ${meterBar(eng.p_short ?? 0, "c-short")}
         </div>
       </div>
-      <div class="channel-detail">model confidence: the chance the price moves half the stop distance its way before the stop (the 1R target is reached less often)</div>`
+      <div class="channel-detail">model confidence: the chance the price reaches target 1 (half the stop distance its way) before the stop</div>`
   }));
 
   cards.push(channelCard({

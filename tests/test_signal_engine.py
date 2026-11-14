@@ -1,4 +1,4 @@
-"""Tests for signal_engine.py (signal engine v3). No network: candles are synthetic.
+"""Tests for signal_engine.py (the 4-hour signal engine). No network: candles are synthetic.
 Run from the project root:  python tests/test_signal_engine.py
 """
 import os
@@ -49,8 +49,8 @@ DATA["WIF/USDT"] = synth(99, drift=0.001)  # a coin outside the signal list
 print("\n[1] model file")
 m = se.model()
 check(len(m.features) == 82 and len(m.trees) == 250, "82 features, 250 trees")
-check(m.sl_atr == 2.0 and m.targets_r == [1.0] and m.fractions == [1.0] and m.max_bars == 54 and m.be_after == 0,
-      "plan: 2x ATR stop, one target at 1R (the whole position), the stop never moves, 54 candles")
+check(m.sl_atr == 2.0 and m.targets_r == [0.5, 1.0, 2.0] and m.max_bars == 54 and m.be_after == 1,
+      "plan: 2x ATR stop, targets 0.5R / 1R / 2R, the stop moves to the entry after TP1, 54 candles")
 check(abs(sum(m.fractions) - 1) < 1e-9 and len(set(round(x, 9) for x in m.fractions)) == 1, "a third closes at each target")
 check(0.5 < m.floor < m.watch_threshold < m.threshold < 0.95 and m.gap_hours == 24,
       f"levels: standard {m.floor:.3f} < forming {m.watch_threshold:.3f} < strong {m.threshold:.3f}, 24h rule")
@@ -63,7 +63,14 @@ t = se.test_stats()
 check(t["signals"] > 300 and 50 < t["win_rate"] < 90 and t["avg_net_r"] > 0 and t["period"].startswith("2025-10"),
       "out-of-sample test stats bundled (Oct 2025 onward, data the model never saw)")
 check(se.walk_forward_stats() == {} and t.get("cost_round_trip") == markets.CRYPTO_COST_ROUND_TRIP,
-      "engine 3.2: old walk-forward (0.12% cost) removed, the test uses the real cost")
+      "engine 5: no old walk-forward numbers (0.12% cost), the test uses the real cost")
+check(se.ENGINE_VERSION == "5.0" and m.version == "5.0" and 70 <= t["win_rate"] <= 85 and t["tp1_rate"] >= t["win_rate"]
+      and t["strong"]["win_rate"] > t["standard"]["win_rate"] >= 70,
+      "engine 5.0: the three-target plan's test (about 3 in 4 reach target 1; strong signals do better than standard)")
+ex = m.meta["exit_change"]
+check(ex["holdout_three_targets"]["win_rate"] > ex["holdout_one_target_1r"]["win_rate"] + 10
+      and ex["holdout_three_targets"]["avg_net_r"] > 0 and ex["holdout_one_target_1r"]["avg_net_r"] > 0,
+      "the model file says what the plan change costs and gives: more winners, both plans positive")
 p = m.raw_proba(np.full((3, 82), np.nan))
 check(np.all((p > 0) & (p < 1)) and np.allclose(p, p[0]), "all-missing input is handled (NaN-aware trees)")
 cal = m.calibrate(np.array([0.0, 0.5, 0.7, 0.99]))
@@ -94,9 +101,9 @@ check(np.allclose(sc["BTC/USDT"][0], one[0]) and np.allclose(sc["BTC/USDT"][3], 
       "batched scoring == one coin at a time")
 
 print("\n[3] trade plan (follow)")
-check(se.targets("LONG", 100, 98) == [102] and se.targets("SHORT", 100, 102) == [98], "live plan: one target at 1R")
+check(se.targets("LONG", 100, 98) == [101, 102, 104] and se.targets("SHORT", 100, 102) == [99, 98, 96],
+      "live plan: three targets at 0.5R / 1R / 2R")
 _live_plan = (m.targets_r, m.fractions, m.be_after, m.tp_atr)
-m.targets_r, m.fractions, m.be_after, m.tp_atr = [0.5, 1.0, 2.0], [1 / 3] * 3, 1, 4.0   # the ladder rules (older signals)
 
 
 def run(side, entry, sl, rows, start=0, max_bars=None):
@@ -156,8 +163,8 @@ act, last = se.replay_all(S, lookback=300, closed=closed)
 tr = (act.get("ETH/USDT") or last.get("ETH/USDT"))
 check(tr and tr["tier"] == "strong" and tr["side"] == "LONG" and tr["bar_time"] == base["ETH/USDT"]["timestamp"].iloc[n - 250],
       "strong score -> strong signal on that candle")
-check(close_to(abs(tr["entry"] - tr["stop_loss"]), 2 * base["ETH/USDT"]["atr"].iloc[n - 250]) and len(tr["targets"]) == 1,
-      "stop 2x ATR at the signal candle, one target")
+check(close_to(abs(tr["entry"] - tr["stop_loss"]), 2 * base["ETH/USDT"]["atr"].iloc[n - 250]) and len(tr["targets"]) == 3,
+      "stop 2x ATR at the signal candle, three targets")
 # standard rule: a mid score only becomes a signal when no coin had one for 24h
 mid = lo.copy()
 mid[n - 200:] = m.floor + 0.01
@@ -252,7 +259,7 @@ for side in ("LONG", "SHORT"):
     e0 = res["last_close"]
     sl, tp = se.levels(side, e0, res["atr"])
     ok = (sl < e0 < tp) if side == "LONG" else (tp < e0 < sl)
-    check(ok and close_to(abs(tp - e0), abs(e0 - sl)), f"{side}: the target is as far as the stop (1R)")
+    check(ok and close_to(abs(tp - e0), 2 * abs(e0 - sl)), f"{side}: the last target is twice as far as the stop (2R)")
 board = eng.board(CLOCK["now"])
 act_rows = [r for r in board.values() if r["active"]]
 for r_ in act_rows[:3]:
@@ -275,11 +282,11 @@ for r_ in act2[:4]:
     a = r_["active"]
     tps = r_["targets"]
     long_ = a["side"] == "LONG"
-    ordered = (r_["stop_loss"] < r_["entry"] < tps[0]) if long_ else (r_["stop_loss"] > r_["entry"] > tps[0])
-    check(r_["verdict"] == a["side"] and ordered and len(tps) == 1 and r_["take_profit"] == tps[-1]
+    ordered = (r_["stop_loss"] < r_["entry"] < tps[0] < tps[1] < tps[2]) if long_ else (r_["stop_loss"] > r_["entry"] > tps[0] > tps[1] > tps[2])
+    check(r_["verdict"] == a["side"] and ordered and len(tps) == 3 and r_["take_profit"] == tps[-1]
           and r_["fresh"] == (a["bar_time"] == r_["bar_time"])
-          and r_["tier"] == "strong" and r_["hits"] == a["hits"] and len(r_["tp_pcts"]) == 1,
-          f"{a['side']} {r_['tp_pcts']}: verdict, stop, the target, tier and freshness from the running trade")
+          and r_["tier"] == "strong" and r_["hits"] == a["hits"] and len(r_["tp_pcts"]) == 3,
+          f"{a['side']} {r_['tp_pcts']}: verdict, stop, the three targets, tier and freshness from the running trade")
     pr = se.progress(a, r_["last_close"])
     check(pr is not None and -100 <= pr["pct"] <= 100, "progress of a running trade at the last close")
 m.threshold, m.floor = saved
