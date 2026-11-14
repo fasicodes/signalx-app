@@ -1,30 +1,44 @@
 """
 Signal streams for SignalX: 15m, 1h and 4h, for crypto and forex.
 
-Six independent streams (market x timeframe). Each has its own model or
-rules, stop/target distances, expected holding time and expiry, and a signal
-on one stream never touches another (a 15m and a 4h signal on the same symbol
-can run at the same time).
+Six streams (market x timeframe). Each has its own model, stop / target
+distances, expected holding time and expiry, and a signal on one stream never
+touches another (a 1h and a 4h signal on the same symbol can run at the same
+time). A stream runs on the site only when its model passed its one test on
+data it never saw with real costs (passed_test below); models/research.json
+says what was tested for every stream and why it is on or off.
 
-Engines
--------
-* crypto_4h: signal engine v3.2 (signal_engine.py, unchanged).
-* every other stream: a trained model in models/<market>_<timeframe>.json
-  (features.py builds its inputs; research/lab.py trains it and writes the
-  walk-forward and holdout tests into the same file). The model scores the
-  chance that a trade reaches its first target before its stop; the stream
-  gives a signal when that score is above the stream's threshold (chosen on
-  the validation years only, then checked on later data the model never saw).
-* rules engine R1 (below) is only used for a stream that has no model file.
+Engines (engine 5, Nov 2026)
+----------------------------
+* crypto_4h: the 4-hour engine (signal_engine.py: the gradient-boosted trees
+  first shipped as engine 3.1, three targets).
+* crypto_1h: models/crypto_1h.json - the 4-hour model of the engine 5 research
+  read at EVERY hourly close: its inputs are the 4-hour candles that end at that
+  hour (four grids: the usual one and the grids shifted by 1, 2 and 3 hours;
+  StreamEngine._reading_board, research/v5/rolling.py). One target at 0.5R.
+* any other stream: a trained model in models/<market>_<timeframe>.json
+  (features.py builds its inputs; research/v5/lab5.py trains it and writes its
+  walk-forward and holdout tests into the same file). None passed: the separate
+  1-hour and 15-minute crypto models failed their holdout test and no forex
+  model passed even its validation years, so those streams have no model file
+  and stay off.
+* rules engine R1 (below) is what a stream without a model file would run. It
+  lost money in every test and is never switched on; it is kept for the tests.
+
+A model scores the chance that a trade reaches its first target before its
+stop; the stream gives a signal when that score is above the stream's level
+(chosen on the validation years only, then checked on later data the model
+never saw).
 
 Trade plan (model streams): stop = sl_atr x ATR from the entry (the close of
 the signal candle), targets at the model file's targets_r (in R = stop
-distance), a part closed at each; after TP1 the stop moves to the entry,
-after TP2 to TP1; the rest closes after max_bars candles. Forex trades are
-closed before the weekend and no new forex signal starts close to the weekly
-close or outside the stream's sessions. One trade at a time per symbol and
-stream, a cooldown after each trade, at most max_per_bar new signals per
-candle (best score first), and the news blackout (news.py) when it is on.
+distance), a part closed at each; with several targets the stop moves to the
+entry after TP1 and to TP1 after TP2; the rest closes after max_bars candles.
+Forex trades are closed before the weekend and no new forex signal starts
+close to the weekly close or outside the stream's sessions. One trade at a
+time per symbol and stream, a cooldown after each trade, at most max_per_bar
+new signals per candle (best score first), an optional cap on the trade's own
+cost in R, and the news blackout (news.py) when it is on.
 
 Rules engine R1 (long side; short is the mirror image)
 ------------------------------------------------------
@@ -53,7 +67,7 @@ EPS = 1e-12
 MIN_SCORE = 60
 GRADE_A, GRADE_B = 80, 70
 WARMUP = 210              # candles needed before the first signal (EMA200)
-REPLAY_BARS = 300         # candles replayed to find each symbol's running trade
+REPLAY_BARS = 300         # candles replayed to find each symbol's running trade (model streams: see replay_bars)
 RECENT_MAX = 30
 MODELS_DIR = os.environ.get("MODELS_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
 
@@ -119,6 +133,16 @@ def _tree_proba(trees, baseline, X):
     return 1.0 / (1.0 + np.exp(-out))
 
 
+def score_sides(model, X):
+    """(long, short) raw scores of a model for the input rows X (a DataFrame in the model's feature order). The
+    short side is the mirror image of the inputs; both are computed in the number format the model was trained
+    with."""
+    import features as FE
+    if getattr(model, "float32", False):
+        X = X.astype(np.float32)
+    return (model.raw_proba(X.to_numpy(dtype=float)), model.raw_proba(FE.flip(X).to_numpy(dtype=float)))
+
+
 class GateModel:
     """Higher-timeframe model that must agree with a signal (multi-timeframe alignment):
     its score for the signal's side must be the higher of the two and at least `level`."""
@@ -132,6 +156,7 @@ class GateModel:
         self.session = bool(spec.get("session", False))
         self.volume = bool(spec.get("volume", True))
         self.anchor = spec.get("anchor")
+        self.float32 = str(spec.get("dtype") or "") == "float32"
         self.level = float(g.get("level", 0.0))
         self.label = g.get("label") or f"{self.tf} model agrees"
         self.trained_symbols = list(g.get("trained_symbols") or [])
@@ -166,6 +191,13 @@ class StreamModel:
         self.session = bool(spec.get("session", True))
         self.volume = bool(spec.get("volume", self.market == "crypto"))
         self.anchor = spec.get("anchor")
+        # engine 5 models were trained on inputs rounded to 32-bit floats: the live inputs get the same rounding,
+        # because a few inputs (market breadth, ranks) sit exactly on a tree's split value and would otherwise
+        # fall on the other side of it
+        self.float32 = str(spec.get("dtype") or "") == "float32"
+        # engine 5: the model reads candles of this (longer) timeframe that END at every candle of the stream,
+        # e.g. the 1h stream reads 4-hour candles ending at each full hour (None = the stream's own candles)
+        self.read_tf = spec.get("read_tf") if spec.get("read_tf") != self.tf else None
         lv = m["levels"]
         self.sl_atr = float(lv["sl_atr"])
         self.targets_r = [float(x) for x in lv["targets_r"]]
@@ -196,6 +228,12 @@ class StreamModel:
         if raw >= self.grade_b:
             return "B"
         return "C"
+
+
+def replay_bars(m):
+    """Candles a model stream replays to know which symbols are in a trade now: at least two full time limits, so
+    a trade that was running when the replay starts cannot change what the newest candle gets."""
+    return max(REPLAY_BARS, 2 * int(m.max_bars) + int(m.cooldown) + 2)
 
 
 def load_model(key):
@@ -282,8 +320,8 @@ def passed_test(test, key=None):
 
 
 def validated(key):
-    """crypto 4h (signal engine v3.2) or a stream model whose holdout test passed passed_test() with the real
-    costs."""
+    """crypto 4h (the 4-hour engine, signal_engine.py) or a stream model whose holdout test passed passed_test()
+    with the real costs."""
     if key == "crypto_4h":
         try:
             import signal_engine as se
@@ -365,7 +403,7 @@ def grade_of(score):
 
 
 def grade_from_confidence(conf, tier=None):
-    """Grade for crypto 4h (engine v3.2) signals: from the calibrated chance of TP1."""
+    """Grade for crypto 4h signals (signal_engine.py): from the calibrated chance of TP1."""
     if conf is None:
         return "C"
     if tier == "strong" and conf >= 80:
@@ -991,6 +1029,18 @@ class CandleStore:
         return df.tail(max(bars, self.history)).reset_index(drop=True)
 
 
+def shifted_candles(df, tf, shift_sec):
+    """Candles of timeframe `tf` built from smaller candles on a grid shifted by `shift_sec` seconds: with a shift
+    of one hour the 4-hour candles end at 01:00, 05:00, ... UTC instead of 00:00, 04:00, ... Only complete candles
+    (by the close of the last small candle) are returned; their timestamp is the candle's real start."""
+    import features as FE
+    d = df[["timestamp", "open", "high", "low", "close", "volume"]].copy()
+    d["timestamp"] = pd.to_datetime(d["timestamp"]) - pd.Timedelta(seconds=int(shift_sec))
+    b = FE.resample_closed(d, tf)
+    b["timestamp"] = b["timestamp"] + pd.Timedelta(seconds=int(shift_sec))
+    return b.reset_index(drop=True)
+
+
 def forex_open_mask(ts):
     """Vectorised markets.forex_open for candle start times."""
     t = pd.to_datetime(pd.Series(ts)).reset_index(drop=True)
@@ -1033,7 +1083,12 @@ class StreamEngine:
             if not force and self._board and self._board[0] == bar:
                 return self._board[1]
             m = self.model
-            out = self._model_board(m, now) if m is not None else self._rules_board(now)
+            if m is None:
+                out = self._rules_board(now)
+            elif m.read_tf:
+                out = self._reading_board(m, now)
+            else:
+                out = self._model_board(m, now)
             self._board = (bar, out)
             return out
 
@@ -1087,13 +1142,13 @@ class StreamEngine:
             cs = FE.currency_block(ref)
         gates = self._gate_scores(m, frames, now) if m.gate is not None else {}
         data, lean = {}, {}
-        tail = REPLAY_BARS + 2
+        replay = replay_bars(m)
+        tail = replay + 2
         for sym, F in frames.items():
             try:
                 X = FE.assemble(F, m.features, sym=sym, anchor=anchor, mkt=mkt, cs=cs).iloc[-tail:]
                 Fx = F.iloc[-tail:]
-                pl = m.raw_proba(X.to_numpy(dtype=float))
-                ps = m.raw_proba(FE.flip(X).to_numpy(dtype=float))
+                pl, ps = score_sides(m, X)
                 g = gates.get(sym)
                 if m.gate is not None:
                     g = align_gate(Fx, self.tf, g, m.gate.tf) if g is not None else (
@@ -1105,7 +1160,7 @@ class StreamEngine:
         plan = plan_for(self.market, self.tf)
         plan["hold_bars"] = m.hold_bars
         active, last, closed = run_policy(data, self.market, self.tf, plan, policy_for(self.market, self.tf),
-                                          lookback=REPLAY_BARS, blocked=self.blocked)
+                                          lookback=replay, blocked=self.blocked)
         out = {}
         for sym, v in data.items():
             cl, cs_, best = lean[sym]
@@ -1113,6 +1168,117 @@ class StreamEngine:
             res = self._result(d, active.get(sym), last.get(sym), closed.get(sym, []), cl * 100, cs_ * 100,
                                m.threshold, m.watch, "v" + m.version, plan, best_raw=best)
             out[sym] = res
+        for sym, err in errors.items():
+            out[sym] = {"error": err, "market": self.market, "timeframe": self.tf}
+        self.errors = errors
+        return out
+
+    # ---- trained model that reads a longer timeframe at every candle of the stream (engine 5, crypto 1h)
+    def _read_grid(self, m, raw, off, wanted, long_tail):
+        """Scores of the long candles (m.read_tf) on the grid shifted by `off` stream candles, for the wanted
+        symbols: {symbol: (start of the stream candle that ends each long candle, long, short, ATR)}."""
+        import features as FE
+        sec, rsec = markets.TF_SEC[self.tf], markets.TF_SEC[m.read_tf]
+        trained = set(m.meta.get("trained_symbols") or [])
+        frames = {}
+        for sym, df in raw.items():
+            try:
+                b = shifted_candles(df, m.read_tf, off * sec)
+                if len(b) >= 260:
+                    frames[sym] = FE.symbol_features(b, m.read_tf, session=m.session, volume=m.volume)
+            except Exception:
+                continue
+        # the cross-symbol blocks use the symbols the model was trained with (same inputs as in its tests)
+        ref = {s_: F for s_, F in frames.items() if s_ in trained} or frames
+        mkt = FE.market_block(ref) if self.market == "crypto" else None
+        cs = FE.currency_block(ref) if self.market != "crypto" else None
+        anchor = FE.anchor_block(frames[m.anchor]) if m.anchor and frames.get(m.anchor) is not None else None
+        out = {}
+        for sym in wanted:
+            F = frames.get(sym)
+            if F is None:
+                continue
+            try:
+                X = FE.assemble(F, m.features, sym=sym, anchor=anchor, mkt=mkt, cs=cs).iloc[-long_tail:]
+                Fx = F.iloc[-long_tail:]
+                pl, ps = score_sides(m, X)
+                last = pd.to_datetime(Fx["timestamp"]).to_numpy() + np.timedelta64(rsec - sec, "s")
+                out[sym] = (last, pl, ps, Fx["atr"].to_numpy(float))
+            except Exception:
+                continue
+        return out
+
+    def _reading_board(self, m, now):
+        """The model's inputs are candles of m.read_tf (4h) built from the stream's own candles (1h) on every grid
+        that ends at a stream candle: one series per offset (the usual 4-hour grid and the grids shifted by 1, 2
+        and 3 hours). Each stream candle gets the score, the ATR and the stop distance of the long candle that
+        ends with it - the same construction as research/v5/rolling.py. Only the grid whose long candle has just
+        closed is computed again at each scan; the other grids are kept from the scans before."""
+        import features as FE
+        sec, rsec = markets.TF_SEC[self.tf], markets.TF_SEC[m.read_tf]
+        k = rsec // sec
+        hist = FE.HISTORY[m.read_tf] * k + 2 * k
+        trained = list(m.meta.get("trained_symbols") or [])
+        raw, errors = {}, {}
+        for sym in dict.fromkeys(list(self.symbols) + trained):
+            try:
+                df = self.store.frame(sym, self.tf, now, bars=hist)
+                if len(df) < 260 * k:
+                    raise ValueError(f"Not enough {self.tf} history for {sym} yet.")
+                raw[sym] = df
+            except Exception as e:
+                if sym in self.symbols:
+                    errors[sym] = str(e)[:160]
+        replay = replay_bars(m)
+        tail = replay + 2
+        long_tail = tail // k + 4
+        cols = {}
+        for sym in self.symbols:
+            if sym in raw:
+                n = min(len(raw[sym]), tail)
+                cols[sym] = {"pl": np.full(n, np.nan), "ps": np.full(n, np.nan), "atr": np.full(n, np.nan),
+                             "ts": pd.to_datetime(raw[sym]["timestamp"]).to_numpy()[-n:]}
+        cache = getattr(self, "_grid_cache", None)
+        if cache is None or cache.get("model") is not m:
+            cache = self._grid_cache = {"model": m, "grids": {}}
+        t_end = int((last_closed_bar(self.tf, now) - datetime(1970, 1, 1)).total_seconds()) + sec
+        for off in range(k):
+            newest = t_end - ((t_end - off * sec) % rsec)        # close of this grid's newest complete long candle
+            hit = cache["grids"].get(off)
+            if hit is None or hit[0] != newest or not set(cols) <= hit[2]:
+                hit = cache["grids"][off] = (newest, self._read_grid(m, raw, off, list(cols), long_tail), set(cols))
+            for sym, c in cols.items():
+                got = hit[1].get(sym)
+                if got is None:
+                    continue
+                last, pl, ps, atr = got
+                pos = np.searchsorted(c["ts"], last)
+                ok = pos < len(c["ts"])
+                ok[ok] = c["ts"][pos[ok]] == last[ok]
+                i = pos[ok]
+                c["pl"][i], c["ps"][i], c["atr"][i] = pl[ok], ps[ok], atr[ok]
+        data, lean, views = {}, {}, {}
+        for sym, c in cols.items():
+            d = raw[sym].iloc[-len(c["ts"]):].reset_index(drop=True)
+            if not np.isfinite(c["pl"][-1]):
+                errors[sym] = f"The latest {self.tf} candle of {sym} could not be read yet."
+                continue
+            view = pd.DataFrame({"timestamp": d["timestamp"], "open": d["open"].astype(float),
+                                 "high": d["high"].astype(float), "low": d["low"].astype(float),
+                                 "close": d["close"].astype(float), "atr": c["atr"]})
+            data[sym] = model_data(m, view, c["pl"], c["ps"], sym=sym)
+            views[sym] = view
+            lean[sym] = (float(m.calibrate(c["pl"][-1:])[0]), float(m.calibrate(c["ps"][-1:])[0]),
+                         float(max(c["pl"][-1], c["ps"][-1])))
+        plan = plan_for(self.market, self.tf)
+        plan["hold_bars"] = m.hold_bars
+        active, last, closed = run_policy(data, self.market, self.tf, plan, policy_for(self.market, self.tf),
+                                          lookback=replay, blocked=self.blocked)
+        out = {}
+        for sym in data:
+            cl, cs_, best = lean[sym]
+            out[sym] = self._result(views[sym], active.get(sym), last.get(sym), closed.get(sym, []), cl * 100,
+                                    cs_ * 100, m.threshold, m.watch, "v" + m.version, plan, best_raw=best)
         for sym, err in errors.items():
             out[sym] = {"error": err, "market": self.market, "timeframe": self.tf}
         self.errors = errors
@@ -1155,8 +1321,7 @@ class StreamEngine:
                 continue
             try:
                 Xg = FE.assemble(Gf, gm.features, sym=sym, anchor=anchor, mkt=mkt, cs=cs)
-                out[sym] = (pd.to_datetime(Gf["timestamp"]).to_numpy(), gm.raw_proba(Xg.to_numpy(dtype=float)),
-                            gm.raw_proba(FE.flip(Xg).to_numpy(dtype=float)))
+                out[sym] = (pd.to_datetime(Gf["timestamp"]).to_numpy(), *score_sides(gm, Xg))
             except Exception:
                 continue
         self._gate_cache = (bar, out, set(frames))

@@ -54,7 +54,7 @@ BOT_TERMS = {
                                                  "Higher means fewer but more selective trades. Set it above every "
                                                  "signal's confidence and the bot never trades; the settings form shows the range."),
     "reward_risk": ("Reward : Risk", "How far the take-profit is compared with the stop. 1.5 means the target is 1.5 times "
-                                     "the stop distance. Signal engine v3 sets its own levels (a stop and three targets) when it has them."),
+                                     "the stop distance. A site signal sets its own levels (a stop and one or three targets)."),
     "max_positions": ("Max open positions", "The most trades the bot keeps open at the same time on this account."),
     "max_position": ("Max position size", "The biggest single trade (in USDT) the bot may open, whatever the risk % says."),
     "site_demo": ("Site demo account", "The bot trades your Demo trading account on this site: virtual USDT, live prices, "
@@ -150,8 +150,8 @@ def _why_no_trade(ctx):
         skipped = [n for n in notes if "skipped" in n]
         lines.append(f"Last scan: {scan.split(':', 1)[-1].strip()}")
         if waits and len(waits) == len(notes):
-            lines.append("Every coin was WAIT: signal engine v3 gives a coin a signal only when its setup is good enough (on closed "
-                         "4-hour candles), so many scans end with no trade. That is normal, not a fault.")
+            lines.append("Every coin was WAIT: the signal engine gives a coin a signal only when its setup is good enough (on closed "
+                         "candles), so many scans end with no trade. That is normal, not a fault.")
         elif waits:
             lines.append(f"{len(waits)} coin(s) were WAIT (no setup).")
         if low:
@@ -166,14 +166,14 @@ def _why_no_trade(ctx):
                          "(often a trade size below the minimum or not enough balance).")
     else:
         lines.append("No scan has run yet. The bot scans every few minutes after it is switched on.")
-    lines.append("The bot only enters on a signal from the 4-hour candle that just closed, never late.")
+    lines.append("The bot only enters on a signal from the candle that just closed, never late.")
     return "\n".join(lines)
 
 
 def _how_bot(ctx):
     st = ctx.get("settings") or {}
     return ("Here is what the bot does on every scan:\n"
-            f"1. It checks each coin you ticked ({len(st.get('coins') or [])} now) with signal engine v3 (closed 4-hour candles).\n"
+            f"1. It checks each coin you ticked ({len(st.get('coins') or [])} now) with the signal engine (closed candles).\n"
             f"2. It trades only a fresh LONG or SHORT with at least {st.get('min_confidence', 65)}% confidence"
             f"{' (no shorts on spot)' if st.get('market_type') == 'spot' else ''}.\n"
             f"3. The size is set so that hitting the stop-loss loses about {st.get('risk_pct', 1)}% of the balance, "
@@ -224,9 +224,10 @@ def _performance(ctx):
     else:
         mine = (f"This account: {s['closed_count']} closed trades, {s.get('wins', 0)} won, win rate {s.get('win_rate')}%, "
                 f"total {_money(s.get('total_pnl'), True)}.")
-    return (mine + "\nIn testing on data the model never saw (Oct 2025 to Oct 2026), about 3 in 4 engine signals closed in "
-            "profit, +0.13R per signal on average after fees. A full loss (-1R) is bigger than most wins, and there were "
-            "losing months. Past results do not guarantee future results.")
+    return (mine + "\nIn the tests on data the models never saw (Oct 2025 to Nov 2026), about 3 in 4 signals of the 4-hour "
+            "stream and about 8 in 10 of the 1-hour stream reached their first target: +0.12R and +0.19R per signal on "
+            "average after costs. A full loss (-1R) is bigger than most wins, and there were losing weeks. Past results "
+            "do not guarantee future results.")
 
 
 def _connect(ctx):
@@ -352,14 +353,16 @@ Answer the user's question clearly and briefly (usually 2 to 6 short sentences o
 English, even when the question is written in another language (the website is English-only).
 
 What you know about the product:
-- The site gives separate signal streams for 15-minute, 1-hour and 4-hour candles, for crypto (62 coins) and forex
-  (the 7 majors, popular crosses and gold). Every signal has an entry, a stop, three targets (TP1, TP2, TP3), a grade
-  (A, B or C) and an expected holding time. The test results of each stream are on the Signals page.
+- The site gives crypto signals on two tested streams, about 100 coins each: the 4-hour stream (three targets: TP1 at
+  0.5R, TP2 at 1R, TP3 at 2R) and the 1-hour stream (one target at 0.5R; its signals come in bursts). There are no
+  15-minute, forex or gold signals. Every signal has an entry, a stop, its targets, a grade or tier and an expected
+  holding time. The test results of each stream are on the Signals page.
 - The bot takes every new site signal that matches the account's settings (markets, timeframes, minimum grade,
   minimum confidence, all symbols or only the ticked ones), at once, with the signal's own stop and targets. It only
   enters while the price is still close to the entry (within 0.35 of the stop distance, before TP1, at most two candles
-  after the signal). It sizes the trade so hitting the stop loses about "risk per trade" % of the balance, closes a third
-  at each target, moves the stop to the entry after TP1 and to TP1 after TP2. Every signal is ordered at most once per account.
+  after the signal). It sizes the trade so hitting the stop loses about "risk per trade" % of the balance. On a
+  three-target signal it closes a third at each target and moves the stop to the entry after TP1 and to TP1 after TP2;
+  a one-target signal closes fully at its target. Every signal is ordered at most once per account.
 - Accounts: "Site demo" (virtual money on this site, crypto + forex, no keys), "Binance Demo" (demo.binance.com key),
   "Live" (real money on Binance), "OANDA demo" and "OANDA live" (forex). Each has its own bot, settings and history.
 - Safety: max open positions, daily loss limit (pauses the bot until 00:00 UTC), the kill switch (bot off + every position

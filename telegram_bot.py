@@ -288,6 +288,15 @@ def _targets(e):
 TF_NAME = {"15m": "15-minute", "1h": "1-hour", "4h": "4-hour"}
 
 
+def _tested_stream(market, tf):
+    """True for a stream whose model passed its test (its confidence is a calibrated chance of target 1)."""
+    try:
+        import streams
+        return bool(streams.validated(f"{market}_{tf}"))
+    except Exception:
+        return market == "crypto" and tf == "4h"
+
+
 def signal_block(e):
     side = e["side"]
     icon = "\U0001F7E2" if side == "LONG" else "\U0001F534"
@@ -302,7 +311,7 @@ def signal_block(e):
     lines.append("Close a third at each target. After TP1 move the stop to the entry, after TP2 to TP1." if len(tps) > 1
                  else "Close the whole position at the target. The stop does not move.")
     extra = []
-    if tf == "4h" and (e.get("market") or "crypto") == "crypto" and e.get("confidence") is not None:
+    if e.get("confidence") is not None and _tested_stream(e.get("market") or "crypto", tf):
         extra.append(f"Model confidence: {float(e['confidence']):.0f}%")
     if e.get("hold_minutes"):
         h = int(e["hold_minutes"]) / 60
@@ -345,8 +354,7 @@ def _signals_text():
     except Exception:
         return "The signals list is not available right now. Please try again in a minute."
     if not rows:
-        return ("No active signals right now. New signals can start at every 15-minute, 1-hour and "
-                "4-hour candle close.")
+        return "No active signals right now. New signals can start at every 1-hour and 4-hour candle close."
     out = [f"<b>Active signals ({total})</b>"]
     for r in rows:
         side = "Long" if r["side"] == "LONG" else "Short"

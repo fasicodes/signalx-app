@@ -3,7 +3,7 @@ Signals board + signal alerts - Signals FM
 ==========================================
 
 * Background refresher: right after every 4-hour candle close it reads
-  signal engine v3 for every crypto coin and keeps the result in memory
+  the 4-hour signal engine for every crypto coin and keeps the result in memory
   (the board page then loads instantly). Trades are given for every crypto coin
   in the engine's signal list (signal_model.json); other symbols show the lean only.
 * Every NEW signal (a trade that started on the candle that just closed) is
@@ -135,7 +135,7 @@ def refresh_board(now=None, only=None):
 
 
 def record_event(sym, res):
-    """Stores a new crypto 4h signal (engine v3.2) as a crypto/4h stream event."""
+    """Stores a new crypto 4h signal (signal_engine.py) as a crypto/4h stream event."""
     import signal_hub
     try:
         return signal_hub.record(sym, "crypto", "4h", res["active"])
@@ -198,12 +198,13 @@ def _untested(e):
 
 def event_text(e):
     msg = f"Entry {_fmt(e['entry'], e['symbol'])} · stop {_fmt(e['stop_loss'], e['symbol'])} · {_targets_txt(e)}"
-    if (e.get("timeframe") or "4h") == "4h" and (e.get("market") or "crypto") == "crypto" and e.get("confidence") is not None:
+    untested = _untested(e)
+    if e.get("confidence") is not None and not untested:     # a tested model's calibrated chance of target 1
         msg += f" · model confidence {float(e['confidence']):.0f}%"
     news = e.get("news")
     if isinstance(news, dict) and news.get("title"):
         msg += f" · high-impact news soon: {news['title']}"
-    if _untested(e):
+    if untested:
         msg += " · experimental: simple rules that have not passed our test on unseen data"
     return msg
 

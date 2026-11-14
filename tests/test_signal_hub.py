@@ -18,7 +18,7 @@ import shutil  # noqa: E402
 import tempfile  # noqa: E402
 
 # the tests must not depend on the model files that ship with the site: they run against an empty models folder
-# (rules engine fallback); the shipped crypto 1h model is checked separately below
+# (rules engine fallback); the shipped crypto 1h model is checked below and in tests/test_engine5.py
 _MD = tempfile.mkdtemp(prefix="models_")
 os.environ["MODELS_DIR"] = _MD
 
@@ -358,7 +358,7 @@ made, scan_errors = {}, []
 hub._FORCE_STREAMS = list(hub.ALL_STREAMS)
 for key in hub.enabled_streams():
     if key == "crypto_4h":
-        continue                      # produced by signalboard.py (signal engine v3.1), tested elsewhere
+        continue                      # produced by signalboard.py (the 4-hour engine), tested elsewhere
     sec = markets.TF_SEC[streams.STREAMS[key]["tf"]]
     made[key] = 0
     close = streams.last_closed_bar(streams.STREAMS[key]["tf"], NOW) + timedelta(seconds=sec + 60)   # scanned 1 min after the close
@@ -521,21 +521,24 @@ hub._FORCE_STREAMS = None
 # more coins for the 4h stream (research/coin_expansion.py) and the 1h per-candle limit (research/cap_test.py)
 # ---------------------------------------------------------------------------
 c4, c1 = markets.stream_coins("crypto", "4h"), markets.stream_coins("crypto", "1h")
-check(set(markets.CRYPTO_4H_ONLY) <= set(c4) and not (set(markets.CRYPTO_4H_ONLY) & set(c1)) and c4 == markets.CRYPTO_COINS
-      and markets.stream_coins("crypto", "15m") == c1 and markets.stream_coins("forex", "1h") == markets.forex_signal_pairs(),
-      "coins per stream: 4h every coin, 1h and 15m without the 4h-only coins, forex the signal pairs")
+c15 = markets.stream_coins("crypto", "15m")
+check(set(markets.CRYPTO_4H_ONLY) <= set(c4) and c1 == c4 == markets.CRYPTO_COINS and not (set(markets.CRYPTO_4H_ONLY) & set(c15))
+      and markets.stream_coins("forex", "1h") == markets.forex_signal_pairs(),
+      "coins per stream: 4h and 1h every coin (both read 4-hour candles), 15m without the added coins, forex the signal pairs")
 check(len(markets.CRYPTO_COINS) == len(set(markets.CRYPTO_COINS)) == 62 + len(markets.CRYPTO_4H_ONLY),
       "coin list: the 62 coins plus the added 4h coins, none twice")
 _had = hub._hooks.get("get_candles")
 hub._hooks["get_candles"] = _had or (lambda **kw: None)
 hub._engines.pop("crypto_1h", None)
-check(hub.engine("crypto_1h").symbols == c1, "the 1h engine scans only the coins its model passed on")
+check(hub.engine("crypto_1h").symbols == c1, "the 1h engine scans every coin")
 hub._engines.pop("crypto_1h", None)
 if _had is None:
     hub._hooks.pop("get_candles", None)
-check(not os.path.exists(os.path.join(os.path.dirname(HERE), "models", "coin_test.json"))
-      and not os.path.exists(os.path.join(os.path.dirname(HERE), "models", "crypto_1h.json")),
-      "engine 3.2: the old coin test and the old crypto 1h model are gone")
+_shipped = os.path.join(os.path.dirname(HERE), "models")
+check(not os.path.exists(os.path.join(_shipped, "coin_test.json"))
+      and json.load(open(os.path.join(_shipped, "crypto_1h.json")))["version"] == "5.0"
+      and sorted(f for f in os.listdir(_shipped) if f.split("_")[0] in ("crypto", "forex")) == ["crypto_1h.json"],
+      "engine 5: the old coin test is gone; the only stream model file is the engine 5 crypto 1h model")
 
 # coins page: 4h "getting close" from the signal board, coins without data left out, joinable signals first
 hub._FORCE_STREAMS = list(hub.ALL_STREAMS)
@@ -566,12 +569,15 @@ check("XRP/USDT" not in [s for s, _ in order] and ("ADA/USDT", "wait") in order,
 check(all(x["signal"]["strong"] is False for x in cs["coins"] if x["status"] in ("buy", "sell")) and cs["counts"]["strong"] == 0,
       "coins: 4h signals without the strong tier are not marked strong")
 check(hub.is_strong({"market": "crypto", "timeframe": "4h", "tier": "strong"}) and not hub.is_strong({"market": "crypto", "timeframe": "4h", "tier": "standard"})
-      and hub.is_strong({"market": "crypto", "timeframe": "1h", "grade": "A"}) and not hub.is_strong({"market": "crypto", "timeframe": "1h", "grade": "B"})
+      and not hub.is_strong({"market": "crypto", "timeframe": "1h", "grade": "A"})
       and not hub.is_strong({"market": "forex", "timeframe": "1h", "grade": "A"}) and not hub.is_strong({"market": "crypto", "timeframe": "15m", "grade": "A"}),
-      "strongest signals: 4h strong tier, 1h top grade, nothing else")
+      "strongest signals: the 4h strong tier; a stream without a tested model has none")
 _md_before = streams.MODELS_DIR
 streams.MODELS_DIR = os.path.join(os.path.dirname(HERE), "models")
 streams.reset_models()
+check(hub.is_strong({"market": "crypto", "timeframe": "1h", "grade": "A"}) and not hub.is_strong({"market": "crypto", "timeframe": "1h", "grade": "B"})
+      and not hub.is_strong({"market": "forex", "timeframe": "1h", "grade": "A"}),
+      "strongest signals with the shipped models: 4h strong tier, 1h top grade, nothing else")
 ss = hub.strong_summary(["1h", "4h"])
 check(ss and ss["strong"]["win_rate"] > ss["all"]["win_rate"] and ss["strong"]["avg_r"] > ss["all"]["avg_r"] and ss["strong"]["per_day"] < ss["all"]["per_day"],
       "strongest signals: better and rarer than all signals in the shipped tests")

@@ -41,12 +41,9 @@ H4 = np.timedelta64(4, "h")
 
 
 def shifted_bars(d15, off):
-    """4-hour candles whose grid is shifted by `off` hours (they end at 0+off, 4+off, ... UTC)."""
-    d = d15.copy()
-    d["timestamp"] = d["timestamp"] - pd.Timedelta(hours=off)
-    b = FE.resample_closed(d[["timestamp", "open", "high", "low", "close", "volume"]], "4h")
-    b["timestamp"] = b["timestamp"] + pd.Timedelta(hours=off)
-    return b.reset_index(drop=True)
+    """4-hour candles whose grid is shifted by `off` hours (they end at 0+off, 4+off, ... UTC): the site's own
+    construction (streams.shifted_candles)."""
+    return ST.shifted_candles(d15, "4h", off * 3600)
 
 
 def build():
@@ -207,5 +204,57 @@ def final():
     return res
 
 
+def export():
+    """models/crypto_1h.json: the 4h model's newest walk-forward fold, read at every hourly close."""
+    res = json.load(open(f"{W}/results/crypto_1h_rolling.json"))
+    assert res.get("passes_validation_rule") and res.get("test"), "export needs the validation and the holdout test"
+    ch = json.load(open(f"{W}/results/{SRC}_choice.json"))
+    fin = pickle.load(open(f"{W}/wf/{SRC}_last.pkl", "rb"))
+    trees, base = L.export_trees(fin["clf"])
+    _, D = L.load_ds(SRC)
+    probe = np.asarray(next(iter(D.values()))["X"][-400:])
+    dense = [{k: np.asarray(v) for k, v in t.items()} for t in trees]
+    assert np.allclose(ST._tree_proba(dense, base, probe), fin["clf"].predict_proba(probe)[:, 1], atol=1e-5), "tree export"
+    plan = L.PLANS[ch["plan"]]
+    trained = json.load(open(f"{W}/ds/{SRC}/meta.json"))["symbols"]
+    test = dict(res["test"], cost_round_trip=L.markets.CRYPTO_COST_ROUND_TRIP, by_offset=res.get("test_by_offset"))
+    test["note"] = ("Walk-forward on data the models never saw (every fold was scored by a model trained only on "
+                    "candles from before the fold), hourly decisions, entries at the price one minute after the hourly "
+                    "candle closed, 0.30% fees and slippage per round trip plus funding for longs. A win = the target "
+                    "was reached before the stop.")
+    hb = float(res["validation"]["median_hold_bars"])
+    model = {
+        "version": "5.0", "stream": "crypto_1h", "market": "crypto", "timeframe": "1h",
+        "trained_on": f"{C['data_start']} to {fin['train_end'][:10]}, {len(trained)} symbols",
+        "spec": {"session": C["session"], "volume": C["volume"], "anchor": C["anchor"], "read_tf": C["tf"],
+                 "dtype": "float32"},
+        "features": fin["cols"], "baseline": base, "trees": trees, "calibration": ch["calibration"],
+        "calibration_note": "Maps the model output to the share of past cases that reached the target before the stop "
+                            f"(walk-forward predictions of the 4-hour model, {C['val'][0]} to {C['val'][1]}).",
+        "threshold": ch["threshold"], "grade_a": max(ch["grade_a"], ch["threshold"]), "grade_b": ch["threshold"],
+        "watch_threshold": min(ch.get("watch", ch["threshold"]), ch["threshold"]),
+        "policy_note": ("The 4-hour model is read at every hourly close, on the 4-hour candle that ends at that hour. A "
+                        "coin gets a signal when the model's score is at least the level chosen on the 4-hour model's "
+                        f"validation years (its top 2%). One trade at a time per coin, a cooldown of {COOLDOWN} hourly "
+                        f"candles, at most {MAX_PER_BAR} new signals per hourly candle (the highest scores)."),
+        "levels": {"sl_atr": C["k"], "targets_r": plan["targets_r"], "fractions": plan["fractions"], "max_bars": H1,
+                   "be_after": plan["be_after"]},
+        "plan_note": (f"Stop {C['k']:g} x ATR(14) of the 4-hour candles from the entry (1R). One target at 0.5R: the whole "
+                      f"position closes there and the stop never moves. Time limit {H1} hourly candles (9 days)."),
+        "selection": {"max_per_bar": MAX_PER_BAR, "cooldown_bars": COOLDOWN, "sessions": None,
+                      "no_new_before_close_h": 0, "cost_cap_r": None},
+        "hold_bars_median": hb, "hold_text": L.hold_text({"tf": "1h"}, hb),
+        "signal_symbols": list(L.markets.CRYPTO_COINS), "trained_symbols": trained,
+        "test": test, "walk_forward": dict(res["validation"], by_offset=res.get("validation_by_offset")),
+        "validation_rule": L.RULE_TEXT,
+        "fees": "0.30% round trip + funding for longs",
+        "research": "research/v5/lab5.py (the 4-hour model) and research/v5/rolling.py (read every hour)",
+    }
+    path = f"{L.APP}/models/crypto_1h.json"
+    json.dump(model, open(path, "w"), separators=(",", ":"))
+    log("exported", path, os.path.getsize(path) // 1024, "KB; passes the site's live bar:",
+        ST.passed_test(test, "crypto_1h"))
+
+
 if __name__ == "__main__":
-    {"build": build, "val": val, "final": final}[sys.argv[1]]()
+    {"build": build, "val": val, "final": final, "export": export}[sys.argv[1]]()

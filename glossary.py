@@ -11,44 +11,50 @@ Keep each text short (one or two sentences) and free of jargon.
 GROUPS = [
     ("Signals", [
         ("signal", "Signal",
-         "A trade idea from the signal engine: Long or Short, with an entry, a stop loss and three targets. "
+         "A trade idea from the signal engine: Long or Short, with an entry, a stop loss and one or three targets. "
          "It is an estimate, not a promise, and signals lose regularly."),
         ("long", "Long",
          "A trade that profits if the price goes up. You buy now and aim to sell higher, at the target."),
         ("short", "Short",
          "A trade that profits if the price goes down. You sell now (usually with futures) and aim to buy back lower, at the target."),
         ("wait", "Wait",
-         "No trade on this coin right now. The engine gives strong signals only for its best setups; if no coin has had a "
-         "signal for 24 hours, the best setup gets a standard signal, so there is rarely a long wait across all coins."),
+         "No trade on this coin right now. The models give signals only for their best setups. On the 4-hour stream, if "
+         "no coin has had a signal for 24 hours, the best setup gets a standard signal, so there is rarely a long wait "
+         "across all coins. The 1-hour stream has no such filler: it can be quiet for days and then give many signals "
+         "in one market move."),
         ("setup_forming", "Setup forming",
          "The engine is close to a signal but not there yet. It is not a trade; keep an eye on the next candle close."),
         ("entry", "Entry",
-         "The price where a signal starts: the close of the candle (15-minute, 1-hour or 4-hour) that gave the signal."),
+         "The price where a signal starts: the close of the candle (1-hour or 4-hour) that gave the signal."),
         ("stop_loss", "Stop loss",
          "The price where you accept the trade was wrong and exit, so the loss stays small. Every signal has one. Always use it."),
         ("target", "Targets",
-         "The prices where you take profit (take profit). Tested 1h and 4h signals have one target, as far from the entry as "
-         "the stop (1R): the whole position closes there and the stop does not move. Experimental signals have three: TP1 at "
-         "1R, TP2 at 2R, TP3 at 3R, a third of the position at each, with the stop moved to the entry after TP1."),
+         "The prices where you take profit. 4-hour signals have three: TP1 at half the stop distance (0.5R), TP2 at 1R and "
+         "TP3 at 2R; a third of the position closes at each, and the stop moves to the entry after TP1 and to TP1 after "
+         "TP2. 1-hour signals have one target at 0.5R: the whole position closes there and the stop does not move."),
         ("targets", "Targets reached",
-         "How many signals reached their target (or TP1, TP2 and TP3 on three-target signals). Because a win (+1R) and a "
-         "loss (-1R) are the same size, a stream needs clearly more than half of its signals to win."),
+         "How many signals reached their first target (TP1) and the later ones. The first target is half as far as the "
+         "stop, so a win is smaller than a full loss: a stream needs clearly more than 2 wins in every 3 signals to make "
+         "money."),
         ("tier", "Strong and standard signals",
-         "Strong: the model's score is in its top 3%. Standard: when no coin has had a signal for 24 hours, the best coin gets "
-         "one if its score is at least average. Strong signals did better in testing (about +0.32R each); standard ones keep "
-         "signals coming but earned much less (about +0.12R), so treat them as lower conviction."),
+         "4-hour stream. Strong: the model's score is in its top 3%. Standard: when no coin has had a signal for 24 hours, "
+         "the best coin gets one if its score is at least average. On unseen data strong signals reached target 1 about "
+         "79% of the time (+0.17R each); standard ones keep signals coming but did less well (about 71%, +0.05R), so "
+         "treat them as lower conviction."),
         ("win_chance", "Model confidence",
-         "The model's estimate of how often the price moves half the stop distance in the signal's direction before the stop. "
-         "The 1R target is further away, so it is reached less often: in testing about 6 in 10 signals reached it (a random "
-         "entry would reach it about 5 in 10 times). Higher confidence did better, but no signal is certain."),
+         "The model's estimate of how often the price reaches the first target (half the stop distance in the signal's "
+         "direction) before the stop. A random entry does that about 2 times in 3; in testing the models' signals did it "
+         "about 3 times in 4 or more. Higher confidence did better, but no signal is certain."),
         ("progress", "Progress",
          "Where the live price is between the current stop and the next target. 100% to a target means it is reached; "
          "100% to stop means the stop is hit."),
         ("time_limit", "Time limit",
-         "If a signal has not closed within 54 four-hour candles (9 days), whatever is left closes at that candle's close."),
+         "If a signal has not closed within 9 days (54 four-hour candles, or 216 hourly candles on the 1-hour stream), "
+         "whatever is left closes at that candle's close."),
         ("candle_4h", "4-hour candle",
-         "One bar on the chart that covers 4 hours. The engine only reads closed candles, so new signals appear right after "
-         "each 4-hour close (six times a day)."),
+         "One bar on the chart that covers 4 hours. The engine only reads closed candles: the 4-hour stream gives new "
+         "signals right after each 4-hour close (six times a day), and the 1-hour stream reads the last four hours at "
+         "every hourly close."),
         ("leaning", "Leaning",
          "The side the model favours right now, Long or Short, with its probability. It shows the direction even when it is "
          "not strong enough for a signal."),
@@ -60,9 +66,9 @@ GROUPS = [
          "1R is the amount you lose if the stop is hit. If you risk $10 on a signal, +1R is a $10 gain and −1R is a $10 loss. "
          "Keep 1R small, for example 1% of your account."),
         ("win_rate", "Win rate",
-         "The share of closed signals that reached their (first) target. A high win rate alone does not mean profit: it "
-         "depends on where the target is. With the target as far as the stop, a random entry wins about half the time, so "
-         "look at the average R after fees too."),
+         "The share of closed signals that reached their first target. A high win rate alone does not mean profit: it "
+         "depends on where the target is. With the first target at half the stop distance, a random entry wins about 2 "
+         "times in 3, and one full loss costs as much as two first-target wins, so look at the average R after fees too."),
         ("avg_r", "Average result (R)",
          "The average result per signal in R, after fees. Above 0 means the signals made money overall in that period."),
         ("profit_factor", "Profit factor",
@@ -72,10 +78,10 @@ GROUPS = [
         ("backtest", "Backtest",
          "Running the same rules over past data to see how they would have done. Useful, but real trading can do worse."),
         ("unseen_data", "Tested on unseen data",
-         "The model learned from July 2020 to September 2025 and was then tested once on October 2025 to October 2026, "
-         "data it had never seen. A walk-forward test on 2023 to 2025 (re-trained every 6 months) was positive every year."),
+         "Each model learned from older data and was then tested once on later data it had never seen (October 2025 to "
+         "November 2026), with trading costs. Only streams that passed that test give signals."),
         ("fees", "Fees",
-         "What the exchange charges to open and close a trade. Every tested result already takes off 0.30% per trade for fees and slippage."),
+         "What the exchange charges to open and close a trade. Every tested result already takes off 0.30% per trade for fees and slippage, plus funding for longs."),
         ("leverage", "Leverage",
          "Borrowed money that makes a position bigger. At 10x, a 10% move against you wipes out the margin. Keep leverage low."),
     ]),

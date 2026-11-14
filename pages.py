@@ -36,7 +36,7 @@ _hooks = {"send_email": None}
 
 # Every feature, as shown on the pricing page. Edit here when plans change.
 PLAN_FEATURES = [
-    ("Signals on 102 coins", "Long or Short with entry, stop loss and targets: every 4 hours on 102 coins, every hour on 62"),
+    ("Signals on 102 coins", "Long or Short with entry, stop loss and targets: checked every 4 hours and every hour"),
     ("Live signals board", "Every coin at a glance, active signals with live progress"),
     ("Signal alerts", "In the app, by email and by Telegram"),
     ("Pro terminal", "Advanced chart, liquidity scanner and 27-channel analysis"),
@@ -66,76 +66,90 @@ FAQ = [
     ]),
     ("signals", "Signals", [
         ("How are signals made?",
-         "<p>The signal engine reads <b>closed 4-hour candles</b>. For each coin it looks at the coin's own price action, its daily "
-         "trend, Bitcoin and the market of 16 large coins (82 measurements in all), and a machine-learning model estimates the chance "
-         "that a trade reaches its first target before its stop. All 102 crypto coins are read together at every close: setups in the "
-         "model's top 3% become <b>strong</b> signals, and if no coin has had a signal for 24 hours, the best setup (with at least an "
-         "average score) becomes a <b>standard</b> signal. At most 5 new signals start on one candle (the highest scores), because "
-         "many coins at once usually means one market move.</p>"),
+         "<p>Two machine-learning models read <b>closed candles</b> of 102 crypto coins. For each coin they look at the coin's own "
+         "price action, its daily trend, Bitcoin and the whole market (82 measurements), and estimate the chance that a trade "
+         "reaches its first target before its stop. Only the best setups become signals.</p>"
+         "<ul><li><b>4-hour stream</b>: read at every 4-hour close. Setups in the model's top 3% become <b>strong</b> signals; if no "
+         "coin has had a signal for 24 hours, the best setup (with at least an average score) becomes a <b>standard</b> signal. At "
+         "most 5 new signals start on one candle.</li>"
+         "<li><b>1-hour stream</b>: a second 4-hour model, read at every hourly close on the 4-hour candle that ends at that hour, "
+         "so a setup can be found up to three hours earlier. A coin gets a signal when its score is in the model's top 2%. At most "
+         "3 new signals start in one hour.</li></ul>"),
         ("Which coins have signals?",
-         "<p>All 102 crypto coins in the list, against USDT. The 4-hour model was trained on 21 of them. In November 202"
-         "6 we re-tested it with real trading costs on the year after its training data (October 2025 to October 2026) o"
-         "n the 94 coins that have enough history; most of them were never used in training, and the results held up on "
-         'them. The newest coins have a short history, so check their results on the <a href="/track-record">Track recor'
-         "d</a>. Forex, gold and the 15-minute and 1-hour timeframes have no signals: nothing we tested for them made mo"
-         "ney after costs on data it had never seen.</p>"),
+         "<p>All 102 crypto coins in the list, against USDT, on both streams. The models were tested on the 94 coins that have "
+         "enough history; the newest coins have a short history, so check their results on the "
+         "<a href=\"/track-record\">Track record</a> and the Signals page.</p>"),
         ("How often do new signals come?",
-         "<p>In the 12-month test there were 813 signals across 94 coins, about 2 a day, and the longest wait between tw"
-         "o new signals was 1.3 days. A signal can only start right after a 4-hour candle closes.</p>"),
+         "<p>The 4-hour stream gave about 2 signals a day in its test, and the longest wait between two new signals was under 2 "
+         "days. The 1-hour stream gave about 2 a day on average too, but in bursts: many signals in one market move, then nothing "
+         "for days or even weeks (it had a signal on about 1 day in 8). We tested giving it a signal every day; those extra "
+         "signals lost money, so it stays quiet when there is no strong setup.</p>"),
         ("Why does a coin say Wait?",
-         "<p>Each coin has at most one signal at a time, and it only gets one when its setup is good enough, so a single coin often "
-         "says Wait. Across all the coins there is almost always at least one signal running. The <a href=\"/signals\">Signals "
-         "board</a> shows which coins have an active signal right now and which are closest to one.</p>"),
+         "<p>Each coin has at most one signal at a time on each stream, and it only gets one when its setup is good enough, so a "
+         "single coin often says Wait. The <a href=\"/signals\">Signals board</a> shows which coins have an active signal right "
+         "now and which are closest to one.</p>"),
         ("How are the entry, stop loss and targets set?",
-         "<p>The entry is the close of the 4-hour candle that gave the signal. The stop loss is 2 times the coin's average 4-hour "
-         "move (ATR) away from the entry; that distance is 1R. There is <b>one target at 1R</b>, as far from the entry as the stop. "
-         "Close the whole position there; the stop does not move. A win (+1R) and a loss (&minus;1R) are the same size, so about "
-         "4 in 10 signals lose and the stream still made money in testing because about 6 in 10 won. Each signal also shows an optional <b>patient entry</b> for the 15-minute chart: a "
-         "limit order a quarter of the ATR better than the entry, valid for 4 hours. In the test it earned more per filled trade "
-         "(+0.20R against +0.15R) but about 4 in 10 signals never came back to it, so the signal itself keeps the market "
-         "entry.</p>"),
+         "<p>The entry is the close of the candle that gave the signal. The stop loss is 2 times the coin's average 4-hour move "
+         "(ATR) away from the entry; that distance is 1R.</p>"
+         "<ul><li><b>4-hour signals</b> have three targets: TP1 at 0.5R, TP2 at 1R and TP3 at 2R. Close a third of the position at "
+         "each. After TP1 move the stop to the entry, after TP2 to TP1.</li>"
+         "<li><b>1-hour signals</b> have one target at 0.5R: close the whole position there; the stop does not move.</li></ul>"
+         "<p>The first target is half as far as the stop. That is why about 3 in 4 signals reach it, and also why one full loss "
+         "costs as much as two first-target wins. Each 4-hour signal also shows an optional <b>patient entry</b> for the "
+         "15-minute chart: a limit order a quarter of the ATR better than the entry, valid for 4 hours; about 4 in 10 signals "
+         "never come back to it.</p>"),
         ("How long does a signal last?",
-         "<p>Until the stop or the target is hit, or for at most 54 four-hour candles (9 days). After 9 days the trade closes at "
-         "that candle's close.</p>"),
+         "<p>Until the stop or its last target is hit, or for at most 9 days. After 9 days the trade closes at that candle's close. "
+         "In the tests half of the 1-hour signals were finished within about 14 hours.</p>"),
         ("What does \"Setup forming\" mean?",
-         "<p>The model is close to a strong signal but still below the line. <b>It is not a trade.</b> Treat it only as a heads-up "
-         "to watch the next 4-hour close.</p>"),
+         "<p>The model is close to a signal but still below the line. <b>It is not a trade.</b> Treat it only as a heads-up "
+         "to watch the next candle close.</p>"),
         ("Can I still take a signal that started hours ago?",
          "<p>You can, but the price has moved since the entry, so your risk and reward are different from the signal's. The signal "
          "card shows how far the price has moved and how close it is to the next target or the stop. If the price is already near "
          "the target, little reward is left for the same risk.</p>"),
-        ("Are there signals for forex or gold?",
-         "<p>No, not any more. In November 2026 we tested the forex and gold models again on new data (2023 to 2026), mo"
-         "re than 40 strategies from public GitHub repositories and the signal logic of the most popular open-source tra"
-         "ding bots. None of them made money after spreads on data it had never seen, so the forex, gold, 15-minute and "
-         "1-hour signals were removed. The forex and gold charts and market briefs are still there. A stream comes back "
-         "only when a model for it passes the same test.</p>"),
+        ("Are there signals for forex, gold or 15-minute charts?",
+         "<p>No. In November 2026 we trained new models for forex and gold (15-minute, 1-hour and 4-hour) and for 15-minute crypto "
+         "and tested them the same way as the others. The forex and gold models did not even reach the target on their "
+         "validation years (about 66 to 71% wins and about zero profit after spreads). The 15-minute crypto model passed its "
+         "validation years but not the test on data it had never seen (69% wins, about zero profit after costs). Publishing them would mean more "
+         "stop-losses, so they stay off. The forex and gold charts and market briefs are still there, and the "
+         "<a href=\"/signals\">Signals page</a> says what was tested. A stream comes back only when a model for it passes "
+         "the same test.</p>"),
     ]),
     ("results", "Results and risk", [
         ("How accurate are the signals?",
-         "<p>The model was trained on July 2020 to September 2025. In November 2026 it was re-tested once on October 202"
-         "5 to October 2026, data it had never seen, on 94 coins, with real trading costs (0.30% per round trip): <b>813"
-         " signals, 59.4% reached the target, +0.196R average per signal after costs</b>, profit factor 1.52, a worst dr"
-         "awdown of &minus;19.2R. Every quarter of that year made money; the weakest (April to June 2026) made +0.09R pe"
-         "r signal. Past results do not guarantee future results.</p><p>Read the win rate with care: the target is as fa"
-         "r as the stop, so a random entry would reach it about half the time, and costs come off every trade. The avera"
-         "ge result after costs is the better measure of what it earns.</p><p>Strong and standard signals are not equal."
-         " In the test the strong ones (469 signals) won 62.5% with +0.294R on average; the standard ones (344 signals, "
-         "given when no coin has had a signal for 24 hours) won 55.2% with +0.063R. Treat a standard signal as lower con"
-         "viction: use a smaller size or skip it.</p>"),
-        ("If about 4 in 10 signals lose, how can it make money?",
-         "<p>Because a win and a loss are about the same size (the target is as far as the stop), and about 6 in 10 sign"
-         "als won in the test, so 10 signals made about +2R together after costs. Losses often come in a row, so keep th"
-         "e risk per signal small.</p>"),
+         "<p>Each model was tested on October 2025 to November 2026, data it had never seen, on 94 coins, with real trading costs "
+         "(0.30% per round trip plus funding) and entries one minute after the candle close:</p>"
+         "<ul><li><b>4-hour stream</b>: 852 signals, <b>75.5% reached target 1 or better</b>, +0.12R average per signal after "
+         "costs, profit factor 1.48, worst drawdown &minus;14R. The weakest quarter (April to June 2026) had 65% and +0.04R.</li>"
+         "<li><b>1-hour stream</b>: 781 signals, <b>82.5% reached the target</b>, +0.19R average per signal, profit factor "
+         "2.03, worst drawdown &minus;32R.</li></ul>"
+         "<p>Read the win rate with care: the first target is half as far as the stop, so a random entry would reach it about 2 "
+         "times in 3. What the models add is the difference above that, and the average result after costs is the better "
+         "measure of what a stream earns. Past results do not guarantee future results.</p>"
+         "<p>Strong and standard 4-hour signals are not equal. In the test the strong ones (496 signals) reached target 1 "
+         "78.6% of the time with +0.17R on average; the standard ones (356 signals, given when no coin has had a signal for 24 "
+         "hours) 71.1% with +0.05R. Treat a standard signal as lower conviction: use a smaller size or skip it.</p>"),
+        ("If about 3 in 4 signals win, why can I still lose money?",
+         "<p>Because a full loss (&minus;1R) is bigger than most wins. A 4-hour signal that reaches TP1 and then comes back to the "
+         "entry earns only about +0.17R, and a 1-hour win is +0.5R, so one stop-loss wipes out several wins. Losses also come in "
+         "groups, because many coins fall together. Keep the risk per signal small and the same every time.</p>"),
+        ("Why did the 4-hour signals change to three targets?",
+         "<p>From October to November 2026 a 4-hour signal had one target as far as the stop (1R). On the unseen year that plan "
+         "won 59.4% of the time and earned +0.19R per signal: about 4 in 10 signals hit the stop. With three targets (0.5R, 1R, "
+         "2R) the same signals reach target 1 75.5% of the time and earn +0.12R per signal. So the three-target plan has fewer "
+         "stop-losses and a smoother record, and it earns less per signal. Both plans made money in the test.</p>"),
         ("How much should I risk on each signal?",
-         "<p>Keep it small and the same every time; that amount is 1R. Losing streaks happen: the worst drop was 19.2R in the "
-         "12-month test, and a longer bad stretch can be deeper. At 1% per signal, a 20R drop is a fifth of the account, so keep "
-         "the risk well below that. There are often four or more signals open at once and they "
-         "usually move together with Bitcoin, so 0.25% to 0.5% per signal (and a limit on open trades) is a sensible start. Only trade money you can afford to lose. The <a href=\"/tools\">position size "
-         "calculator</a> works out the size for you.</p>"),
+         "<p>Keep it small and the same every time; that amount is 1R. Losing streaks happen: the worst drop was 14R on the 4-hour "
+         "stream and 32R on the 1-hour stream in the test, and a longer bad stretch can be deeper. At 1% per signal, a 30R drop "
+         "is nearly a third of the account, so keep the risk well below that. There are often many signals open at once and they "
+         "usually move together with Bitcoin, so 0.25% to 0.5% per signal (and a limit on open trades) is a sensible start. Only "
+         "trade money you can afford to lose. The <a href=\"/tools\">position size calculator</a> works out the size for you.</p>"),
         ("Where can I see the live results?",
-         "<p>On the <a href=\"/track-record\">Track record</a> page. It records every signal the engine gives on a fixed list of "
-         "coins, live, with its result in R after fees, next to a 365-day backtest that is refreshed every week.</p>"),
+         "<p>On the <a href=\"/track-record\">Track record</a> page (4-hour stream: every signal the engine gives on a fixed list "
+         "of coins, live, with its result in R after fees, next to a 365-day backtest that is refreshed every week) and on the "
+         "<a href=\"/signals\">Signals page</a> (both streams: live win rate and results of the last 7 and 30 days).</p>"),
         ("Is this financial advice?",
          "<p>No. Signals FM gives algorithmic analysis for education. You decide every trade and you are responsible for it. "
          "Please read the <a href=\"/risk-disclosure\">risk disclosure</a>.</p>"),
@@ -151,8 +165,8 @@ FAQ = [
         ("How many emails will I get?",
          "<p>One email when new signals start, at most 12 a day. Every email has a one-click link to stop them.</p>"),
         ("Why didn't I get an alert?",
-         "<p>Alerts go out only for new signals on the coins you chose, right after a 4-hour candle closes. Check that alerts are "
-         "on and that the coin is in your list. For email, also check your spam folder.</p>"),
+         "<p>Alerts go out only for new signals on the coins and timeframes you chose, right after a candle closes. Check that "
+         "alerts are on and that the coin is in your list. For email, also check your spam folder.</p>"),
     ]),
     ("trading", "Demo trading and the auto-trade bot", [
         ("What is Demo trading?",

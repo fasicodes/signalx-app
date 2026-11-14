@@ -1,5 +1,5 @@
 """
-Signals FM - signal engine v3.
+Signals FM - the 4-hour signal engine (crypto 4h stream of engine 5).
 
 What it does
   * Works on CLOSED 4-hour candles (a signal never changes while a candle is
@@ -9,27 +9,32 @@ What it does
     the whole market (16 large coins: breadth, average momentum, and how
     strong this coin is relative to the others).
   * A gradient-boosted model (trained on Jul 2020 - Sep 2025, 21 coins,
-    exported to signal_model.json) estimates, for LONG and for SHORT, the
-    probability that target 1 is reached before the stop. A calibration
-    curve turns that into an honest win probability. The features are
-    scale-free, so the same model reads every coin in the list (tested on
-    32 coins it never saw as well).
+    exported to signal_model.json; the same trees since engine 3.1) estimates,
+    for LONG and for SHORT, the probability that target 1 is reached before
+    the stop. A calibration curve turns that into an honest win probability.
+    The features are scale-free, so the same model reads every coin in the
+    list.
   * Which candles become signals (every signal coin is read together):
       - "strong": the model's score is in its top 3%;
       - "standard": if no coin has had a signal for 24 hours, the best free
-        coin gets one when its score is at least the model's median.
+        coin gets one when its score is at least the model's median (this is
+        what gives the stream about one signal a day in a quiet market).
     At most `max_per_bar` new signals per candle (the highest scores), one
     trade at a time per coin; everything else is WAIT.
   * Trade plan (signal_model.json "levels"): stop = 2 x ATR(14) from entry
-    (1R), one target at 1R; the whole position closes there and the stop never
-    moves. Time limit 54 candles (9 days). Fees are counted as 0.30% round
-    trip (markets.CRYPTO_COST_ROUND_TRIP). (Until Oct 2026: targets 0.5R / 1R / 2R, a third at each, stop to the
-    entry after TP1 - see "exit_change" in the model file.)
+    (1R); targets at 0.5R / 1R / 2R, a third of the position closed at each;
+    after target 1 the stop moves to the entry, after target 2 to target 1.
+    Time limit 54 candles (9 days). Costs: 0.30% round trip
+    (markets.CRYPTO_COST_ROUND_TRIP) plus funding for longs.
 
-Engine 3.2 (Nov 2026): the same trees as 3.1, re-tested with the real cost on data the model never saw
-(Oct 2025 - Oct 2026, 52 coins): MODEL["test"] / signal_model.json. The old 3.1 results (0.12% cost) and
-the old track record were removed. Each signal also carries a better-entry zone for the 15m chart
-(BETTER_ENTRY_ATR below).
+Engine 5.0 (Nov 2026): the three-target plan is back (engine 3.2 used one
+target at 1R from Oct to Nov 2026). On the year the model never saw (Oct 2025
+- Nov 2026, 94 coins) about 3 signals in 4 reached target 1 with this plan
+(75.5%, +0.12R per signal after costs); with the single 1R target 59.4% won
+(+0.19R per signal): fewer stops for a smaller average result. Both plans,
+and a single 0.5R target, are in signal_model.json "exit_change"
+(research/v5/engine4h.py). Each signal also carries a better-entry zone for
+the 15m chart (BETTER_ENTRY_ATR below).
 
 This module is pure numpy/pandas (no sklearn at runtime). main.py, the
 auto-trade bot and the track record all call it, so every surface shows the
@@ -49,10 +54,10 @@ import pandas as pd
 
 import markets
 
-ENGINE_VERSION = "3.2"
+ENGINE_VERSION = "5.0"
 # Optional better entry on the 15-minute chart: a limit order this many ATR(4h) better than the signal's entry,
-# valid for one 4h candle. Tested Nov 2026 on the holdout: +0.20R per filled trade instead of +0.15R, but only
-# ~62% of the signals fill, so the signal itself keeps the market entry (more total profit).
+# valid for one 4h candle. Tested Nov 2026 on the holdout with the one-target plan: +0.20R per filled trade instead
+# of +0.15R, but only ~62% of the signals fill, so the signal itself keeps the market entry (more total profit).
 BETTER_ENTRY_ATR = 0.25
 BETTER_ENTRY_SEC = 4 * 3600
 TIMEFRAME = "4h"

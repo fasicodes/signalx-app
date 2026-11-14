@@ -450,10 +450,10 @@
       <div class="res-grid">
         {% for s in T.streams %}
         <article class="res-card">
-          <h3>{{ '1-hour' if s.timeframe == '1h' else '4-hour' }} model<span>{{ s.period }}</span></h3>
+          <h3>{{ 'Forex ' if s.market == 'forex' else '' }}{{ {'15m': '15-minute', '1h': '1-hour', '4h': '4-hour'}.get(s.timeframe, s.timeframe) }} model<span>{{ s.period }}</span></h3>
           <dl>
             <div><dt>Signals in the test</dt><dd data-ds-count>{{ "{:,}".format(s.signals) }}<small>about {{ s.per_day | round(1) }} a day</small></dd></div>
-            <div><dt>Reached the target</dt><dd class="pos" data-ds-count>{{ s.win_rate }}%</dd></div>
+            <div><dt>Reached the first target</dt><dd class="pos" data-ds-count>{{ s.win_rate }}%</dd></div>
             <div><dt>Average per signal</dt><dd data-ds-count>{{ "%+.2f" | format(s.avg_r) }}R<small>after fees</small></dd></div>
           </dl>
           {% if s.extra_coins %}
@@ -465,10 +465,10 @@
         {% endfor %}
         {% if T.streams | length > 1 %}
         <article class="res-card total">
-          <h3>Both models together<span>the same year, all coins</span></h3>
+          <h3>{{ 'Both' if T.streams | length == 2 else 'All' }} models together<span>the same year, all coins</span></h3>
           <dl>
             <div><dt>Signals in the test</dt><dd data-ds-count>{{ "{:,}".format(T.signals) }}<small>about {{ T.per_day }} a day</small></dd></div>
-            <div><dt>Reached the target</dt><dd class="pos" data-ds-count>{{ T.win_rate }}%</dd></div>
+            <div><dt>Reached the first target</dt><dd class="pos" data-ds-count>{{ T.win_rate }}%</dd></div>
             <div><dt>Average per signal</dt><dd data-ds-count>{{ "%+.2f" | format(T.avg_r) }}R<small>after fees</small></dd></div>
           </dl>
         </article>
@@ -480,7 +480,7 @@
           <h3>4-hour model<span>{{ S.get('period') or 'one year of unseen data' }}</span></h3>
           <dl>
             {% if NSIG %}<div><dt>Signals in the test</dt><dd>{{ "{:,}".format(NSIG) }}</dd></div>{% endif %}
-            <div><dt>Reached the target</dt><dd class="pos">{{ WIN }}%</dd></div>
+            <div><dt>Reached the first target</dt><dd class="pos">{{ WIN }}%</dd></div>
             {% if AVGR is not none %}<div><dt>Average per signal</dt><dd>{{ "%+.2f" | format(AVGR) }}R<small>after fees</small></dd></div>{% endif %}
           </dl>
         </article>
@@ -489,10 +489,10 @@
       <div class="truth">
         <div>
           <h3>Read this before you trade</h3>
-          <p>{% if WIN %}About {{ (WIN / 10) | round | int }} in 10 signals reached the target, but not every signal wins. {% else %}Not every signal wins. {% endif %}A win
-            (+1R) and a full loss (&minus;1R) are the same size, so some signals lose and some months lose money. That is why every signal has a
-            stop-loss, and why you should risk only a small, fixed amount on each one. Signals often come in groups because coins move
-            together, so keep only a few trades open at once. R is the amount you risk on one trade.</p>
+          <p>{% if WIN %}About {{ (WIN / 10) | round | int }} in 10 signals reached their first target, but not every signal wins. {% else %}Not every signal wins. {% endif %}The
+            first target is half as far as the stop, so a full loss (&minus;1R) is bigger than most wins, and some weeks lose money. That is why
+            every signal has a stop-loss, and why you should risk only a small, fixed amount on each one. Signals often come in groups
+            because coins move together, so keep only a few trades open at once. R is the amount you risk on one trade.</p>
         </div>
         <div class="links">
           {% if track_record_public %}<a href="/track-record">See every live result</a>{% endif %}
