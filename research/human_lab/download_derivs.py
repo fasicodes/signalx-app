@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 BASE = os.environ.get("BINANCE_DATA_URL", "https://data.binance.vision").rstrip("/")
 OUT = os.environ.get("DERIVS_DIR", "derivs")
 START = dt.date(2021, 1, 1)
-THREADS = 8
+THREADS = int(os.environ.get("THREADS", 8))
 COINS = ("BTC ETH SOL BNB XRP DOGE ADA AVAX LINK LTC DOT TRX BCH ATOM NEAR UNI ETC FIL APT ARB OP INJ SUI AAVE XLM "
          "ICP SHIB PEPE FET STX IMX GRT ALGO LDO CRV THETA SAND MANA AXS GALA CHZ APE EGLD XTZ SNX DYDX FLOW NEO "
          "IOTA MINA COMP YFI DASH ZEN SUSHI 1INCH BAT KSM ZIL ENJ ONE GMT RVN WOO SEI TIA").split()
