@@ -944,7 +944,7 @@ def export(stream):
     model = {
         "version": "5.0", "stream": stream, "market": c["market"], "timeframe": c["tf"],
         "trained_on": f"{c['data_start']} to {fin['train_end'][:10]}, {len(trained)} symbols",
-        "spec": {"session": c["session"], "volume": c["volume"], "anchor": c.get("anchor")},
+        "spec": {"session": c["session"], "volume": c["volume"], "anchor": c.get("anchor"), "dtype": "float32"},
         "features": cols, "baseline": base, "trees": trees, "calibration": res["calibration"],
         "calibration_note": "Maps the model output to the share of past cases that reached target 1 before the stop "
                             f"(walk-forward predictions {c['val'][0]} to {c['val'][1]}).",
@@ -980,7 +980,8 @@ def export(stream):
         hfin = pickle.load(open(f"{W}/wf/{hs}_last.pkl", "rb"))
         htrees, hbase = export_trees(hfin["clf"])
         model["gate"] = {"timeframe": ch["tf"], "features": hfin["cols"], "baseline": hbase, "trees": htrees,
-                         "spec": {"session": ch["session"], "volume": ch["volume"], "anchor": ch.get("anchor")},
+                         "spec": {"session": ch["session"], "volume": ch["volume"], "anchor": ch.get("anchor"),
+                                  "dtype": "float32"},
                          "level": res["gate"]["level"], "label": f"the {ch['tf']} model leans the same way",
                          "trained_symbols": json.load(open(f"{W}/ds/{hs}/meta.json"))["symbols"],
                          "trained_on": f"{ch['data_start']} to {hfin['train_end'][:10]}"}

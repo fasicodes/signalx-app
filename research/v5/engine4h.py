@@ -134,7 +134,7 @@ def main(write=False):
     raw = json.load(open(MODEL))
     tr, fr, be = PLANS[LIVE_PLAN]
     raw["version"] = "5.0"
-    raw["levels"].update({"targets_r": tr, "fractions": [round(x, 6) for x in fr], "be_after": be,
+    raw["levels"].update({"targets_r": tr, "fractions": list(fr), "be_after": be,
                           "tp_atr": raw["levels"]["sl_atr"] * tr[-1]})
     raw["test"] = res[LIVE_PLAN]
     keep = ("signals", "signals_per_day", "win_rate", "avg_net_r", "total_net_r", "profit_factor", "max_drawdown_r")

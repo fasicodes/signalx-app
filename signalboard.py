@@ -3,7 +3,7 @@ Signals board + signal alerts - Signals FM
 ==========================================
 
 * Background refresher: right after every 4-hour candle close it reads
-  signal engine v3 for every crypto coin and keeps the result in memory
+  the 4-hour signal engine for every crypto coin and keeps the result in memory
   (the board page then loads instantly). Trades are given for every crypto coin
   in the engine's signal list (signal_model.json); other symbols show the lean only.
 * Every NEW signal (a trade that started on the candle that just closed) is
@@ -135,7 +135,7 @@ def refresh_board(now=None, only=None):
 
 
 def record_event(sym, res):
-    """Stores a new crypto 4h signal (engine v3.2) as a crypto/4h stream event."""
+    """Stores a new crypto 4h signal (signal_engine.py) as a crypto/4h stream event."""
     import signal_hub
     try:
         return signal_hub.record(sym, "crypto", "4h", res["active"])

@@ -2,24 +2,26 @@
 Signal hub - the 15m / 1h / 4h signal streams for crypto and forex.
 
 * Storage: every signal of every stream is one row in `signal_events`
-  (market + timeframe + symbol + candle are unique, so a 15m and a 4h signal
+  (market + timeframe + symbol + candle are unique, so a 1h and a 4h signal
   on the same symbol never overwrite each other). The migration only ADDS
   columns; rows from before it are crypto 4h signals (the only stream that
   existed) and get that market and timeframe.
-* Scanner: after every candle close of each timeframe it runs the stream's
-  engine on every symbol (streams.py; crypto 4h is still produced by
-  signalboard.py with signal engine v3.2), stores the new signals and sends the
-  alerts (signalboard.notify: bell, email, Telegram; users choose markets and
-  timeframes).
+* Scanner: after every candle close of each switched-on timeframe it runs the
+  stream's engine on every symbol (streams.py; crypto 4h is produced by
+  signalboard.py with the 4-hour engine, signal_engine.py), stores the new
+  signals and sends the alerts (signalboard.notify: bell, email, Telegram;
+  users choose markets and timeframes).
 * Tracker: follows every ACTIVE signal on closed candles with the plan stored
   with it and writes its result (TP1/TP2/TP3 hit, SL hit, expired) - the live
   statistics are computed only from these real, closed signals.
 * API (login required): /api/signals, /api/signals/stats, /api/signals/latest,
   /api/signals/streams, /api/signals/<id>, POST /api/signals/<id>/cancel (admin).
 
-Env: SIGNAL_STREAMS (default / 'all': all six streams; 'validated': only the streams whose model passed its test on
-unseen data; or a comma-separated list). Streams that have not passed the test are marked 'untested' everywhere.
-SIGNAL_HUB=off to stop the background job.
+Which streams run: only the streams whose model passed its one test on unseen
+data with real costs (streams.validated; engine 5: crypto 4h and crypto 1h).
+SIGNAL_STREAMS (a comma-separated list) can only narrow that down; a stream
+that did not pass is never switched on. models/research.json says why each
+stream is on or off. SIGNAL_HUB=off stops the background job.
 """
 import json
 import os
@@ -39,9 +41,7 @@ from db import get_db_connection
 hub_bp = Blueprint("signal_hub", __name__)
 
 ALL_STREAMS = ["crypto_15m", "crypto_1h", "crypto_4h", "forex_15m", "forex_1h", "forex_4h"]
-# Default: only the streams that passed their test on unseen data with real costs. The rules streams lose money after costs (models/research.json: crypto 15m
-# -0.14R, forex 15m -0.22R, forex 1h -0.11R, forex 4h -0.08R per signal), so they need SIGNAL_STREAMS=all to run.
-DEFAULT_STREAMS = list(ALL_STREAMS)   # the universe; enabled_streams() decides what runs
+DEFAULT_STREAMS = list(ALL_STREAMS)   # the universe; enabled_streams() decides what runs (only tested streams)
 MAX_LATE_SHARE = 0.25          # a signal published later than 25% of its candle after the close...
 MAX_ENTRY_DRIFT_R = (-0.5, 0.3)  # ...or whose price already moved past these R from the entry is not published
 DELAY_SEC = {"crypto": 45, "forex": 90}
@@ -102,7 +102,7 @@ def validated_streams():
 
 
 def stream_tested(market, tf):
-    """True when the stream passed its test on data it never saw (crypto 4h: signal engine v3.2)."""
+    """True when the stream passed its test on data it never saw (streams.validated)."""
     try:
         return bool(streams.validated(f"{market}_{tf}"))
     except Exception:
@@ -113,9 +113,9 @@ _FORCE_STREAMS = None     # set by tests only; the site never switches on an unt
 
 
 def enabled_streams():
-    """Only the streams whose model passed its test on unseen data with real costs (Nov 2026: crypto 4h, engine
-    3.2). The old rules streams and the crypto 1h model were removed from the site. SIGNAL_STREAMS can only narrow
-    this down (a comma-separated list); untested streams are never switched on."""
+    """Only the streams whose model passed its test on unseen data with real costs (engine 5, Nov 2026: crypto 4h
+    and crypto 1h). SIGNAL_STREAMS can only narrow this down (a comma-separated list); a stream that did not pass
+    is never switched on."""
     if _FORCE_STREAMS is not None:          # tests only (the rules engine code is still exercised there)
         return list(_FORCE_STREAMS)
     tested = validated_streams()
@@ -406,7 +406,7 @@ def due_streams(now=None):
     for key in enabled_streams():
         cfg = streams.STREAMS[key]
         if key == "crypto_4h":
-            continue                      # crypto 4h: signalboard.py (engine v3.2)
+            continue                      # crypto 4h: signalboard.py (the 4-hour engine)
         bar = streams.last_closed_bar(cfg["tf"], now)
         if _state["scanned"].get(key) == bar:
             continue
@@ -1164,7 +1164,7 @@ def coins_status(now=None):
         if board:
             boards.append((streams.STREAMS[key]["tf"], board))
     if "crypto_4h" in tested and _engines.get("crypto_4h") is None:
-        # the 4h stream is engine v3.2, run by signalboard.py: its board has the same fields
+        # the 4h stream is run by signalboard.py (signal_engine.py): its board has the same fields
         try:
             import signalboard
             with signalboard._board_lock:

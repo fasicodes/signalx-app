@@ -1,5 +1,5 @@
 {
- "version": "3.2",
+ "version": "5.0",
  "timeframe": "4h",
  "trained_on": "2020-07-01 to 2025-09-30, 21 coins",
  "features": [
@@ -86408,14 +86408,18 @@
  "levels": {
   "sl_atr": 2.0,
   "targets_r": [
-   1.0
+   0.5,
+   1.0,
+   2.0
   ],
   "fractions": [
-   1.0
+   0.3333333333333333,
+   0.3333333333333333,
+   0.3333333333333333
   ],
   "max_bars": 54,
-  "be_after": 0,
-  "tp_atr": 2.0
+  "be_after": 1,
+  "tp_atr": 4.0
  },
  "signal_coins": [
   "BTC/USDT",
@@ -86482,76 +86486,76 @@
   "MINA/USDT"
  ],
  "test": {
-  "period": "2025-10-01 to 2026-10-23",
+  "period": "2025-10-01 to 2026-11-08",
   "coins": 94,
   "coins_with_signals": 94,
-  "signals": 813,
-  "signals_per_day": 2.1,
-  "win_rate": 59.4,
-  "tp1_rate": 59.4,
-  "tp2_rate": 0.0,
-  "tp3_rate": 0.0,
-  "stop_rate": 35.1,
-  "money_making_rate": 63.1,
-  "avg_net_r": 0.196,
-  "total_net_r": 159.6,
-  "profit_factor": 1.52,
-  "max_drawdown_r": -19.2,
-  "avg_hold_bars": 14.1,
-  "max_gap_days": 1.3,
-  "avg_stop_pct": 6.99,
-  "strong": {
-   "signals": 469,
-   "win_rate": 62.5,
-   "avg_net_r": 0.294
-  },
-  "standard": {
-   "signals": 344,
-   "win_rate": 55.2,
-   "avg_net_r": 0.063
-  },
+  "signals": 852,
+  "signals_per_day": 2.11,
+  "win_rate": 75.5,
+  "tp1_rate": 76.8,
+  "tp2_rate": 40.7,
+  "tp3_rate": 14.9,
+  "stop_rate": 22.4,
+  "money_making_rate": 74.9,
+  "avg_net_r": 0.118,
+  "total_net_r": 100.3,
+  "profit_factor": 1.48,
+  "max_drawdown_r": -14.3,
+  "avg_hold_bars": 12.0,
+  "max_gap_days": 1.8,
+  "avg_stop_pct": 6.93,
   "years": {
    "2025": {
-    "signals": 171,
-    "win_rate": 60.8,
-    "avg_net_r": 0.23
+    "signals": 168,
+    "avg_net_r": 0.156,
+    "win_rate": 76.8
    },
    "2026": {
-    "signals": 642,
-    "win_rate": 59.0,
-    "avg_net_r": 0.187
+    "signals": 684,
+    "avg_net_r": 0.108,
+    "win_rate": 75.1
    }
+  },
+  "strong": {
+   "signals": 496,
+   "avg_net_r": 0.167,
+   "win_rate": 78.6
+  },
+  "standard": {
+   "signals": 356,
+   "avg_net_r": 0.049,
+   "win_rate": 71.1
   },
   "quarters": {
    "2025-Q4": {
-    "signals": 171,
-    "win_rate": 60.8,
-    "avg_net_r": 0.23
+    "signals": 168,
+    "avg_net_r": 0.156,
+    "win_rate": 76.8
    },
    "2026-Q1": {
     "signals": 179,
-    "win_rate": 58.1,
-    "avg_net_r": 0.144
+    "avg_net_r": 0.103,
+    "win_rate": 76.5
    },
    "2026-Q2": {
-    "signals": 150,
-    "win_rate": 50.7,
-    "avg_net_r": 0.087
+    "signals": 152,
+    "avg_net_r": 0.035,
+    "win_rate": 65.1
    },
    "2026-Q3": {
-    "signals": 222,
-    "win_rate": 58.6,
-    "avg_net_r": 0.18
+    "signals": 225,
+    "avg_net_r": 0.086,
+    "win_rate": 77.3
    },
    "2026-Q4": {
-    "signals": 91,
-    "win_rate": 75.8,
-    "avg_net_r": 0.456
+    "signals": 128,
+    "avg_net_r": 0.242,
+    "win_rate": 81.2
    }
   },
-  "fees": "0.30% per round trip (Binance VIP 0 fees + slippage)",
+  "fees": "0.30% per round trip (Binance VIP 0 fees + slippage) plus funding for longs",
   "cost_round_trip": 0.003,
-  "note": "Re-tested Nov 2026 with real costs on data after the model's training period, replayed exactly as the site does (4h candles, the engine's own stop / target / time limit and signal rules)."
+  "note": "Tested Nov 2026 on data after the model's training period, replayed exactly as the site does (4h candles, the engine's own stop / targets / time limit and signal rules). A win = target 1 or better. Entries at the price one minute after the signal candle closed."
  },
  "trained_coins": [
   "ADA/USDT",
@@ -86578,25 +86582,37 @@
  ],
  "max_per_bar": 5,
  "exit_change": {
-  "changed": "2026-10",
-  "from": "targets 0.5R / 1R / 2R, a third at each, stop to entry after TP1",
-  "to": "one target at 1R, the whole position, the stop never moves",
-  "holdout_old_plan": {
-   "signals": 806,
-   "win_rate": 76.2,
-   "avg_net_r": 0.173,
-   "total_net_r": 139.7,
-   "profit_factor": 1.77,
-   "max_drawdown_r": -12.4
+  "changed": "2026-11",
+  "from": "one target at 1R, the whole position, the stop never moves (engine 3.2, Oct - Nov 2026)",
+  "to": "targets 0.5R / 1R / 2R, a third at each, stop to the entry after target 1, to target 1 after target 2",
+  "why": "More signals end in profit: about 3 in 4 reach target 1, against about 6 in 10 that reached the single 1R target. The price is a smaller average result per signal.",
+  "holdout_one_target_1r": {
+   "signals": 848,
+   "signals_per_day": 2.1,
+   "win_rate": 59.4,
+   "avg_net_r": 0.186,
+   "total_net_r": 157.9,
+   "profit_factor": 1.49,
+   "max_drawdown_r": -18.7
   },
-  "holdout_new_plan": {
-   "signals": 805,
-   "win_rate": 59.6,
-   "avg_net_r": 0.236,
-   "total_net_r": 190.2,
-   "profit_factor": 1.66,
-   "max_drawdown_r": -17.5
+  "holdout_three_targets": {
+   "signals": 852,
+   "signals_per_day": 2.11,
+   "win_rate": 75.5,
+   "avg_net_r": 0.118,
+   "total_net_r": 100.3,
+   "profit_factor": 1.48,
+   "max_drawdown_r": -14.3
+  },
+  "holdout_one_target_half_r": {
+   "signals": 859,
+   "signals_per_day": 2.13,
+   "win_rate": 76.1,
+   "avg_net_r": 0.087,
+   "total_net_r": 74.5,
+   "profit_factor": 1.35,
+   "max_drawdown_r": -14.5
   }
  },
- "retest": "Engine 3.2 (Nov 2026) uses the same trees as 3.1. Old results were removed: they were computed with a 0.12% cost; the test above uses the real cost (0.30% per round trip)."
+ "retest": "Engine 5.0 (Nov 2026) uses the same trees as 3.1 / 3.2 with the three-target plan. The test above uses 0.30% per round trip, funding for longs and the entry one minute after the candle close (research/v5/engine4h.py)."
 }
