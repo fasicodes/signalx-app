@@ -79,7 +79,10 @@ RULE = {"win": 73.0, "avg_r": 0.05, "pf": 1.15, "year_win": 68.0, "year_avg": 0.
         "year_min_n": 30}
 RULE_TEXT = ("validation: win rate >= 73%, average >= +0.05R after costs, profit factor >= 1.15, at least 150 signals, "
              "every validation year (30+ signals) >= 68% wins with a positive average, and the next stricter score "
-             "level passes too; among the settings that pass, the one with the most signals")
+             "level holds up too (so the strictest level tried can never be chosen). Among the settings that pass and give at least one signal a day: the steadiest one "
+             "(highest Sharpe ratio of the daily results), preferring the simplest plan (one target, no cost cap, no "
+             "higher-timeframe check) when its Sharpe ratio is within 10% of the best")
+MIN_PER_DAY = 1.0
 
 
 def log(*a):
@@ -458,7 +461,9 @@ def cost_array(sym, c, close, dist):
     return markets.CRYPTO_COST_ROUND_TRIP * close / dist
 
 
-def policy_data(c, D, preds, thr, cal, cost_cap=None, grade_a=9.0, grade_b=9.0, gate=None):
+def policy_data(c, D, preds, thr, cal, cost_cap=None, grade_a=9.0, grade_b=9.0, gate=None, floor=None):
+    """Candidates per symbol for streams.run_policy. floor (a score level below thr) adds the 'standard' candidates
+    of the daily signal; data["strong"] then marks the candidates that reached thr."""
     data = {}
     for sym, d in D.items():
         key = sym.replace("/", "")
@@ -466,7 +471,7 @@ def policy_data(c, D, preds, thr, cal, cost_cap=None, grade_a=9.0, grade_b=9.0, 
         best = np.fmax(pl, ps)
         longs = pl >= ps
         dist = c["k"] * d["atr"]
-        ok = np.isfinite(best) & (best >= thr) & np.isfinite(d["atr"]) & (d["atr"] > 0) & d["elig"]
+        ok = np.isfinite(best) & (best >= (thr if floor is None else floor)) & np.isfinite(d["atr"]) & (d["atr"] > 0) & d["elig"]
         if cost_cap is not None:
             with np.errstate(all="ignore"):
                 ok &= cost_array(sym, c, d["c"], dist) <= cost_cap
@@ -478,16 +483,22 @@ def policy_data(c, D, preds, thr, cal, cost_cap=None, grade_a=9.0, grade_b=9.0, 
         data[sym] = {"ts": d["ts"], "o": d["o"], "h": d["h"], "l": d["l"], "c": d["c"], "atr": d["atr"],
                      "side": side, "score": np.nan_to_num(best, nan=0.0), "conf": conf, "grade": grade, "setup": None,
                      "dist": dist, "slip": d["slip"]}
+        if floor is not None:
+            data[sym]["strong"] = ok & (best >= thr)
     return data
 
 
+GAP_HOURS = 24
+
+
 def simulate(c, D, preds, thr, start, end, cal, plan="p3", cost_cap=None, grade_a=9.0, grade_b=9.0, gate=None,
-             max_per_bar=None, cooldown=None):
+             max_per_bar=None, cooldown=None, floor=None):
     p = dict(PLANS[plan], max_bars=c["H"], tf_sec=FE.TF_SEC[c["tf"]])
     policy = {"max_per_bar": c["max_per_bar"] if max_per_bar is None else max_per_bar,
               "cooldown": c["cooldown"] if cooldown is None else cooldown,
-              "sessions": None, "no_new_before_close_h": 0}        # forex time rules are in d["elig"] already
-    data = policy_data(c, D, preds, thr, cal, cost_cap, grade_a, grade_b, gate)
+              "sessions": None, "no_new_before_close_h": 0,        # forex time rules are in d["elig"] already
+              "gap_hours": GAP_HOURS if floor is not None else 0}
+    data = policy_data(c, D, preds, thr, cal, cost_cap, grade_a, grade_b, gate, floor)
     _, _, closed = ST.run_policy(data, c["market"], c["tf"], p, policy, start_time=start, end_time=end,
                                  lookback=10 ** 9)
     return [t for lst in closed.values() for t in lst]
@@ -507,6 +518,13 @@ def stats(trades, start, end):
     gp, gl = r[r > 0].sum(), -r[r < 0].sum()
     t_sorted = sorted(pd.Timestamp(t["signal_at"]) for t in trades)
     gaps = np.diff([pd.Timestamp(start)] + t_sorted + [pd.Timestamp(end)]) / pd.Timedelta(days=1)
+    # result per calendar day (signals close in bursts, so days - not signals - are the independent units)
+    day0 = pd.Timestamp(start).normalize()
+    daily = np.zeros(int(np.ceil(days)) + 2)
+    for t, x in zip(trades, r):
+        k = int((pd.Timestamp(t.get("closed_at") or t["signal_at"]).normalize() - day0) / pd.Timedelta(days=1))
+        daily[min(max(k, 0), len(daily) - 1)] += x
+    sharpe = float(daily.mean() / daily.std() * np.sqrt(365)) if daily.std() > 0 else 0.0
     day_set = {t.normalize() for t in t_sorted}
     stop_pct = np.array([abs(t["entry"] - t["stop_loss"]) / t["entry"] * 100 for t in trades])
     out = {"period": f"{pd.Timestamp(start).date()} to {pd.Timestamp(end).date()}", "signals": n,
@@ -520,6 +538,7 @@ def stats(trades, start, end):
            "money_making_rate": round(float((r > 0).mean()) * 100, 1),
            "avg_net_r": round(float(r.mean()), 3), "total_net_r": round(float(r.sum()), 1),
            "profit_factor": round(float(gp / gl), 2) if gl > 0 else None, "max_drawdown_r": round(dd, 1),
+           "sharpe_daily": round(sharpe, 2),
            "avg_hold_bars": round(float(np.mean([t["bars_held"] for t in trades])), 1),
            "median_hold_bars": float(np.median([t["bars_held"] for t in trades])),
            "max_gap_days": round(float(np.max(gaps)), 1), "avg_stop_pct": round(float(stop_pct.mean()), 2),
@@ -552,7 +571,7 @@ def passes(s):
     return True
 
 
-QS = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.93, 0.95, 0.97, 0.98, 0.99, 0.995]
+QS = [0.8, 0.85, 0.9, 0.93, 0.95, 0.96, 0.97, 0.975, 0.98, 0.985, 0.99, 0.995, 0.9975]
 
 
 def val_scores(c, D, preds):
@@ -567,12 +586,63 @@ def val_scores(c, D, preds):
     return np.concatenate(vals), np.concatenate(labs)
 
 
+def candidates(grid):
+    """Grid settings that pass the validation rule and whose next stricter score level holds up as well."""
+    out = []
+    for s in grid:
+        if not passes(s):
+            continue
+        stricter = [x for x in grid if x["plan"] == s["plan"] and x["cap"] == s["cap"] and x["q"] > s["q"]
+                    and x.get("gate") == s.get("gate")]
+        if not stricter:
+            continue        # the strictest level of a grid is only there to confirm the level below it
+        nxt = min(stricter, key=lambda x: x["q"])
+        if not (nxt["signals"] >= 50 and (nxt["win_rate"] or 0) >= RULE["win"] - 1
+                and (nxt["avg_net_r"] or 0) >= RULE["avg_r"] / 2):
+            continue
+        out.append(s)
+    return out
+
+
+def choose(grid):
+    """The setting that goes to the holdout test (see RULE_TEXT)."""
+    cands = candidates(grid)
+    daily = [s for s in cands if s["signals_per_day"] >= MIN_PER_DAY]
+    cands = daily or cands
+    if not cands:
+        return None
+    key = lambda s: s["sharpe_daily"]
+    best = max(cands, key=key)
+    plain = lambda s: s.get("gate") in (None, "none")
+    for simple in (lambda s: s["plan"] == "p1" and s["cap"] is None and plain(s),
+                   lambda s: s["plan"] == "p1" and plain(s), lambda s: s["cap"] is None and plain(s), plain,
+                   lambda s: s["plan"] == "p1" and s["cap"] is None, lambda s: s["plan"] == "p1"):
+        sub = [s for s in cands if simple(s)]
+        if sub and key(max(sub, key=key)) >= 0.9 * key(best):
+            return max(sub, key=key)
+    return best
+
+
 def short(s):
-    keys = ("signals", "signals_per_day", "win_rate", "avg_net_r", "profit_factor", "max_drawdown_r")
+    keys = ("signals", "signals_per_day", "win_rate", "avg_net_r", "profit_factor", "max_drawdown_r", "sharpe_daily")
     return {k: s.get(k) for k in keys}
 
 
-def tune(stream, gate=None, tag=""):
+QS_MTF = [0.5, 0.7, 0.8, 0.85, 0.9, 0.93, 0.95, 0.97, 0.98, 0.99]
+_G = {}          # state shared with the worker processes of a grid (set before the pool forks)
+
+
+def _grid_point(args):
+    plan, cap, q, thr = args
+    g = _G
+    s = stats(simulate(g["c"], g["D"], g["preds"], thr, g["ds"], g["de"], g["cal"], plan, cap, gate=g["gate"]),
+              g["ds"], g["de"])
+    s.update({"plan": plan, "cap": cap, "q": q, "thr": thr})
+    return s
+
+
+def tune(stream, gate=None, tag="", plans=None, caps=None, qs=None, gate_name=None):
+    """The validation grid of one variant (plain model, or one higher-timeframe gate level) -> results/<stream><tag>.json"""
     c = CFG[stream]
     cols, D = load_ds(stream)
     preds = dict(np.load(f"{W}/wf/{stream}.npz"))
@@ -580,59 +650,144 @@ def tune(stream, gate=None, tag=""):
     cal = calibration(pv, yv)
     okv = np.isfinite(pv)
     ds, de = c["val"]
-    caps = [None, 0.12, 0.09, 0.07] if c["market"] == "crypto" else [None, 0.10, 0.07]
-    grid = []
-    for plan in PLANS:
-        for cap in caps:
-            for q in QS:
-                thr = float(np.quantile(pv[okv], q))
-                s = stats(simulate(c, D, preds, thr, ds, de, cal, plan, cap, gate=gate), ds, de)
-                s.update({"plan": plan, "cap": cap, "q": q, "thr": thr})
-                grid.append(s)
-                log(stream, tag, plan, "cap", cap, f"q={q}", s["signals"], s["signals_per_day"], s["win_rate"],
-                    s["avg_net_r"], s.get("profit_factor"), {y: (v["win_rate"], v["avg_net_r"]) for y, v in (s.get("years") or {}).items()})
-    ok = []
-    for s in grid:
-        if not passes(s):
-            continue
-        stricter = [x for x in grid if x["plan"] == s["plan"] and x["cap"] == s["cap"] and x["q"] > s["q"]]
-        nxt = min(stricter, key=lambda x: x["q"]) if stricter else None
-        if nxt is not None and not (nxt["signals"] >= 50 and (nxt["win_rate"] or 0) >= RULE["win"] - 1
-                                    and (nxt["avg_net_r"] or 0) >= RULE["avg_r"] / 2):
-            continue
-        ok.append(s)
-    res = {"stream": stream, "tag": tag, "k": c["k"], "H": c["H"], "grid": grid, "rule": RULE_TEXT, "choice": None,
-           "calibration": {"x": [float(x) for x in cal[0]], "y": [float(x) for x in cal[1]]}}
-    if ok:
-        ch = max(ok, key=lambda s: (s["signals"], s["avg_net_r"]))
-        res["choice"] = ch
-        same = sorted([x for x in grid if x["plan"] == ch["plan"] and x["cap"] == ch["cap"]], key=lambda x: x["thr"])
-        ga = next((x["thr"] for x in same if x["thr"] > ch["thr"] and (x["win_rate"] or 0) >= 80 and x["signals"] >= 30),
-                  float(np.quantile(pv[okv], 0.999)))
-        gb = next((x["thr"] for x in same if x["thr"] > ch["thr"] and (x["win_rate"] or 0) >= 76 and x["signals"] >= 30),
-                  (ch["thr"] + ga) / 2)
-        gb = min(gb, ga)
-        tr = simulate(c, D, preds, ch["thr"], ds, de, cal, ch["plan"], ch["cap"], ga, gb, gate=gate)
-        res.update({"threshold": ch["thr"], "grade_a": ga, "grade_b": gb, "plan": ch["plan"], "cap": ch["cap"],
-                    "watch": float(np.quantile(pv[okv], max(0.5, ch["q"] - 0.05))),
-                    "walk_forward": stats(tr, ds, de),
-                    "hold_bars_median": float(np.median([t["bars_held"] for t in tr]))})
-        log(stream, tag, "CHOICE", ch["plan"], "cap", ch["cap"], "q", ch["q"], json.dumps(short(res["walk_forward"])))
+    if caps is None:
+        caps = [None, 0.12, 0.09, 0.07] if c["market"] == "crypto" else [None, 0.10, 0.07]
+    plans = list(plans or PLANS)
+    qs = list(qs or QS)
+    _G.update(c=c, D=D, preds=preds, cal=cal, gate=gate, ds=ds, de=de)
+    jobs = [(plan, cap, q, float(np.quantile(pv[okv], q))) for plan in plans for cap in caps for q in qs]
+    n_proc = int(os.environ.get("V5_JOBS", "1"))
+    if n_proc > 1:
+        import multiprocessing as mp
+        with mp.get_context("fork").Pool(n_proc) as pool:
+            grid = pool.map(_grid_point, jobs, chunksize=1)
     else:
-        best = [s for s in grid if s["signals"] >= RULE["min_signals"] and s["win_rate"] is not None]
-        if best:
-            b = max(best, key=lambda s: s["avg_net_r"])
-            res["closest"] = b
-            log(stream, tag, "NO setting passes validation; closest:", b["plan"], b["cap"], b["q"], json.dumps(short(b)))
+        grid = [_grid_point(j) for j in jobs]
+    for s in grid:
+        s["gate"] = gate_name
+        log(stream, tag, s["plan"], "cap", s["cap"], f"q={s['q']}", s["signals"], s["signals_per_day"], s["win_rate"],
+            s["avg_net_r"], s.get("profit_factor"), "sharpe", s.get("sharpe_daily"),
+            {y: (v["win_rate"], v["avg_net_r"]) for y, v in (s.get("years") or {}).items()})
+    res = {"stream": stream, "tag": tag, "k": c["k"], "H": c["H"], "grid": grid,
+           "calibration": {"x": [float(x) for x in cal[0]], "y": [float(x) for x in cal[1]]},
+           "quantiles": {str(q): float(np.quantile(pv[okv], q)) for q in (0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.99, 0.999)}}
     os.makedirs(f"{W}/results", exist_ok=True)
     json.dump(res, open(f"{W}/results/{stream}{tag}.json", "w"), indent=1, default=str)
     return res
 
 
-def final(stream, gate=None, tag=""):
-    """The holdout test of the tuned choice - run once per stream."""
+def decide(stream, htf_stream=None):
+    """Pools the plain grid and (when given) the gate grids, applies the validation rule and writes the stream's
+    one choice -> results/<stream>_choice.json. Nothing here looks at the holdout."""
     c = CFG[stream]
-    path = f"{W}/results/{stream}{tag}.json"
+    base = json.load(open(f"{W}/results/{stream}.json"))
+    grid = list(base["grid"])
+    gates = {}
+    if htf_stream:
+        G = gate_scores(stream, htf_stream)
+        for name, level in gate_levels(stream, G).items():
+            f = f"{W}/results/{stream}_mtf_{name}.json"
+            if os.path.exists(f):
+                grid += json.load(open(f))["grid"]
+                gates[name] = level
+    ch = choose(grid)
+    res = {"stream": stream, "k": c["k"], "H": c["H"], "rule": RULE_TEXT, "choice": ch, "calibration": base["calibration"],
+           "variants": {"plain": len(base["grid"]), **{f"gate {k}": v for k, v in gates.items()}}}
+    passing = candidates(grid)
+    res["passing_settings"] = len(passing)
+    if ch is None:
+        ok = [s for s in grid if s["signals"] >= RULE["min_signals"] and s["win_rate"] is not None]
+        if ok:
+            res["closest"] = max(ok, key=lambda s: s["avg_net_r"])
+            log(stream, "NO setting passes validation; closest:", json.dumps({k: res["closest"].get(k) for k in
+                ("plan", "cap", "q", "gate", "signals", "signals_per_day", "win_rate", "avg_net_r", "profit_factor")}))
+        json.dump(res, open(f"{W}/results/{stream}_choice.json", "w"), indent=1, default=str)
+        return res
+    gate = None
+    if ch.get("gate"):
+        res["gate"] = {"stream": htf_stream, "name": ch["gate"], "level": gates[ch["gate"]]}
+        gate = make_gate(gate_scores(stream, htf_stream), gates[ch["gate"]])
+    cols, D = load_ds(stream)
+    preds = dict(np.load(f"{W}/wf/{stream}.npz"))
+    cal = (np.array(base["calibration"]["x"]), np.array(base["calibration"]["y"]))
+    same = sorted([x for x in grid if x["plan"] == ch["plan"] and x["cap"] == ch["cap"] and x.get("gate") == ch.get("gate")],
+                  key=lambda x: x["thr"])
+    pv, _ = val_scores(c, D, preds)
+    pv = pv[np.isfinite(pv)]
+    ga = next((x["thr"] for x in same if x["thr"] > ch["thr"] and (x["win_rate"] or 0) >= ch["win_rate"] + 2
+               and x["signals"] >= 30), float(np.quantile(pv, 0.999)))
+    ds, de = c["val"]
+    tr = simulate(c, D, preds, ch["thr"], ds, de, cal, ch["plan"], ch["cap"], ga, ch["thr"], gate=gate)
+    res.update({"threshold": ch["thr"], "grade_a": ga, "grade_b": ch["thr"], "plan": ch["plan"], "cap": ch["cap"],
+                "watch": float(np.quantile(pv, max(0.5, ch["q"] - 0.05))), "walk_forward": stats(tr, ds, de),
+                "hold_bars_median": float(np.median([t["bars_held"] for t in tr]))})
+    log(stream, "CHOICE plan", ch["plan"], "cap", ch["cap"], "q", ch["q"], "gate", ch.get("gate"),
+        json.dumps(short(res["walk_forward"])), json.dumps(res["walk_forward"]["years"]))
+    json.dump(res, open(f"{W}/results/{stream}_choice.json", "w"), indent=1, default=str)
+    return res
+
+
+DAILY_RULE = {"win": 70.0, "avg_r": 0.0, "year_avg": -0.03, "min_signals": 100}
+DAILY_RULE_TEXT = ("daily signal (when the stream gave no signal for 24 hours, the best candidate from a lower score "
+                   "level gets one): used only when those 'standard' signals alone reach >= 70% wins and a positive "
+                   "average on the validation years with no year below -0.03R, and the whole stream still passes the "
+                   "validation rule; among the levels that pass, the one with the best average of the standard signals")
+
+
+def _tier(trades, tier, start, end):
+    return stats([t for t in trades if t.get("tier") == tier], start, end)
+
+
+def daily(stream):
+    """Validation only: should the stream's choice get a daily ('standard') signal, and from which score level?"""
+    c = CFG[stream]
+    path = f"{W}/results/{stream}_choice.json"
+    res = json.load(open(path))
+    if not res.get("choice"):
+        return res
+    ch = res["choice"]
+    base = json.load(open(f"{W}/results/{stream}.json"))
+    gate = make_gate(gate_scores(stream, res["gate"]["stream"]), res["gate"]["level"]) if res.get("gate") else None
+    cols, D = load_ds(stream)
+    preds = dict(np.load(f"{W}/wf/{stream}.npz"))
+    cal = (np.array(res["calibration"]["x"]), np.array(res["calibration"]["y"]))
+    ds, de = c["val"]
+    out, ok = [], []
+    for q, level in sorted(base["quantiles"].items(), key=lambda kv: float(kv[0])):
+        if level >= res["threshold"] or float(q) > 0.95:
+            continue
+        tr = simulate(c, D, preds, res["threshold"], ds, de, cal, res["plan"], res["cap"], res["grade_a"],
+                      res["grade_b"], gate=gate, floor=level)
+        whole, std = stats(tr, ds, de), _tier(tr, "standard", ds, de)
+        row = {"q": float(q), "floor": level, "whole": whole, "standard": std, "strong": _tier(tr, "strong", ds, de)}
+        out.append(row)
+        good = (std["signals"] >= DAILY_RULE["min_signals"] and std["win_rate"] >= DAILY_RULE["win"]
+                and std["avg_net_r"] > DAILY_RULE["avg_r"] and passes(whole)
+                and all(v["avg_net_r"] >= DAILY_RULE["year_avg"] for v in std["years"].values() if v["signals"] >= 30))
+        if good:
+            ok.append(row)
+        log(stream, "daily floor q", q, "standard:", json.dumps(short(std)), json.dumps(std.get("years")),
+            "| whole:", json.dumps({k: whole[k] for k in ("signals", "signals_per_day", "days_with_signal_pct",
+                                                           "max_gap_days", "win_rate", "avg_net_r", "sharpe_daily")}),
+            "PASS" if good else "")
+    res["daily_grid"] = out
+    res["daily_rule"] = DAILY_RULE_TEXT
+    res["daily"] = None
+    if ok:
+        b = max(ok, key=lambda r: r["standard"]["avg_net_r"])
+        res["daily"] = {"q": b["q"], "floor": b["floor"], "gap_hours": GAP_HOURS, "walk_forward": b["whole"],
+                        "walk_forward_standard": b["standard"], "walk_forward_strong": b["strong"]}
+        log(stream, "DAILY CHOICE floor q", b["q"], json.dumps(short(b["standard"])))
+    else:
+        log(stream, "no daily level passes: the stream stays strong-only")
+    json.dump(res, open(path, "w"), indent=1, default=str)
+    return res
+
+
+def final(stream):
+    """The holdout test of the stream's validated choice - run once per stream."""
+    c = CFG[stream]
+    path = f"{W}/results/{stream}_choice.json"
     res = json.load(open(path))
     if not res.get("choice"):
         log(stream, "no validated choice: the holdout is not opened")
@@ -640,6 +795,9 @@ def final(stream, gate=None, tag=""):
     if res.get("test"):
         log(stream, "holdout already scored:", json.dumps(short(res["test"])))
         return res
+    gate = None
+    if res.get("gate"):
+        gate = make_gate(gate_scores(stream, res["gate"]["stream"]), res["gate"]["level"])
     cols, D = load_ds(stream)
     preds = dict(np.load(f"{W}/wf/{stream}.npz"))
     cal = (np.array(res["calibration"]["x"]), np.array(res["calibration"]["y"]))
@@ -652,12 +810,189 @@ def final(stream, gate=None, tag=""):
         sel = [t for t in tr if pd.Timestamp(a) <= pd.Timestamp(t["signal_at"]) < pd.Timestamp(e)]
         res["test"]["folds"][f"{a} to {e}"] = short(stats(sel, a, e))
     res["test"]["symbols"] = len(D)
-    log(stream, tag, "HOLDOUT", json.dumps(short(res["test"])), json.dumps(res["test"]["years"]))
+    log(stream, "HOLDOUT", json.dumps(short(res["test"])), json.dumps(res["test"]["years"]))
+    if res.get("daily"):
+        # the same choice with the validated daily signal: its own holdout run (the standard signals take coins,
+        # so the strong signals are not exactly the same as in the run above)
+        tr2 = simulate(c, D, preds, res["threshold"], hs, he, cal, res["plan"], res["cap"], res["grade_a"],
+                       res["grade_b"], gate=gate, floor=res["daily"]["floor"])
+        t2 = stats(tr2, hs, he)
+        t2["symbols"] = len(D)
+        t2["strong"] = {k: v for k, v in _tier(tr2, "strong", hs, he).items() if k in
+                        ("signals", "win_rate", "avg_net_r", "profit_factor")}
+        t2["standard"] = {k: v for k, v in _tier(tr2, "standard", hs, he).items() if k in
+                          ("signals", "win_rate", "avg_net_r", "profit_factor", "years")}
+        t2["folds"] = {}
+        for a, e in c["hold"]:
+            sel = [t for t in tr2 if pd.Timestamp(a) <= pd.Timestamp(t["signal_at"]) < pd.Timestamp(e)]
+            t2["folds"][f"{a} to {e}"] = short(stats(sel, a, e))
+        res["test_daily"] = t2
+        log(stream, "HOLDOUT with the daily signal", json.dumps(short(t2)), "standard:", json.dumps(t2["standard"]))
+        pickle.dump(tr2, open(f"{W}/results/{stream}_holdout_trades_daily.pkl", "wb"))
     json.dump(res, open(path, "w"), indent=1, default=str)
-    pickle.dump(tr, open(f"{W}/results/{stream}{tag}_holdout_trades.pkl", "wb"))
+    pickle.dump(tr, open(f"{W}/results/{stream}_holdout_trades.pkl", "wb"))
     return res
+
+
+# ---------------------------------------------------------------------------
+# multi-timeframe variant: the higher-timeframe model must lean the same way
+# ---------------------------------------------------------------------------
+def gate_scores(stream, htf_stream):
+    """{symbol: (long, short)}: the higher-timeframe model's walk-forward scores of the last higher-timeframe
+    candle that had CLOSED when each candle of `stream` closed."""
+    c, ch = CFG[stream], CFG[htf_stream]
+    _, D = load_ds(stream)
+    _, Dh = load_ds(htf_stream)
+    Ph = dict(np.load(f"{W}/wf/{htf_stream}.npz"))
+    tf = np.timedelta64(FE.TF_SEC[c["tf"]], "s")
+    htf = np.timedelta64(FE.TF_SEC[ch["tf"]], "s")
+    out = {}
+    for sym, d in D.items():
+        if sym not in Dh:
+            continue
+        key = sym.replace("/", "")
+        idx = np.searchsorted(Dh[sym]["ts"] + htf, d["ts"] + tf, side="right") - 1
+        ok, ii = idx >= 0, idx.clip(0)
+        out[sym] = (np.where(ok, Ph[f"{key}_L"][ii], np.nan).astype(np.float32),
+                    np.where(ok, Ph[f"{key}_S"][ii], np.nan).astype(np.float32))
+    return out
+
+
+def make_gate(G, level):
+    def gate(sym, longs):
+        if sym not in G:
+            return np.zeros(len(longs), dtype=bool)
+        gl, gs = G[sym]
+        mine, other = np.where(longs, gl, gs), np.where(longs, gs, gl)
+        return np.isfinite(mine) & (mine >= other) & (mine >= level)
+    return gate
+
+
+def gate_levels(stream, G):
+    """Gate levels to try: quantiles of the higher-timeframe scores over the validation years only."""
+    c = CFG[stream]
+    _, D = load_ds(stream)
+    a, e = np.datetime64(c["val"][0]), np.datetime64(c["val"][1])
+    parts = []
+    for sym, (gl, gs) in G.items():
+        m = (D[sym]["ts"] >= a) & (D[sym]["ts"] < e) & D[sym]["elig"]
+        parts += [gl[m], gs[m]]
+    hv = np.concatenate(parts)
+    hv = hv[np.isfinite(hv)]
+    return {"g50": float(np.quantile(hv, 0.5)), "g70": float(np.quantile(hv, 0.7)), "g85": float(np.quantile(hv, 0.85)),
+            "g93": float(np.quantile(hv, 0.93))}
+
+
+def tune_mtf(stream, htf_stream):
+    """The validation grid once per gate level (results/<stream>_mtf_<level>.json); decide() picks."""
+    G = gate_scores(stream, htf_stream)
+    for name, level in gate_levels(stream, G).items():
+        tune(stream, gate=make_gate(G, level), tag=f"_mtf_{name}", plans=("p1", "p3"), qs=QS_MTF, gate_name=name,
+             caps=[None, 0.09] if CFG[stream]["market"] == "crypto" else [None, 0.08])
+
+
+# ---------------------------------------------------------------------------
+# export for the site (models/<stream>.json, read by streams.StreamModel)
+# ---------------------------------------------------------------------------
+def export_trees(clf):
+    trees = []
+    for it in clf._predictors:
+        nodes = it[0].nodes
+        trees.append({"f": nodes["feature_idx"].astype(int).tolist(), "t": [float(x) for x in nodes["num_threshold"]],
+                      "l": nodes["left"].astype(int).tolist(), "r": nodes["right"].astype(int).tolist(),
+                      "leaf": nodes["is_leaf"].astype(int).tolist(), "v": [round(float(x), 7) for x in nodes["value"]],
+                      "m": nodes["missing_go_to_left"].astype(int).tolist()})
+    return trees, float(np.ravel(clf._baseline_prediction)[0])
+
+
+def hold_text(c, bars):
+    mins = bars * FE.TF_SEC[c["tf"]] / 60
+    if mins < 90:
+        return f"about {int(round(mins))} minutes"
+    return f"about {mins / 60:.0f} hours" if mins < 48 * 60 else f"about {mins / 1440:.1f} days"
+
+
+def export(stream):
+    c = CFG[stream]
+    res = json.load(open(f"{W}/results/{stream}_choice.json"))
+    assert res.get("choice") and res.get("test"), "export needs a validated choice and its holdout test"
+    fin = pickle.load(open(f"{W}/wf/{stream}_last.pkl", "rb"))
+    clf, cols = fin["clf"], fin["cols"]
+    trees, base = export_trees(clf)
+    # the exported trees must give the same scores as the trained model
+    _, D = load_ds(stream)
+    probe = np.asarray(next(iter(D.values()))["X"][-400:])
+    dense = [{k: np.asarray(v) for k, v in t.items()} for t in trees]
+    assert np.allclose(ST._tree_proba(dense, base, probe), clf.predict_proba(probe)[:, 1], atol=1e-5), "tree export"
+    plan = PLANS[res["plan"]]
+    folds_info = json.load(open(f"{W}/wf/{stream}_folds.json"))
+    trained = json.load(open(f"{W}/ds/{stream}/meta.json"))["symbols"]
+    crypto = c["market"] == "crypto"
+    test = dict(res["test"])
+    if crypto:
+        test["cost_round_trip"] = markets.CRYPTO_COST_ROUND_TRIP
+    test["note"] = ("Walk-forward on data the models never saw: every fold was scored by a model trained only on "
+                    "candles from before the fold. Entries at the price shortly after the signal candle closed, "
+                    + ("0.30% fees and slippage per round trip plus funding for longs." if crypto else
+                       "the pair's spread plus slippage (markets.FOREX_COST_PIPS)."))
+    hb = res.get("hold_bars_median") or c["H"] / 4
+    n_targets = len(plan["targets_r"])
+    model = {
+        "version": "5.0", "stream": stream, "market": c["market"], "timeframe": c["tf"],
+        "trained_on": f"{c['data_start']} to {fin['train_end'][:10]}, {len(trained)} symbols",
+        "spec": {"session": c["session"], "volume": c["volume"], "anchor": c.get("anchor")},
+        "features": cols, "baseline": base, "trees": trees, "calibration": res["calibration"],
+        "calibration_note": "Maps the model output to the share of past cases that reached target 1 before the stop "
+                            f"(walk-forward predictions {c['val'][0]} to {c['val'][1]}).",
+        "threshold": res["threshold"], "grade_a": max(res["grade_a"], res["threshold"]),
+        "grade_b": max(min(res["grade_b"], res["grade_a"]), res["threshold"]),
+        "watch_threshold": min(res.get("watch", res["threshold"]), res["threshold"]),
+        "policy_note": ("A symbol gets a signal when the model's score is at least the level chosen on the validation "
+                        "years" + (f" and the trade's own cost is at most {res['cap']}R" if res.get("cap") else "")
+                        + f". One trade at a time per symbol, a cooldown of {c['cooldown']} candles, at most "
+                        f"{c['max_per_bar']} new signals per candle (the highest scores)."),
+        "levels": {"sl_atr": c["k"], "targets_r": plan["targets_r"], "fractions": plan["fractions"],
+                   "max_bars": c["H"], "be_after": plan["be_after"]},
+        "plan_note": (f"Stop {c['k']:g} x ATR(14) from the entry (1R). "
+                      + ("One target at 0.5R: the whole position closes there and the stop never moves."
+                         if n_targets == 1 else
+                         "Targets at " + " / ".join(f"{x:g}R" for x in plan["targets_r"]) + ", an equal part closed at "
+                         "each; after target 1 the stop moves to the entry, after target 2 to target 1.")
+                      + f" Time limit {c['H']} candles."),
+        "selection": {"max_per_bar": c["max_per_bar"], "cooldown_bars": c["cooldown"],
+                      "sessions": list(c["sessions"]) if c.get("sessions") else None,
+                      "no_new_before_close_h": c.get("close_h", 0), "cost_cap_r": res.get("cap")},
+        "hold_bars_median": hb, "hold_text": hold_text(c, hb),
+        "signal_symbols": markets.forex_signal_pairs() if not crypto else markets.stream_coins("crypto", c["tf"]),
+        "trained_symbols": trained, "test": test, "walk_forward": res["walk_forward"],
+        "validation_rule": res.get("rule"), "folds": folds_info,
+        "fees": ("0.30% round trip + funding for longs" if crypto else
+                 "typical spread per pair + 0.3 pip slippage (markets.FOREX_COST_PIPS)"),
+    }
+    if res.get("gate"):
+        # multi-timeframe check: the higher-timeframe model of the same walk-forward fold, with its level
+        hs = res["gate"]["stream"]
+        ch = CFG[hs]
+        hfin = pickle.load(open(f"{W}/wf/{hs}_last.pkl", "rb"))
+        htrees, hbase = export_trees(hfin["clf"])
+        model["gate"] = {"timeframe": ch["tf"], "features": hfin["cols"], "baseline": hbase, "trees": htrees,
+                         "spec": {"session": ch["session"], "volume": ch["volume"], "anchor": ch.get("anchor")},
+                         "level": res["gate"]["level"], "label": f"the {ch['tf']} model leans the same way",
+                         "trained_symbols": json.load(open(f"{W}/ds/{hs}/meta.json"))["symbols"],
+                         "trained_on": f"{ch['data_start']} to {hfin['train_end'][:10]}"}
+        model["policy_note"] = model["policy_note"].replace(
+            ". One trade at a time", f", and the {ch['tf']} model must lean the same way with a score in its top "
+            f"{100 - int(res['gate']['name'][1:])}% (multi-timeframe check). One trade at a time", 1)
+    os.makedirs(f"{APP}/models", exist_ok=True)
+    path = f"{APP}/models/{stream}.json"
+    json.dump(model, open(path, "w"), separators=(",", ":"))
+    log("exported", path, os.path.getsize(path) // 1024, "KB", "passes the site's live bar:",
+        ST.passed_test(test, stream))
 
 
 if __name__ == "__main__":
     cmd, stream = sys.argv[1], sys.argv[2]
-    {"build": build, "wf": wf, "tune": tune, "final": final}[cmd](stream)
+    if cmd in ("tune_mtf", "decide"):
+        {"tune_mtf": tune_mtf, "decide": decide}[cmd](stream, sys.argv[3] if len(sys.argv) > 3 else None)
+    else:
+        {"build": build, "wf": wf, "tune": tune, "daily": daily, "final": final, "export": export}[cmd](stream)

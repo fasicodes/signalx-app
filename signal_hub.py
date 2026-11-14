@@ -760,10 +760,16 @@ def stream_stats(market, tf, now=None):
     with _Cursor() as cur:
         cur.execute("SELECT * FROM signal_events WHERE market=%s AND timeframe=%s", (market, tf))
         rows = cur.fetchall() or []
+    # the record of the engine that runs now: a signal of an older engine had another model or exit plan, so its
+    # result says nothing about the signals given today (it stays in the signal list with its own result)
+    engine = streams.plan_for(market, tf).get("engine")
+    older = [r for r in rows if r.get("engine") and r.get("engine") != engine]
+    rows = [r for r in rows if not (r.get("engine") and r.get("engine") != engine)]
     closed = [r for r in rows if r.get("status") in CLOSED]
     out = {"market": market, "timeframe": tf, "total": len([r for r in rows if r.get("status") != "CANCELLED"]),
            "active": sum(1 for r in rows if r.get("status") == "ACTIVE"),
-           "cancelled": sum(1 for r in rows if r.get("status") == "CANCELLED"), "windows": {}, "by_grade": {}}
+           "cancelled": sum(1 for r in rows if r.get("status") == "CANCELLED"), "windows": {}, "by_grade": {},
+           "engine": engine, "older_engines": _stats_rows([r for r in older if r.get("status") in CLOSED]) if older else None}
     for name, days in (("all", None), ("30d", 30), ("7d", 7)):
         sel = closed if days is None else [r for r in closed if _parse(r.get("closed_at")) and
                                           _parse(r["closed_at"]) >= now - timedelta(days=days)]
@@ -954,30 +960,32 @@ def coin_test(key):
             "per_day": r.get("signals_per_day"), "win_rate": r.get("win_rate"), "avg_r": r.get("avg_net_r")}
 
 
+def _test_of(key):
+    """The published test on unseen data of a stream (crypto 4h: the engine's model file; others: models/<key>.json)."""
+    try:
+        if key == "crypto_4h":
+            import signal_engine as se
+            return se.test_stats() or {}
+        m = streams.load_model(key)
+        return (m.meta.get("test") if m is not None else None) or {}
+    except Exception:
+        return {}
+
+
 def tested_summary():
-    """Landing page: the test on data the model never saw, for every switched-on tested crypto stream, plus the
+    """Landing page: the test on data the model never saw, for every switched-on tested stream, plus the
     signal-weighted total. Numbers come straight from the model files; nothing is estimated here."""
     out = []
-    for key in ("crypto_1h", "crypto_4h"):
-        if key not in _tested_keys():
-            continue
-        try:
-            if key == "crypto_4h":
-                import signal_engine as se
-                t = se.test_stats() or {}
-            else:
-                m = streams.load_model(key)
-                t = (m.meta.get("test") if m is not None else None) or {}
-        except Exception:
-            t = {}
+    for key in [k for k in ALL_STREAMS if k in _tested_keys()]:
+        t = _test_of(key)
         if not t.get("signals") or t.get("win_rate") is None:
             continue
-        tf = key.split("_", 1)[1]
-        row = {"key": key, "timeframe": tf, "period": _period_label(t.get("period")),
+        market, tf = key.split("_", 1)
+        row = {"key": key, "market": market, "timeframe": tf, "period": _period_label(t.get("period")),
                "signals": int(t["signals"]), "per_day": float(t.get("signals_per_day") or 0),
                "win_rate": float(t["win_rate"]), "avg_r": float(t.get("avg_net_r") or 0),
                "profit_factor": t.get("profit_factor"), "max_drawdown_r": t.get("max_drawdown_r"),
-               "coins": len(markets.stream_coins("crypto", tf))}
+               "coins": len(markets.stream_coins(market, tf))}
         extra = coin_test(key)
         if extra:
             row["extra_coins"] = extra
@@ -986,6 +994,8 @@ def tested_summary():
         return {"streams": [], "signals": 0}
     n = sum(x["signals"] for x in out)
     return {"streams": out, "signals": n, "coins": len(markets.CRYPTO_COINS),
+            "pairs": len(markets.forex_signal_pairs()) if any(x["market"] == "forex" for x in out) else 0,
+            "markets": sorted({x["market"] for x in out}),
             "per_day": round(sum(x["per_day"] for x in out), 1),
             "win_rate": round(sum(x["signals"] * x["win_rate"] for x in out) / n, 1),
             "avg_r": round(sum(x["signals"] * x["avg_r"] for x in out) / n, 3)}
@@ -1207,41 +1217,29 @@ def coins_status(now=None):
 
 
 def is_strong(row):
-    """The strongest signals, by levels fixed before the unseen-data test and better on BOTH the walk-forward years and
-    the unseen year: crypto 4h = the engine's 'strong' tier (its top 3% of scores), crypto 1h = the model's top grade."""
-    if (row.get("market") or "crypto") != "crypto":
-        return False
-    tf = row.get("timeframe")
-    if tf == "4h":
+    """The strongest signals, by levels fixed before the unseen-data test: crypto 4h = the engine's 'strong' tier
+    (its top 3% of scores); a tested model stream = the model's top grade (A)."""
+    market, tf = row.get("market") or "crypto", row.get("timeframe") or "4h"
+    if market == "crypto" and tf == "4h":
         return row.get("tier") == "strong"
-    if tf == "1h":
-        return row.get("grade") == "A"
-    return False
+    return row.get("grade") == "A" and stream_tested(market, tf)
 
 
-def strong_summary(tfs=("1h", "4h")):
-    """Test results (unseen data, after costs) of the strongest signals and of all signals of the tested crypto streams."""
+def strong_summary(tfs=("15m", "1h", "4h"), market="crypto"):
+    """Test results (unseen data, after costs) of the strongest signals and of all signals of the tested streams."""
     parts, alls = [], []
-    try:
-        if "4h" in tfs:
-            import signal_engine as se
-            t = se.test_stats() or {}
-            days = max(1.0, (t.get("signals") or 0) / max(float(t.get("signals_per_day") or 1), 1e-9))
-            if (t.get("strong") or {}).get("signals"):
-                parts.append((t["strong"], days))
-            if t.get("signals"):
-                alls.append((t, days))
-        if "1h" in tfs:
-            m = streams.load_model("crypto_1h")
-            t = (m.meta.get("test") if m is not None else None) or {}
-            days = max(1.0, (t.get("signals") or 0) / max(float(t.get("signals_per_day") or 1), 1e-9))
-            a = (t.get("by_grade") or {}).get("A") or {}
-            if a.get("signals"):
-                parts.append((a, days))
-            if t.get("signals"):
-                alls.append((t, days))
-    except Exception:
-        return None
+    for tf in tfs:
+        key = f"{market}_{tf}"
+        if not stream_tested(market, tf):
+            continue
+        t = _test_of(key)
+        if not t.get("signals"):
+            continue
+        days = max(1.0, t["signals"] / max(float(t.get("signals_per_day") or 1), 1e-9))
+        top = t.get("strong") if key == "crypto_4h" else (t.get("by_grade") or {}).get("A")
+        if (top or {}).get("signals"):
+            parts.append((top, days))
+        alls.append((t, days))
 
     def mix(xs):
         n = sum(x["signals"] for x, _ in xs)
