@@ -425,10 +425,14 @@ def wf(stream):
                      "train_end": str((a - purge).date()), "base": round(float(y.mean()), 4)})
         log(stream, kind, a.date(), e.date(), "rows", len(y), "base", round(float(y.mean()), 3),
             f"{time.time() - t0:.0f}s")
-        pickle.dump({"clf": clf, "cols": cols, "train_end": str(a - purge), "rows": int(len(y)), "fold": str(a.date())},
-                    open(f"{W}/wf/{stream}_last.pkl", "wb"))
+        blob = {"clf": clf, "cols": cols, "train_end": str(a - purge), "rows": int(len(y)), "fold": str(a.date()),
+                "fold_end": str(e.date()), "kind": kind}
+        pickle.dump(blob, open(f"{W}/wf/{stream}_last.pkl", "wb"))
+        if os.environ.get("V5_KEEP_FOLDS"):          # every fold's model (the rolling-window test scores with them)
+            pickle.dump(blob, open(f"{W}/wf/{stream}_fold_{a.date()}.pkl", "wb"))
         del X, y
-    np.savez(f"{W}/wf/{stream}.npz", **{f"{s.replace('/', '')}_L": v[0] for s, v in preds.items()},
+    out = os.environ.get("V5_WF_OUT") or f"{W}/wf/{stream}.npz"     # (a re-run may write its scores somewhere else)
+    np.savez(out, **{f"{s.replace('/', '')}_L": v[0] for s, v in preds.items()},
              **{f"{s.replace('/', '')}_S": v[1] for s, v in preds.items()})
     json.dump(info, open(f"{W}/wf/{stream}_folds.json", "w"), indent=1)
     log("wf done", stream)
