@@ -1,6 +1,6 @@
 # Signals FM (SignalX)
 
-Trading signals for crypto and forex on 15-minute, 1-hour and 4-hour candles, a news and economic
+Crypto trading signals on 1-hour and 4-hour candles (engine 5), forex and gold charts, a news and economic
 calendar section, demo trading, an auto-trade bot and an AI assistant. Flask + MySQL, deployed on Railway.
 
 ## Run locally
@@ -21,9 +21,9 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 
 | Job | Module | What it does | Switch |
 |---|---|---|---|
-| Signal scanner + tracker | `signal_hub.py` | After every 15m / 1h / 4h candle close: runs each stream, stores new signals, sends alerts; follows every active signal to its result (TP1/TP2/TP3, stop, expiry). | `SIGNAL_HUB`, `SIGNAL_STREAMS` |
-| Crypto 4h engine | `signalboard.py` + `signal_engine.py` | Signal engine v3.1 board after each 4h close. | `SIGNAL_BOARD` |
-| Track record | `trackrecord.py` | Live record + backtest of engine v3.1. | `TRACK_RECORD_ENGINE` |
+| Signal scanner + tracker | `signal_hub.py` | After every candle close of a switched-on stream (engine 5: crypto 1h): runs it, stores new signals, sends alerts; follows every active signal to its result (TP1/TP2/TP3, stop, expiry). | `SIGNAL_HUB`, `SIGNAL_STREAMS` |
+| Crypto 4h engine | `signalboard.py` + `signal_engine.py` | The 4-hour engine (5.0) board after each 4h close. | `SIGNAL_BOARD` |
+| Track record | `trackrecord.py` | Live record + backtest of the 4-hour engine. | `TRACK_RECORD_ENGINE` |
 | Strategy library | `strategies.py` + `strategy_library.py` | Once a day: backtests the 30 library strategies on the last year of 1h / 4h candles (20 crypto coins, 6 forex pairs) and stores the results for the Strategies page. | `STRATEGIES_ENGINE`, `STRATEGIES_REFRESH_HOURS` |
 | News + calendar | `news.py` | News every 10 min, calendar every 30 min (de-duplicated). | `NEWS_JOB` |
 | Auto-trade engine | `autotrade.py` | Hands every new site signal to the bots that want it, places orders, follows stops and targets. | `AUTOTRADE_ENGINE` |
@@ -34,10 +34,13 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 * `markets.py` - every symbol (62 crypto coins, 44 forex pairs), the forex signal list (7 majors, crosses, gold;
   `FOREX_SIGNAL_PAIRS`), pip sizes, spreads, the forex week (DST-aware) and sessions.
 * `streams.py` - the six streams, the shared selection policy (one trade per symbol, cooldown, max signals per
-  candle, forex sessions, weekend exit, news blackout) and the trade plan follower used by both the live site and the research.
+  candle, cost cap, forex sessions, weekend exit, news blackout) and the trade plan follower used by both the live
+  site and the research. A stream runs only when its model passed its one test on unseen data (`passed_test`).
 * `features.py` - model inputs (the same code for research and live).
-* `models/<market>_<timeframe>.json` - trained stream models with their walk-forward and holdout tests
-  (crypto 4h uses `signal_model.json`, engine v3.1). A stream without a model file falls back to rules engine R1.
+* `signal_model.json` - the crypto 4h engine (trees of engine 3.1, three targets since engine 5.0).
+* `models/crypto_1h.json` - the crypto 1h stream: the engine 5 4-hour model read at every hourly close
+  (`StreamEngine._reading_board`). No other stream has a model file, so the others stay off.
+* `models/research.json` - what was tested for every stream and why it is on or off (shown on the Signals page).
 * Research code that trains and tests the models: see "Research" below.
 
 Database: every signal is a row in `signal_events` (market, timeframe, grade, plan, status, result). The
@@ -117,39 +120,35 @@ The tests use a SQLite stand-in for MySQL (`tests/dbshim.py`) and fake brokers /
 installed (`pip install -r requirements.txt`); it checks the login rule and the coin / timeframe checks on the data
 endpoints, the security headers and the analysis functions that once had bugs.
 
-## Results: what is live and what is not (tested on data the models never saw)
+## Results: what is live and what is not (engine 5, Nov 2026)
 
-All six streams run by default. Streams that have not passed the test are marked **untested** on the Signals page and in alerts, and live auto-trading accounts copy only the tested ones (demo accounts copy all). Set `SIGNAL_STREAMS=validated` to run only the tested streams.
+Only streams whose model passed its one test on data it never saw run on the site (`streams.passed_test`: at least 50
+signals, +0.05R per signal after costs, profit factor 1.1, drawdown at most half the total result). `SIGNAL_STREAMS` can
+only narrow that list down. Test period: 2025-10-01 to 2026-11-08, 94 coins, 0.30% per round trip plus funding for
+longs, entries one minute after the candle close.
 
-Rule fixed before the results: a stream counts as *tested* only if the model version picked on the validation years
-(2023-01 to 2025-09) also reaches **at least 70 % wins (TP1 or better), a positive average result after costs and
-at least 50 signals** on a later holdout (2025-10-01 to 2026-10-11, crypto; 2021-01 to 2022-03, forex).
-Crypto costs 0.12 % per round trip; the holdout was scored once per picked version.
+| Stream | On the site | Plan | Unseen-data result |
+|---|---|---|---|
+| Crypto 4h | **on** | stop 2 ATR, targets 0.5R / 1R / 2R (a third at each) | 852 signals (2.1 a day), **75.5 %** reach TP1, +0.12R per signal, PF 1.48 |
+| Crypto 1h | **on** | the 4h model read every hour; one target at 0.5R | 781 signals (1.9 a day, in bursts), **82.5 %** reach the target, +0.19R per signal, PF 2.03 |
+| Crypto 15m | off | - | passed validation, failed the unseen test: 69.4 %, +0.01R |
+| Forex / gold 15m, 1h, 4h | off | - | no setting reached the validation target (best about 70 %, +0.03R); the unseen years were not opened |
 
-| Stream | On the site | Unseen-data result |
-|---|---|---|
-| Crypto 4h (engine v3.1) | **on** | 73.6 % wins, +0.105 R per signal, 735 signals (about 2 a day) |
-| Crypto 1h, with the 4h model agreeing | **on** | 72.6 % wins, +0.083 R per signal, 1,691 signals (about 4.5 a day) |
-| Crypto 1h alone | off | 68.1 %, -0.004 R |
-| Crypto 15m | on, **untested** (simple rules R1) | a 15m model was trained (stop 2 and 3 ATR, alone and with the 1h model agreeing) and none reached the validation target: closest 71.4 % wins but only +0.029 R, and 2025 fell to about 64 % and a loss. Rules replay 2023-2025: ~84 signals a day, 48.1 % reach TP1, **-0.139 R** per signal |
-| Forex 15m / 1h / 4h and gold | on, **untested** (simple rules R1) | no model version reached the validation target, or lost money on unseen data (best: 1h, 70.8 % but -0.072 R). Rules replay 2017-2020: 15m ~9 a day **-0.218 R**, 1h ~2.9 a day **-0.112 R**, 4h ~1 a day **-0.082 R** |
+Plainly:
 
-Things the numbers say, plainly:
-
-* The simple rules (R1) that the untested streams run lose money on average in every validation year and every grade (see `models/research.json`, `rules_replay`; reproduce with `research/rules_replay.py`). Loosening them (lower score, weaker higher-timeframe filter) gives more signals but the same average loss, so more signals on every timeframe needs a trained model that passes the test, not looser rules.
-
-* A "win" is TP1 (half of the stop distance) or better; about 66 % of all trades in the data reach TP1 whatever
-  the signal, so a high win rate alone is not skill. The measure that matters is the average result after
-  costs (R = the risk of one trade). The two live models add about 6-7 points of win rate and +0.08 to +0.1 R per signal.
-* More signals cost accuracy: the 1h model alone (13 signals a day) is close to the base rate and earns about
-  nothing on unseen data. With both live streams expect roughly 6-7 signals a day across all coins, not 2-3 per coin.
-* Crypto signals come in bursts: on busy days many coins fire together, so the unseen-data samples are smaller than
-  the signal counts suggest. Treat the averages as indications, not promises.
-* Not used because they did not help or did not hold: order-flow inputs, the Hawkes / Bayesian / conformal /
-  Kelly prompt (the site's first engine: 49.5-51 % right on the next candle), forex models (see `research/README.md`).
-* The numbers come from history; live results will differ. The Track record page keeps the live record.
+* A win is the first target (half the stop distance). A random entry reaches it about 2 times in 3, and one full
+  loss costs as much as two first-target wins, so the average result after costs is the measure that matters.
+* The 1h stream has no filler signal: it can be quiet for days and then give many signals in one market move.
+  A daily filler was tested and lost money on the validation years.
+* With the single 1R target of engine 3.2 the same 4h signals won 59.4 % (+0.19R per signal): engine 5 trades some
+  profit per signal for fewer stop-losses.
+* The numbers come from history; live results will differ. The Signals page and the Track record keep the live record.
 
 ## Research (how the stream models were trained and tested)
+
+Engine 5: `research/v5` (`fetch.py` data, `lab5.py` models and the pre-registered selection, `rolling.py` the hourly
+reading of the 4h model, `engine4h.py` the 4h plan re-test, `live_check.py` live engine == research, `summary.py`
+writes `models/research.json`). The text below describes the earlier research.
 
 The research scripts are not part of the web app. Data: Binance spot 1-minute candles (public CC repositories
 on GitHub, aggregated to 15m) for 53 coins, 2020-2026, and 15-minute forex/gold candles (2012-2022-03).

@@ -369,7 +369,7 @@
           <h2>It loses too. We show every one.</h2>
           <p>{% if WIN %}In testing, {{ WIN }}% of signals reached the target and the rest hit the stop.{% else %}Some signals hit the stop.{% endif %}
             Fees are included in every result, and every signal stays on the track record, wins and losses.</p>
-          <div class="ctas" style="margin:22px 0 0"><a class="pbtn primary xl" href="/login">Meet the agents</a><a class="pbtn xl" href="/track-record">See the track record</a></div>
+          <div class="ctas" style="margin:22px 0 0"><a class="pbtn primary xl" href="/login">Meet the agents</a>{% if track_record_public %}<a class="pbtn xl" href="/track-record">See the track record</a>{% endif %}</div>
         </article>
       </div>
     </div>

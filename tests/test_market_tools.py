@@ -245,7 +245,8 @@ check('item("/chart", "Live chart"' in nav and 'item("/liquidity-scanner", "Liqu
 check("/advanced#livechart" not in nav and "/advanced#liquidity" not in nav, "side menu no longer sends these to the Pro terminal")
 dash = open(os.path.join(ROOT, "templates", "dashboard.html"), encoding="utf-8").read()
 appjs = open(os.path.join(ROOT, "static", "app.js"), encoding="utf-8").read()
-check('data-page="/chart"' in dash and 'data-page="/liquidity-scanner"' in dash and 'href="/chart" id="adv-chart-link"' in dash, "dashboard tool links go to the new pages")
+check('href="/chart" id="adv-chart-link"' in dash and "/advanced#livechart" not in dash and "/advanced#liquidity" not in dash,
+      "dashboard tool links go to the new pages (the redesigned dashboard links the live chart; the side menu has the scanner)")
 check("a.dataset.page" in appjs and "`/chart${q}" in appjs, "dashboard links carry the coin")
 for f in ("chart-page.js", "liquidity-page.js", "market-common.js"):
     src = open(os.path.join(ROOT, "static", f), encoding="utf-8").read()
