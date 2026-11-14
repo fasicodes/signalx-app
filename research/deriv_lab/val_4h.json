@@ -1,0 +1,154 @@
+{
+ "tf": "4h",
+ "candidates": {
+  "M_top1": {
+   "signals": 604,
+   "avg_net_r": 0.061,
+   "total_net_r": 36.6,
+   "profit_factor": 1.11,
+   "max_drawdown_r": -77.9,
+   "win_rate": 42.5,
+   "avg_stop_pct": 5.67,
+   "years": {
+    "2022": {
+     "signals": 419,
+     "avg_net_r": 0.082
+    },
+    "2023": {
+     "signals": 184,
+     "avg_net_r": 0.018
+    },
+    "2024": {
+     "signals": 1,
+     "avg_net_r": -1.136
+    }
+   },
+   "cost_round_trip": 0.003,
+   "thr": 1.1250109863915083
+  },
+  "M_top2": {
+   "signals": 1035,
+   "avg_net_r": 0.04,
+   "total_net_r": 41.3,
+   "profit_factor": 1.07,
+   "max_drawdown_r": -110.0,
+   "win_rate": 41.8,
+   "avg_stop_pct": 5.81,
+   "years": {
+    "2022": {
+     "signals": 705,
+     "avg_net_r": 0.051
+    },
+    "2023": {
+     "signals": 328,
+     "avg_net_r": 0.023
+    },
+    "2024": {
+     "signals": 2,
+     "avg_net_r": -1.117
+    }
+   },
+   "cost_round_trip": 0.003,
+   "thr": 1.0105757723454845
+  },
+  "M_top5": {
+   "signals": 2103,
+   "avg_net_r": -0.06,
+   "total_net_r": -125.5,
+   "profit_factor": 0.9,
+   "max_drawdown_r": -202.4,
+   "win_rate": 39.7,
+   "avg_stop_pct": 5.94,
+   "years": {
+    "2022": {
+     "signals": 1348,
+     "avg_net_r": -0.049
+    },
+    "2023": {
+     "signals": 745,
+     "avg_net_r": -0.076
+    },
+    "2024": {
+     "signals": 10,
+     "avg_net_r": -0.338
+    }
+   },
+   "cost_round_trip": 0.003,
+   "thr": 0.8303417960219293
+  },
+  "M_top10": {
+   "signals": 3425,
+   "avg_net_r": -0.039,
+   "total_net_r": -132.2,
+   "profit_factor": 0.93,
+   "max_drawdown_r": -263.7,
+   "win_rate": 40.8,
+   "avg_stop_pct": 5.96,
+   "years": {
+    "2022": {
+     "signals": 2065,
+     "avg_net_r": -0.047
+    },
+    "2023": {
+     "signals": 1295,
+     "avg_net_r": -0.015
+    },
+    "2024": {
+     "signals": 65,
+     "avg_net_r": -0.247
+    }
+   },
+   "cost_round_trip": 0.003,
+   "thr": 0.6595490467886665
+  },
+  "H1": {
+   "signals": 494,
+   "avg_net_r": -0.072,
+   "total_net_r": -35.7,
+   "profit_factor": 0.88,
+   "max_drawdown_r": -64.6,
+   "win_rate": 37.7,
+   "avg_stop_pct": 7.46,
+   "years": {
+    "2022": {
+     "signals": 24,
+     "avg_net_r": -0.142
+    },
+    "2023": {
+     "signals": 185,
+     "avg_net_r": -0.077
+    },
+    "2024": {
+     "signals": 285,
+     "avg_net_r": -0.063
+    }
+   },
+   "cost_round_trip": 0.003
+  },
+  "H2": {
+   "signals": 1822,
+   "avg_net_r": 0.123,
+   "total_net_r": 224.1,
+   "profit_factor": 1.22,
+   "max_drawdown_r": -62.1,
+   "win_rate": 42.8,
+   "avg_stop_pct": 5.33,
+   "years": {
+    "2022": {
+     "signals": 584,
+     "avg_net_r": 0.135
+    },
+    "2023": {
+     "signals": 722,
+     "avg_net_r": 0.129
+    },
+    "2024": {
+     "signals": 516,
+     "avg_net_r": 0.101
+    }
+   },
+   "cost_round_trip": 0.003
+  }
+ },
+ "chosen": "H2"
+}

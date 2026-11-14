@@ -64,6 +64,23 @@ A TradingView-style library with two kinds of strategies, each clearly labelled:
   are refused; 3 posts a day per member; 3 reports hide a post until an admin (`ADMIN_EMAILS`) restores it; the
   author or an admin can delete it. Likes work on both kinds.
 
+## Premium chart workspace (`/premium-chart`, free for members right now)
+
+Opened by the **Premium chart Access** button (FREE NOW label) on the Live chart, the Home chart card and the side
+menu. `premium_chart.py` + `static/premium-chart.js` (pure parts in `static/premium-chart-core.js`, tested with
+Node in `tests/test_premium_chart_core.js`):
+
+* up to 16 charts per tab, each with its own coin, interval and chart type; crosshair / scroll / coin / interval sync;
+* one shared price feed (`/api/premium/prices`, one exchange call for every coin) keeps every chart live, up to
+  200 charts across a member's open tabs (one tab polls, the others listen through a BroadcastChannel);
+* custom intervals from 1 minute to 12 months (`/api/premium/bars` builds them from the largest exchange interval
+  that divides them; intraday buckets restart at 00:00 UTC), second intervals (predefined and custom) and tick bars
+  built in the browser from the exchange's public trades (`/api/premium/trades`, crypto only);
+* range bars, Renko, Kagi, Line break and Point & figure on any interval, bar replay (one or all charts), spread
+  charts (A / B, A - B, A + B, A × B) and CSV export;
+* a bond screener (`bonds.py`): end-of-day government bond yields from the U.S. Treasury, the ECB, the Bank of
+  Canada, Japan's Ministry of Finance and the Reserve Bank of Australia, cached for 6 hours.
+
 ## News and economic calendar
 
 `news.py`: calendar from Financial Modeling Prep, Finnhub or Trading Economics; news from Finnhub, FMP and
