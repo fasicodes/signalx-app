@@ -597,7 +597,9 @@ def api_tickers():
         stale = _cache.get(("tickers",))
         if stale:
             return jsonify({"ok": True, "tickers": stale[1], "stale": True, "server_time": int(time.time())})
-        return jsonify({"ok": False, "error": f"Prices are not available right now ({str(e)[:120]})."}), 502
+        # the exchange's error text (URLs, internal details) stays in the server log, not in the response
+        print(f"[market] tickers failed: {type(e).__name__}: {str(e)[:200]}")
+        return jsonify({"ok": False, "error": "Prices are not available right now. Please try again in a moment."}), 502
 
 
 @market_bp.route("/api/liquidity/map", methods=["GET"])
