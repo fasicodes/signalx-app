@@ -48,7 +48,7 @@ import pandas as pd
 import markets
 
 RULES_VERSION = "R1"
-MODEL_VERSION = "4.0"
+MODEL_VERSION = "5.0"
 EPS = 1e-12
 MIN_SCORE = 60
 GRADE_A, GRADE_B = 80, 70
@@ -134,6 +134,7 @@ class GateModel:
         self.anchor = spec.get("anchor")
         self.level = float(g.get("level", 0.0))
         self.label = g.get("label") or f"{self.tf} model agrees"
+        self.trained_symbols = list(g.get("trained_symbols") or [])
 
     def raw_proba(self, X):
         return _tree_proba(self.trees, self.baseline, X)
@@ -159,6 +160,8 @@ class StreamModel:
         self.grade_a = float(m.get("grade_a", self.threshold))
         self.grade_b = float(m.get("grade_b", self.threshold))
         self.watch = float(m.get("watch_threshold", self.threshold))
+        # engine 5 daily signal: candidates from `floor` up are "standard" candidates (see run_policy)
+        self.floor = float(m.get("floor", self.threshold) or self.threshold)
         spec = m.get("spec") or {}
         self.session = bool(spec.get("session", True))
         self.volume = bool(spec.get("volume", self.market == "crypto"))
@@ -174,6 +177,9 @@ class StreamModel:
         self.cooldown = int(sel.get("cooldown_bars", 0) or 0)
         self.sessions = tuple(sel["sessions"]) if sel.get("sessions") else None
         self.no_new_before_close_h = float(sel.get("no_new_before_close_h", 0) or 0)
+        # engine 5: a candidate whose own round-trip cost is above this many R gets no signal (None = no cap)
+        self.cost_cap = float(sel["cost_cap_r"]) if sel.get("cost_cap_r") else None
+        self.gap_hours = float(sel.get("gap_hours") or 0) if self.floor < self.threshold else 0.0
         self.hold_bars = float(m.get("hold_bars_median") or max(1, self.max_bars // 4))
         self.signal_symbols = list(m.get("signal_symbols") or [])
         self.gate = GateModel(m["gate"]) if m.get("gate") else None
@@ -335,7 +341,7 @@ def policy_for(market, tf):
     m = load_model(key) if key != "crypto_4h" else None
     if m is not None:
         return {"max_per_bar": m.max_per_bar, "cooldown": m.cooldown, "sessions": m.sessions,
-                "no_new_before_close_h": m.no_new_before_close_h}
+                "no_new_before_close_h": m.no_new_before_close_h, "gap_hours": m.gap_hours}
     return {"max_per_bar": RULES_MAX_PER_BAR.get(cfg["tf"], MAX_PER_BAR), "cooldown": int(cfg.get("cooldown") or 0),
             "sessions": cfg.get("sessions"),
             "no_new_before_close_h": float(cfg.get("no_new_before_close_h") or 0)}
@@ -697,13 +703,21 @@ def run_policy(data, market, tf, plan, policy, start_time=None, end_time=None, l
         candidates), conf (shown to users), grade, setup (optional), atr}
     Rules: one trade at a time per symbol, a cooldown after each trade, at most
     max_per_bar new signals per candle (best score first), forex time rules,
-    and blocked(symbol, signal_time) -> reason (news blackout)."""
+    and blocked(symbol, signal_time) -> reason (news blackout).
+
+    Daily signal (policy gap_hours > 0, data "strong" = True where the candidate reached the stream's full
+    level): candidates below that level are only "standard" candidates. A candle's strong candidates become
+    signals as above; when it has none and the stream has given no signal for gap_hours, the best standard
+    candidate becomes one signal (tier 'standard'), so a quiet market still gets about one signal a day."""
     tf_sec = markets.TF_SEC[tf]
     forex = market == "forex"
     max_per_bar = int(policy.get("max_per_bar") or 0)
     cooldown = int(policy.get("cooldown") or 0)
     sessions = set(policy.get("sessions") or ()) or None
     close_h = float(policy.get("no_new_before_close_h") or 0)
+    gap = np.timedelta64(int(float(policy.get("gap_hours") or 0) * 3600), "s")
+    use_gap = gap > np.timedelta64(0, "s")
+    last_signal = None
     events, info = [], {}
     for sym, v in data.items():
         ts = v["ts"]
@@ -747,19 +761,29 @@ def run_policy(data, market, tf, plan, policy, start_time=None, end_time=None, l
                 allowed_cache[t] = ok
             if not ok:
                 continue
-        picked = 0
+        picks, standard = [], None
         for _, neg, sym, i in group:
-            if max_per_bar and picked >= max_per_bar:
+            if max_per_bar and len(picks) >= max_per_bar:
                 break
             if i <= busy[sym]:
                 continue
             if blocked is not None and blocked(sym, close_time):
                 continue
+            strong = data[sym].get("strong")
+            if strong is None or strong[i]:
+                picks.append((sym, i, "strong" if strong is not None else None))
+            elif standard is None:
+                standard = (sym, i, "standard")
+        if not picks and use_gap and standard is not None and (last_signal is None or t - last_signal >= gap):
+            picks = [standard]
+        if picks:
+            last_signal = t
+        for sym, i, tier in picks:
             v = data[sym]
             tr = make_trade(sym, market, tf, v, i, plan)
+            tr["tier"] = tier
             res = follow(tr["side"], tr["entry"], tr["stop_loss"], v["o"], v["h"], v["l"], v["c"], i + 1, plan,
                          exit_mask=info[sym]["exit"])
-            picked += 1
             tr["bars_held"] = int(res["bars"])
             tr["hits"] = int(res["hits"])
             if res["status"] is None:
@@ -768,7 +792,14 @@ def run_policy(data, market, tf, plan, policy, start_time=None, end_time=None, l
                 active[sym] = tr
                 busy[sym] = 10 ** 12
                 continue
-            r = float(res["r_gross"]) - cost_r(sym, tr["entry"], tr["stop_loss"])
+            # costs like the live tracker (signal_hub.evaluate_row): fees / spread, plus funding for crypto longs
+            r = float(res["r_gross"]) - cost_r(sym, tr["entry"], tr["stop_loss"],
+                                               hours=res["bars"] * tf_sec / 3600.0, side=tr["side"])
+            slip = v.get("slip")
+            if slip is not None and np.isfinite(slip[i]):
+                # research only: the follower's real fill (shortly after the close) instead of the close itself;
+                # the stop and the targets stay where the signal put them
+                r -= (1 if tr["side"] == "LONG" else -1) * float(slip[i]) / abs(tr["entry"] - tr["stop_loss"])
             jx = min(i + res["bars"], len(v["ts"]) - 1)
             tr.update({"status": res["status"], "exit_price": res["exit_price"], "r": round(r, 3),
                        "closed_at": pd.Timestamp(v["ts"][jx]).to_pydatetime() + timedelta(seconds=tf_sec)})
@@ -1054,7 +1085,7 @@ class StreamEngine:
                 anchor = FE.anchor_block(frames[m.anchor])
         else:
             cs = FE.currency_block(ref)
-        gates = self._gate_scores(m, frames) if m.gate is not None else {}
+        gates = self._gate_scores(m, frames, now) if m.gate is not None else {}
         data, lean = {}, {}
         tail = REPLAY_BARS + 2
         for sym, F in frames.items():
@@ -1067,7 +1098,7 @@ class StreamEngine:
                 if m.gate is not None:
                     g = align_gate(Fx, self.tf, g, m.gate.tf) if g is not None else (
                         np.full(len(Fx), np.nan), np.full(len(Fx), np.nan))
-                data[sym] = model_data(m, Fx, pl, ps, gate=g)
+                data[sym] = model_data(m, Fx, pl, ps, gate=g, sym=sym)
                 lean[sym] = (float(m.calibrate(pl[-1:])[0]), float(m.calibrate(ps[-1:])[0]), float(max(pl[-1], ps[-1])))
             except Exception as e:
                 errors[sym] = str(e)[:160]
@@ -1087,27 +1118,30 @@ class StreamEngine:
         self.errors = errors
         return out
 
-    def _gate_scores(self, m, frames):
-        """{symbol: (gate timestamps, raw long, raw short)} of the higher-timeframe gate model."""
+    def _gate_scores(self, m, frames, now=None):
+        """{symbol: (gate timestamps, raw long, raw short)} of the higher-timeframe gate model, from that
+        timeframe's own closed candles (like the research), for the stream's symbols. The gate's view of the whole
+        market uses the symbols it was trained with. Kept until the next higher-timeframe candle closes."""
         import features as FE
         gm = m.gate
+        now = now or _utcnow()
+        bar = last_closed_bar(gm.tf, now)
+        hit = getattr(self, "_gate_cache", None)
+        if hit and hit[0] == bar and set(frames) <= hit[2]:
+            return hit[1]
+        trained = list(gm.trained_symbols or m.meta.get("trained_symbols") or [])
+        hist = FE.HISTORY.get(gm.tf, 1000)
         G = {}
-        for sym, F in frames.items():
+        for sym in dict.fromkeys(list(frames) + trained):
             try:
-                base = F[["timestamp", "open", "high", "low", "close"]].copy()
-                base["volume"] = 1.0
-                if "volume" in self.store._data.get((sym, self.tf), pd.DataFrame()).columns:
-                    raw = self.store._data[(sym, self.tf)]
-                    base = raw[["timestamp", "open", "high", "low", "close", "volume"]].copy()
-                gdf = FE.resample_closed(base, gm.tf)
-                if len(gdf) < 220:
+                gdf = self.store.frame(sym, gm.tf, now, bars=hist)
+                if len(gdf) < 260:
                     continue
                 G[sym] = FE.symbol_features(gdf, gm.tf, session=gm.session, volume=gm.volume)
             except Exception:
                 continue
         mkt = anchor = cs = None
-        trained = set(m.meta.get("trained_symbols") or [])
-        ref = {k: v for k, v in G.items() if k in trained} or G
+        ref = {k: v for k, v in G.items() if k in set(trained)} or G
         if self.market == "crypto":
             mkt = FE.market_block(ref)
             if gm.anchor and G.get(gm.anchor) is not None:
@@ -1115,13 +1149,17 @@ class StreamEngine:
         else:
             cs = FE.currency_block(ref)
         out = {}
-        for sym, Gf in G.items():
+        for sym in frames:
+            Gf = G.get(sym)
+            if Gf is None:
+                continue
             try:
                 Xg = FE.assemble(Gf, gm.features, sym=sym, anchor=anchor, mkt=mkt, cs=cs)
                 out[sym] = (pd.to_datetime(Gf["timestamp"]).to_numpy(), gm.raw_proba(Xg.to_numpy(dtype=float)),
                             gm.raw_proba(FE.flip(Xg).to_numpy(dtype=float)))
             except Exception:
                 continue
+        self._gate_cache = (bar, out, set(frames))
         return out
 
     def _result(self, d, a, last, closed, p_long, p_short, threshold, watch, version, plan, best_raw=None):
@@ -1135,7 +1173,8 @@ class StreamEngine:
             "verdict": a["side"] if a else "WAIT",
             "fresh": bool(a and a["bar_time"] == bar_time),
             "confidence": a["confidence"] if a else round(max(p_long, p_short), 1),
-            "grade": a["grade"] if a else None, "setup": a["setup"] if a else None, "tier": None,
+            "grade": a["grade"] if a else None, "setup": a["setup"] if a else None,
+            "tier": a.get("tier") if a else None,
             "p_long": round(p_long, 1), "p_short": round(p_short, 1), "bias": "LONG" if p_long >= p_short else "SHORT",
             "strength": round(min(best / threshold, 1.5) * 100, 1) if threshold else None,
             "setup_forming": bool(not a and best >= watch),
@@ -1171,16 +1210,29 @@ def align_gate(F, tf, g, gate_tf):
     return np.where(ok, gl[ii], np.nan), np.where(ok, gs[ii], np.nan)
 
 
-def model_data(m, F, pl, ps, gate=None):
+def entry_cost_r(symbol, close, dist):
+    """Round-trip cost in R of a trade entered at `close` with stop distance `dist` (arrays or numbers; funding
+    is not included: it depends on how long the trade runs)."""
+    with np.errstate(all="ignore"):
+        if markets.is_forex(symbol):
+            return markets.cost_price(symbol) / dist
+        return markets.CRYPTO_COST_ROUND_TRIP * close / dist
+
+
+def model_data(m, F, pl, ps, gate=None, sym=None):
     """Candidates of a model stream for run_policy: the better side when its
-    raw score reaches the threshold (and the higher-timeframe gate agrees);
-    stop = sl_atr x ATR."""
+    raw score reaches the threshold (and the higher-timeframe gate agrees, and
+    the trade's own cost is at most the model's cost cap); stop = sl_atr x ATR."""
     pl = np.asarray(pl, dtype=float)
     ps = np.asarray(ps, dtype=float)
     best = np.fmax(pl, ps)
     longs = pl >= ps
     atr = F["atr"].to_numpy(float)
-    ok = np.isfinite(best) & (best >= m.threshold) & np.isfinite(atr) & (atr > 0)
+    daily = float(getattr(m, "gap_hours", 0) or 0) > 0
+    ok = np.isfinite(best) & (best >= (m.floor if daily else m.threshold)) & np.isfinite(atr) & (atr > 0)
+    cap = getattr(m, "cost_cap", None)
+    if cap is not None and sym is not None:
+        ok &= entry_cost_r(sym, F["close"].to_numpy(float), m.sl_atr * atr) <= cap
     if gate is not None and getattr(m, "gate", None) is not None:
         gl, gs = gate
         side_score = np.where(longs, gl, gs)
@@ -1189,7 +1241,10 @@ def model_data(m, F, pl, ps, gate=None):
     side = np.where(ok, np.where(longs, "LONG", "SHORT"), "").astype(object)
     conf = np.where(longs, m.calibrate(pl), m.calibrate(ps)) * 100
     grade = np.array([m.grade(x) for x in best], dtype=object)
-    return {"ts": pd.to_datetime(F["timestamp"]).to_numpy(), "o": F["open"].to_numpy(float),
-            "h": F["high"].to_numpy(float), "l": F["low"].to_numpy(float), "c": F["close"].to_numpy(float),
-            "atr": atr, "side": side, "score": np.nan_to_num(best, nan=0.0), "conf": conf, "grade": grade,
-            "setup": None, "dist": m.sl_atr * atr}
+    out = {"ts": pd.to_datetime(F["timestamp"]).to_numpy(), "o": F["open"].to_numpy(float),
+           "h": F["high"].to_numpy(float), "l": F["low"].to_numpy(float), "c": F["close"].to_numpy(float),
+           "atr": atr, "side": side, "score": np.nan_to_num(best, nan=0.0), "conf": conf, "grade": grade,
+           "setup": None, "dist": m.sl_atr * atr}
+    if daily:
+        out["strong"] = ok & (best >= m.threshold)
+    return out
