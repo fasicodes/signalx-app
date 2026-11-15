@@ -207,20 +207,6 @@ def init_tables():
     with _Cursor() as cur:
         cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS candle_cache (
-                symbol VARCHAR(30) NOT NULL,
-                tf VARCHAR(5) NOT NULL,
-                depth INT NOT NULL,
-                n INT NOT NULL,
-                last_ts DATETIME NOT NULL,
-                data MEDIUMBLOB NOT NULL,
-                updated_at DATETIME NOT NULL,
-                PRIMARY KEY (symbol, tf)
-            )
-            """
-        )
-        cur.execute(
-            """
             CREATE TABLE IF NOT EXISTS signal_events (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 symbol VARCHAR(30) NOT NULL,
@@ -265,6 +251,26 @@ def init_tables():
             for name in ("markets", "timeframes"):
                 if name not in have:
                     cur.execute(f"ALTER TABLE signal_alert_subs ADD COLUMN {name} TEXT NULL")
+    # the database copy of the streams' candle history (cache_load / cache_save): optional, so a problem here never
+    # stops the signal tables above
+    try:
+        with _Cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS candle_cache (
+                    symbol VARCHAR(30) NOT NULL,
+                    tf VARCHAR(5) NOT NULL,
+                    depth INT NOT NULL,
+                    n INT NOT NULL,
+                    last_ts DATETIME NOT NULL,
+                    data MEDIUMBLOB NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    PRIMARY KEY (symbol, tf)
+                )
+                """
+            )
+    except Exception as e:
+        print(f"[signal_hub] candle_cache table not created (the history then always comes from the exchange): {e}")
 
 
 def _run_resets(cur):
