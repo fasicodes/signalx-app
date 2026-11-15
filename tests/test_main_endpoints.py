@@ -471,6 +471,93 @@ finally:
         else:
             os.environ[k] = v
 
+print("\n[12b] Connect Gmail: the site sends through the owner's Gmail (Gmail API over HTTPS, Railway allows it)")
+import base64 as _b64  # noqa: E402
+import json as _json  # noqa: E402
+from urllib.parse import parse_qs as _pq, urlparse as _up  # noqa: E402
+_GVARS = ("ADMIN_EMAILS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET") + _MAIL_VARS
+_saved_env = {k: os.environ.pop(k, None) for k in _GVARS}
+os.environ.update({"ADMIN_EMAILS": "member@example.com", "GOOGLE_CLIENT_ID": "cid.apps.googleusercontent.com",
+                   "GOOGLE_CLIENT_SECRET": "gsecret"})
+_routes, _posts2 = {}, []
+
+
+def _post2(url, json=None, data=None, headers=None, timeout=None, **kw):
+    _posts2.append({"url": url, "json": json, "data": data})
+    return _routes[url]
+
+
+def _jwt(claims):
+    enc = lambda d: _b64.urlsafe_b64encode(_json.dumps(d).encode()).decode().rstrip("=")  # noqa: E731
+    return enc({"alg": "RS256"}) + "." + enc(claims) + ".sig"
+
+
+_requests.post = _post2
+try:
+    r = guest.get("/admin/mail/gmail/connect")
+    check(r.status_code == 302 and "/login" in r.headers.get("Location", ""), "visitors: Connect Gmail sends them to log in")
+    r = member.get("/admin/mail/gmail/connect")
+    loc = r.headers.get("Location", "")
+    q = _pq(_up(loc).query)
+    with member.session_transaction() as s:
+        pend = dict(s.get("gmail_connect") or {})
+    check(r.status_code == 302 and loc.startswith("https://accounts.google.com/")
+          and q.get("redirect_uri") == ["http://localhost/api/auth/google/callback"] and q.get("state") == [pend.get("state")]
+          and "gmail.send" in q.get("scope", [""])[0], "admin: Google's page, with the Google login's return address and a new state")
+    r = member.get("/api/auth/google/callback?state=wrong&code=abc")
+    check(not _posts2 and "gmail=" not in r.headers.get("Location", ""), "a return with another state is not taken as Connect Gmail")
+    _routes[_mailer.GOOGLE_TOKEN_URL] = _Resp(200, {
+        "access_token": "acc-1", "expires_in": 3599, "refresh_token": "1//refresh-abc", "token_type": "Bearer",
+        "scope": "openid https://www.googleapis.com/auth/gmail.send", "id_token": _jwt({"email": "owner@gmail.com",
+                                                                                       "email_verified": True})})
+    r = member.get(f"/api/auth/google/callback?state={pend.get('state')}&code=good-code")
+    check(r.status_code == 302 and r.headers.get("Location", "").endswith("/admin/news?gmail=connected"),
+          "the right state: connected, back to the admin page")
+    check(_posts2 and _posts2[-1]["data"].get("redirect_uri") == "http://localhost/api/auth/google/callback",
+          "the code is swapped with the same return address")
+    d = member.get("/api/admin/mail-status").get_json()
+    check(d["provider"] == "gmail" and d["gmail"]["email"] == "owner@gmail.com" and (d.get("gmail_message") or {}).get("ok") is True,
+          "the admin page shows Gmail connected, with a message")
+    check(member.get("/api/admin/mail-status").get_json().get("gmail_message") is None, "that message is shown once")
+    with member.session_transaction() as s:
+        check(s.get("user_id") == uid and s.get("email") == "member@example.com" and "gmail_connect" not in s,
+              "the admin stays logged in as before")
+    c = Conn()
+    cur = c.cursor()
+    cur.execute("SELECT name, val FROM mail_settings")
+    _rows = {x["name"]: x["val"] for x in cur.fetchall()}
+    c.close()
+    check(_rows.get("gmail_email") == "owner@gmail.com" and _rows.get("gmail_token") and "refresh-abc" not in _rows["gmail_token"],
+          "kept in MySQL (mail_settings), the permission encrypted")
+    _routes[_mailer.GMAIL_SEND_URL] = _Resp(200, {"id": "m1"})
+    r = member.post("/api/admin/mail-test")
+    check(r.status_code == 200 and r.get_json().get("provider_name") == "Gmail" and _posts2[-1]["url"] == _mailer.GMAIL_SEND_URL,
+          "the test email goes out through Gmail")
+    member.get("/admin/mail/gmail/connect")
+    with member.session_transaction() as s:
+        st2 = (s.get("gmail_connect") or {}).get("state")
+    r = member.get(f"/api/auth/google/callback?state={st2}&error=access_denied")
+    check(r.headers.get("Location", "").endswith("gmail=failed")
+          and member.get("/api/admin/mail-status").get_json()["gmail"]["email"] == "owner@gmail.com",
+          "closed Google's page on a second try: the connected Gmail stays")
+    page = member.get("/admin/news").get_data(as_text=True)
+    check('id="gmail-connect"' in page and 'href="/admin/mail/gmail/connect"' in page and 'id="gmail-off"' in page,
+          "/admin/news has Connect Gmail and Disconnect Gmail")
+    _routes[_mailer.GOOGLE_REVOKE_URL] = _Resp(200, {})
+    r = member.post("/api/admin/mail/gmail/disconnect")
+    check(r.status_code == 200 and r.get_json()["gmail"]["connected"] is False and r.get_json()["provider"] is None
+          and _posts2[-1]["url"] == _mailer.GOOGLE_REVOKE_URL, "disconnect: forgotten and cancelled at Google")
+    os.environ["ADMIN_EMAILS"] = "boss@example.com"
+    check(member.get("/admin/mail/gmail/connect").status_code == 404
+          and member.post("/api/admin/mail/gmail/disconnect").status_code == 403, "non-admins cannot connect or disconnect")
+finally:
+    _requests.post = _orig_post
+    for k, v in _saved_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
