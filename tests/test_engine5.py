@@ -54,11 +54,11 @@ check(all(v["avg_net_r"] > 0 and v["win_rate"] >= 70 for v in t["folds"].values(
       "crypto 1h: both walk-forward folds and all four hour offsets of the 4-hour grid were positive")
 check(m.meta["walk_forward"]["win_rate"] >= 73 and all(v["avg_net_r"] > 0 for v in m.meta["walk_forward"]["years"].values()),
       "crypto 1h: every validation year was positive")
-check([k for k in hub.ALL_STREAMS if streams.validated(k)] == ["crypto_1h", "crypto_4h"]
-      and hub.enabled_streams() == ["crypto_1h", "crypto_4h"],
-      "live streams: crypto 1h and crypto 4h; 15m and forex have no model that passed")
+LIVE = ["crypto_15m", "crypto_1h", "crypto_4h"]
+check([k for k in hub.ALL_STREAMS if streams.validated(k)] == LIVE and hub.enabled_streams() == LIVE,
+      "live streams: crypto 15m, 1h and 4h; forex has no model that passed")
 os.environ["SIGNAL_STREAMS"] = "all"
-check(hub.enabled_streams() == ["crypto_1h", "crypto_4h"], "SIGNAL_STREAMS=all cannot switch on a stream that did not pass")
+check(hub.enabled_streams() == LIVE, "SIGNAL_STREAMS=all cannot switch on a stream that did not pass")
 os.environ["SIGNAL_STREAMS"] = "crypto_4h,forex_1h"
 check(hub.enabled_streams() == ["crypto_4h"], "SIGNAL_STREAMS can only narrow the tested streams down")
 del os.environ["SIGNAL_STREAMS"]
@@ -76,23 +76,62 @@ check(set(R["streams"]) == set(hub.ALL_STREAMS) and all(R["streams"][k]["live"] 
       "models/research.json agrees with what is live")
 check(all(R["streams"][k]["reason"].startswith("Switched off") for k in hub.ALL_STREAMS if k not in hub.enabled_streams())
       and all(R["streams"][k]["reason"].startswith("Live") for k in hub.enabled_streams())
-      and "not opened" in R["streams"]["forex_1h"]["reason"] and "69.4%" in R["streams"]["crypto_15m"]["reason"],
-      "research.json says in plain words why each stream is on or off (forex never reached the test; 15m failed it)")
+      and "not opened" in R["streams"]["forex_1h"]["reason"] and "69.4%" in R["streams"]["crypto_15m"]["reason"]
+      and "82.9%" in R["streams"]["crypto_15m"]["reason"],
+      "research.json says in plain words why each stream is on or off (forex never reached the test; the separate 15m "
+      "model failed it, the 4-hour model read every 15 minutes passed)")
 info = {x["key"]: x for x in hub.stream_info()}
 check(info["crypto_1h"]["enabled"] and info["crypto_1h"]["validated"] and info["crypto_1h"]["targets_r"] == [0.5]
       and info["crypto_1h"]["symbols"] == len(markets.CRYPTO_COINS) and info["forex_4h"]["enabled"] is False
       and info["forex_4h"]["research"]["reason"].startswith("Switched off"),
       "stream info for the Signals page: 1h on with its plan, forex off with the reason")
 ts_ = hub.tested_summary()
-check([x["key"] for x in ts_["streams"]] == ["crypto_1h", "crypto_4h"] and ts_["signals"] == sum(x["signals"] for x in ts_["streams"])
+check([x["key"] for x in ts_["streams"]] == LIVE and ts_["signals"] == sum(x["signals"] for x in ts_["streams"])
       and 70 <= ts_["win_rate"] <= 90 and ts_["avg_r"] > 0 and ts_["markets"] == ["crypto"] and ts_["pairs"] == 0,
-      "landing summary: both tested streams and their signal-weighted total")
+      "landing summary: the three tested streams and their signal-weighted total")
 mt = hub.model_test("crypto", "1h")
 check(mt["holdout"]["signals"] == t["signals"] and mt["walk_forward"]["signals"] > 0 and mt["engine"] == "v5.0",
       "the Signals page gets the 1h model's holdout and walk-forward tests")
 m4 = se.model()
 check(m4.version == "5.0" and m4.targets_r == [0.5, 1.0, 2.0] and streams.passed_test(se.test_stats(), "crypto_4h"),
       "crypto 4h: engine 5.0 with three targets passes the live bar")
+
+print("\n[1b] the 15m stream: the same 4-hour model read at every 15-minute close")
+m15 = streams.load_model("crypto_15m")
+raw1 = json.load(open(os.path.join(ROOT, "models", "crypto_1h.json")))
+raw15 = json.load(open(os.path.join(ROOT, "models", "crypto_15m.json")))
+check(m15 is not None and m15.version == "5.0" and m15.tf == "15m" and m15.read_tf == "4h" and m15.float32
+      and raw15["trees"] == raw1["trees"] and raw15["features"] == raw1["features"] and raw15["calibration"] == raw1["calibration"],
+      "crypto 15m: the very model of the 1h stream (same trees, inputs and calibration), read on 4-hour candles")
+check(m15.sl_atr == 2.0 and m15.targets_r == [0.5] and m15.fractions == [1.0] and m15.be_after == 0 and m15.max_bars == 864
+      and m15.max_per_bar == 1 and m15.cooldown == 8 and m15.cost_cap is None and m15.gap_hours == 0,
+      "crypto 15m plan: the 1h stream's plan in 15-minute candles (864 = 9 days); 1 new signal per candle, cooldown 8")
+check(m15.threshold > m.threshold and m15.threshold == raw1["grade_a"] and m15.grade_a == m15.threshold,
+      "crypto 15m takes only the model's top 0.5% (the level of the 1h stream's grade A), chosen on the validation years")
+t15 = m15.meta["test"]
+check(streams.passed_test(t15, "crypto_15m") and t15["win_rate"] >= 70 and t15["avg_net_r"] >= 0.05 and t15["signals"] >= 150
+      and t15["cost_round_trip"] == markets.CRYPTO_COST_ROUND_TRIP and t15["period"].startswith("2025-10"),
+      f"crypto 15m passed its test on unseen data with the real cost ({t15['signals']} signals, {t15['win_rate']}%, "
+      f"{t15['avg_net_r']:+}R)")
+check(all(v["avg_net_r"] > 0 and v["win_rate"] >= 70 for v in t15["folds"].values()) and len(t15["by_minute"]) == 4
+      and all(v["avg_net_r"] > 0 for v in t15["by_minute"].values()),
+      "crypto 15m: both folds and every minute of the hour (:00, :15, :30, :45) were positive")
+check(m15.meta["walk_forward"]["win_rate"] >= 73 and all(v["avg_net_r"] > 0 for v in m15.meta["walk_forward"]["years"].values())
+      and m15.meta["pre_registered_validation"]["signals_per_day"] > m15.meta["walk_forward"]["signals_per_day"],
+      "crypto 15m: every validation year positive; the stricter selection gives fewer signals than the pre-registered one")
+ov = t15["overlap_with_1h"]
+check(ov["signals_15m"] == t15["signals"] and 0 < ov["also_in_1h_pct"] < 100,
+      f"the share of 15m signals the 1h stream also gives is recorded ({ov['also_in_1h_pct']}%)")
+check(streams.plan_for("crypto", "15m") == {"targets_r": [0.5], "fractions": [1.0], "be_after": 0, "max_bars": 864,
+                                            "tf_sec": 900, "engine": "v5.0", "sl_atr": 2.0}
+      and streams.policy_for("crypto", "15m")["max_per_bar"] == 1 and streams.policy_for("crypto", "15m")["cooldown"] == 8,
+      "the plan and the selection stored with every 15m signal come from its model file")
+check(markets.stream_coins("crypto", "15m") == markets.CRYPTO_COINS and m15.signal_symbols == markets.CRYPTO_COINS
+      and streams.hold_text("crypto_15m").startswith("about") and streams.replay_bars(m15) == 2 * 864 + 8 + 2,
+      "crypto 15m covers every coin, has its holding time and replays two full time limits")
+info15 = {x["key"]: x for x in hub.stream_info()}["crypto_15m"]
+check(info15["enabled"] and info15["validated"] and info15["targets_r"] == [0.5] and info15["symbols"] == len(markets.CRYPTO_COINS),
+      "stream info for the Signals page: 15m on, one target, every coin")
 
 # ---------------------------------------------------------------------------
 # [2] 4-hour candles on a shifted grid
@@ -278,6 +317,38 @@ streams.model_data = _orig_model_data
 # ---------------------------------------------------------------------------
 # [4] policy additions
 # ---------------------------------------------------------------------------
+print("\n[3b] the 15m engine: 16 grids of 4-hour candles, one ending at every 15-minute close")
+m15.meta["trained_symbols"] = list(SYMS)
+SEEN.clear()
+streams.model_data = spy
+eng15 = streams.StreamEngine("crypto", "15m", streams.CandleStore(candles, sleep=0), SYMS)
+check(eng15.history_need() == ("15m", FE.HISTORY["4h"] * 16 + 32) and eng.history_need() == ("1h", FE.HISTORY["4h"] * 4 + 8)
+      and eng15.history_symbols() == SYMS,
+      "history the 15m stream reads at every scan: 16 times the 4-hour history (the 1h stream: 4 times)")
+b15 = eng15.board(NOW)
+check(set(b15) == set(SYMS) and not eng15.errors
+      and all(r["timeframe"] == "15m" and r["max_bars"] == 864 and r["targets_r"] == [0.5]
+              and r["bar_time"] == datetime(2026, 10, 10, 13, 45) for r in b15.values()),
+      "a result for every coin at the last closed 15-minute candle, with the 15m plan")
+ok = True
+sym = "SOL/USDT"
+full15 = candles(sym, "15m", 10 ** 6)
+full15 = full15[full15["timestamp"] + pd.Timedelta(minutes=15) <= pd.Timestamp(NOW)].tail(eng15.history_need()[1])
+ts15, _, _, atr15 = SEEN[sym]
+ok &= np.isfinite(atr15[-200:]).all()
+for back in (1, 2, 5, 9, 16, 23):
+    ts_c = pd.Timestamp(ts15[-back])
+    end = ts_c + pd.Timedelta(minutes=15)
+    off = (end.hour * 60 + end.minute) % 240
+    b = streams.shifted_candles(full15, "4h", off * 60)
+    row = b[b["timestamp"] + pd.Timedelta(hours=3, minutes=45) == ts_c]
+    ok &= len(row) == 1
+    if len(row):
+        atr = se._atr(b, 14)
+        ok &= abs(float(atr.loc[row.index[0]]) - atr15[-back]) < 1e-9 * atr15[-back]
+check(ok, "the stop distance of a 15m candle comes from the 4-hour candle that ends at its close (any of the 16 grids)")
+streams.model_data = _orig_model_data
+
 print("\n[4] stream policy")
 
 
@@ -429,6 +500,53 @@ check(s["engine"] == "v5.0" and s["windows"]["all"]["closed"] == 1 and s["window
       "live statistics: the record of the engine that runs now; an older engine's signals are counted apart")
 check(hub.signal_json(row)["tested"] is True and hub.signal_json(row)["targets_r"] == [0.5] and hub.signal_json(row)["rr"] is None,
       "signal JSON: a 1h signal is from a tested stream and has one target")
+
+print("\n[5b] a long first history load runs in slices and never holds up the other streams")
+CALLS = []
+
+
+def counting(symbol, timeframe, limit, since=None):
+    CALLS.append((symbol, timeframe))
+    if symbol == "BAD/USDT":
+        raise ValueError("this coin is not on the exchange")
+    return candles(symbol, timeframe, limit, since)
+
+
+st = streams.CandleStore(counting, sleep=0)
+saved = (hub._store, dict(hub._engines), hub._FORCE_STREAMS, hub.scan_stream, hub.WARM_SLICE_SEC)
+hub._store = st
+hub._engines.update({"crypto_1h": streams.StreamEngine("crypto", "1h", st, SYMS),
+                     "crypto_15m": streams.StreamEngine("crypto", "15m", st, SYMS + ["BAD/USDT"])})
+hub._FORCE_STREAMS = ["crypto_15m", "crypto_1h", "crypto_4h"]
+hub._state["scanned"].clear()
+hub._warm_failed.clear()
+T = datetime(2026, 10, 10, 14, 0, 50)        # the 13:00 hourly and the 13:45 15-minute candle just closed (+45 s)
+check(hub.warming("crypto_15m", T) == {"loaded": 0, "total": 6} and hub.warming("crypto_1h", T) == {"loaded": 0, "total": 5}
+      and hub.warming("crypto_4h", T) is None, "after a restart nothing is loaded yet (the 4h board loads its own)")
+hub.warm("crypto_1h", T, budget=10 ** 6)
+check(hub.warming("crypto_1h", T) is None, "a short history (the 1h stream) loads in one slice")
+SCANS = []
+hub.scan_stream = lambda key, now=None: SCANS.append(key) or []
+hub.WARM_SLICE_SEC = 0                        # one coin per slice
+acts = hub.step(T)
+check(SCANS == ["crypto_1h"] and "warming:crypto_15m:1/6" in acts and hub._state["scanned"]["crypto_15m"] == datetime(2026, 10, 10, 13, 45),
+      "the ready 1h stream scans first; the 15m stream loads one coin and gives no signal for that candle")
+info15 = {x["key"]: x for x in hub.stream_info()}["crypto_15m"]
+check(info15["warming"] == {"loaded": 1, "total": 6}, "the Signals page shows how far the loading is")
+for k in range(8):
+    hub.step(T + timedelta(minutes=2 + k))     # between candle closes: one slice per pass
+check(hub.warming("crypto_15m", T) is None and "crypto_15m" not in hub._state["warming"] and SCANS == ["crypto_1h"]
+      and ("crypto_15m", "BAD/USDT") in hub._warm_failed,
+      "the slices finish the history; a coin that cannot be loaded does not keep the stream waiting")
+SCANS.clear()
+hub.step(datetime(2026, 10, 10, 14, 15, 50))
+check(SCANS == ["crypto_15m"], "from the next 15-minute close on, the 15m stream scans")
+n_calls = len(CALLS)
+hub.step(datetime(2026, 10, 10, 14, 17, 0))
+check(len(CALLS) == n_calls, "a loaded stream costs no more history calls between candle closes")
+hub._store, engines, hub._FORCE_STREAMS, hub.scan_stream, hub.WARM_SLICE_SEC = saved
+hub._engines.clear()
+hub._engines.update(engines)
 
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")

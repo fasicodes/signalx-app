@@ -20,18 +20,19 @@ GROUPS = [
         ("wait", "Wait",
          "No trade on this coin right now. The models give signals only for their best setups. On the 4-hour stream, if "
          "no coin has had a signal for 24 hours, the best setup gets a standard signal, so there is rarely a long wait "
-         "across all coins. The 1-hour stream has no such filler: it can be quiet for days and then give many signals "
-         "in one market move."),
+         "across all coins. The 1-hour and 15-minute streams have no such filler: they can be quiet for days and then "
+         "give many signals in one market move."),
         ("setup_forming", "Setup forming",
          "The engine is close to a signal but not there yet. It is not a trade; keep an eye on the next candle close."),
         ("entry", "Entry",
-         "The price where a signal starts: the close of the candle (1-hour or 4-hour) that gave the signal."),
+         "The price where a signal starts: the close of the candle (15-minute, 1-hour or 4-hour) that gave the signal."),
         ("stop_loss", "Stop loss",
          "The price where you accept the trade was wrong and exit, so the loss stays small. Every signal has one. Always use it."),
         ("target", "Targets",
          "The prices where you take profit. 4-hour signals have three: TP1 at half the stop distance (0.5R), TP2 at 1R and "
          "TP3 at 2R; a third of the position closes at each, and the stop moves to the entry after TP1 and to TP1 after "
-         "TP2. 1-hour signals have one target at 0.5R: the whole position closes there and the stop does not move."),
+         "TP2. 1-hour and 15-minute signals have one target at 0.5R: the whole position closes there and the stop does not "
+         "move."),
         ("targets", "Targets reached",
          "How many signals reached their first target (TP1) and the later ones. The first target is half as far as the "
          "stop, so a win is smaller than a full loss: a stream needs clearly more than 2 wins in every 3 signals to make "
@@ -49,12 +50,12 @@ GROUPS = [
          "Where the live price is between the current stop and the next target. 100% to a target means it is reached; "
          "100% to stop means the stop is hit."),
         ("time_limit", "Time limit",
-         "If a signal has not closed within 9 days (54 four-hour candles, or 216 hourly candles on the 1-hour stream), "
-         "whatever is left closes at that candle's close."),
+         "If a signal has not closed within 9 days (54 four-hour candles, 216 hourly candles on the 1-hour stream or 864 "
+         "candles of 15 minutes on the 15-minute stream), whatever is left closes at that candle's close."),
         ("candle_4h", "4-hour candle",
          "One bar on the chart that covers 4 hours. The engine only reads closed candles: the 4-hour stream gives new "
-         "signals right after each 4-hour close (six times a day), and the 1-hour stream reads the last four hours at "
-         "every hourly close."),
+         "signals right after each 4-hour close (six times a day), the 1-hour stream reads the last four hours at "
+         "every hourly close, and the 15-minute stream does the same at every 15-minute close."),
         ("leaning", "Leaning",
          "The side the model favours right now, Long or Short, with its probability. It shows the direction even when it is "
          "not strong enough for a signal."),

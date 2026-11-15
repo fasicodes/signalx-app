@@ -354,7 +354,13 @@ def _signals_text():
     except Exception:
         return "The signals list is not available right now. Please try again in a minute."
     if not rows:
-        return "No active signals right now. New signals can start at every 1-hour and 4-hour candle close."
+        try:      # the timeframes that run (engine 5: 15m, 1h and 4h crypto)
+            tfs = [t for t in ("15m", "1h", "4h") if any(k.endswith("_" + t) for k in signal_hub.enabled_streams())]
+        except Exception:
+            tfs = []
+        names = [TF_NAME[t] for t in tfs]
+        when = (", ".join(names[:-1]) + " and " + names[-1]) if len(names) > 1 else (names[0] if names else "")
+        return ("No active signals right now." + (f" New signals can start at every {when} candle close." if when else ""))
     out = [f"<b>Active signals ({total})</b>"]
     for r in rows:
         side = "Long" if r["side"] == "LONG" else "Short"

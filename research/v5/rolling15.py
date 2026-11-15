@@ -37,6 +37,7 @@ when it is within 10% of the best. The holdout is then scored once, for that one
   python rolling15.py final    the one holdout test of the choice; refuses without a validated choice; also how many
                                of its signals the 1-hour stream gives too (same coin and side within 4 hours)
   python rolling15.py export   models/crypto_15m.json for the site (only after a passed holdout)
+  python rolling15.py summary  marks crypto_15m live in models/research.json, keeping what was tested before
 """
 import json
 import os
@@ -434,5 +435,61 @@ def export():
         ST.passed_test(test, "crypto_15m"))
 
 
+LIVE_LABEL = "the 4-hour model read at every 15-minute close"
+_KEEP = ("period", "signals", "signals_per_day", "days_with_signal_pct", "win_rate", "stop_rate", "avg_net_r",
+         "total_net_r", "profit_factor", "max_drawdown_r", "sharpe_daily", "avg_stop_pct", "years", "folds")
+
+
+def _short(s):
+    return {k: s[k] for k in _KEEP if s and k in s} if s else None
+
+
+def live_entry(old, res, m15):
+    """models/research.json's crypto_15m block once this test passed: live, keeping what was tested before."""
+    t, ch, pre = m15["test"], res["choice"], res["validation"]
+    variants = [v for v in (old or {}).get("variants", []) if not str(v.get("label", "")).startswith(LIVE_LABEL)]
+    first = next((v for v in variants if str(v.get("label", "")).startswith("15-minute model")), None)
+    before = ""
+    if first and first.get("holdout"):
+        h = first["holdout"]
+        before = (f" A separate 15-minute model was tested first and failed ({h['win_rate']:.1f}% wins, "
+                  f"{h['avg_net_r']:+.2f}R per signal on the same unseen period), so this is the second 15-minute "
+                  "variant scored on that period.")
+    ov = t.get("overlap_with_1h") or {}
+    top = f"{100 - ch['q'] * 100:g}%"
+    reason = (f"Live: {LIVE_LABEL} (one target at 0.5R; only the top {top} of its scores; at most {ch['max_per_bar']} "
+              f"new signal per candle). On data it never saw ({t['period']}): {t['signals']} signals on {t['symbols']} "
+              f"coins (about {t['signals_per_day']:.1f} a day, in bursts), {t['win_rate']:.1f}% reached the target, "
+              f"{t['avg_net_r']:+.2f}R per signal after costs, profit factor {t['profit_factor']}. About "
+              f"{ov.get('also_in_1h_pct', 0):.0f}% of its signals are trades the 1-hour stream gives too (same coin and "
+              f"side within 4 hours).{before} Its selection was chosen on the validation years before that period was "
+              f"opened: the setting written down first passed them too but gave {pre['signals_per_day']:.1f} signals a "
+              f"day and a {pre['max_drawdown_r']:.0f}R drawdown.")
+    grid = [{k: g.get(k) for k in ("q", "max_per_bar", "cooldown", "signals", "signals_per_day", "win_rate", "avg_net_r",
+                                    "profit_factor", "max_drawdown_r", "sharpe_daily", "passes", "dd_ok")}
+            for g in res.get("tune", [])]
+    return {"live": True, "chosen": f"{LIVE_LABEL} (research/v5/rolling15.py)", "reason": reason,
+            "validation": _short(res["validation_choice"]), "test": _short(t), "pre_registered_validation": _short(pre),
+            "selection_grid": grid, "by_minute_holdout": res.get("test_by_minute"), "overlap_with_1h": ov,
+            "variants": variants + [{"label": f"{LIVE_LABEL}, score in the model's top {top}, {ch['max_per_bar']} new "
+                                              f"signal per candle, cooldown {ch['cooldown']}",
+                                     "validation_period": "2023-01 to 2025-09", "validation": _short(res["validation_choice"]),
+                                     "holdout": _short(t), "passed": True}]}
+
+
+def summary():
+    """models/research.json: crypto_15m is live (the full regeneration in summary.py does the same)."""
+    from datetime import datetime, timezone
+    path = f"{L.APP}/models/research.json"
+    R = json.load(open(path))
+    res = json.load(open(RESULTS))
+    assert res.get("passed_test"), "only a passed test goes into research.json as live"
+    m15 = json.load(open(f"{L.APP}/models/crypto_15m.json"))
+    R["streams"]["crypto_15m"] = live_entry(R["streams"].get("crypto_15m"), res, m15)
+    R["generated"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    json.dump(R, open(path, "w"), indent=1)
+    log("research.json crypto_15m:", R["streams"]["crypto_15m"]["reason"])
+
+
 if __name__ == "__main__":
-    {"build": build, "val": val, "tune": tune, "final": final, "export": export}[sys.argv[1]]()
+    {"build": build, "val": val, "tune": tune, "final": final, "export": export, "summary": summary}[sys.argv[1]]()

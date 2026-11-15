@@ -260,7 +260,7 @@
   </section>
 
   <p class="note">How to use a signal: enter near the entry price and place the stop loss. 4-hour signals have three targets:
-    close a third at each, and after TP1 move the stop to the entry, after TP2 to TP1. 1-hour signals have one target, half as
+    close a third at each, and after TP1 move the stop to the entry, after TP2 to TP1. 1-hour and 15-minute signals have one target, half as
     far as the stop: close the whole position there. If no level is reached before the time limit, the rest is closed.
     Results include typical costs (0.30% per crypto trade plus funding for longs). A full loss (&minus;1R) is bigger than most
     wins, so risk a small, fixed amount on every signal.</p>
@@ -367,9 +367,13 @@
     if (!x || !x.signals) return "no score level reached the target";
     return `${x.signals} signals (${x.signals_per_day}/day), win rate ${x.win_rate}%, average ${x.avg_net_r > 0 ? "+" : ""}${x.avg_net_r}R`;
   }
+  // after a restart a stream that reads 4-hour candles built from its own loads months of candles first (signal_hub.warm)
+  const warmNote = (w) => ` The scanner is still loading this stream's candle history (${w.loaded} of ${w.total} coins). `
+    + "Its signals start when that is done, up to about two hours after the site restarts.";
   function scanNote() {
     const s = STREAMS.find((x) => x.market === market && x.timeframe === tf) || {};
     if (s.error) return ` The scanner reported a problem for this stream: ${s.error}`;
+    if (s.warming) return warmNote(s.warming);
     const l = s.last_scan;
     if (!l) return " The scanner has not finished its first run for this stream yet; it loads several months of candles first, which can take a few minutes.";
     return ` Last scan ${dayTime(l.at)}: ${l.symbols} symbols checked, ${l.errors} could not be read, ${l.new} new signals. A signal appears only when a symbol meets the stream's rules at a candle close.`;
@@ -462,6 +466,8 @@
         $("list-state").className = "empty-box";
         $("list-state").textContent = $("f-status").value === "active"
           ? `No active ${tf} ${market} signals right now. The scanner checks every symbol at each ${tf} candle close.`
+            + ((STREAMS.find((x) => x.market === market && x.timeframe === tf) || {}).warming
+              ? warmNote(STREAMS.find((x) => x.market === market && x.timeframe === tf).warming) : "")
           : "No signals match these filters yet." + scanNote();
       } else $("list-state").hidden = true;
       loadBotStatus(d.signals.map((x) => x.id));

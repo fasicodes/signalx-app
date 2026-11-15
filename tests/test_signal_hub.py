@@ -537,8 +537,9 @@ if _had is None:
 _shipped = os.path.join(os.path.dirname(HERE), "models")
 check(not os.path.exists(os.path.join(_shipped, "coin_test.json"))
       and json.load(open(os.path.join(_shipped, "crypto_1h.json")))["version"] == "5.0"
-      and sorted(f for f in os.listdir(_shipped) if f.split("_")[0] in ("crypto", "forex")) == ["crypto_1h.json"],
-      "engine 5: the old coin test is gone; the only stream model file is the engine 5 crypto 1h model")
+      and json.load(open(os.path.join(_shipped, "crypto_15m.json")))["version"] == "5.0"
+      and sorted(f for f in os.listdir(_shipped) if f.split("_")[0] in ("crypto", "forex")) == ["crypto_15m.json", "crypto_1h.json"],
+      "engine 5: the old coin test is gone; the stream model files are the engine 5 crypto 1h and 15m models")
 
 # coins page: 4h "getting close" from the signal board, coins without data left out, joinable signals first
 hub._FORCE_STREAMS = list(hub.ALL_STREAMS)

@@ -47,7 +47,7 @@ _usage_lock = threading.Lock()
 
 DISCLAIMER = "Information only, not financial advice."
 
-SYSTEM = """You are the assistant of Signals FM, a website with crypto trading signals on 1-hour and 4-hour candles,
+SYSTEM = """You are the assistant of Signals FM, a website with crypto trading signals on 15-minute, 1-hour and 4-hour candles,
 forex and gold charts, a news and economic calendar section, demo trading and an auto-trade bot.
 
 Answer every question helpfully and completely: trading and markets, how to read and use a signal, indicators
@@ -59,16 +59,18 @@ unless the user asks for more).
 Always write in English, even when the question is in another language (the website is English-only).
 
 How the website works (use this when relevant):
-- Signals: two crypto streams, each tested on data its model never saw. Every signal has an entry (the close of the
+- Signals: three crypto streams, each tested on data its model never saw. Every signal has an entry (the close of the
   signal candle), a stop loss (1R away), targets, a grade or tier, an expected holding time and a status (active, TP
   hit, stop hit, expired, cancelled). 4-hour stream: read at every 4-hour close; three targets at 0.5R, 1R and 2R:
   close a third at each; after TP1 move the stop to the entry, after TP2 to TP1. 1-hour stream: the 4-hour model read
   at every hourly close; one target at 0.5R: the whole position closes there and the stop does not move; its signals
-  come in bursts (many in one market move, then quiet days). Whatever is left closes when the time limit (9 days)
-  ends. "Win rate" counts signals that reached at least the first target: about 3 in 4 or more did in the tests, but a
+  come in bursts (many in one market move, then quiet days). 15-minute stream: the same model read at every 15-minute
+  close, only its strongest setups (top 0.5%), same one-target plan; about one signal every two days in its test, and
+  about 6 in 10 of its signals are the same trade as a 1-hour signal. Whatever is left closes when the time limit
+  (9 days) ends. "Win rate" counts signals that reached at least the first target: about 3 in 4 or more did in the tests, but a
   full loss (-1R) costs as much as two first-target wins, so the average result after costs is what matters.
-- There are no 15-minute, forex or gold signals: nothing tested for them made money after costs on data it had never
-  seen (the Signals page says what was tested). Forex and gold have charts, market briefs, news and the calendar.
+- There are no forex or gold signals: nothing tested for them made money after costs on data it had never seen (the
+  Signals page says what was tested). Forex and gold have charts, market briefs, news and the calendar.
 - News: an economic calendar (impact, actual / forecast / previous) and a news feed; high-impact events matter most.
 - Auto-trade bot: takes the site's signals automatically on the accounts the user connects (Site demo with virtual
   money, Binance demo / live, OANDA demo / live for forex) with risk % per trade, max open trades, a daily loss limit
@@ -182,15 +184,18 @@ SITE_FAQ = [
     (r"\b(how|what).*(use|read|follow|trade).*signal|\bsignal\b.*\b(mean|work)",
      "How to use a signal: enter near the entry price and put the stop loss where the signal says. 4-hour signals have three "
      "targets: close a third of the position at each (TP1, TP2, TP3); after TP1 move the stop to the entry, after TP2 to TP1. "
-     "1-hour signals have one target: close the whole position there. If the time limit (9 days) ends first, close what is "
+     "1-hour and 15-minute signals have one target: close the whole position there. If the time limit (9 days) ends first, close what is "
      "left. Size the trade so that hitting the stop loses only a small part of your account (for example 0.5-1%)."),
-    (r"\b(15m|1h|4h|15[ -]?min(ute)?s?|time ?frames?)\b", "Signals come from two crypto streams. The 4-hour stream reads every coin at each "
-                                               "4-hour close; its signals have three targets and are held for days. The 1-hour "
-                                               "stream reads the same coins at every hourly close; its signals have one target "
-                                               "at half the stop distance (in the tests half of them finished within about 14 "
-                                               "hours) and come in bursts. There are no 15-minute or forex signals: nothing tested "
-                                               "for them made money after costs on data it had never seen. Each stream shows its "
-                                               "own results on the Signals page."),
+    (r"\b(15m|1h|4h|15[ -]?min(ute)?s?|time ?frames?)\b", "Signals come from three crypto streams. The 4-hour stream reads every "
+                                               "coin at each 4-hour close; its signals have three targets and are held "
+                                               "for days. The 1-hour stream reads the same coins at every hourly close; "
+                                               "its signals have one target at half the stop distance (in the tests half "
+                                               "of them finished within about 14 hours) and come in bursts. The 15-minute "
+                                               "stream reads the 1-hour stream's model at every 15-minute close and takes "
+                                               "only its strongest setups: fewer signals with the same one-target plan, "
+                                               "often the same trade as a 1-hour signal. There are no forex signals: "
+                                               "nothing tested for them made money after costs on data it had never seen. "
+                                               "Each stream shows its own results on the Signals page."),
     (r"\b(win rate|accuracy|results?|track record|performance)\b",
      "Win rate counts signals that reached at least TP1. The Signals page shows, per market and timeframe, the live record "
      "from real closed signals (all time, 30 days, 7 days, with the sample size) and, separately, the backtest on data the "

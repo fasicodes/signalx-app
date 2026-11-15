@@ -36,7 +36,8 @@
       <h3>Reads closed 4-hour candles{{ tip('candle_4h', '4-hour candle') }}</h3>
       <p>The engine only uses candles that have finished. For each of the 102 crypto coins it checks, it reads the coin's own price action,
         its daily trend, Bitcoin and the whole market: 82 measurements in all. The 4-hour stream reads them at every 4-hour
-        close; the 1-hour stream reads the last four hours at every hourly close.</p>
+        close; the 1-hour stream reads the last four hours at every hourly close, and the 15-minute stream at every
+        15-minute close.</p>
     </div>
     <div class="icard">
       <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"/></svg></div>
@@ -49,8 +50,7 @@
       <div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></svg></div>
       <h3>Tested on data it never saw{{ tip('unseen_data', 'tested on unseen data') }}</h3>
       <p>Each model learned from older data and was then tested on October 2025 to November 2026, with every fee included and
-        losses counted the pessimistic way. Timeframes and markets whose models failed that test (15-minute, forex, gold)
-        give no signals.</p>
+        losses counted the pessimistic way. Markets whose models failed that test (forex, gold) give no signals.</p>
     </div>
   </div>
   {% if stats and stats.signals %}

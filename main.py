@@ -2233,7 +2233,7 @@ def _landing_live():
 
 
 def _landing_tested():
-    """Test results of the switched-on tested models (1h and 4h crypto), for the landing page."""
+    """Test results of the switched-on tested streams (crypto 15m, 1h and 4h), for the landing page."""
     try:
         import signal_hub
         return signal_hub.tested_summary()
@@ -2971,23 +2971,24 @@ init_strategies(app, get_candles=lambda **kw: _stream_candles(**kw), is_admin=la
 
 
 def _signal_check():
-    """What the tested crypto models check, in the landing page's words ("102 crypto coins every hour and every 4
-    hours"), for the app guide. Built from the streams that run, so the guide cannot go stale when a stream or the
-    coin list changes. Empty when unknown (the guide then keeps its own wording)."""
+    """What the tested crypto models check, in the landing page's words ("102 crypto coins every 15 minutes, every hour
+    and every 4 hours"), for the app guide. Built from the streams that run, so the guide cannot go stale when a stream
+    or the coin list changes. Empty when unknown (the guide then keeps its own wording)."""
     try:
         tfs = [k.split("_", 1)[1] for k in signal_hub._tested_keys() if k.startswith("crypto_")]
-        n = {tf: len(_markets.stream_coins("crypto", tf)) for tf in ("1h", "4h") if tf in tfs}
+        n = {tf: len(_markets.stream_coins("crypto", tf)) for tf in ("15m", "1h", "4h") if tf in tfs}
     except Exception:
         return ""
-    if "1h" in n and "4h" in n:
-        if n["1h"] == n["4h"]:
-            return f"{n['4h']} crypto coins every hour and every 4 hours"
-        return f"{n['4h']} crypto coins every 4 hours, and {n['1h']} of them every hour too"
-    if "4h" in n:
-        return f"{n['4h']} crypto coins every 4 hours"
-    if "1h" in n:
-        return f"{n['1h']} crypto coins every hour"
-    return ""
+    if not n:
+        return ""
+    words = {"15m": "every 15 minutes", "1h": "every hour", "4h": "every 4 hours"}
+    if len(set(n.values())) == 1:
+        ev = [words[t] for t in ("15m", "1h", "4h") if t in n]
+        return f"{max(n.values())} crypto coins " + ((", ".join(ev[:-1]) + " and " + ev[-1]) if len(ev) > 1 else ev[0])
+    # streams that check different coin lists: the widest one first, then how many of those each other one checks
+    order = sorted(n, key=lambda t: (-n[t], ("4h", "1h", "15m").index(t)))
+    rest = [f"{n[t]} of them {words[t]}" for t in order[1:]]
+    return f"{n[order[0]]} crypto coins {words[order[0]]}, and " + " and ".join(rest) + " too"
 
 
 def _site_globals():

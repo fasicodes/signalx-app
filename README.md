@@ -1,6 +1,6 @@
 # Signals FM (SignalX)
 
-Crypto trading signals on 1-hour and 4-hour candles (engine 5), forex and gold charts, a news and economic
+Crypto trading signals on 15-minute, 1-hour and 4-hour candles (engine 5), forex and gold charts, a news and economic
 calendar section, demo trading, an auto-trade bot and an AI assistant. Flask + MySQL, deployed on Railway.
 
 ## Run locally
@@ -21,7 +21,7 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 
 | Job | Module | What it does | Switch |
 |---|---|---|---|
-| Signal scanner + tracker | `signal_hub.py` | After every candle close of a switched-on stream (engine 5: crypto 1h): runs it, stores new signals, sends alerts; follows every active signal to its result (TP1/TP2/TP3, stop, expiry). | `SIGNAL_HUB`, `SIGNAL_STREAMS` |
+| Signal scanner + tracker | `signal_hub.py` | After every candle close of a switched-on stream (engine 5: crypto 15m and 1h): runs it, stores new signals, sends alerts; follows every active signal to its result (TP1/TP2/TP3, stop, expiry). | `SIGNAL_HUB`, `SIGNAL_STREAMS` |
 | Crypto 4h engine | `signalboard.py` + `signal_engine.py` | The 4-hour engine (5.0) board after each 4h close. | `SIGNAL_BOARD` |
 | Track record | `trackrecord.py` | Live record + backtest of the 4-hour engine. | `TRACK_RECORD_ENGINE` |
 | Strategy library | `strategies.py` + `strategy_library.py` | Once a day: backtests the 30 library strategies on the last year of 1h / 4h candles (20 crypto coins, 6 forex pairs) and stores the results for the Strategies page. | `STRATEGIES_ENGINE`, `STRATEGIES_REFRESH_HOURS` |
@@ -39,7 +39,13 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 * `features.py` - model inputs (the same code for research and live).
 * `signal_model.json` - the crypto 4h engine (trees of engine 3.1, three targets since engine 5.0).
 * `models/crypto_1h.json` - the crypto 1h stream: the engine 5 4-hour model read at every hourly close
-  (`StreamEngine._reading_board`). No other stream has a model file, so the others stay off.
+  (`StreamEngine._reading_board`).
+* `models/crypto_15m.json` - the crypto 15m stream: the same model (same trees) read at every 15-minute close, only
+  its top 0.5% of scores, 1 new signal per candle. No forex stream has a model file, so they stay off.
+* A stream that reads 4-hour candles built from its own needs months of them at its first scan after a restart
+  (15m: about 16,000 candles per coin); `signal_hub.warm` loads that history in slices after the due scans, so it
+  never delays the other streams, and the stream gives no signals until it is loaded (the Signals page shows the
+  progress).
 * `models/research.json` - what was tested for every stream and why it is on or off (shown on the Signals page).
 * Research code that trains and tests the models: see "Research" below.
 
@@ -131,15 +137,17 @@ longs, entries one minute after the candle close.
 |---|---|---|---|
 | Crypto 4h | **on** | stop 2 ATR, targets 0.5R / 1R / 2R (a third at each) | 852 signals (2.1 a day), **75.5 %** reach TP1, +0.12R per signal, PF 1.48 |
 | Crypto 1h | **on** | the 4h model read every hour; one target at 0.5R | 781 signals (1.9 a day, in bursts), **82.5 %** reach the target, +0.19R per signal, PF 2.03 |
-| Crypto 15m | off | - | passed validation, failed the unseen test: 69.4 %, +0.01R |
+| Crypto 15m | **on** | the 4h model read every 15 minutes, its top 0.5% only; one target at 0.5R | 199 signals (0.5 a day, in bursts), **82.9 %** reach the target, +0.21R per signal, PF 2.32; about 6 in 10 are trades the 1h stream gives too. (A separate 15m model failed first: 69.4 %, +0.01R.) |
 | Forex / gold 15m, 1h, 4h | off | - | no setting reached the validation target (best about 70 %, +0.03R); the unseen years were not opened |
 
 Plainly:
 
 * A win is the first target (half the stop distance). A random entry reaches it about 2 times in 3, and one full
   loss costs as much as two first-target wins, so the average result after costs is the measure that matters.
-* The 1h stream has no filler signal: it can be quiet for days and then give many signals in one market move.
-  A daily filler was tested and lost money on the validation years.
+* The 1h and 15m streams have no filler signal: they can be quiet for days and then give many signals in one
+  market move. A daily filler was tested and lost money on the validation years.
+* The 15m stream is the second 15m variant scored on the unseen period, and its selection was chosen on the
+  validation years after the setting written down first gave 11.5 signals a day (research/v5/rolling15.py says how).
 * With the single 1R target of engine 3.2 the same 4h signals won 59.4 % (+0.19R per signal): engine 5 trades some
   profit per signal for fewer stop-losses.
 * The numbers come from history; live results will differ. The Signals page and the Track record keep the live record.
@@ -147,7 +155,7 @@ Plainly:
 ## Research (how the stream models were trained and tested)
 
 Engine 5: `research/v5` (`fetch.py` data, `lab5.py` models and the pre-registered selection, `rolling.py` the hourly
-reading of the 4h model, `engine4h.py` the 4h plan re-test, `live_check.py` live engine == research, `summary.py`
+reading of the 4h model, `rolling15.py` its 15-minute reading, `engine4h.py` the 4h plan re-test, `live_check.py` live engine == research, `summary.py`
 writes `models/research.json`). The text below describes the earlier research.
 
 The research scripts are not part of the web app. Data: Binance spot 1-minute candles (public CC repositories

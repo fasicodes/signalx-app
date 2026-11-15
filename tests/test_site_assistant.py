@@ -90,9 +90,10 @@ check("whole position closes at the target" in a and "a third" not in a, "built-
 a = sa.builtin_answer("Explain this signal", {"viewing_signal": SIG})
 check("a third closes at each target" in a and "after TP2 to TP1" in a, "built-in: a three-target signal keeps the three-target plan")
 a = sa.builtin_answer("which timeframes do you have?", {})
-check("no 15-minute or forex signals" in a and "streams for 15-minute" not in a, "built-in: timeframes answer names the two live streams")
+check("three crypto streams" in a and "15-minute stream" in a and "no forex signals" in a and "streams for 15-minute" not in a,
+      "built-in: timeframes answer names the three live streams and says there are no forex signals")
 a = sa.builtin_answer("how do I use a signal", {})
-check("1-hour signals have one target" in a and "close a third" in a, "built-in: how-to covers both plans")
+check("1-hour and 15-minute signals have one target" in a and "close a third" in a, "built-in: how-to covers both plans")
 a = sa.builtin_answer("what do the grades mean?", {})
 check("filter the Signals page" not in a and "Signal strength" in a, "built-in: grades answer points to the bot setting that exists")
 a = sa.builtin_answer("are there forex signals for pips?", {})
