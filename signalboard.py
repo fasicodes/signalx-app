@@ -369,6 +369,15 @@ _started = False
 _start_lock = threading.Lock()
 
 
+def _email_ready():
+    """True when an email service is set up (Brevo, Resend or Gmail SMTP - mailer.py)."""
+    try:
+        import mailer
+        return mailer.provider() is not None
+    except Exception:
+        return bool(os.environ.get("MAIL_USERNAME") and os.environ.get("MAIL_PASSWORD"))
+
+
 def init_signalboard(app=None, *, engine_signal=None, coins=None, prices=None, send_email=None, telegram=None, start=True):
     global _started
     if app is not None and getattr(app, "secret_key", None):
@@ -587,7 +596,7 @@ def api_alerts():
         return jsonify({"ok": True, "enabled": bool(r and r["enabled"]), "email": bool(r and r["email"]),
                         "coins": sorted(coins) if coins else "ALL", "choices": symbol_choices(),
                         "markets": sorted(mk) if mk else "ALL", "timeframes": sorted(tfs) if tfs else "ALL",
-                        "email_ready": bool(os.environ.get("MAIL_USERNAME") and os.environ.get("MAIL_PASSWORD"))})
+                        "email_ready": _email_ready()})
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"ok": False, "error": "Invalid request."}), 400

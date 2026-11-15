@@ -117,6 +117,21 @@ backoff, an activity log, and "Trade this signal" on the Signals page. Keys are 
 signal on screen, the newest signals, each stream's results, upcoming high-impact events, headlines), a timeout
 with one retry, hourly limits per user / visitor, and built-in answers when the AI is off or busy. English only.
 
+## Email (sign-up links, password resets, contact form, alerts)
+
+`mailer.py`. Railway's Free, Trial and Hobby plans block outbound SMTP, so Gmail SMTP cannot send from there and
+reset links never arrive. Use an email service called over HTTPS instead (the first one set is used):
+
+- **Brevo** (free, 300 emails a day, no domain of your own needed): sign up at brevo.com, add and verify your
+  sender address (Senders), create an API key (SMTP & API), and turn off "Authorised IPs" blocking under Security
+  (Railway's outgoing IP changes). Railway Variables: `BREVO_API_KEY`, `MAIL_FROM` = `Signals FM <the verified address>`.
+- **Resend** (needs a domain you own, verified with DNS records in Resend): `RESEND_API_KEY`, `MAIL_FROM` =
+  `Signals FM <no-reply@yourdomain>`.
+- **Gmail SMTP** (`MAIL_USERNAME` + a 16-character Gmail App Password in `MAIL_PASSWORD`): only on Railway Pro or locally.
+
+Check it on `/admin/news` (admins): the "Email delivery" box shows the service in use, the last email's result or
+error, and sends a test email to your own address. Failures are also printed to the Railway logs as `[mailer] ERROR`.
+
 ## Tests
 
 ```bash

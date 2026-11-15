@@ -30,7 +30,7 @@
   .cover-prev { max-width: 220px; border-radius: 8px; border: 1px solid var(--line); display: block; }
   .prev { border: 1px dashed var(--line); border-radius: 10px; padding: 14px; line-height: 1.7; max-height: 60vh; overflow: auto; }
   .prev img { max-width: 100%; }
-  .msg { font-size: 13.5px; } .msg.ok { color: #22c55e; } .msg.bad { color: #e5484d; }
+  .msg { font-size: 13.5px; } .msg.ok { color: #22c55e; } .msg.bad { color: #e5484d; } .msg.warn { color: #f59e0b; }
   .stat { font-size: 13px; color: var(--text-dim); line-height: 1.7; }
   .stat code { font-size: 12.5px; }
 </style>
@@ -46,7 +46,7 @@
 <main class="wrap">
   <div class="phead">
     <h1>Articles and news feeds</h1>
-    <p>Write, schedule and publish your own articles (Markdown), and check the news and calendar sources. Only admins see this page.</p>
+    <p>Write, schedule and publish your own articles (Markdown), and check the news and calendar sources and email delivery. Only admins see this page.</p>
   </div>
   <div class="adm">
     <div>
@@ -70,6 +70,11 @@
           Last calendar refresh: <span id="lc">{{ status.last_calendar or 'not yet' }}</span>
         </div>
         <div class="row" style="margin-top:10px"><button class="pbtn" type="button" id="refresh">Refresh feeds now</button><span class="msg" id="rmsg"></span></div>
+      </div>
+      <div class="box" style="margin-top:14px" id="mail-box">
+        <b>Email delivery</b>
+        <div class="stat" id="mail">Checking…</div>
+        <div class="row" style="margin-top:10px"><button class="pbtn" type="button" id="mail-test">Send a test email to me</button><span class="msg" id="mmsg" role="status"></span></div>
       </div>
     </div>
     <div class="box">
@@ -228,8 +233,34 @@
     } catch (e) { $("rmsg").textContent = e.message; $("rmsg").className = "msg bad"; }
     $("refresh").disabled = false;
   });
+  // Email delivery: the service in use, the last email the site sent, and a test email to the admin's own address.
+  function renderMail(d) {
+    const last = d.last || {};
+    const lastTxt = !last.at ? "none since the last restart"
+      : last.ok ? `sent ${esc(when(last.at))}` : `<span class="msg bad">failed ${esc(when(last.at))}: ${esc(last.error || "")}</span>`;
+    $("mail").innerHTML = `Service: ${d.provider ? esc(d.provider_name) : '<span class="msg bad">not set up</span>'}` +
+      (d.sender ? `<br>Sender: <code>${esc(d.sender)}</code>` : "") + `<br>Last email: ${lastTxt}` +
+      (d.notes || []).map((n) => `<br><span class="msg warn">${esc(n)}</span>`).join("");
+  }
+  async function loadMail() {
+    try { renderMail(await api("/api/admin/mail-status")); }
+    catch (e) { $("mail").innerHTML = `<span class="msg bad">${esc(e.message)}</span>`; }
+  }
+  $("mail-test").addEventListener("click", async () => {
+    $("mail-test").disabled = true; $("mmsg").textContent = "Sending…"; $("mmsg").className = "msg";
+    try {
+      const d = await jpost("/api/admin/mail-test");
+      $("mmsg").textContent = `Sent to ${d.sent_to}. Check that inbox (and the spam folder).`; $("mmsg").className = "msg ok";
+    } catch (e) {   // the service's own reason is shown under "Last email" above
+      $("mmsg").textContent = /^Not sent:/.test(e.message) ? "Not sent: the reason is under Last email above." : e.message;
+      $("mmsg").className = "msg bad";
+    }
+    $("mail-test").disabled = false;
+    loadMail();
+  });
   fill(null);
   loadList();
+  loadMail();
 })();
 </script>
 </body>

@@ -378,4 +378,23 @@ with app.test_request_context("/", base_url="https://evil.example.org"):
 body = auth._email_html("T", "<p>x</p>", "Go", 'https://a.example/x?token=a"b<c')
 check('href="https://a.example/x?token=a&quot;b&lt;c"' in body, "link in emails is escaped")
 
+print("\n[9] no email service, or an email that could not be sent: say so instead of 'we sent a link'")
+MAIL.clear()
+mailer.provider = lambda: None
+try:
+    answers = [post("/api/forgot-password", {"email": e}) for e in ("sara@example.com", "nobody-here@example.com")]
+    check(all(code == 503 and "not set up" in d.get("error", "") for code, d in answers) and answers[0] == answers[1]
+          and not MAIL, "no email service: forgot password says so, the same for every address (reveals no account)")
+finally:
+    del mailer.provider
+_orig_send = mailer.send_email
+auth.send_email = lambda to, subject, body, reply_to=None: False
+try:
+    code, d = post("/api/register", {"email": "lena@example.com", "password": "secret123"})
+    check(code == 201 and "could not send the verification email" in d.get("message", "")
+          and "Forgot password" in d.get("message", "") and row("lena@example.com"),
+          "sign-up whose email failed: account kept, the message says to use Forgot password later")
+finally:
+    auth.send_email = _orig_send
+
 print(f"\nALL {passed} CHECKS PASSED")

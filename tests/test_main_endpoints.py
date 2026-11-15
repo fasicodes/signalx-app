@@ -416,6 +416,61 @@ for path in ("/about", "/risk-disclosure"):
     check("track record" in g and 'href="/track-record"' not in g, f"{path}: visitors read 'track record' without a link")
     check('href="/track-record"' in m, f"{path}: members get the link")
 
+print("\n[12] email delivery check for the admin (reset links never arrived: Railway Hobby blocks SMTP)")
+import mailer as _mailer  # noqa: E402
+import requests as _requests  # noqa: E402
+_MAIL_VARS = ("BREVO_API_KEY", "RESEND_API_KEY", "MAIL_USERNAME", "MAIL_PASSWORD", "MAIL_FROM")
+_saved_env = {k: os.environ.pop(k, None) for k in _MAIL_VARS + ("ADMIN_EMAILS",)}
+check(guest.get("/api/admin/mail-status").status_code == 403 and member.get("/api/admin/mail-status").status_code == 403
+      and member.post("/api/admin/mail-test").status_code == 403, "mail status and test email: admins only")
+os.environ["ADMIN_EMAILS"] = "Member@Example.com"
+d = member.get("/api/admin/mail-status").get_json()
+check(d["ok"] and d["provider"] is None and d["notes"], "no email service set up: the admin sees it, with a note")
+check(member.get("/api/signals/alerts").get_json().get("email_ready") is False, "signal alerts: email not ready")
+_posts, _orig_post = [], _requests.post
+_answer = {"code": 201, "data": {"messageId": "<1@brevo>"}}
+
+
+class _Resp:
+    def __init__(self, code, data):
+        self.status_code, self._d, self.text = code, data, str(data)
+
+    def json(self):
+        return self._d
+
+
+def _fake_post(url, json=None, headers=None, timeout=None, **kw):
+    _posts.append({"url": url, "json": json})
+    return _Resp(_answer["code"], _answer["data"])
+
+
+_requests.post = _fake_post
+try:
+    os.environ.update({"BREVO_API_KEY": "test-key", "MAIL_FROM": "Signals FM <owner@example.com>"})
+    check(member.get("/api/signals/alerts").get_json().get("email_ready") is True, "signal alerts: email ready with Brevo")
+    r = member.post("/api/admin/mail-test")
+    d = r.get_json()
+    body = (_posts[-1]["json"] or {}) if _posts else {}
+    check(r.status_code == 200 and d["ok"] and d["sent_to"] == "member@example.com" and d["provider_name"] == "Brevo"
+          and d["last"]["ok"] is True, "test email: sent to the admin's own address through Brevo")
+    check(body.get("to") == [{"email": "member@example.com"}] and "Test email" in body.get("htmlContent", "")
+          and "test-key" not in str(d), "the test email is the site's branded email; the key is never sent back")
+    _answer.update(code=401, data={"code": "unauthorized", "message": "Key not found"})
+    r = member.post("/api/admin/mail-test")
+    d = r.get_json()
+    check(r.status_code == 502 and d["ok"] is False and "Key not found" in d["error"] and d["last"]["ok"] is False,
+          "a refused test email: the admin sees Brevo's reason")
+    page = member.get("/admin/news")
+    check(page.status_code == 200 and 'id="mail-box"' in page.get_data(as_text=True)
+          and "/api/admin/mail-test" in page.get_data(as_text=True), "/admin/news has the Email delivery box")
+finally:
+    _requests.post = _orig_post
+    for k, v in _saved_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)

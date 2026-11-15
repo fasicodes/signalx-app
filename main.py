@@ -3017,6 +3017,35 @@ def _is_admin():
 app.context_processor(_site_globals)
 
 
+# Email delivery check for the admin (a box on /admin/news): which email service is set up, how the last email went,
+# and a test email to the admin's own address. Railway Hobby / Trial block SMTP, so a missing reset email shows here.
+import mailer as _mailer  # noqa: E402
+
+
+@app.route("/api/admin/mail-status", methods=["GET"])
+def admin_mail_status():
+    if not _is_admin():
+        return jsonify({"ok": False, "error": "Only the site admin can do this."}), 403
+    return jsonify(dict(_mailer.status(), ok=True))
+
+
+@app.route("/api/admin/mail-test", methods=["POST"])
+@limiter.limit("5 per 10 minutes")
+def admin_mail_test():
+    if not _is_admin():
+        return jsonify({"ok": False, "error": "Only the site admin can do this."}), 403
+    to = (session.get("email") or "").strip()
+    from auth import _email_html
+    html = _email_html("Test email", "<p style=\"margin:0\">This test email came from the Signals FM admin page. "
+                                     "If you can read it, sign-up links, password resets and signal alerts reach "
+                                     "your members too.</p>", "Open Signals FM", _site_base() + "/", "")
+    sent = _mailer.send_email(to, "Signals FM test email", html)
+    st = _mailer.status()
+    if not sent:
+        return jsonify(dict(st, ok=False, error="Not sent: " + (st["last"]["error"] or "unknown error"))), 502
+    return jsonify(dict(st, ok=True, sent_to=to))
+
+
 # Friendly error pages (website design + a way back) instead of the plain "Internal Server Error" page.
 # API calls (/api/...) get a short JSON error, so the pages' own scripts can show it.
 _ERRORS = {
