@@ -36,6 +36,7 @@ when it is within 10% of the best. The holdout is then scored once, for that one
   python rolling15.py tune     validation years only: the grid above and its one choice
   python rolling15.py final    the one holdout test of the choice; refuses without a validated choice; also how many
                                of its signals the 1-hour stream gives too (same coin and side within 4 hours)
+  python rolling15.py export   models/crypto_15m.json for the site (only after a passed holdout)
 """
 import json
 import os
@@ -369,5 +370,69 @@ def final():
     return res
 
 
+def export():
+    """models/crypto_15m.json: the 4h model's newest walk-forward fold (the same trees as models/crypto_1h.json),
+    read at every 15-minute close with the selection chosen on the validation years."""
+    res = json.load(open(RESULTS))
+    ch15 = res.get("choice")
+    assert ch15 and res.get("test") and res.get("passed_test"), "export needs the validated choice and a passed holdout"
+    ch = json.load(open(f"{W}/results/{SRC}_choice.json"))
+    fin = pickle.load(open(f"{W}/wf/{SRC}_last.pkl", "rb"))
+    trees, base = L.export_trees(fin["clf"])
+    _, D = L.load_ds(SRC)
+    probe = np.asarray(next(iter(D.values()))["X"][-400:])
+    dense = [{k: np.asarray(v) for k, v in t.items()} for t in trees]
+    assert np.allclose(ST._tree_proba(dense, base, probe), fin["clf"].predict_proba(probe)[:, 1], atol=1e-5), "tree export"
+    one_hour = json.load(open(f"{L.APP}/models/crypto_1h.json"))
+    assert one_hour["trees"] == json.loads(json.dumps(trees)) and one_hour["features"] == fin["cols"], \
+        "the 15-minute stream must read the same model as the 1-hour stream"
+    plan = L.PLANS[ch["plan"]]
+    trained = json.load(open(f"{W}/ds/{SRC}/meta.json"))["symbols"]
+    thr = float(ch15["thr"])
+    test = dict(res["test"], cost_round_trip=L.markets.CRYPTO_COST_ROUND_TRIP, by_minute=res.get("test_by_minute"),
+                overlap_with_1h=res.get("overlap_with_1h"))
+    test["note"] = ("Walk-forward on data the models never saw (every fold was scored by a model trained only on "
+                    "candles from before the fold), 15-minute decisions, entries at the price one minute after the "
+                    "15-minute candle closed, 0.30% fees and slippage per round trip plus funding for longs. A win = "
+                    "the target was reached before the stop.")
+    v = res["validation_choice"]
+    hb = float(v["median_hold_bars"])
+    model = {
+        "version": "5.0", "stream": "crypto_15m", "market": "crypto", "timeframe": "15m",
+        "trained_on": f"{C['data_start']} to {fin['train_end'][:10]}, {len(trained)} symbols",
+        "spec": {"session": C["session"], "volume": C["volume"], "anchor": C["anchor"], "read_tf": C["tf"],
+                 "dtype": "float32"},
+        "features": fin["cols"], "baseline": base, "trees": trees, "calibration": ch["calibration"],
+        "calibration_note": "Maps the model output to the share of past cases that reached the target before the stop "
+                            f"(walk-forward predictions of the 4-hour model, {C['val'][0]} to {C['val'][1]}).",
+        "threshold": thr, "grade_a": max(ch["grade_a"], thr), "grade_b": thr,
+        "watch_threshold": min(ch.get("watch", thr), thr),
+        "policy_note": ("The 4-hour model is read at every 15-minute close, on the 4-hour candle that ends at that "
+                        f"close. A coin gets a signal when the model's score is in its top {100 * (1 - ch15['q']):g}% "
+                        "(the level chosen for this stream on the validation years). One trade at a time per coin, a "
+                        f"cooldown of {ch15['cooldown']} candles of 15 minutes, at most {ch15['max_per_bar']} new "
+                        "signal per 15-minute candle (the highest score)."),
+        "levels": {"sl_atr": C["k"], "targets_r": plan["targets_r"], "fractions": plan["fractions"], "max_bars": H15,
+                   "be_after": plan["be_after"]},
+        "plan_note": (f"Stop {C['k']:g} x ATR(14) of the 4-hour candles from the entry (1R). One target at 0.5R: the whole "
+                      f"position closes there and the stop never moves. Time limit {H15} candles of 15 minutes (9 days)."),
+        "selection": {"max_per_bar": int(ch15["max_per_bar"]), "cooldown_bars": int(ch15["cooldown"]), "sessions": None,
+                      "no_new_before_close_h": 0, "cost_cap_r": None},
+        "selection_note": ("Chosen on the validation years before the holdout was opened (research/v5/rolling15.py): "
+                           "the pre-registered setting (the 4h model's own level, 3 signals per candle) passed the "
+                           "validation rule but gave 11.5 signals a day and a -257R drawdown."),
+        "hold_bars_median": hb, "hold_text": L.hold_text({"tf": "15m"}, hb),
+        "signal_symbols": list(L.markets.CRYPTO_COINS), "trained_symbols": trained,
+        "test": test, "walk_forward": v, "pre_registered_validation": L.short(res["validation"]),
+        "validation_rule": L.RULE_TEXT,
+        "fees": "0.30% round trip + funding for longs",
+        "research": "research/v5/lab5.py (the 4-hour model) and research/v5/rolling15.py (read every 15 minutes)",
+    }
+    path = f"{L.APP}/models/crypto_15m.json"
+    json.dump(model, open(path, "w"), separators=(",", ":"))
+    log("exported", path, os.path.getsize(path) // 1024, "KB; passes the site's live bar:",
+        ST.passed_test(test, "crypto_15m"))
+
+
 if __name__ == "__main__":
-    {"build": build, "val": val, "tune": tune, "final": final}[sys.argv[1]]()
+    {"build": build, "val": val, "tune": tune, "final": final, "export": export}[sys.argv[1]]()
