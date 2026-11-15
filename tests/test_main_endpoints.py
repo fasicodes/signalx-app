@@ -366,6 +366,22 @@ nav = member.get("/signals").get_data(as_text=True)
 check('href="/strategies"' in nav, "the app menu links to Strategies")
 check(guest.post("/api/strategies/community", data={"title": "x"}).status_code == 401, "sharing a strategy needs a login")
 
+print("\n[9] the app guide names the coins the running streams check (it said '62 of them every hour' after engine 5)")
+import markets as _mk  # noqa: E402
+import signal_hub as _hub  # noqa: E402
+n_all = len(_mk.CRYPTO_COINS)
+check(main._signal_check() == f"{n_all} crypto coins every hour and every 4 hours", "both crypto streams run: every coin, both timeframes")
+guide = member.get("/signals").get_data(as_text=True)
+check(f"Our tested models check {n_all} crypto coins every hour and every 4 hours." in guide and "62 of them" not in guide,
+      "the guide on the app pages uses it")
+_orig_keys = _hub._tested_keys
+_hub._tested_keys = lambda: ["crypto_4h"]
+check(main._signal_check() == f"{n_all} crypto coins every 4 hours", "only the 4-hour stream: says so")
+_hub._tested_keys = lambda: []
+check(main._signal_check() == "" and "Our tested models check every crypto coin at each candle close."
+      in member.get("/signals").get_data(as_text=True), "nothing known: the guide keeps general words, no number")
+_hub._tested_keys = _orig_keys
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
