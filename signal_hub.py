@@ -323,11 +323,58 @@ def record(symbol, market, tf, a, news=None):
         if "uniq" in str(e).lower() or "duplicate" in str(e).lower() or "constraint" in str(e).lower():
             return None
         raise
-    return {"symbol": symbol, "market": market, "timeframe": tf, "side": a["side"], "bar_time": bar_time,
-            "entry": entry, "stop_loss": stop, "take_profit": float(a["take_profit"]), "targets": tps,
-            "confidence": a.get("confidence"), "grade": grade, "setup": a.get("setup"), "tier": a.get("tier"),
-            "expires_at": expires, "hold_minutes": hold, "news": news,
-            "better_entry": a.get("better_entry"), "better_entry_until": _parse(a.get("better_entry_until"))}
+    ev = {"symbol": symbol, "market": market, "timeframe": tf, "side": a["side"], "bar_time": bar_time,
+          "entry": entry, "stop_loss": stop, "take_profit": float(a["take_profit"]), "targets": tps,
+          "confidence": a.get("confidence"), "grade": grade, "setup": a.get("setup"), "tier": a.get("tier"),
+          "expires_at": expires, "hold_minutes": hold, "news": news,
+          "better_entry": a.get("better_entry"), "better_entry_until": _parse(a.get("better_entry_until"))}
+    same = _same_trade(symbol, market, a["side"], tf)
+    if same:
+        ev["same_as"] = same
+    return ev
+
+
+def _signal_at(row):
+    t = _parse(row.get("bar_time"))
+    return t + timedelta(seconds=markets.TF_SEC.get(row.get("timeframe") or "4h", 0)) if t else None
+
+
+def _same_trade(symbol, market, side, tf):
+    """The newest running signal of ANOTHER stream on the same coin and side, or None. About 6 in 10 15m signals are
+    the trade the 1h stream already gives (the same model): taking both doubles the risk on one coin, so the cards and
+    the alerts say so."""
+    try:
+        with _Cursor() as cur:
+            cur.execute("""SELECT timeframe, bar_time FROM signal_events WHERE symbol=%s AND market=%s AND side=%s
+                           AND status='ACTIVE' AND timeframe<>%s ORDER BY bar_time DESC LIMIT 1""",
+                        (symbol, market, side, tf))
+            o = cur.fetchone()
+    except Exception:
+        return None
+    return {"timeframe": o["timeframe"], "signal_at": _iso(_signal_at(o))} if o else None
+
+
+def mark_same_trades(sigs):
+    """Adds same_as to the running signals of a list (one query) whose coin and side another stream runs too."""
+    act = [s for s in sigs if s.get("status") == "ACTIVE"]
+    if not act:
+        return sigs
+    syms = sorted({s["symbol"] for s in act})
+    try:
+        with _Cursor() as cur:
+            marks = ",".join(["%s"] * len(syms))
+            cur.execute(f"""SELECT symbol, market, side, timeframe, bar_time FROM signal_events
+                            WHERE status='ACTIVE' AND symbol IN ({marks})""", tuple(syms))
+            rows = cur.fetchall() or []
+    except Exception:
+        return sigs
+    for s in act:
+        others = [r for r in rows if r["symbol"] == s["symbol"] and r["side"] == s["side"]
+                  and (r.get("market") or "crypto") == (s.get("market") or "crypto") and r["timeframe"] != s["timeframe"]]
+        if others:
+            o = max(others, key=lambda r: _parse(r["bar_time"]) or datetime.min)
+            s["same_as"] = {"timeframe": o["timeframe"], "signal_at": _iso(_signal_at(o))}
+    return sigs
 
 
 # ===========================================================================
@@ -1267,8 +1314,8 @@ def api_list():
         return jsonify({"ok": False, "error": "Invalid page."}), 400
     rows, total = list_signals(market, tf, symbol, side, None if status == "all" else status, grade, sort, page, per)
     prices = live_prices(rows)
-    return jsonify({"ok": True, "total": total, "page": page, "per_page": per,
-                    "pages": max(1, -(-total // per)), "signals": [signal_json(r, prices.get(r["symbol"])) for r in rows]})
+    return jsonify({"ok": True, "total": total, "page": page, "per_page": per, "pages": max(1, -(-total // per)),
+                    "signals": mark_same_trades([signal_json(r, prices.get(r["symbol"])) for r in rows])})
 
 
 @hub_bp.route("/api/signals/stats", methods=["GET"])

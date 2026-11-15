@@ -431,6 +431,7 @@
         <span class="since">${esc(s.timeframe)} · ${dayTime(s.signal_at)}</span></div>
       <div class="tags"><span class="st ${s.status}">${STATUS[s.status] || esc(s.status)}${s.status === "ACTIVE" && s.hits ? ` · TP${s.hits} reached` : ""}</span>
         ${s.tested === false ? '<span class="badge untested" title="Simple rules that have not passed our test on unseen data">Experimental</span>' : ""}
+        ${s.status === "ACTIVE" && s.same_as ? `<span class="badge" title="The ${esc(s.same_as.timeframe)} stream has the same coin and side running since ${dayTime(s.same_as.signal_at)}. Taking both doubles the risk on this coin.">Also running on ${esc(s.same_as.timeframe)}</span>` : ""}
         ${s.setup ? `<span class="badge">${esc(SETUP[s.setup] || s.setup)}</span>` : ""}
         </div>
       ${lv}

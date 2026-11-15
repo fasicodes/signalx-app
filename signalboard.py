@@ -206,7 +206,18 @@ def event_text(e):
         msg += f" · high-impact news soon: {news['title']}"
     if untested:
         msg += " · experimental: simple rules that have not passed our test on unseen data"
+    msg += same_trade_note(e, " · ")
     return msg
+
+
+def same_trade_note(e, lead=""):
+    """'the same coin and side as the running 1h signal' when another stream already runs this coin and side (taking
+    both doubles the risk on the coin), else ''."""
+    o = e.get("same_as")
+    if not isinstance(o, dict) or not o.get("timeframe"):
+        return ""
+    return (f"{lead}the same coin and side as the running {o['timeframe']} signal on {e['symbol']}: taking both doubles "
+            "the risk on this coin")
 
 
 def _sub_coins(raw):
@@ -286,6 +297,8 @@ def _email_html(events, user_id=None):
         + "</tr>"
         for e in events)
     link = f"{base}/signals" if base else "/signals"
+    notes = "".join("<p style='color:#8a5a00;margin:10px 0 0;font-size:13px'>" + n[0].upper() + n[1:] + ".</p>"
+                    for n in (same_trade_note(e) for e in events) if n)
     if user_id is not None:
         u = f"{base}/signals/unsubscribe?t={_unsub_token(user_id)}"
         unsub = f'<a href="{u}" style="color:#6f8279">Stop these emails</a> (one click, no login).'
@@ -302,6 +315,7 @@ def _email_html(events, user_id=None):
         <th style="padding:6px 10px">Entry</th><th style="padding:6px 10px">Stop</th><th style="padding:6px 10px">TP1</th>
         <th style="padding:6px 10px">TP2</th><th style="padding:6px 10px">TP3</th></tr>{rows}
       </table>
+      {notes}
       <p style="margin:16px 0"><a href="{link}" style="background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open the signals board</a></p>
       <p style="color:#6f8279;font-size:12px;line-height:1.6">Not financial advice. Signals can and do lose; past results do not guarantee future results.
       You get this email because you turned on signal alerts. {unsub}</p>

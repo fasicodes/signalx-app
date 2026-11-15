@@ -613,6 +613,45 @@ hub._store, engines, hub._FORCE_STREAMS = saved
 hub._engines.clear()
 hub._engines.update(engines)
 
+print("\n[5d] a signal that repeats another stream's running trade says so")
+import signalboard as sbd  # noqa: E402
+import telegram_bot as tgb  # noqa: E402
+bt2 = datetime(2026, 10, 20, 9, 0)
+base_sig = {"side": "LONG", "entry": 20.0, "stop_loss": 18.6, "take_profit": 20.35, "targets": [20.35], "confidence": 76.0,
+            "grade": "A", "bar_time": bt2, "signal_at": bt2 + timedelta(hours=1)}
+e1 = hub.record("AVAX/USDT", "crypto", "1h", base_sig)
+e15 = hub.record("AVAX/USDT", "crypto", "15m", dict(base_sig, bar_time=bt2 + timedelta(minutes=30),
+                                                   signal_at=bt2 + timedelta(minutes=45)))
+e15s = hub.record("AVAX/USDT", "crypto", "15m", dict(base_sig, side="SHORT", stop_loss=21.4, take_profit=19.65,
+                                                    targets=[19.65], bar_time=bt2 + timedelta(minutes=45),
+                                                    signal_at=bt2 + timedelta(hours=1)))
+check(e1 is not None and "same_as" not in e1 and e15["same_as"] == {"timeframe": "1h", "signal_at": "2026-10-20T10:00:00Z"}
+      and e15s is not None and "same_as" not in e15s,
+      "a 15m long while the 1h long runs on the coin is marked; the first signal and an opposite one are not")
+txt = sbd.event_text(e15)
+mail = sbd._email_html([e15, e15s], user_id=None)
+tg = tgb.signal_block(e15)
+check("the same coin and side as the running 1h signal on AVAX/USDT: taking both doubles the risk" in txt
+      and "The same coin and side as the running 1h signal on AVAX/USDT" in mail and mail.count("same coin and side") == 1
+      and "same coin and side as the running 1h signal: taking both doubles the risk" in tg
+      and "same coin and side" not in sbd.event_text(e15s) + tgb.signal_block(e15s),
+      "the app notification, the email and Telegram say it; the other signals do not")
+with hub._Cursor() as cur:
+    cur.execute("SELECT * FROM signal_events WHERE symbol='AVAX/USDT' ORDER BY id")
+    rows_ = cur.fetchall()
+listed = hub.mark_same_trades([hub.signal_json(r) for r in rows_])
+by_tf = {(x["timeframe"], x["side"]): x for x in listed}
+check(by_tf[("15m", "LONG")]["same_as"]["timeframe"] == "1h" and by_tf[("1h", "LONG")]["same_as"]["timeframe"] == "15m"
+      and "same_as" not in by_tf[("15m", "SHORT")],
+      "the Signals page marks both running signals of the same trade (each points to the other stream)")
+with hub._Cursor() as cur:
+    cur.execute("UPDATE signal_events SET status='TP1' WHERE symbol='AVAX/USDT' AND timeframe='1h'")
+listed = hub.mark_same_trades([hub.signal_json(r) for r in rows_])
+check(all("same_as" not in x for x in listed if x["timeframe"] == "15m"), "once the 1h signal has closed the mark goes away")
+tpl = open(os.path.join(ROOT, "templates", "signals.html"), encoding="utf-8").read()
+check("s.same_as" in tpl and "Also running on" in tpl and "doubles the risk on this coin" in tpl,
+      "the signal card shows the mark with its reason")
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)

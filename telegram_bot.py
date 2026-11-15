@@ -321,6 +321,10 @@ def signal_block(e):
     news = e.get("news")
     if news and news.get("title"):
         lines.append(f"\u26A0\uFE0F High-impact news soon: {html.escape(str(news['title']))}")
+    same = e.get("same_as")
+    if isinstance(same, dict) and same.get("timeframe"):
+        lines.append(f"\u2139\uFE0F The same coin and side as the running {html.escape(str(same['timeframe']))} signal: "
+                     "taking both doubles the risk on this coin.")
     url = _link("/signals?market=" + (e.get("market") or "crypto") + "&timeframe=" + tf)
     if url:
         lines.append(f'<a href="{html.escape(url)}">Open on Signals FM</a>')
