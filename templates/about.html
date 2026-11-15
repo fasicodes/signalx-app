@@ -68,7 +68,7 @@
 <section class="block">
   <h2 class="sec">What we promise</h2>
   <div class="cards2">
-    <div class="icard"><h3>Every result, not just the wins</h3><p>The <a class="link" href="/track-record">track record</a> logs every
+    <div class="icard"><h3>Every result, not just the wins</h3><p>The {% if track_record_public or session.get('user_id') %}<a class="link" href="/track-record">track record</a>{% else %}track record{% endif %} logs every
       signal automatically with its stop, target and result after fees. Nothing is deleted.</p></div>
     <div class="icard"><h3>No guaranteed profits</h3><p>No signal service can promise profit, and we never will. We would rather show
       Wait than a weak trade.</p></div>

@@ -394,6 +394,12 @@ check("<title>Trading signals 4h | Signals FM</title>" in html and "for 4-hour c
       "only the 4-hour stream on: title and intro follow")
 _hub.stream_info = _orig_info
 
+print("\n[11] while the track record is private, visitors get no link to it (it would only open the login page)")
+for path in ("/about", "/risk-disclosure"):
+    g, m = guest.get(path).get_data(as_text=True), member.get(path).get_data(as_text=True)
+    check("track record" in g and 'href="/track-record"' not in g, f"{path}: visitors read 'track record' without a link")
+    check('href="/track-record"' in m, f"{path}: members get the link")
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
