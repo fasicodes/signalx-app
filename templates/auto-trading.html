@@ -1031,12 +1031,17 @@
         : "";
       const cl = d.options.confidence;
       if (cl) {
-        const f = Math.floor, h1 = cl.streams && cl.streams["1h"];
-        // the 1-hour stream (engine 5) has its own, higher confidence range: say which signals each minimum takes
-        $("s-conf-hint").textContent = h1
-          ? `4-hour signals show about ${f(cl.standard)}–${f(cl.max)}% (strong ones ${f(cl.strong)}% or more), 1-hour signals about `
-            + `${f(h1.min)}–${f(h1.max)}%. ${f(cl.standard)}% or lower takes every signal; ${f(cl.strong)}% takes strong 4-hour signals`
-            + (h1.min >= f(cl.strong) ? " and every 1-hour signal." : ` and 1-hour signals from ${f(cl.strong)}%.`)
+        // the 1-hour and 15-minute streams (engine 5) have their own, higher confidence ranges: say which signals each minimum takes
+        const f = Math.floor, x = cl.streams || {}, NAMES = { "1h": "1-hour", "15m": "15-minute" };
+        const more = ["1h", "15m"].filter((t) => x[t]);
+        const every = more.filter((t) => x[t].min >= f(cl.strong)).map((t) => NAMES[t]);
+        const some = more.filter((t) => x[t].min < f(cl.strong)).map((t) => NAMES[t]);
+        $("s-conf-hint").textContent = more.length
+          ? `4-hour signals show about ${f(cl.standard)}–${f(cl.max)}% (strong ones ${f(cl.strong)}% or more), `
+            + more.map((t) => `${NAMES[t]} signals about ${f(x[t].min) === f(x[t].max) ? f(x[t].min) : `${f(x[t].min)}–${f(x[t].max)}`}%`).join(", ") + ". "
+            + `${f(cl.standard)}% or lower takes every signal; ${f(cl.strong)}% takes strong 4-hour signals`
+            + (every.length ? ` and every ${every.join(" and ")} signal` : "")
+            + (some.length ? ` and ${some.join(" and ")} signals from ${f(cl.strong)}%` : "") + "."
           : `Signals show about ${f(cl.standard)}–${f(cl.max)}%. ${f(cl.standard)}% or lower takes every signal; ${f(cl.strong)}% takes strong signals only.`;
       }
       renderStatus();

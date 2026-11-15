@@ -266,7 +266,8 @@
 {% set AVGR = T.avg_r if T else S.get('avg_net_r') %}
 {% set COINS = (T.coins if (T and T.coins) else (lv.coins if (lv and lv.coins) else (ncoins or 62))) %}
 {% set TFS = (T.streams | map(attribute='timeframe') | list) if T else ((lv.timeframes or []) if lv else []) %}
-{% if '1h' in TFS and '4h' in TFS %}{% set EVERY = 'every hour and every 4 hours' %}{% elif '1h' in TFS %}{% set EVERY = 'every hour' %}{% else %}{% set EVERY = 'every 4 hours' %}{% endif %}
+{% set EV = [] %}{% for t, w in [('15m', 'every 15 minutes'), ('1h', 'every hour'), ('4h', 'every 4 hours')] %}{% if t in TFS %}{% set _ = EV.append(w) %}{% endif %}{% endfor %}
+{% set EVERY = ((EV[:-1] | join(', ')) ~ ' and ' ~ EV[-1]) if EV | length > 1 else (EV[0] if EV else 'every 4 hours') %}
 {# the 4h model covers more coins than the 1h model (coin test): say how many each one checks #}
 {% set C1 = ((T.streams | selectattr('timeframe', 'equalto', '1h') | map(attribute='coins') | list) or [none])[0] if T else none %}
 {% set C4 = ((T.streams | selectattr('timeframe', 'equalto', '4h') | map(attribute='coins') | list) or [none])[0] if T else none %}

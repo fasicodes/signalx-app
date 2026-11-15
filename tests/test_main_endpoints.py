@@ -370,11 +370,19 @@ print("\n[9] the app guide names the coins the running streams check (it said '6
 import markets as _mk  # noqa: E402
 import signal_hub as _hub  # noqa: E402
 n_all = len(_mk.CRYPTO_COINS)
-check(main._signal_check() == f"{n_all} crypto coins every hour and every 4 hours", "both crypto streams run: every coin, both timeframes")
+check(main._signal_check() == f"{n_all} crypto coins every 15 minutes, every hour and every 4 hours",
+      "the three crypto streams run: every coin, every timeframe")
 guide = member.get("/signals").get_data(as_text=True)
-check(f"Our tested models check {n_all} crypto coins every hour and every 4 hours." in guide and "62 of them" not in guide,
-      "the guide on the app pages uses it")
+check(f"Our tested models check {n_all} crypto coins every 15 minutes, every hour and every 4 hours." in guide
+      and "62 of them" not in guide, "the guide on the app pages uses it")
 _orig_keys = _hub._tested_keys
+_hub._tested_keys = lambda: ["crypto_1h", "crypto_4h"]
+check(main._signal_check() == f"{n_all} crypto coins every hour and every 4 hours", "two streams: both timeframes")
+_orig_cov = _mk.stream_coins
+_mk.stream_coins = lambda market, tf: _orig_cov(market, tf)[:62] if tf == "1h" else _orig_cov(market, tf)
+check(main._signal_check() == f"{n_all} crypto coins every 4 hours, and 62 of them every hour too",
+      "streams that check different coin lists: each one's number")
+_mk.stream_coins = _orig_cov
 _hub._tested_keys = lambda: ["crypto_4h"]
 check(main._signal_check() == f"{n_all} crypto coins every 4 hours", "only the 4-hour stream: says so")
 _hub._tested_keys = lambda: []
@@ -382,11 +390,11 @@ check(main._signal_check() == "" and "Our tested models check every crypto coin 
       in member.get("/signals").get_data(as_text=True), "nothing known: the guide keeps general words, no number")
 _hub._tested_keys = _orig_keys
 
-print("\n[10] Signals page names only the streams that run (no 15-minute stream since engine 5)")
+print("\n[10] Signals page names only the streams that run")
 html = member.get("/signals").get_data(as_text=True)
-check("<title>Trading signals 1h, 4h | Signals FM</title>" in html, "Signals page title: 1h, 4h (it said 15m, 1h, 4h)")
-check('<span id="intro-streams">Separate signal streams for 1-hour and 4-hour candles, for crypto.</span>' in html,
-      "Signals page intro (before its script runs) names the two crypto streams")
+check("<title>Trading signals 15m, 1h, 4h | Signals FM</title>" in html, "Signals page title: the three crypto timeframes")
+check('<span id="intro-streams">Separate signal streams for 15-minute, 1-hour and 4-hour candles, for crypto.</span>' in html,
+      "Signals page intro (before its script runs) names the three crypto streams")
 _orig_info = _hub.stream_info
 _hub.stream_info = lambda: [dict(s, enabled=s["key"] == "crypto_4h") for s in _orig_info()]
 html = member.get("/signals").get_data(as_text=True)

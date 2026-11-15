@@ -2345,15 +2345,17 @@ def _confidence_levels():
         out = {"standard": pct(m.floor), "strong": pct(m.threshold), "max": round(float(m.cal_y[-1]) * 100, 1)}
     except Exception:
         return None
-    # engine 5: 1-hour signals come from their own model file and show their own (higher) confidence, which the
-    # same minimum is compared with, so the form names that range too while the stream runs
+    # engine 5: 1-hour and 15-minute signals come from their own model files and show their own (higher) confidence,
+    # which the same minimum is compared with, so the form names those ranges too while the streams run
     try:
         import signal_hub
         import streams
-        m1 = streams.load_model("crypto_1h") if "crypto_1h" in signal_hub.enabled_streams() else None
-        if m1 is not None:
-            out["streams"] = {"1h": {"min": round(float(m1.calibrate(m1.threshold)) * 100, 1),
-                                     "max": round(float(m1.cal_y[-1]) * 100, 1)}}
+        on = signal_hub.enabled_streams()
+        for tf in ("1h", "15m"):
+            mm = streams.load_model(f"crypto_{tf}") if f"crypto_{tf}" in on else None
+            if mm is not None:
+                out.setdefault("streams", {})[tf] = {"min": round(float(mm.calibrate(mm.threshold)) * 100, 1),
+                                                     "max": round(float(mm.cal_y[-1]) * 100, 1)}
     except Exception:
         pass
     return out

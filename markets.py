@@ -3,7 +3,7 @@ Markets, symbols and forex rules for SignalX - the one place to configure them.
 
 * CRYPTO_COINS / FOREX_PAIRS: every symbol the site knows (charts, pickers).
 * CRYPTO_4H_ONLY: the coins added after the coin test of the 4-hour engine (the name is historical: the engine 5
-  1-hour stream reads 4-hour candles too and covers them as well);
+  1-hour and 15-minute streams read 4-hour candles too and cover them as well);
   stream_coins(market, timeframe) is the list each signal stream scans.
 * FOREX_SIGNAL_PAIRS: the forex symbols that get trade signals. The default is
   the 7 majors, the popular crosses and gold; override it with the env var
@@ -130,14 +130,12 @@ def forex_signal_pairs():
 
 
 def stream_coins(market, tf):
-    """Symbols a signal stream scans. Forex: the forex signal pairs. Crypto 4h and 1h: every coin (both streams read
-    4-hour candles; their models were tested on every coin with enough history). Crypto 15m (no model, switched
-    off): every coin except CRYPTO_4H_ONLY."""
+    """Symbols a signal stream scans. Forex: the forex signal pairs. Crypto: every coin - the 4h, 1h and 15m
+    streams all read 4-hour candles (the 1h and 15m streams the engine 5 4-hour model at every hourly or
+    15-minute close), and that model was trained and tested on every coin with enough history."""
     if market == "forex":
         return forex_signal_pairs()
-    if tf in ("4h", "1h"):
-        return list(CRYPTO_COINS)
-    return [c for c in CRYPTO_COINS if c not in CRYPTO_4H_ONLY]
+    return list(CRYPTO_COINS)
 
 
 def is_forex(symbol):

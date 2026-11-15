@@ -225,8 +225,8 @@ def _performance(ctx):
         mine = (f"This account: {s['closed_count']} closed trades, {s.get('wins', 0)} won, win rate {s.get('win_rate')}%, "
                 f"total {_money(s.get('total_pnl'), True)}.")
     return (mine + "\nIn the tests on data the models never saw (Oct 2025 to Nov 2026), about 3 in 4 signals of the 4-hour "
-            "stream and about 8 in 10 of the 1-hour stream reached their first target: +0.12R and +0.19R per signal on "
-            "average after costs. A full loss (-1R) is bigger than most wins, and there were losing weeks. Past results "
+            "stream and about 8 in 10 of the 1-hour and 15-minute streams reached their first target: +0.12R, +0.19R and "
+            "+0.21R per signal on average after costs. A full loss (-1R) is bigger than most wins, and there were losing weeks. Past results "
             "do not guarantee future results.")
 
 
@@ -353,9 +353,10 @@ Answer the user's question clearly and briefly (usually 2 to 6 short sentences o
 English, even when the question is written in another language (the website is English-only).
 
 What you know about the product:
-- The site gives crypto signals on two tested streams, about 100 coins each: the 4-hour stream (three targets: TP1 at
-  0.5R, TP2 at 1R, TP3 at 2R) and the 1-hour stream (one target at 0.5R; its signals come in bursts). There are no
-  15-minute, forex or gold signals. Every signal has an entry, a stop, its targets, a grade or tier and an expected
+- The site gives crypto signals on three tested streams, about 100 coins each: the 4-hour stream (three targets: TP1
+  at 0.5R, TP2 at 1R, TP3 at 2R), the 1-hour stream (one target at 0.5R; its signals come in bursts) and the 15-minute
+  stream (the 1-hour stream's model read every 15 minutes, only its strongest setups; same one-target plan; often the
+  same trade as a 1-hour signal). There are no forex or gold signals. Every signal has an entry, a stop, its targets, a grade or tier and an expected
   holding time. The test results of each stream are on the Signals page.
 - The bot takes every new site signal that matches the account's settings (markets, timeframes, minimum grade,
   minimum confidence, all symbols or only the ticked ones), at once, with the signal's own stop and targets. It only

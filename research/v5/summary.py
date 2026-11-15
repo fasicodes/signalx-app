@@ -1,6 +1,6 @@
 """models/research.json: what the engine 5 research tested for every stream, what went live and why.
 
-Reads the result files of lab5.py, rolling.py and engine4h.py (work/results/) and the two live model files.
+Reads the result files of lab5.py, rolling.py, rolling15.py and engine4h.py (work/results/) and the live model files.
 The Signals page shows a stream's "reason" when the stream is switched off. Blocks written by other research labs
 (for example "deriv_lab", the futures-positioning test of research/deriv_lab) are kept as they are.
 
@@ -160,6 +160,12 @@ def main():
         streams["crypto_4h"]["also_tested"].append(note)
         streams["crypto_1h"]["also_tested"].append(note)
         streams["crypto_15m"]["variants"].append(note)
+    # the 15-minute stream that went live: the 4-hour model read at every 15-minute close (rolling15.py)
+    roll15 = load("crypto_15m_rolling")
+    p15 = f"{L.APP}/models/crypto_15m.json"
+    if roll15 and roll15.get("passed_test") and os.path.exists(p15):
+        import rolling15
+        streams["crypto_15m"] = rolling15.live_entry(streams["crypto_15m"], roll15, json.load(open(p15)))
     out = {"generated": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "engine": "5.0", "rule": GO_LIVE, "protocol": PROTOCOL,
            "validation_rule": L.RULE_TEXT, "daily_signal_rule": L.DAILY_RULE_TEXT,
            "fixed_before_the_test": load("prereg"), "streams": streams,

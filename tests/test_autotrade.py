@@ -302,7 +302,11 @@ h1 = (cl or {}).get("streams", {}).get("1h")
 check(h1 and 50 < h1["min"] <= h1["max"] < 100 and h1["min"] > cl["strong"], "status also shows the 1-hour stream's confidence range")
 _tpl = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "auto-trading.html"),
             encoding="utf-8").read()
-check('cl.streams && cl.streams["1h"]' in _tpl and "every 1-hour signal" in _tpl, "the settings hint names the 1-hour range")
+h15 = (cl or {}).get("streams", {}).get("15m")
+check(h15 and h15["min"] >= h1["min"] and h15["max"] == h1["max"],
+      "and the 15-minute stream's range (the same model at a stricter level: it starts higher)")
+check("cl.streams" in _tpl and '"15m": "15-minute"' in _tpl and "takes strong 4-hour signals" in _tpl,
+      "the settings hint names the 1-hour and 15-minute ranges")
 
 print("\n[2] connect both accounts")
 saved_key = os.environ.pop("AUTOTRADE_ENCRYPTION_KEY")

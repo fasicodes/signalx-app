@@ -236,7 +236,9 @@
       var c = d.counts || {};
       $("n-all").textContent = d.coins.length; $("n-sig").textContent = (c.buy || 0) + (c.sell || 0);
       $("n-forming").textContent = c.forming || 0; $("n-wait").textContent = c.wait || 0;
-      $("meta").textContent = d.coins.length + " coins · signals from the tested " + (d.timeframes || []).join(" and ") +
+      const tfs = d.timeframes || [];
+      $("meta").textContent = d.coins.length + " coins · signals from the tested " +
+        (tfs.length > 1 ? tfs.slice(0, -1).join(", ") + " and " + tfs[tfs.length - 1] : tfs.join("")) +
         " crypto models · next check " + hhmm(d.next_check);
       render();
     }).catch(function () { $("meta").textContent = "Could not reach the server. It tries again in a minute."; });
