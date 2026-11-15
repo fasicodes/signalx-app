@@ -280,7 +280,9 @@ def _email_html(events, user_id=None):
         f"<td style='padding:6px 10px;color:{'#0f8a50' if e['side'] == 'LONG' else '#d92d47'}'><b>{e['side']}</b></td>"
         f"<td style='padding:6px 10px'>{_fmt(e['entry'], e['symbol'])}</td>"
         f"<td style='padding:6px 10px'>{_fmt(e['stop_loss'], e['symbol'])}</td>"
-        + "".join(f"<td style='padding:6px 10px'>{_fmt(v, e['symbol'])}</td>" for v in tps(e))
+        + "".join(f"<td style='padding:6px 10px'>{_fmt(v, e['symbol'])}</td>" for v in tps(e)[:3])
+        # one-target signals (1-hour stream): fill TP2 / TP3 so every row lines up with the header
+        + "<td style='padding:6px 10px;color:#6f8279'>&ndash;</td>" * max(0, 3 - len(tps(e)))
         + "</tr>"
         for e in events)
     link = f"{base}/signals" if base else "/signals"

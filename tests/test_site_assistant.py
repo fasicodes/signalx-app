@@ -83,6 +83,20 @@ t, d, _ = sse(cl.post("/api/assistant/chat", json={"question": "Explain this sig
 check("EUR/USD 1h LONG grade A" in t, "built-in answer explains the signal on screen")
 t, d, _ = sse(cl.post("/api/assistant/chat", json={"question": "what is the next big news event?"}))
 check("CPI m/m" in t, "built-in answer reads the calendar")
+# engine 5: built-in answers follow the live streams (1-hour signals have one target; no 15-minute or forex signals)
+one = dict(SIG, symbol="SOL/USDT", targets=[151.2])
+a = sa.builtin_answer("Explain this signal", {"viewing_signal": one})
+check("whole position closes at the target" in a and "a third" not in a, "built-in: a one-target signal gets the one-target plan")
+a = sa.builtin_answer("Explain this signal", {"viewing_signal": SIG})
+check("a third closes at each target" in a and "after TP2 to TP1" in a, "built-in: a three-target signal keeps the three-target plan")
+a = sa.builtin_answer("which timeframes do you have?", {})
+check("no 15-minute or forex signals" in a and "streams for 15-minute" not in a, "built-in: timeframes answer names the two live streams")
+a = sa.builtin_answer("how do I use a signal", {})
+check("1-hour signals have one target" in a and "close a third" in a, "built-in: how-to covers both plans")
+a = sa.builtin_answer("what do the grades mean?", {})
+check("filter the Signals page" not in a and "Signal strength" in a, "built-in: grades answer points to the bot setting that exists")
+a = sa.builtin_answer("are there forex signals for pips?", {})
+check("no forex signals" in a and "forex signals close before the weekend" not in a, "built-in: forex answer says there are no forex signals")
 
 
 # ---- with an AI key: streaming from the fake API

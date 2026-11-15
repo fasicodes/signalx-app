@@ -50,9 +50,11 @@
   .lp .ex-plan dt { color: var(--ds-text-dim); font-size: 14.5px; }
   .lp .ex-plan dt small { display: block; color: var(--ds-text-faint); font-size: 12.5px; }
   .lp .ex-plan dd { margin: 0; font: 650 17px var(--ds-font-body); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .lp .ex-bar { position: relative; height: 8px; border-radius: 999px; margin: 20px 0 8px; background: linear-gradient(90deg, var(--ds-down) 0 50%, var(--ds-up) 50% 100%); opacity: .9; }
-  .lp .ex-bar i { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--ds-surface); border: 3px solid var(--ds-text); transform: translate(-50%, -50%); }
-  .lp .ex-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--ds-text-faint); }
+  /* the example's target is half as far as the stop, so the entry sits two thirds of the way from the stop to the target */
+  .lp .ex-bar { position: relative; height: 8px; border-radius: 999px; margin: 20px 0 8px; background: linear-gradient(90deg, var(--ds-down) 0 66.7%, var(--ds-up) 66.7% 100%); opacity: .9; }
+  .lp .ex-bar i { position: absolute; top: 50%; left: 66.7%; width: 16px; height: 16px; border-radius: 50%; background: var(--ds-surface); border: 3px solid var(--ds-text); transform: translate(-50%, -50%); }
+  .lp .ex-scale { position: relative; display: flex; justify-content: space-between; font-size: 12px; color: var(--ds-text-faint); }
+  .lp .ex-scale span:nth-child(2) { position: absolute; left: 66.7%; transform: translateX(-50%); }
   .lp .ex-plain { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--ds-surface-2); color: var(--ds-text-dim); font-size: 14px; line-height: 1.55; }
   .lp .ex-chip { position: absolute; display: flex; align-items: center; gap: 9px; padding: 9px 13px; border-radius: 13px; background: var(--ds-surface);
     border: 1px solid var(--ds-line); box-shadow: var(--ds-shadow-2); font-size: 13.5px; color: var(--ds-text-dim); white-space: nowrap; }
@@ -284,7 +286,7 @@
           <a class="pbtn xl" href="#how">How it works</a>
         </div>
         <ul class="facts">
-          {% if WIN %}<li><b data-ds-count>{{ WIN }}%</b><span>reached the target in testing</span></li>{% endif %}
+          {% if WIN %}<li><b data-ds-count>{{ WIN }}%</b><span>reached the first target in testing</span></li>{% endif %}
           {% if PERDAY %}<li><b>{{ PERDAY }} a day</b><span>signals on average</span></li>{% endif %}
           <li><b>Fees</b><span>included in every result</span></li>
         </ul>
@@ -293,16 +295,16 @@
       <figure class="ex">
         <div class="ex-card">
           <div class="ex-top"><span class="ex-tag">Example</span><span class="side buy">BUY</span></div>
-          <p class="ex-coin"><b>BTC</b><span>4h signal &middot; started 20 min ago</span></p>
+          <p class="ex-coin"><b>BTC</b><span>1h signal &middot; started 20 min ago</span></p>
           <dl class="ex-plan">
             <div><dt>Buy near</dt><dd>67,250</dd></div>
             <div><dt>Stop-loss<small>exit here if it goes wrong</small></dt><dd class="neg">65,790</dd></div>
-            <div><dt>Target<small>as far above your entry as the stop is below it</small></dt><dd class="pos">68,710</dd></div>
+            <div><dt>Target<small>half as far above your entry as the stop is below it</small></dt><dd class="pos">67,980</dd></div>
           </dl>
           <div class="ex-bar" aria-hidden="true"><i></i></div>
           <div class="ex-scale" aria-hidden="true"><span>Stop-loss</span><span>Entry</span><span>Target</span></div>
-          <p class="ex-plain">Buy BTC near 67,250. If the price falls to 65,790, close the trade. If it rises to 68,710, take your profit.
-            Risk only 1% of your account.</p>
+          <p class="ex-plain">Buy BTC near 67,250. If the price falls to 65,790, close the trade. If it rises to 67,980, close the whole
+            trade and take your profit. Risk only 1% of your account.</p>
         </div>
         <div class="ex-chip c1" aria-hidden="true"><b>ETH</b><span class="st close">Getting close</span></div>
         <div class="ex-chip c2" aria-hidden="true"><b>SOL</b><span class="st wait">Wait</span></div>
@@ -367,9 +369,9 @@
         <article class="chap" data-ch="4">
           <p class="fx-eyebrow">Chapter 05 &middot; The truth</p>
           <h2>It loses too. We show every one.</h2>
-          <p>{% if WIN %}In testing, {{ WIN }}% of signals reached the target and the rest hit the stop.{% else %}Some signals hit the stop.{% endif %}
+          <p>{% if WIN %}In testing, {{ WIN }}% of signals reached their first target and most of the rest hit the stop.{% else %}Some signals hit the stop.{% endif %}
             Fees are included in every result, and every signal stays on the track record, wins and losses.</p>
-          <div class="ctas" style="margin:22px 0 0"><a class="pbtn primary xl" href="/login">Meet the agents</a><a class="pbtn xl" href="/track-record">See the track record</a></div>
+          <div class="ctas" style="margin:22px 0 0"><a class="pbtn primary xl" href="/login">Meet the agents</a>{% if track_record_public %}<a class="pbtn xl" href="/track-record">See the track record</a>{% endif %}</div>
         </article>
       </div>
     </div>

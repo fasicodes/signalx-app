@@ -176,25 +176,29 @@ def context_text(ctx):
 # built-in answers (no AI key, AI busy or failed)
 # ---------------------------------------------------------------------------
 SITE_FAQ = [
-    (r"\b(grade|grades|a b c)\b", "Every signal has a grade. A means the most confirming factors and the highest model score, "
-                                  "B is solid, C meets the minimum. You can filter the Signals page by grade, and the bot can be "
-                                  "set to take only A, A and B, or all grades."),
+    (r"\b(grade|grades|a b c)\b", "Every signal has a grade from its model's score: A for the strongest signals, B for strong "
+                                  "ones, C for the rest. The auto-trade bot's \"Signal strength\" setting can take only A, A and "
+                                  "B, or all signals. A grade is not a promise: signals of every grade hit the stop sometimes."),
     (r"\b(how|what).*(use|read|follow|trade).*signal|\bsignal\b.*\b(mean|work)",
-     "How to use a signal: enter near the entry price, put the stop loss where the signal says, and close a third of the "
-     "position at each target (TP1, TP2, TP3). After TP1 move the stop to the entry, after TP2 to TP1. If nothing is reached "
-     "before the time limit, close the rest. Size the trade so that hitting the stop loses only a small part of your account "
-     "(for example 0.5-1%)."),
-    (r"\b(15m|1h|4h|timeframe|time frame)\b", "The site has separate signal streams for 15-minute, 1-hour and 4-hour candles. "
-                                               "Shorter timeframes give more signals with smaller moves and shorter holding times; "
-                                               "4-hour signals move further and are held for days. Each stream has its own results."),
+     "How to use a signal: enter near the entry price and put the stop loss where the signal says. 4-hour signals have three "
+     "targets: close a third of the position at each (TP1, TP2, TP3); after TP1 move the stop to the entry, after TP2 to TP1. "
+     "1-hour signals have one target: close the whole position there. If the time limit (9 days) ends first, close what is "
+     "left. Size the trade so that hitting the stop loses only a small part of your account (for example 0.5-1%)."),
+    (r"\b(15m|1h|4h|15[ -]?min(ute)?s?|time ?frames?)\b", "Signals come from two crypto streams. The 4-hour stream reads every coin at each "
+                                               "4-hour close; its signals have three targets and are held for days. The 1-hour "
+                                               "stream reads the same coins at every hourly close; its signals have one target "
+                                               "at half the stop distance (in the tests half of them finished within about 14 "
+                                               "hours) and come in bursts. There are no 15-minute or forex signals: nothing tested "
+                                               "for them made money after costs on data it had never seen. Each stream shows its "
+                                               "own results on the Signals page."),
     (r"\b(win rate|accuracy|results?|track record|performance)\b",
      "Win rate counts signals that reached at least TP1. The Signals page shows, per market and timeframe, the live record "
      "from real closed signals (all time, 30 days, 7 days, with the sample size) and, separately, the backtest on data the "
      "model never saw. Past results do not guarantee future results."),
     (r"\b(news|calendar|nfp|cpi|fomc|interest rate|central bank)\b",
      "The News page has the economic calendar (time, currency, impact, actual / forecast / previous) and a news feed. "
-     "High-impact releases can move prices sharply; forex signals for that currency are paused from 30 minutes before to "
-     "15 minutes after them."),
+     "High-impact releases can move prices sharply: a signal shows a warning when a high-impact US event is due in the "
+     "next hours."),
     (r"\b(bot|auto.?trade|autotrade)\b",
      "The auto-trade bot copies the site's signals onto the account you connect (Site demo with virtual money, Binance, or "
      "OANDA for forex). Choose markets, timeframes, minimum grade, risk % per trade, max open trades and the daily loss limit, "
@@ -205,7 +209,8 @@ SITE_FAQ = [
     (r"\b(forex|pip|pips|spread|session)\b",
      "Forex prices move in pips (0.0001 for most pairs, 0.01 for JPY pairs, 0.1 for gold here). The spread is the cost of "
      "every trade. The London and New York sessions are the most active; the market is closed from Friday 17:00 to Sunday "
-     "17:00 New York time, so forex signals close before the weekend."),
+     "17:00 New York time. The site has forex and gold charts, market briefs and the calendar, but no forex signals: no "
+     "forex model passed our test on data it had never seen."),
 ]
 
 
@@ -221,8 +226,9 @@ def builtin_answer(question, ctx):
     q = _norm(question).lower()
     if re.search(r"\b(this|the) signal\b|explain (it|this)", q) and ctx.get("viewing_signal"):
         s = ctx["viewing_signal"]
-        return ("This signal: " + _sig_line(s) + ". Follow the plan: a third closes at each target, after TP1 the stop moves to "
-                "the entry. This is information, not advice.")
+        plan = ("a third closes at each target, after TP1 the stop moves to the entry, after TP2 to TP1"
+                if len(s.get("targets") or []) > 1 else "the whole position closes at the target and the stop does not move")
+        return "This signal: " + _sig_line(s) + f". Follow the plan: {plan}. This is information, not advice."
     if re.search(r"\b(latest|active|current|new|today'?s?)\b.*\bsignals?\b", q) and ctx.get("active_signals"):
         return "Newest active signals:\n" + "\n".join("- " + _sig_line(s) for s in ctx["active_signals"][:5])
     if re.search(r"\b(next|upcoming)\b.*\b(news|event|release|calendar)\b", q) and ctx.get("next_events"):

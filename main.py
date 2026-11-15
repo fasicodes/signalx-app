@@ -2159,9 +2159,9 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
 
         "engine": engine,
         "engine_test": signal_engine.test_stats(),
-        "disclaimer": ("Not financial advice. The verdict comes from signal engine v3 (4-hour candles); "
-                        "confidence is how often similar setups reached target 1 before the stop, measured on data "
-                        "the model never saw, after fees. All other panels are display-only."),
+        "disclaimer": (f"Not financial advice. The verdict comes from signal engine v{signal_engine.ENGINE_VERSION} "
+                        "(4-hour candles); confidence is how often similar setups reached target 1 before the stop, "
+                        "measured on data the model never saw, after fees. All other panels are display-only."),
     }
     result.update(volatility_data)
     return result
@@ -2266,6 +2266,7 @@ def advanced_dashboard():
         user_avatar=session.get("avatar_url"),
         coins=AVAILABLE_COINS,
         forex_pairs=FOREX_PAIRS,
+        engine_version=signal_engine.ENGINE_VERSION,
     )
 
 
@@ -2969,6 +2970,26 @@ limiter.limit("60 per minute")(strategies_bp)
 init_strategies(app, get_candles=lambda **kw: _stream_candles(**kw), is_admin=lambda: _is_admin())
 
 
+def _signal_check():
+    """What the tested crypto models check, in the landing page's words ("102 crypto coins every hour and every 4
+    hours"), for the app guide. Built from the streams that run, so the guide cannot go stale when a stream or the
+    coin list changes. Empty when unknown (the guide then keeps its own wording)."""
+    try:
+        tfs = [k.split("_", 1)[1] for k in signal_hub._tested_keys() if k.startswith("crypto_")]
+        n = {tf: len(_markets.stream_coins("crypto", tf)) for tf in ("1h", "4h") if tf in tfs}
+    except Exception:
+        return ""
+    if "1h" in n and "4h" in n:
+        if n["1h"] == n["4h"]:
+            return f"{n['4h']} crypto coins every hour and every 4 hours"
+        return f"{n['4h']} crypto coins every 4 hours, and {n['1h']} of them every hour too"
+    if "4h" in n:
+        return f"{n['4h']} crypto coins every 4 hours"
+    if "1h" in n:
+        return f"{n['1h']} crypto coins every hour"
+    return ""
+
+
 def _site_globals():
     ga = (os.environ.get("GA_MEASUREMENT_ID") or "").strip()
     email = (os.environ.get("SUPPORT_EMAIL") or "").strip()
@@ -2980,6 +3001,7 @@ def _site_globals():
         "site_url": site if _re.fullmatch(r"https?://[A-Za-z0-9.\-:]+", site) else "",
         "current_year": _dt.utcnow().year,
         "is_admin": _is_admin(),
+        "signal_check": _signal_check(),
     }
 
 

@@ -366,6 +366,48 @@ nav = member.get("/signals").get_data(as_text=True)
 check('href="/strategies"' in nav, "the app menu links to Strategies")
 check(guest.post("/api/strategies/community", data={"title": "x"}).status_code == 401, "sharing a strategy needs a login")
 
+print("\n[9] the app guide names the coins the running streams check (it said '62 of them every hour' after engine 5)")
+import markets as _mk  # noqa: E402
+import signal_hub as _hub  # noqa: E402
+n_all = len(_mk.CRYPTO_COINS)
+check(main._signal_check() == f"{n_all} crypto coins every hour and every 4 hours", "both crypto streams run: every coin, both timeframes")
+guide = member.get("/signals").get_data(as_text=True)
+check(f"Our tested models check {n_all} crypto coins every hour and every 4 hours." in guide and "62 of them" not in guide,
+      "the guide on the app pages uses it")
+_orig_keys = _hub._tested_keys
+_hub._tested_keys = lambda: ["crypto_4h"]
+check(main._signal_check() == f"{n_all} crypto coins every 4 hours", "only the 4-hour stream: says so")
+_hub._tested_keys = lambda: []
+check(main._signal_check() == "" and "Our tested models check every crypto coin at each candle close."
+      in member.get("/signals").get_data(as_text=True), "nothing known: the guide keeps general words, no number")
+_hub._tested_keys = _orig_keys
+
+print("\n[10] Signals page names only the streams that run (no 15-minute stream since engine 5)")
+html = member.get("/signals").get_data(as_text=True)
+check("<title>Trading signals 1h, 4h | Signals FM</title>" in html, "Signals page title: 1h, 4h (it said 15m, 1h, 4h)")
+check('<span id="intro-streams">Separate signal streams for 1-hour and 4-hour candles, for crypto.</span>' in html,
+      "Signals page intro (before its script runs) names the two crypto streams")
+_orig_info = _hub.stream_info
+_hub.stream_info = lambda: [dict(s, enabled=s["key"] == "crypto_4h") for s in _orig_info()]
+html = member.get("/signals").get_data(as_text=True)
+check("<title>Trading signals 4h | Signals FM</title>" in html and "for 4-hour candles, for crypto.</span>" in html,
+      "only the 4-hour stream on: title and intro follow")
+_hub.stream_info = _orig_info
+
+print("\n[10b] the Pro terminal names the engine version that runs (it said 'signal engine v3' after engine 5)")
+import signal_engine as _se  # noqa: E402
+adv = member.get("/advanced").get_data(as_text=True)
+check(f"Signal engine v{_se.ENGINE_VERSION}:" in adv and f"signal engine v{_se.ENGINE_VERSION} (4-hour candles)" in adv
+      and "engine v3" not in adv, "/advanced: engine note and disclaimer show the running version")
+js = open(os.path.join(ROOT, "static", "script.js"), encoding="utf-8").read()
+check('"signal engine v3' not in js and "eng.engine_version" in js, "Pro terminal card label comes from the engine's version")
+
+print("\n[11] while the track record is private, visitors get no link to it (it would only open the login page)")
+for path in ("/about", "/risk-disclosure"):
+    g, m = guest.get(path).get_data(as_text=True), member.get(path).get_data(as_text=True)
+    check("track record" in g and 'href="/track-record"' not in g, f"{path}: visitors read 'track record' without a link")
+    check('href="/track-record"' in m, f"{path}: members get the link")
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)

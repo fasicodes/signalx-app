@@ -1030,7 +1030,15 @@
           + (untested.length ? ` Experimental (not passed our test yet): ${untested.map(nm).join(", ")}. Demo accounts copy them; live accounts copy only the tested streams.` : "")
         : "";
       const cl = d.options.confidence;
-      if (cl) $("s-conf-hint").textContent = `Signals show about ${Math.floor(cl.standard)}–${Math.floor(cl.max)}%. ${Math.floor(cl.standard)}% or lower takes every signal; ${Math.floor(cl.strong)}% takes strong signals only.`;
+      if (cl) {
+        const f = Math.floor, h1 = cl.streams && cl.streams["1h"];
+        // the 1-hour stream (engine 5) has its own, higher confidence range: say which signals each minimum takes
+        $("s-conf-hint").textContent = h1
+          ? `4-hour signals show about ${f(cl.standard)}–${f(cl.max)}% (strong ones ${f(cl.strong)}% or more), 1-hour signals about `
+            + `${f(h1.min)}–${f(h1.max)}%. ${f(cl.standard)}% or lower takes every signal; ${f(cl.strong)}% takes strong 4-hour signals`
+            + (h1.min >= f(cl.strong) ? " and every 1-hour signal." : ` and 1-hour signals from ${f(cl.strong)}%.`)
+          : `Signals show about ${f(cl.standard)}–${f(cl.max)}%. ${f(cl.standard)}% or lower takes every signal; ${f(cl.strong)}% takes strong signals only.`;
+      }
       renderStatus();
       if (first) renderCoins();
       else announceNewTrades(prevLast);

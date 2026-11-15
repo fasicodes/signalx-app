@@ -214,6 +214,25 @@ check([e["currency"] for e in d["events"]] == ["EUR"], "calendar currency filter
 check(cl.get("/api/calendar?from=2026-01-01&to=2026-06-01").status_code == 400, "calendar range limited to 31 days")
 r = cl.get("/news")
 check(r.status_code == 200 and "Economic calendar" in r.get_data(as_text=True), "news page renders for visitors")
+# the page names a news pause only when a running stream really pauses (engine 5: crypto only, no crypto blackout)
+import signal_hub  # noqa: E402
+page = r.get_data(as_text=True)
+check(news.paused_markets() == [] and "paused" not in page and 'id="bo-before"' not in page
+      and "check the calendar before you trade" in page, "crypto streams without NEWS_BLACKOUT_CRYPTO: no pause is promised")
+signal_hub._FORCE_STREAMS = ["crypto_1h", "forex_1h"]
+page = cl.get("/news").get_data(as_text=True)
+check(news.paused_markets() == ["forex"] and "Forex signals are paused for a currency" in page and 'id="bo-before"' in page,
+      "a forex stream runs: the forex pause and its minutes are shown")
+signal_hub._FORCE_STREAMS = ["crypto_1h"]
+os.environ["NEWS_BLACKOUT_CRYPTO"] = "on"
+page = cl.get("/news").get_data(as_text=True)
+check(news.paused_markets() == ["crypto"] and "Crypto signals are paused around high-impact US releases" in page,
+      "NEWS_BLACKOUT_CRYPTO=on: the crypto pause is shown")
+os.environ.pop("NEWS_BLACKOUT_CRYPTO", None)
+signal_hub._FORCE_STREAMS = None
+# calendar values: actual, forecast and previous all get the unit, never twice ("3.1%%" before)
+check("calVal(e.actual, e.unit)" in page and "calVal(e.forecast, e.unit)" in page and "calVal(e.previous, e.unit)" in page,
+      "calendar cells use one unit helper for all three values")
 
 # ---- admin
 check(cl.post("/api/admin/articles", json={}).status_code == 401, "admin API needs a login")

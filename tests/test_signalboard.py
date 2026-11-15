@@ -235,6 +235,14 @@ row = q.fetchone()
 check(r.status_code == 200 and b"Email alerts are off" in r.data and row["email"] == 0 and row["enabled"] == 1,
       "no login needed: email off, bell alerts kept")
 check(cl.get("/signals/unsubscribe?t=bad").status_code == 400, "bad link -> clear message")
+# a 1-hour signal has one target: its row still has a cell under TP2 and TP3, like the 4-hour rows
+html = sb._email_html([{"symbol": "A/USDT", "timeframe": "1h", "side": "LONG", "entry": 1, "stop_loss": 0.9, "take_profit": 1.05,
+                        "targets": [1.05]},
+                       {"symbol": "B/USDT", "timeframe": "4h", "side": "SHORT", "entry": 2, "stop_loss": 2.2, "take_profit": 1.6,
+                        "targets": [1.9, 1.8, 1.6]}], user_id=1)
+rows = _re.findall(r"<tr><td.*?</tr>", html, _re.S)
+check(len(rows) == 2 and all(r.count("<td") == 8 for r in rows) and rows[0].count("&ndash;") == 2 and "&ndash;" not in rows[1],
+      "email: one-target rows fill TP2 / TP3 with a dash, every row has 8 cells")
 
 print("\n[landing summary]")
 from datetime import datetime as _D, timedelta as _T

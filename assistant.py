@@ -262,7 +262,7 @@ def _coin_answer(ctx):
     sg = c.get("signal")
     if sg:
         verdict = sg.get("verdict")
-        txt = f"Signal engine v3: {verdict}"
+        txt = f"4-hour signal engine: {verdict}"
         if sg.get("confidence") is not None:
             txt += f", {round(sg['confidence'])}% confidence"
         if verdict == "WAIT" and sg.get("active_side"):

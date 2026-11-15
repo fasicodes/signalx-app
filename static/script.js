@@ -640,7 +640,7 @@ function renderTier1(data) {
   const prog = eng.progress || null;
 
   cards.push(channelCard({
-    id: 1, title: "Win Probability", model: "signal engine v3 · 4h",
+    id: 1, title: "Win Probability", model: `signal engine${eng.engine_version ? " v" + eng.engine_version : ""} · 4h`,
     span2: true,
     body: eng.error ? `<div class="channel-detail">${escapeHtml(eng.error)}</div>` : `
       <div class="dual-split">

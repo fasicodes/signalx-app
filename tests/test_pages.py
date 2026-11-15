@@ -228,7 +228,8 @@ print("\n[6] app pages: shell, ? tips, guide, Telegram block")
 login()
 st, html = get("/dash")
 check(st == 200 and 'class="app an-shell"' in html and 'id="an-guide"' in html and "data-auto" in html, "dashboard: shell + welcome guide (auto on home)")
-check('data-tip="unseen_data"' in html and "/static/shell.css" in html and "/static/shell.js" in html, "dashboard: ? tip + shell files")
+check("/static/shell.css" in html and "/static/shell.js" in html and 'data-tip="' in open(os.path.join(ROOT, "static", "app.js")).read(),
+      "dashboard: shell files; the ? tips are drawn by app.js")
 check('href="/about" class="an-item"' in html and 'href="/faq" class="an-item"' in html and "/advanced#about" not in html,
       "menu links go to the new About/FAQ pages")
 check(html.count("data-guide-open") >= 2, "guide can be reopened from the menu and the account popover")

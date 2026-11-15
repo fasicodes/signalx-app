@@ -1,7 +1,8 @@
 """models/research.json: what the engine 5 research tested for every stream, what went live and why.
 
 Reads the result files of lab5.py, rolling.py and engine4h.py (work/results/) and the two live model files.
-The Signals page shows a stream's "reason" when the stream is switched off.
+The Signals page shows a stream's "reason" when the stream is switched off. Blocks written by other research labs
+(for example "deriv_lab", the futures-positioning test of research/deriv_lab) are kept as they are.
 
   python summary.py
 """
@@ -17,6 +18,7 @@ from lab5 import ST, W  # noqa: E402
 
 KEEP = ("period", "signals", "signals_per_day", "days_with_signal_pct", "win_rate", "stop_rate", "avg_net_r",
         "total_net_r", "profit_factor", "max_drawdown_r", "sharpe_daily", "avg_stop_pct", "years", "folds")
+OTHER_LABS = ("deriv_lab",)      # top-level blocks of models/research.json that belong to other research labs
 GO_LIVE = ("A stream goes live only when its one test on data it never saw has at least 50 signals, earns at least "
            "+0.05R per signal after real costs, has a profit factor of at least 1.1 and a drawdown smaller than half "
            "of its total result, and at least 70% of its signals reach their first target.")
@@ -115,7 +117,9 @@ def main():
                    f"{r(c15['walk_forward']['avg_net_r'])} per signal) but not its one test on data it never saw "
                    f"({c15['test']['period']}): {c15['test']['signals']} signals, {pct(c15['test']['win_rate'])} wins, "
                    f"{r(c15['test']['avg_net_r'])} per signal after costs, with heavy losses in the crash of October 2025. "
-                   "A daily signal for quiet days lost money on the validation years too. A 15-minute stream comes back "
+                   "A daily signal for quiet days lost money on the validation years too. Binance futures positioning "
+                   "(funding rate, open interest, long/short ratios; 40 coins) was tested as well in Nov 2026: no "
+                   "15-minute version passed the validation years (research/deriv_lab). A 15-minute stream comes back "
                    "only when a model for it passes the same test."),
         "variants": [
             {"label": f"15-minute model, stop 6 ATR ({setting(c15)})", "validation_period": "2023-01 to 2025-09",
@@ -144,13 +148,25 @@ def main():
                                                              "profit_factor")}, "holdout": None, "passed": False}],
         }
 
+    path = f"{L.APP}/models/research.json"
+    try:
+        kept = {k: v for k, v in json.load(open(path)).items() if k in OTHER_LABS}
+    except (OSError, ValueError):
+        kept = {}
+    dl = kept.get("deriv_lab") or {}
+    if dl.get("summary"):
+        note = {"label": "Binance futures positioning (research/deriv_lab)", "result": dl.get("result"),
+                "summary": dl["summary"], "passed": False}
+        streams["crypto_4h"]["also_tested"].append(note)
+        streams["crypto_1h"]["also_tested"].append(note)
+        streams["crypto_15m"]["variants"].append(note)
     out = {"generated": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "engine": "5.0", "rule": GO_LIVE, "protocol": PROTOCOL,
            "validation_rule": L.RULE_TEXT, "daily_signal_rule": L.DAILY_RULE_TEXT,
            "fixed_before_the_test": load("prereg"), "streams": streams,
            "live_check": ("The site's engine was run on the research candles at 14 moments of the unseen period: all "
                           "1,190 signals of the compared candles were the research's signals, with the same side, entry "
                           "and stop (research/v5/live_check.py).")}
-    path = f"{L.APP}/models/research.json"
+    out.update(kept)
     json.dump(out, open(path, "w"), indent=1)
     for k, v in streams.items():
         print(k, "LIVE" if v["live"] else "OFF", "-", v["reason"][:400])

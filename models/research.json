@@ -256,12 +256,14 @@
       }
      },
      "passed": true
+    },
+    {
+     "label": "Binance futures positioning (research/deriv_lab)",
+     "result": "failed",
+     "summary": "Futures positioning (funding, open interest, long/short ratios, premium) on 40 coins, 15m / 1h / 4h. Only the 4-hour squeeze breakout passed the validation years (+0.12R per signal 2022-2024); on 2025-2026, data it never saw, it earned +0.00R per signal over 1,152 signals, so nothing went live.",
+     "passed": false
     }
    ]
-  "crypto_15m": {
-   "live": false,
-   "chosen": null,
-   "reason": "Switched off (Nov 2026). Costs are too large for 15-minute trades (about 0.4R per trade). 47 strategies from public GitHub repositories, the signal logic of the most popular open-source trading bots (freqtrade, gekko, jesse, zenbot, OctoBot, Crypto-Signal, intelligent-trading-bot and others) and combinations of the best ones were tested with real costs; none made money on data it had never seen (research/repo_lab). Binance futures positioning (funding rate, open interest, long/short ratios; 40 coins) was tested as well in Nov 2026: no 15-minute version passed the validation years (research/deriv_lab)."
   },
   "crypto_1h": {
    "live": true,
@@ -515,13 +517,19 @@
       }
      ],
      "passed": false
+    },
+    {
+     "label": "Binance futures positioning (research/deriv_lab)",
+     "result": "failed",
+     "summary": "Futures positioning (funding, open interest, long/short ratios, premium) on 40 coins, 15m / 1h / 4h. Only the 4-hour squeeze breakout passed the validation years (+0.12R per signal 2022-2024); on 2025-2026, data it never saw, it earned +0.00R per signal over 1,152 signals, so nothing went live.",
+     "passed": false
     }
    ]
   },
   "crypto_15m": {
    "live": false,
    "chosen": null,
-   "reason": "Switched off. A 15-minute model with a stop wide enough for the costs (6 ATR; one target at 0.5R, score in the model's top 0.5%, own cost at most 0.07R) passed the validation years 2023-2025 (77.7% wins, +0.13R per signal) but not its one test on data it never saw (2025-10-01 to 2026-11-08): 284 signals, 69.4% wins, +0.01R per signal after costs, with heavy losses in the crash of October 2025. A daily signal for quiet days lost money on the validation years too. A 15-minute stream comes back only when a model for it passes the same test.",
+   "reason": "Switched off. A 15-minute model with a stop wide enough for the costs (6 ATR; one target at 0.5R, score in the model's top 0.5%, own cost at most 0.07R) passed the validation years 2023-2025 (77.7% wins, +0.13R per signal) but not its one test on data it never saw (2025-10-01 to 2026-11-08): 284 signals, 69.4% wins, +0.01R per signal after costs, with heavy losses in the crash of October 2025. A daily signal for quiet days lost money on the validation years too. Binance futures positioning (funding rate, open interest, long/short ratios; 40 coins) was tested as well in Nov 2026: no 15-minute version passed the validation years (research/deriv_lab). A 15-minute stream comes back only when a model for it passes the same test.",
    "variants": [
     {
      "label": "15-minute model, stop 6 ATR (one target at 0.5R, score in the model's top 0.5%, own cost at most 0.07R)",
@@ -652,9 +660,14 @@
       }
      ],
      "passed": false
+    },
+    {
+     "label": "Binance futures positioning (research/deriv_lab)",
+     "result": "failed",
+     "summary": "Futures positioning (funding, open interest, long/short ratios, premium) on 40 coins, 15m / 1h / 4h. Only the 4-hour squeeze breakout passed the validation years (+0.12R per signal 2022-2024); on 2025-2026, data it never saw, it earned +0.00R per signal over 1,152 signals, so nothing went live.",
+     "passed": false
     }
    ]
-   "reason": "Switched off (Nov 2026). The old 1-hour model fell below zero once real costs (0.30%) were counted. 47 strategies from public GitHub repositories, the signal logic of the most popular open-source trading bots (freqtrade, gekko, jesse, zenbot, OctoBot, Crypto-Signal, intelligent-trading-bot and others) and combinations of the best ones were tested with real costs; none made money on data it had never seen (research/repo_lab). Binance futures positioning (funding rate, open interest, long/short ratios; 40 coins) was tested as well in Nov 2026: no 1-hour version passed the validation years (research/deriv_lab)."
   },
   "forex_15m": {
    "live": false,
@@ -720,8 +733,7 @@
    ]
   }
  },
- "live_check": "The site's engine was run on the research candles at 14 moments of the unseen period: all 1,190 signals of the compared candles were the research's signals, with the same side, entry and stop (research/v5/live_check.py)."
-}
+ "live_check": "The site's engine was run on the research candles at 14 moments of the unseen period: all 1,190 signals of the compared candles were the research's signals, with the same side, entry and stop (research/v5/live_check.py).",
  "deriv_lab": {
   "tested": "2026-11-06",
   "result": "failed",

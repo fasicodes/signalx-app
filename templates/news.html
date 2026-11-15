@@ -59,8 +59,12 @@
 {% block content %}
 <div class="phead">
   <h1>News and economic calendar</h1>
+  {% set P = pauses or [] %}
   <p>Upcoming economic releases with their expected impact, and the latest forex, crypto, commodities and economy news.
-    Forex signals are paused for a currency around its high-impact releases.</p>
+    {% if 'forex' in P and 'crypto' in P %}New signals are paused around high-impact releases: forex for the pair's currencies, crypto for US releases.
+    {% elif 'forex' in P %}Forex signals are paused for a currency around its high-impact releases.
+    {% elif 'crypto' in P %}Crypto signals are paused around high-impact US releases.
+    {% else %}High-impact releases can move prices sharply, so check the calendar before you trade.{% endif %}</p>
 </div>
 
 <div class="nw-tabs" role="tablist" aria-label="Section">
@@ -96,8 +100,8 @@
   <div id="cal-state" class="state">Loading the calendar…</div>
   <div id="cal"></div>
   <p class="small-note">Times update every minute. Values come from the site's licensed data provider; "Actual" fills in after the release.
-    Signals for a currency are paused from <span id="bo-before">30</span> minutes before to <span id="bo-after">15</span> minutes after
-    its high-impact events.</p>
+    {% if P %}Signals for a currency are paused from <span id="bo-before">30</span> minutes before to <span id="bo-after">15</span> minutes after
+    its high-impact events.{% endif %}</p>
 </section>
 
 <section id="sec-news" role="tabpanel" aria-labelledby="tab-news" hidden>
@@ -130,6 +134,13 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // calendar value with its unit: the same for actual, forecast and previous, and never twice when the provider
+  // already wrote it into the value ("3.1%" with unit "%")
+  const calVal = (v, unit) => {
+    if (v == null || v === "") return "–";
+    const s = String(v), u = String(unit || "").trim();
+    return u && !s.toLowerCase().endsWith(u.toLowerCase()) ? s + u : s;
+  };
   const ZONES = ["UTC", "Europe/London", "Europe/Berlin", "America/New_York", "America/Chicago", "America/Los_Angeles",
     "Asia/Karachi", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney"];
   let tz = "UTC";
@@ -180,9 +191,9 @@
           <td class="c"><span class="ccy">${esc(e.currency || e.country || "")}</span></td>
           <td class="i"><span class="imp ${esc(e.impact)}" title="${esc(e.impact)} impact" aria-label="${esc(e.impact)} impact"></span></td>
           <td class="e">${esc(e.title)}</td>
-          <td class="v num" data-l="Actual">${esc(e.actual ?? "–")}${e.actual != null && e.unit ? esc(e.unit) : ""}</td>
-          <td class="v num" data-l="Forecast">${esc(e.forecast ?? "–")}</td>
-          <td class="v num" data-l="Previous">${esc(e.previous ?? "–")}</td></tr>`;
+          <td class="v num" data-l="Actual">${esc(calVal(e.actual, e.unit))}</td>
+          <td class="v num" data-l="Forecast">${esc(calVal(e.forecast, e.unit))}</td>
+          <td class="v num" data-l="Previous">${esc(calVal(e.previous, e.unit))}</td></tr>`;
       });
       html += "</tbody></table></div>";
     });
@@ -205,7 +216,7 @@
       const d = await r.json();
       if (!r.ok || !d.ok) throw new Error(d.error || "failed");
       EVENTS = d.events; NEXT = d.next_high;
-      if (d.blackout) { $("bo-before").textContent = d.blackout.before_min; $("bo-after").textContent = d.blackout.after_min; }
+      if (d.blackout && $("bo-before")) { $("bo-before").textContent = d.blackout.before_min; $("bo-after").textContent = d.blackout.after_min; }
       renderCal(); countdown();
       const shown = $("cal").innerHTML !== "";
       $("cal-state").hidden = shown;
