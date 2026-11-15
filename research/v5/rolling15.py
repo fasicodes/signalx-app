@@ -20,10 +20,22 @@ The holdout period was already used once for a 15-minute stream (the separate 15
 this is the second 15-minute variant scored on it; models/research.json must say so. The 4h model it reads, and the
 1-hour reading of it, were tested on the same period and passed.
 
+Amendment, 15 Nov 2026, made after the validation result above and BEFORE the holdout was opened: the pre-registered
+setting passed the validation rule (11,526 signals, 74.3% wins, +0.064R, profit factor 1.24) but gave 11.5 signals a
+day in bursts and a drawdown of -257R on the validation years (the 1-hour stream: 4.6 a day, -84R), which nobody
+could follow at 1% risk per signal. Reading the model four times as often crosses its score level about four times as
+often, so the selection is now chosen on the validation years only, like lab5 chooses: a small grid of the score
+level (q = 0.98, 0.99, 0.995, 0.9975 of the 4h model's validation scores), at most 1 or 3 new signals per candle and a
+cooldown of 8 or 16 candles. A setting must pass lab5's validation rule, its next stricter score level must hold up
+(lab5.candidates), it must keep its drawdown within half of its total (the site's own rule) and give at least one
+signal a day; among those the steadiest (highest daily Sharpe ratio) is chosen, keeping the pre-registered setting
+when it is within 10% of the best. The holdout is then scored once, for that one setting.
+
   python rolling15.py build    shifted 4-hour features and the fold models' scores  -> work/rolling15/
-  python rolling15.py val      validation years only: must pass lab5's validation rule
-  python rolling15.py final    the one holdout test; refuses when validation did not pass; also how many of its
-                               signals the 1-hour stream gives too (same coin and side within 4 hours)
+  python rolling15.py val      validation years only, the pre-registered setting: must pass lab5's validation rule
+  python rolling15.py tune     validation years only: the grid above and its one choice
+  python rolling15.py final    the one holdout test of the choice; refuses without a validated choice; also how many
+                               of its signals the 1-hour stream gives too (same coin and side within 4 hours)
 """
 import json
 import os
@@ -48,6 +60,12 @@ COOLDOWN = L.CFG["crypto_15m"]["cooldown"]
 C = L.CFG[SRC]
 H15 = C["H"] * 16                          # the 4h model's time limit, in 15-minute candles
 RESULTS = f"{W}/results/crypto_15m_rolling.json"
+PRE = {"q": 0.98, "max_per_bar": MAX_PER_BAR, "cooldown": COOLDOWN}     # the pre-registered setting
+# amendment (see the docstring): the grid chosen from on the validation years only
+QS15 = (0.98, 0.99, 0.995, 0.9975)
+GRID_MPB = (1, 3)
+GRID_CD = (8, 16)
+_CACHE = {}
 
 
 def build():
@@ -146,12 +164,39 @@ def quarter_data(thr, grade_a, cal):
     return data
 
 
-def run(start, end):
-    ch = json.load(open(f"{W}/results/{SRC}_choice.json"))
-    cal = (np.array(ch["calibration"]["x"]), np.array(ch["calibration"]["y"]))
-    data = quarter_data(ch["threshold"], ch["grade_a"], cal)
+def thresholds():
+    """Score level of each q: the q-quantile of the 4h model's walk-forward scores on the validation years (both
+    sides, eligible candles), exactly as lab5.tune computes it."""
+    if "thr" not in _CACHE:
+        _, D = L.load_ds(SRC)
+        preds = dict(np.load(f"{W}/wf/{SRC}.npz"))
+        pv, _ = L.val_scores(C, D, preds)
+        ok = np.isfinite(pv)
+        _CACHE["thr"] = {q: float(np.quantile(pv[ok], q)) for q in QS15}
+    return _CACHE["thr"]
+
+
+def _base():
+    """Candidates at the lowest score level of the grid (q = 0.98, the 4h model's own level), loaded once."""
+    if "data" not in _CACHE:
+        ch = json.load(open(f"{W}/results/{SRC}_choice.json"))
+        thr = thresholds()
+        assert abs(thr[0.98] - ch["threshold"]) < 1e-9, "q=0.98 must be the 4h model's own score level"
+        cal = (np.array(ch["calibration"]["x"]), np.array(ch["calibration"]["y"]))
+        _CACHE["ch"] = ch
+        _CACHE["data"] = quarter_data(thr[0.98], ch["grade_a"], cal)
+    return _CACHE["ch"], _CACHE["data"]
+
+
+def run(start, end, setting=None):
+    st = setting or PRE
+    ch, base = _base()
+    thr = thresholds()[st["q"]]
+    data = base if st["q"] == 0.98 else {
+        sym: dict(d, side=np.where(d["score"] >= thr, d["side"], "").astype(object)) for sym, d in base.items()}
     plan = dict(L.PLANS[ch["plan"]], max_bars=H15, tf_sec=900)
-    policy = {"max_per_bar": MAX_PER_BAR, "cooldown": COOLDOWN, "sessions": None, "no_new_before_close_h": 0}
+    policy = {"max_per_bar": int(st["max_per_bar"]), "cooldown": int(st["cooldown"]), "sessions": None,
+              "no_new_before_close_h": 0}
     _, _, closed = ST.run_policy(data, "crypto", "15m", plan, policy, start_time=start, end_time=end, lookback=10 ** 9)
     trades = []
     for sym, lst in closed.items():
@@ -161,6 +206,65 @@ def run(start, end):
             t["symbol"] = sym
             trades.append(t)
     return trades, len(data), ch
+
+
+def dd_ok(s):
+    """The site's own drawdown rule (streams.passed_test): the worst losing run within half of the total."""
+    dd, total = s.get("max_drawdown_r"), s.get("total_net_r")
+    return dd is not None and total is not None and abs(float(dd)) <= 0.5 * max(float(total), 0.0)
+
+
+def choose15(grid):
+    """The one setting that goes to the holdout (see the amendment in the docstring)."""
+    cands = []
+    for s in grid:
+        if not (s["passes"] and s["dd_ok"]):
+            continue
+        stricter = [x for x in grid if x["max_per_bar"] == s["max_per_bar"] and x["cooldown"] == s["cooldown"]
+                    and x["q"] > s["q"]]
+        if not stricter:
+            continue        # the strictest level only confirms the level below it (lab5.candidates)
+        nxt = min(stricter, key=lambda x: x["q"])
+        if not (nxt["signals"] >= 50 and (nxt["win_rate"] or 0) >= L.RULE["win"] - 1
+                and (nxt["avg_net_r"] or 0) >= L.RULE["avg_r"] / 2):
+            continue
+        cands.append(s)
+    daily = [s for s in cands if s["signals_per_day"] >= L.MIN_PER_DAY]
+    cands = daily or cands
+    if not cands:
+        return None
+    best = max(cands, key=lambda s: s["sharpe_daily"])
+    pre = [s for s in cands if all(s[k] == v for k, v in PRE.items())]
+    if pre and pre[0]["sharpe_daily"] >= 0.9 * best["sharpe_daily"]:
+        return pre[0]
+    return best
+
+
+def tune():
+    """Validation years only: every setting of the grid, and the one choice."""
+    start, end = C["val"]
+    res = json.load(open(RESULTS))
+    if res.get("test"):
+        raise SystemExit("the holdout was already scored: the choice cannot change any more")
+    grid = []
+    for q in QS15:
+        for mpb in GRID_MPB:
+            for cd in GRID_CD:
+                st = {"q": q, "max_per_bar": mpb, "cooldown": cd}
+                trades, _, _ = run(start, end, st)
+                s = L.stats(trades, start, end)
+                s.update(st, thr=thresholds()[q], passes=L.passes(s), dd_ok=dd_ok(s))
+                grid.append(s)
+                log("q", q, "max/candle", mpb, "cooldown", cd, json.dumps(L.short(s)), "passes", s["passes"],
+                    "dd ok", s["dd_ok"], {y: (v["win_rate"], v["avg_net_r"]) for y, v in (s.get("years") or {}).items()})
+    best = choose15(grid)
+    res["tune"] = [dict(L.short(s), **{k: s[k] for k in ("q", "max_per_bar", "cooldown", "thr", "passes", "dd_ok",
+                                                         "total_net_r", "years")}) for s in grid]
+    res["choice"] = {k: best[k] for k in ("q", "max_per_bar", "cooldown", "thr")} if best else None
+    res["validation_choice"] = {k: v for k, v in best.items() if k not in ("passes", "dd_ok")} if best else None
+    json.dump(res, open(RESULTS, "w"), indent=1, default=str)
+    log("CHOICE", json.dumps(res["choice"]), json.dumps(L.short(best)) if best else "none passes")
+    return res
 
 
 def by_minute(trades, start, end):
@@ -235,14 +339,14 @@ def overlap(t15, t1h, window_h=4):
 
 def final():
     res = json.load(open(RESULTS))
-    if not res.get("passes_validation_rule"):
-        log("validation did not pass: the holdout is not opened")
+    if not res.get("choice"):
+        log("no setting passed the validation years (run tune): the holdout is not opened")
         return res
     if res.get("test"):
         log("holdout already scored:", json.dumps(L.short(res["test"])))
         return res
     start, end = C["hold"][0][0], C["hold"][-1][1]
-    trades, nsym, _ = run(start, end)
+    trades, nsym, _ = run(start, end, res["choice"])
     s = L.stats(trades, start, end)
     s["symbols"] = nsym
     s["folds"] = {}
@@ -266,4 +370,4 @@ def final():
 
 
 if __name__ == "__main__":
-    {"build": build, "val": val, "final": final}[sys.argv[1]]()
+    {"build": build, "val": val, "tune": tune, "final": final}[sys.argv[1]]()
