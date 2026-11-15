@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trading signals 15m, 1h, 4h | Signals FM</title>
+{# the streams that run (switched-off streams are not offered on this page) #}
+{% set ON = (streams or []) | selectattr('enabled') | list %}
+{% set ON_TFS = ['15m', '1h', '4h'] | select('in', ON | map(attribute='timeframe') | list) | list %}
+{% set ON_MKS = ['crypto', 'forex'] | select('in', ON | map(attribute='market') | list) | list %}
+{% set TF_NAMES = {'15m': '15-minute', '1h': '1-hour', '4h': '4-hour'} %}
+<title>Trading signals{{ (' ' ~ ON_TFS | join(', ')) if ON_TFS else '' }} | Signals FM</title>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -151,7 +156,8 @@
 <main class="wrap">
   <div class="phead">
     <h1>Trading signals</h1>
-    <p><span id="intro-streams">Separate signal streams for 15-minute, 1-hour and 4-hour candles, for crypto and forex.</span> Each stream has its own rules,
+    {% set TN = [] %}{% for t in ON_TFS %}{% set _ = TN.append(TF_NAMES[t]) %}{% endfor %}
+    <p><span id="intro-streams">{% if TN %}Separate signal streams for {{ (TN[:-1] | join(', ') ~ ' and ' ~ TN[-1]) if TN | length > 1 else TN[0] }} candles, for {{ 'crypto and forex' if ON_MKS | length > 1 else ON_MKS[0] }}.{% else %}Separate signal streams for each market and timeframe.{% endif %}</span> Each stream has its own rules,
       stop and target distances, holding time and track record, and a signal on one timeframe never changes another.</p>
   </div>
 

@@ -382,6 +382,18 @@ check(main._signal_check() == "" and "Our tested models check every crypto coin 
       in member.get("/signals").get_data(as_text=True), "nothing known: the guide keeps general words, no number")
 _hub._tested_keys = _orig_keys
 
+print("\n[10] Signals page names only the streams that run (no 15-minute stream since engine 5)")
+html = member.get("/signals").get_data(as_text=True)
+check("<title>Trading signals 1h, 4h | Signals FM</title>" in html, "Signals page title: 1h, 4h (it said 15m, 1h, 4h)")
+check('<span id="intro-streams">Separate signal streams for 1-hour and 4-hour candles, for crypto.</span>' in html,
+      "Signals page intro (before its script runs) names the two crypto streams")
+_orig_info = _hub.stream_info
+_hub.stream_info = lambda: [dict(s, enabled=s["key"] == "crypto_4h") for s in _orig_info()]
+html = member.get("/signals").get_data(as_text=True)
+check("<title>Trading signals 4h | Signals FM</title>" in html and "for 4-hour candles, for crypto.</span>" in html,
+      "only the 4-hour stream on: title and intro follow")
+_hub.stream_info = _orig_info
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
