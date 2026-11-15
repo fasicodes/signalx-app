@@ -74,7 +74,16 @@
       <div class="box" style="margin-top:14px" id="mail-box">
         <b>Email delivery</b>
         <div class="stat" id="mail">Checking…</div>
-        <div class="row" style="margin-top:10px"><button class="pbtn" type="button" id="mail-test">Send a test email to me</button><span class="msg" id="mmsg" role="status"></span></div>
+        <div class="row" style="margin-top:10px">
+          <a class="pbtn primary" id="gmail-connect" href="/admin/mail/gmail/connect" hidden>Connect Gmail</a>
+          <button class="pbtn" type="button" id="gmail-off" hidden>Disconnect Gmail</button>
+          <button class="pbtn" type="button" id="mail-test">Send a test email to me</button>
+        </div>
+        <p class="stat" id="gmail-help" hidden style="margin:10px 0 0">"Connect Gmail" makes the site send its emails from your own Gmail.
+          Once, before the first connect: in Google Cloud (the project of the Google login) open APIs &amp; Services → Library →
+          Gmail API → Enable. On Google's page pick your Gmail; if Google says it has not verified the app, press Advanced →
+          Go to …, then tick "Send email on your behalf".</p>
+        <p class="msg" id="mmsg" role="status" style="margin:10px 0 0"></p>
       </div>
     </div>
     <div class="box">
@@ -235,17 +244,31 @@
   });
   // Email delivery: the service in use, the last email the site sent, and a test email to the admin's own address.
   function renderMail(d) {
-    const last = d.last || {};
+    const last = d.last || {}, g = d.gmail || {};
     const lastTxt = !last.at ? "none since the last restart"
       : last.ok ? `sent ${esc(when(last.at))}` : `<span class="msg bad">failed ${esc(when(last.at))}: ${esc(last.error || "")}</span>`;
+    const gTxt = g.connected ? `connected, <code>${esc(g.email)}</code>` : g.available ? "not connected"
+      : "needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (the Google login settings)";
     $("mail").innerHTML = `Service: ${d.provider ? esc(d.provider_name) : '<span class="msg bad">not set up</span>'}` +
-      (d.sender ? `<br>Sender: <code>${esc(d.sender)}</code>` : "") + `<br>Last email: ${lastTxt}` +
+      `<br>Gmail: ${gTxt}` + (d.sender ? `<br>Sender: <code>${esc(d.sender)}</code>` : "") + `<br>Last email: ${lastTxt}` +
       (d.notes || []).map((n) => `<br><span class="msg warn">${esc(n)}</span>`).join("");
+    $("gmail-connect").hidden = !g.available || !!g.connected;
+    $("gmail-off").hidden = !g.connected;
+    $("gmail-help").hidden = !g.available || !!g.connected;
+    if (d.gmail_message) {   // back from Google's page
+      $("mmsg").textContent = d.gmail_message.text || ""; $("mmsg").className = "msg " + (d.gmail_message.ok ? "ok" : "bad");
+    }
   }
   async function loadMail() {
     try { renderMail(await api("/api/admin/mail-status")); }
     catch (e) { $("mail").innerHTML = `<span class="msg bad">${esc(e.message)}</span>`; }
   }
+  $("gmail-off").addEventListener("click", async () => {
+    if (!confirm("Disconnect Gmail? The site stops sending its emails from it.")) return;
+    try { renderMail(await jpost("/api/admin/mail/gmail/disconnect")); $("mmsg").textContent = "Gmail disconnected."; $("mmsg").className = "msg ok"; }
+    catch (e) { $("mmsg").textContent = e.message; $("mmsg").className = "msg bad"; }
+  });
+  if (/[?&]gmail=/.test(location.search)) history.replaceState(null, "", location.pathname);
   $("mail-test").addEventListener("click", async () => {
     $("mail-test").disabled = true; $("mmsg").textContent = "Sending…"; $("mmsg").className = "msg";
     try {

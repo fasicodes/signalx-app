@@ -3026,6 +3026,37 @@ import mailer as _mailer  # noqa: E402
 def admin_mail_status():
     if not _is_admin():
         return jsonify({"ok": False, "error": "Only the site admin can do this."}), 403
+    return jsonify(dict(_mailer.status(), ok=True, gmail_message=session.pop("gmail_connect_msg", None)))
+
+
+@app.route("/admin/mail/gmail/connect", methods=["GET"])
+@limiter.limit("10 per hour")
+def admin_gmail_connect():
+    """Starts "Connect Gmail": Google's page, then back to the Google login's return address (already registered
+    with Google), where oauth.py finishes it. The site then sends its emails from that Gmail (mailer.py)."""
+    if not session.get("user_id"):
+        return redirect("/login")
+    if not _is_admin():
+        return _error_page(404)
+    if not _mailer.gmail_available():
+        session["gmail_connect_msg"] = {"ok": False, "text": "Connect Gmail needs the Google login settings "
+                                        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the Railway variables."}
+        return redirect("/admin/news?gmail=failed")
+    redirect_uri = url_for("oauth.google_callback", _external=True)
+    state = _secrets.token_urlsafe(24)
+    session["gmail_connect"] = {"state": state, "email": (session.get("email") or "").strip().lower(),
+                                "redirect_uri": redirect_uri, "at": int(time.time())}
+    return redirect(_mailer.gmail_auth_url(redirect_uri, state))
+
+
+@app.route("/api/admin/mail/gmail/disconnect", methods=["POST"])
+def admin_gmail_disconnect():
+    if not _is_admin():
+        return jsonify({"ok": False, "error": "Only the site admin can do this."}), 403
+    try:
+        _mailer.gmail_disconnect()
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Gmail could not be disconnected: {e}"}), 500
     return jsonify(dict(_mailer.status(), ok=True))
 
 

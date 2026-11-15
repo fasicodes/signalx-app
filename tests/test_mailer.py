@@ -2,10 +2,13 @@
 admin page shows (a blocked SMTP port on Railway Hobby / Trial, a wrong Gmail password, a refused API key).
 No network: requests.post and smtplib.SMTP are replaced by fakes. Run from the project root:  python tests/test_mailer.py
 """
+import base64
+import json
 import os
 import smtplib
 import socket
 import sys
+from urllib.parse import parse_qs, urlparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -53,6 +56,27 @@ def fake_post(url, json=None, headers=None, timeout=None, **kw):
 
 
 requests.post = fake_post
+
+# the connected Gmail lives in MySQL (mail_settings); here a dict stands in for that table
+STORE = {}
+
+
+def fake_read():
+    if STORE.get("__down__"):
+        raise RuntimeError("database busy")
+    return {k: v for k, v in STORE.items() if not k.startswith("__")}
+
+
+def fake_write(values):
+    for k, v in values.items():
+        if v is None:
+            STORE.pop(k, None)
+        else:
+            STORE[k] = v
+
+
+mailer._db_read = fake_read
+mailer._db_write = fake_write
 
 print("\n[1] no email service set up")
 env()
@@ -198,9 +222,142 @@ err = mailer.status()["last"]["error"] or ""
 check(ok is False and "Railway blocks" not in err, "a refused recipient is not blamed on a blocked port")
 FakeSMTP.mode = "ok"
 
-print("\n[5] code stays readable by older Python (production version unknown)")
+print("\n[5] Connect Gmail: the site sends through the owner's own Gmail (Gmail API over HTTPS)")
+GV = {"GOOGLE_CLIENT_ID": "cid.apps.googleusercontent.com", "GOOGLE_CLIENT_SECRET": "gsecret", "SECRET_KEY": "k" * 32}
+REDIR = "https://site.example/api/auth/google/callback"
+TOKEN, SEND, REVOKE = mailer.GOOGLE_TOKEN_URL, mailer.GMAIL_SEND_URL, mailer.GOOGLE_REVOKE_URL
+env()
+for k in GV:
+    os.environ.pop(k, None)
+check(not mailer.gmail_available() and mailer.status()["gmail"]["available"] is False
+      and "GOOGLE_CLIENT_ID" in mailer.status()["notes"][0], "without the Google login settings Connect Gmail is not offered")
+os.environ.update(GV)
+check(mailer.gmail_available() and "Connect Gmail" in mailer.status()["notes"][0], "with them it is, and the note points to it")
+q = parse_qs(urlparse(mailer.gmail_auth_url(REDIR, "st4te")).query)
+check(q.get("scope") == ["openid email https://www.googleapis.com/auth/gmail.send"] and q.get("access_type") == ["offline"]
+      and "consent" in q.get("prompt", [""])[0] and q.get("state") == ["st4te"] and q.get("redirect_uri") == [REDIR]
+      and q.get("client_id") == [GV["GOOGLE_CLIENT_ID"]], "Google's page: send-only permission, lasting, the login's return address")
+
+ROUTES = {}
+
+
+def route_post(url, json=None, data=None, headers=None, timeout=None, **kw):
+    POSTS.append({"url": url, "json": json, "data": data, "headers": headers or {}, "timeout": timeout})
+    a = ROUTES.get(url)
+    if isinstance(a, list):
+        a = a.pop(0)
+    if isinstance(a, Exception):
+        raise a
+    return a
+
+
+def jwt(claims):
+    enc = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).decode().rstrip("=")  # noqa: E731
+    return enc({"alg": "RS256"}) + "." + enc(claims) + ".signature"
+
+
+requests.post = route_post
+GRANT = {"access_token": "acc-1", "expires_in": 3599, "refresh_token": "1//refresh-xyz", "token_type": "Bearer",
+         "scope": "openid https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email",
+         "id_token": jwt({"email": "Owner@Gmail.com", "email_verified": True})}
+ROUTES[TOKEN] = Resp(200, dict(GRANT, scope="openid https://www.googleapis.com/auth/userinfo.email"))
+ok, msg = mailer.gmail_finish("code-0", REDIR)
+check(not ok and "Send email on your behalf" in msg and not STORE and mailer.provider() is None,
+      "permission box not ticked on Google's page: not connected, the admin is told to tick it")
+ROUTES[TOKEN] = Resp(400, {"error": "invalid_grant", "error_description": "Bad Request"})
+ok, msg = mailer.gmail_finish("used-code", REDIR)
+check(not ok and "Google refused" in msg and not STORE, "a refused code: not connected, Google's reason shown")
+ROUTES[TOKEN] = Resp(200, {k: v for k, v in GRANT.items() if k != "refresh_token"})
+ok, msg = mailer.gmail_finish("code-1", REDIR)
+check(not ok and "lasting permission" in msg and not STORE, "no lasting permission (refresh token): not connected")
+POSTS.clear()
+ROUTES[TOKEN] = Resp(200, GRANT)
+ok, msg = mailer.gmail_finish("code-2", REDIR)
+d = POSTS[-1]["data"] if POSTS else {}
+check(ok and "owner@gmail.com" in msg, "connected: the message names the Gmail")
+check(d.get("grant_type") == "authorization_code" and d.get("code") == "code-2" and d.get("redirect_uri") == REDIR
+      and d.get("client_secret") == "gsecret", "the code is swapped at Google with the same return address")
+check(STORE.get("gmail_email") == "owner@gmail.com" and STORE.get("gmail_token")
+      and "refresh-xyz" not in STORE["gmail_token"], "the Gmail and its permission are stored, the permission encrypted")
+check(mailer.provider() == "gmail", "a connected Gmail is used")
+os.environ["BREVO_API_KEY"] = "k"
+check(mailer.provider() == "gmail", "the connected Gmail comes before BREVO_API_KEY")
+os.environ.pop("BREVO_API_KEY")
+st = mailer.status()
+check(st["provider_name"] == "Gmail" and st["sender"] == "Signals FM <owner@gmail.com>" and st["gmail"]["connected"]
+      and st["gmail"]["email"] == "owner@gmail.com" and not st["notes"], "status: Gmail, the sender is that Gmail, no warnings")
+check("refresh-xyz" not in repr(st) and "acc-1" not in repr(st), "status never shows a token")
+
+POSTS.clear()
+ROUTES[SEND] = Resp(200, {"id": "m1", "threadId": "t1", "labelIds": ["SENT"]})
+ok = mailer.send_email("member@example.com", "Set a new password", HTML, reply_to="visitor@example.org")
+p = POSTS[-1] if POSTS else {"json": {"raw": ""}, "headers": {}, "url": ""}
+raw = base64.urlsafe_b64decode(p["json"]["raw"].encode()).decode()
+check(ok and len(POSTS) == 1 and p["url"] == SEND and p["headers"].get("Authorization") == "Bearer acc-1",
+      "sent with the Gmail API, with the fresh access token (no extra call to Google)")
+check("From: Signals FM <owner@gmail.com>" in raw and "To: member@example.com" in raw and "Subject: Set a new password" in raw
+      and "Reply-To: visitor@example.org" in raw and "text/html" in raw and "text/plain" in raw,
+      "the email: from the Gmail, to, subject, reply-to, HTML and a text copy")
+
+mailer._gmail["access_until"] = 0
+POSTS.clear()
+ROUTES[TOKEN] = Resp(200, {"access_token": "acc-2", "expires_in": 3599, "token_type": "Bearer"})
+ok = mailer.send_email("member@example.com", "Hi", HTML)
+check(ok and [x["url"] for x in POSTS] == [TOKEN, SEND] and POSTS[0]["data"].get("grant_type") == "refresh_token"
+      and POSTS[0]["data"].get("refresh_token") == "1//refresh-xyz" and POSTS[1]["headers"].get("Authorization") == "Bearer acc-2",
+      "an expired access token is renewed with the stored permission")
+POSTS.clear()
+ROUTES[SEND] = [Resp(401, {"error": {"code": 401, "message": "Invalid Credentials"}}), Resp(200, {"id": "m2"})]
+ROUTES[TOKEN] = Resp(200, {"access_token": "acc-3", "expires_in": 3599})
+ok = mailer.send_email("member@example.com", "Hi", HTML)
+check(ok and [x["url"] for x in POSTS] == [SEND, TOKEN, SEND] and POSTS[2]["headers"].get("Authorization") == "Bearer acc-3",
+      "a refused access token is renewed once and the email still goes out")
+ROUTES[SEND] = Resp(403, {"error": {"code": 403, "status": "PERMISSION_DENIED", "message":
+                      "Gmail API has not been used in project 123 before or it is disabled. Enable it by visiting "
+                      "https://console.developers.google.com/apis/api/gmail.googleapis.com/overview?project=123 then retry."}})
+ok = mailer.send_email("member@example.com", "Hi", HTML)
+err = mailer.status()["last"]["error"] or ""
+check(not ok and "HTTP 403" in err and "Turn on the Gmail API" in err, "Gmail API switched off in Google Cloud: says how to turn it on")
+ROUTES[SEND] = Resp(200, {"id": "m3"})
+
+mailer._gmail["access_until"] = 0
+ROUTES[TOKEN] = Resp(400, {"error": "invalid_grant", "error_description": "Token has been expired or revoked."})
+ok = mailer.send_email("member@example.com", "Hi", HTML)
+err = mailer.status()["last"]["error"] or ""
+check(not ok and "Connect Gmail" in err and "In production" in err,
+      "Google ended the permission: says to connect again (and the 7-day Testing hint)")
+
+mailer._gmail.update(loaded=0.0, email=None, token=None, enc=None, since=None, access=None, access_until=0.0, error=None)
+check(mailer.gmail_account() == {"email": "owner@gmail.com", "since": STORE.get("gmail_since"), "ready": True},
+      "after a restart the Gmail is read back from the database and its permission decrypted")
+STORE["__down__"] = True
+check(mailer.gmail_account(force=True) is not None, "database busy: the connected Gmail is kept, not dropped")
+STORE.pop("__down__")
+os.environ["SECRET_KEY"] = "another-secret-key-" * 2
+mailer._gmail.update(loaded=0.0, enc=None, token=None, access=None, access_until=0.0)
+acct = mailer.gmail_account()
+ok = mailer.send_email("member@example.com", "Hi", HTML)
+check(acct is not None and acct["ready"] is False and not ok and "SECRET_KEY" in (mailer.status()["last"]["error"] or "")
+      and mailer.status()["notes"], "a permission saved with another SECRET_KEY is not used; the admin is told to connect again")
+os.environ["SECRET_KEY"] = GV["SECRET_KEY"]
+mailer._gmail.update(loaded=0.0, enc=None)
+check(mailer.gmail_account()["ready"] is True and mailer.status()["gmail"]["error"] is None, "the right SECRET_KEY reads it again")
+
+POSTS.clear()
+ROUTES[REVOKE] = Resp(200, {})
+mailer.gmail_disconnect()
+check(not STORE and mailer.provider() is None and POSTS and POSTS[-1]["url"] == REVOKE
+      and POSTS[-1]["data"] == {"token": "1//refresh-xyz"}, "disconnect: forgotten, the permission cancelled at Google, nothing left")
+ROUTES[REVOKE] = requests.exceptions.ConnectionError("down")
+mailer.gmail_disconnect()
+check(mailer.provider() is None, "disconnect again (Google unreachable) does not fail")
+for k in GV:
+    os.environ.pop(k, None)
+requests.post = fake_post
+
+print("\n[6] code stays readable by older Python (production version unknown)")
 import ast  # noqa: E402
-for f in ("mailer.py", "auth.py", "signalboard.py"):
+for f in ("mailer.py", "auth.py", "signalboard.py", "oauth.py"):
     src = open(os.path.join(ROOT, f), encoding="utf-8").read()
     try:
         ast.parse(src, feature_version=(3, 10))

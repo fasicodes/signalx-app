@@ -16,9 +16,10 @@ Is file ko main.py mein register karna hai:
 """
 
 import os
+import time
 
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, redirect, session, url_for
+from flask import Blueprint, redirect, request, session, url_for
 
 from db import get_db_connection
 from auth import _bump_session_version, _session_version
@@ -92,6 +93,9 @@ def google_login():
 
 @oauth_bp.route("/api/auth/google/callback")
 def google_callback():
+    pending = session.get("gmail_connect")
+    if isinstance(pending, dict) and request.args.get("state") and request.args.get("state") == pending.get("state"):
+        return _finish_gmail_connect(pending)       # "Connect Gmail" on the admin page comes back here too
     try:
         google = oauth.google
     except AttributeError:          # Google login is not configured on this server
@@ -118,3 +122,20 @@ def google_callback():
     session["avatar_url"] = avatar_url
     session["sv"] = user.get("sv", 0)
     return redirect("/")
+
+
+def _finish_gmail_connect(pending):
+    """The end of "Connect Gmail" (started on /admin/news, see main.py and mailer.py). It uses the Google login's
+    return address, so nothing new has to be registered with Google. Nobody is logged in or out here."""
+    import mailer
+    session.pop("gmail_connect", None)
+    if ((session.get("email") or "").strip().lower() != pending.get("email")
+            or time.time() - float(pending.get("at") or 0) > 1800):
+        ok, text = False, "The Gmail connection was started in another login or too long ago. Press Connect Gmail again."
+    elif request.args.get("error"):
+        ok, text = False, "Gmail was not connected: the Google page was closed or the permission was not given."
+    else:
+        ok, text = mailer.gmail_finish(request.args.get("code") or "",
+                                       pending.get("redirect_uri") or url_for("oauth.google_callback", _external=True))
+    session["gmail_connect_msg"] = {"ok": ok, "text": text}
+    return redirect("/admin/news?gmail=" + ("connected" if ok else "failed"))

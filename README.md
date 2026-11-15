@@ -120,17 +120,24 @@ with one retry, hourly limits per user / visitor, and built-in answers when the 
 ## Email (sign-up links, password resets, contact form, alerts)
 
 `mailer.py`. Railway's Free, Trial and Hobby plans block outbound SMTP, so Gmail SMTP cannot send from there and
-reset links never arrive. Use an email service called over HTTPS instead (the first one set is used):
+reset links never arrive. These ways send over HTTPS instead (the first one set up is used):
 
-- **Brevo** (free, 300 emails a day, no domain of your own needed): sign up at brevo.com, add and verify your
-  sender address (Senders), create an API key (SMTP & API), and turn off "Authorised IPs" blocking under Security
-  (Railway's outgoing IP changes). Railway Variables: `BREVO_API_KEY`, `MAIL_FROM` = `Signals FM <the verified address>`.
-- **Resend** (needs a domain you own, verified with DNS records in Resend): `RESEND_API_KEY`, `MAIL_FROM` =
-  `Signals FM <no-reply@yourdomain>`.
+- **Connect Gmail** (free, no new account): the site sends from the owner's own Gmail through the Gmail API. Once, in
+  Google Cloud, in the project of the Google login (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`): APIs & Services →
+  Library → **Gmail API → Enable**, and keep the OAuth consent screen **In production** (in "Testing" Google ends the
+  permission after 7 days). Then on `/admin/news` press **Connect Gmail**, pick the Gmail, press Advanced → Go to …
+  if Google says the app is not verified, and tick "Send email on your behalf". It comes back through the Google
+  login's return address (`/api/auth/google/callback`), so nothing new is registered with Google. The permission
+  (refresh token) is stored encrypted with `SECRET_KEY` in the MySQL table `mail_settings`; **Disconnect Gmail**
+  removes it and cancels it at Google. A Gmail account sends up to about 500 emails a day.
+- **Brevo** (`BREVO_API_KEY`, `MAIL_FROM`): best with a domain of your own (Brevo rewrites a gmail.com sender
+  address). Turn off "Authorised IPs" blocking under Security, since Railway's outgoing IP changes.
+- **Resend** (`RESEND_API_KEY`, `MAIL_FROM` = `Signals FM <no-reply@yourdomain>`): needs a domain verified in Resend.
 - **Gmail SMTP** (`MAIL_USERNAME` + a 16-character Gmail App Password in `MAIL_PASSWORD`): only on Railway Pro or locally.
 
-Check it on `/admin/news` (admins): the "Email delivery" box shows the service in use, the last email's result or
-error, and sends a test email to your own address. Failures are also printed to the Railway logs as `[mailer] ERROR`.
+Check it on `/admin/news` (admins): the "Email delivery" box shows the service in use, the connected Gmail, the last
+email's result or error, and sends a test email to your own address. Failures are also printed to the Railway logs
+as `[mailer] ERROR`.
 
 ## Tests
 
