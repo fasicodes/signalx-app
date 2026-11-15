@@ -801,10 +801,23 @@ def _int_arg(name, default, lo, hi):
         return default
 
 
+def paused_markets():
+    """Markets whose new signals wait around high-impact events (blackout_reason) among the streams that run:
+    forex always, crypto only with NEWS_BLACKOUT_CRYPTO=on. Empty while only crypto streams run without it
+    (engine 5), so the News page does not promise a pause that never happens."""
+    try:
+        import signal_hub
+        on = signal_hub.enabled_streams()
+    except Exception:
+        return []
+    crypto = (os.environ.get("NEWS_BLACKOUT_CRYPTO", "off") or "off").lower() in ("on", "1", "true", "yes")
+    return [m for m in ("forex", "crypto") if any(k.startswith(m + "_") for k in on) and (m == "forex" or crypto)]
+
+
 @news_bp.route("/news", methods=["GET"])
 def news_page():
     return render_template("news.html", active="news", currencies=CURRENCIES, categories=CATEGORIES,
-                           logged_in=bool(session.get("user_id")))
+                           logged_in=bool(session.get("user_id")), pauses=paused_markets())
 
 
 @news_bp.route("/api/news", methods=["GET"])
