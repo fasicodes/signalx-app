@@ -114,7 +114,6 @@
     loadEngine();
     loadChart();
     loadInternals();
-    renderOthers();
   }
 
   // ---------------------------------------------------------------- tool links (carry the coin)
@@ -517,60 +516,8 @@
   async function loadBoard() {
     try { S.board = await getJSON("/api/signals/board"); } catch (e) { return; }
     try { window.dispatchEvent(new CustomEvent("sfm:board", { detail: S.board })); } catch (e) {}
-    renderOthers();
     if (S.board && S.board.loading) setTimeout(loadBoard, 6000);
   }
-  function mini(r) {
-    const a = r.active, p = r.progress || {};
-    const pos = p.pct == null ? 0 : p.pct;
-    const bar = pos >= 0
-      ? `<i style="left:50%;width:${pos / 2}%;background:var(--long)"></i>`
-      : `<i style="right:50%;width:${-pos / 2}%;background:var(--short)"></i>`;
-    const side = a.side === "LONG" ? "Long" : "Short";
-    return `<button type="button" class="d-mini" data-sym="${esc(r.symbol)}" aria-current="${r.symbol === S.coin}">
-      <span class="d-mini-top"><b>${esc(base(r.symbol))}</b><span class="d-pill ${r.fresh ? "new" : ""}" style="${r.fresh ? "" : `background:var(--${a.side === "LONG" ? "long" : "short"}-bg);color:var(--${a.side === "LONG" ? "long" : "short"})`}">${r.fresh ? "New " + side.toLowerCase() : side}</span></span>
-      <span class="d-mini-bar">${bar}</span>
-      <small>${p.move_pct == null ? "started " + ago(a.signal_at) : `${signed(p.move_pct)}% since entry, ${Math.abs(p.pct)}% to ${p.pct >= 0 ? "TP" + (p.next || 1) : "stop"}${a.hits ? ` · TP${a.hits} ✓` : ""}`}</small>
-    </button>`;
-  }
-  function miniStream(x) {
-    const long = x.side === "LONG";
-    const hits = x.hits ? ` · TP${x.hits} ✓` : "";
-    return `<button type="button" class="d-mini" data-sym="${esc(x.symbol)}" aria-current="${x.symbol === S.coin}">
-      <span class="d-mini-top"><b>${esc(base(x.symbol))}</b><span class="d-pill" style="background:var(--${long ? "long" : "short"}-bg);color:var(--${long ? "long" : "short"})">${esc(x.timeframe)} ${long ? "long" : "short"}</span></span>
-      <span class="d-mini-bar"><i style="left:0;width:100%;background:var(--${long ? "long" : "short"})"></i></span>
-      <small>Started ${ago(x.signal_at)}${hits}${x.tested === false ? " · experimental" : ""}</small>
-    </button>`;
-  }
-  function renderOthers() {
-    const box = $("others-list");
-    const b = S.board;
-    if (!b || !box) return;
-    if (b.loading) { box.innerHTML = `<p class="d-empty">Checking every coin. This takes a few seconds after a restart.</p>`; return; }
-    const rows = b.rows || [];
-    const act = rows.filter((r) => r.state === "ACTIVE");
-    const forming = rows.filter((r) => r.state === "WAIT" && r.setup_forming);
-    const w = b.same_side_warning;
-    $("others-warn").hidden = !w;
-    if (w) $("others-warn").textContent = `${w.count} of ${w.total} active signals are ${w.side.toLowerCase()}. Coins tend to move together, so these can win or lose at the same time. Don't put full risk on all of them.`;
-    const others = streamsActive();
-    let html = act.map(mini).join("") + others.slice(0, 12).map(miniStream).join("");
-    if (!act.length && !others.length) {
-      html = `<p class="d-empty">No active signals right now. Each stream checks every symbol at its candle close (15 minutes, 1 hour, 4 hours).${forming.length ? " Closest to a strong 4-hour signal:" : ""}</p>`;
-    }
-    if (forming.length) {
-      html += forming.slice(0, 4).map((r) => `<button type="button" class="d-mini" data-sym="${esc(r.symbol)}" aria-current="${r.symbol === S.coin}">
-        <span class="d-mini-top"><b>${esc(base(r.symbol))}</b><span class="d-pill" style="background:var(--amber-bg);color:var(--amber)">Setup forming</span></span>
-        <span class="d-mini-bar"><i style="left:0;width:${Math.min(100, r.strength || 0)}%;background:var(--amber)"></i></span>
-        <small>Leaning ${String(r.bias || "").toLowerCase()}, not a trade yet</small></button>`).join("");
-    }
-    box.innerHTML = html;
-    box.querySelectorAll(".d-mini").forEach((el) => el.addEventListener("click", () => {
-      selectCoin(el.dataset.sym);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }));
-  }
-
   // ---------------------------------------------------------------- coin sheet
   function statusPill(sym) {
     const r = boardRow(sym) || {};

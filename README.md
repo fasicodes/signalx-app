@@ -45,7 +45,9 @@ takes a MySQL named lock (`GET_LOCK`), so only one copy runs and another takes o
 * A stream that reads 4-hour candles built from its own needs months of them at its first scan after a restart
   (15m: about 16,000 candles per coin); `signal_hub.warm` loads that history in slices after the due scans, so it
   never delays the other streams, and the stream gives no signals until it is loaded (the Signals page shows the
-  progress).
+  progress). A copy of each coin's history is kept in the database (`candle_cache`, about 50 MB for every coin of
+  the 15m and 1h streams, rewritten once a day), so after a restart the history is read from there in seconds and
+  only the candles since the copy come from the exchange.
 * `models/research.json` - what was tested for every stream and why it is on or off (shown on the Signals page).
 * Research code that trains and tests the models: see "Research" below.
 
@@ -115,13 +117,29 @@ backoff, an activity log, and "Trade this signal" on the Signals page. Keys are 
 signal on screen, the newest signals, each stream's results, upcoming high-impact events, headlines), a timeout
 with one retry, hourly limits per user / visitor, and built-in answers when the AI is off or busy. English only.
 
+## Email (sign-up links, password resets, contact form, alerts)
+
+`mailer.py`. Railway's Free, Trial and Hobby plans block outbound SMTP, so Gmail SMTP cannot send from there and
+reset links never arrive. Use an email service called over HTTPS instead (the first one set is used):
+
+- **Brevo** (free, 300 emails a day, no domain of your own needed): sign up at brevo.com, add and verify your
+  sender address (Senders), create an API key (SMTP & API), and turn off "Authorised IPs" blocking under Security
+  (Railway's outgoing IP changes). Railway Variables: `BREVO_API_KEY`, `MAIL_FROM` = `Signals FM <the verified address>`.
+- **Resend** (needs a domain you own, verified with DNS records in Resend): `RESEND_API_KEY`, `MAIL_FROM` =
+  `Signals FM <no-reply@yourdomain>`.
+- **Gmail SMTP** (`MAIL_USERNAME` + a 16-character Gmail App Password in `MAIL_PASSWORD`): only on Railway Pro or locally.
+
+Check it on `/admin/news` (admins): the "Email delivery" box shows the service in use, the last email's result or
+error, and sends a test email to your own address. Failures are also printed to the Railway logs as `[mailer] ERROR`.
+
 ## Tests
 
 ```bash
 for t in tests/test_*.py; do python "$t" || echo "FAILED: $t"; done
 ```
 
-The tests use a SQLite stand-in for MySQL (`tests/dbshim.py`) and fake brokers / APIs: no network needed.
+The tests use a SQLite stand-in for MySQL (`tests/dbshim.py`) and fake brokers / APIs: no network needed. GitHub
+runs every test file on each push and pull request (`.github/workflows/tests.yml`).
 `tests/test_main_endpoints.py` loads the whole app (`main.py`), so it needs the packages from `requirements.txt`
 installed (`pip install -r requirements.txt`); it checks the login rule and the coin / timeframe checks on the data
 endpoints, the security headers and the analysis functions that once had bugs.

@@ -548,6 +548,110 @@ hub._store, engines, hub._FORCE_STREAMS, hub.scan_stream, hub.WARM_SLICE_SEC = s
 hub._engines.clear()
 hub._engines.update(engines)
 
+print("\n[5c] a copy of the long history in the database: a restart loads it in seconds")
+saved = (hub._store, dict(hub._engines), hub._FORCE_STREAMS)
+st1 = streams.CandleStore(counting, sleep=0)
+hub._store = st1
+hub._engines.clear()
+hub._engines["crypto_15m"] = streams.StreamEngine("crypto", "15m", st1, SYMS)
+hub._FORCE_STREAMS = ["crypto_15m", "crypto_4h"]
+hub._warm_failed.clear()
+hub._cache_saved.clear()
+with hub._Cursor() as cur:
+    cur.execute("DELETE FROM candle_cache")
+T = datetime(2026, 10, 10, 14, 0, 50)
+need = hub.engine("crypto_15m").history_need()[1]
+CALLS.clear()
+hub.warm("crypto_15m", T, budget=10 ** 6)
+first_calls = len(CALLS)
+with hub._Cursor() as cur:
+    cur.execute("SELECT symbol, depth, n FROM candle_cache WHERE tf='15m'")
+    rows = cur.fetchall()
+check(hub.warming("crypto_15m", T) is None and sorted(r["symbol"] for r in rows) == sorted(SYMS)
+      and all(r["depth"] >= need and r["n"] >= need for r in rows) and first_calls >= 50 * len(SYMS),
+      f"the first load asks the exchange ({first_calls} calls) and writes one copy per coin")
+
+
+def restart(at):
+    st = streams.CandleStore(counting, sleep=0)
+    hub._store = st
+    hub._engines["crypto_15m"] = streams.StreamEngine("crypto", "15m", st, SYMS)
+    hub._cache_saved.clear()
+    CALLS.clear()
+    hub.warm("crypto_15m", at, budget=10 ** 6)
+    return st
+
+
+T2 = T + timedelta(days=1, hours=3)
+st2 = restart(T2)
+check(hub.warming("crypto_15m", T2) is None and len(CALLS) <= 2 * len(SYMS),
+      f"a restart a day later reads the copy: {len(CALLS)} exchange calls instead of {first_calls}")
+fresh = streams.CandleStore(candles, sleep=0)
+check(all(st2.frame(s_, "15m", T2, bars=need).equals(fresh.frame(s_, "15m", T2, bars=need)) for s_ in SYMS),
+      "the copy plus the newest candles is exactly the frame a full load gives")
+with hub._Cursor() as cur:
+    cur.execute("UPDATE candle_cache SET data=%s WHERE symbol=%s AND tf='15m'", (b"not a copy", "BTC/USDT"))
+st3 = restart(T2)
+check(sum(1 for c_ in CALLS if c_[0] == "BTC/USDT") >= 50 and sum(1 for c_ in CALLS if c_[0] == "ETH/USDT") <= 2,
+      "a damaged copy is not used: that coin loads from the exchange again, the others from their copies")
+with hub._Cursor() as cur:
+    cur.execute("SELECT n FROM candle_cache WHERE symbol='BTC/USDT' AND tf='15m'")
+    check((cur.fetchone() or {}).get("n", 0) >= need, "and its copy is written again")
+T_OLD = T + timedelta(days=hub.CACHE_MAX_AGE_DAYS + 1)
+st4 = restart(T_OLD)
+with hub._Cursor() as cur:
+    cur.execute("SELECT updated_at FROM candle_cache WHERE symbol='ETH/USDT' AND tf='15m'")
+    upd = hub._parse((cur.fetchone() or {}).get("updated_at"))
+check(sum(1 for c_ in CALLS if c_[0] == "ETH/USDT") >= 20 and upd == T_OLD,
+      f"a copy older than {hub.CACHE_MAX_AGE_DAYS} days is not used: the full history is loaded again and copied anew")
+st5 = restart(T2)
+check(hub._refresh_cache(T2 + timedelta(hours=1)) == 0
+      and hub._refresh_cache(T2 + timedelta(seconds=hub.CACHE_REFRESH_SEC + 60), limit=2) == 2
+      and hub._refresh_cache(T2 + timedelta(seconds=hub.CACHE_REFRESH_SEC + 120), limit=99) == len(SYMS) - 2,
+      "the copies are rewritten once a day, a few coins per scanner pass")
+hub._store, engines, hub._FORCE_STREAMS = saved
+hub._engines.clear()
+hub._engines.update(engines)
+
+print("\n[5d] a signal that repeats another stream's running trade says so")
+import signalboard as sbd  # noqa: E402
+import telegram_bot as tgb  # noqa: E402
+bt2 = datetime(2026, 10, 20, 9, 0)
+base_sig = {"side": "LONG", "entry": 20.0, "stop_loss": 18.6, "take_profit": 20.35, "targets": [20.35], "confidence": 76.0,
+            "grade": "A", "bar_time": bt2, "signal_at": bt2 + timedelta(hours=1)}
+e1 = hub.record("AVAX/USDT", "crypto", "1h", base_sig)
+e15 = hub.record("AVAX/USDT", "crypto", "15m", dict(base_sig, bar_time=bt2 + timedelta(minutes=30),
+                                                   signal_at=bt2 + timedelta(minutes=45)))
+e15s = hub.record("AVAX/USDT", "crypto", "15m", dict(base_sig, side="SHORT", stop_loss=21.4, take_profit=19.65,
+                                                    targets=[19.65], bar_time=bt2 + timedelta(minutes=45),
+                                                    signal_at=bt2 + timedelta(hours=1)))
+check(e1 is not None and "same_as" not in e1 and e15["same_as"] == {"timeframe": "1h", "signal_at": "2026-10-20T10:00:00Z"}
+      and e15s is not None and "same_as" not in e15s,
+      "a 15m long while the 1h long runs on the coin is marked; the first signal and an opposite one are not")
+txt = sbd.event_text(e15)
+mail = sbd._email_html([e15, e15s], user_id=None)
+tg = tgb.signal_block(e15)
+check("the same coin and side as the running 1h signal on AVAX/USDT: taking both doubles the risk" in txt
+      and "The same coin and side as the running 1h signal on AVAX/USDT" in mail and mail.count("same coin and side") == 1
+      and "same coin and side as the running 1h signal: taking both doubles the risk" in tg
+      and "same coin and side" not in sbd.event_text(e15s) + tgb.signal_block(e15s),
+      "the app notification, the email and Telegram say it; the other signals do not")
+with hub._Cursor() as cur:
+    cur.execute("SELECT * FROM signal_events WHERE symbol='AVAX/USDT' ORDER BY id")
+    rows_ = cur.fetchall()
+listed = hub.mark_same_trades([hub.signal_json(r) for r in rows_])
+by_tf = {(x["timeframe"], x["side"]): x for x in listed}
+check(by_tf[("15m", "LONG")]["same_as"]["timeframe"] == "1h" and by_tf[("1h", "LONG")]["same_as"]["timeframe"] == "15m"
+      and "same_as" not in by_tf[("15m", "SHORT")],
+      "the Signals page marks both running signals of the same trade (each points to the other stream)")
+with hub._Cursor() as cur:
+    cur.execute("UPDATE signal_events SET status='TP1' WHERE symbol='AVAX/USDT' AND timeframe='1h'")
+listed = hub.mark_same_trades([hub.signal_json(r) for r in rows_])
+check(all("same_as" not in x for x in listed if x["timeframe"] == "15m"), "once the 1h signal has closed the mark goes away")
+tpl = open(os.path.join(ROOT, "templates", "signals.html"), encoding="utf-8").read()
+check("s.same_as" in tpl and "Also running on" in tpl and "doubles the risk on this coin" in tpl,
+      "the signal card shows the mark with its reason")
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)

@@ -31,6 +31,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from db import get_db_connection
 from mailer import send_email
+import mailer as _mailer
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -199,6 +200,18 @@ def _email_html(title, body_html, button_text, button_url, note_html=""):
 </div>"""
 
 
+def _mail_ready():
+    """False only when no email service is set up at all: then no link can reach anyone (see mailer.py)."""
+    try:
+        return getattr(_mailer, "provider", lambda: "unknown")() is not None
+    except Exception:
+        return True
+
+
+NO_MAIL_ERROR = ("Email is not set up on this site yet, so we cannot send you a link right now. "
+                 "Please try again later or contact us.")
+
+
 @auth_bp.route("/api/register", methods=["POST"])
 def register():
     data = request.get_json(silent=True) or {}
@@ -247,7 +260,7 @@ def register():
                 (email, password_hash, _hash_token(token), expires),
             )
         verify_link = f"{_base_url()}/api/verify-email?token={token}"
-        send_email(
+        sent = send_email(
             email,
             "Verify your email for Signals FM",
             _email_html(
@@ -259,6 +272,12 @@ def register():
                 "If you did not sign up for Signals FM, you can ignore this email.</p>",
             ),
         )
+        if sent is False:   # the account exists; "Forgot password" sends a new link once email works
+            return jsonify({
+                "message": "Account created, but we could not send the verification email right now. In a few minutes "
+                           "use \"Forgot password\" to get a new link (setting a password also verifies your email), "
+                           "or contact us."
+            }), 201
         return jsonify({
             "message": f"Account created. We sent a verification link to {email}. Open it to finish "
                        "(check your spam folder too), then log in."
@@ -368,6 +387,8 @@ def forgot_password():
 
     if not email or len(email) > MAX_EMAIL_LEN:
         return generic_response
+    if not _mail_ready():   # the same answer for every address, so it tells nobody whether an account exists
+        return jsonify({"error": NO_MAIL_ERROR}), 503
 
     token = secrets.token_urlsafe(32)
     expires = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_MINUTES)

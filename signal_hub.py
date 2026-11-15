@@ -23,6 +23,7 @@ SIGNAL_STREAMS (a comma-separated list) can only narrow that down; a stream
 that did not pass is never switched on. models/research.json says why each
 stream is on or off. SIGNAL_HUB=off stops the background job.
 """
+import io
 import json
 import os
 import threading
@@ -62,6 +63,13 @@ _state = {"scanned": {}, "tracked": {}, "errors": {}, "last_scan": {}, "warming"
 WARM_SLICE_SEC = 40
 WARM_RETRY_SEC = 1800      # a coin whose history could not be loaded is tried again after this long
 _warm_failed = {}          # (stream, symbol) -> when its history load failed
+# a copy of that long history in the database (candle_cache), so a restart loads it in seconds and only asks the
+# exchange for the candles since (about 50 MB for every coin of the 15m and 1h streams): it is written when a coin's
+# history was loaded from the exchange and refreshed once a day, a few coins per scanner pass
+CACHE_MAX_AGE_DAYS = 30     # an older copy is not used (the full history is loaded again)
+CACHE_REFRESH_SEC = 24 * 3600   # a day-old copy needs about one exchange call per coin after a restart
+CACHE_SAVES_PER_PASS = 6
+_cache_saved = {}           # (symbol, timeframe) -> when the database copy was last written or read
 _engines = {}
 _store = None
 _lock = threading.Lock()
@@ -243,6 +251,26 @@ def init_tables():
             for name in ("markets", "timeframes"):
                 if name not in have:
                     cur.execute(f"ALTER TABLE signal_alert_subs ADD COLUMN {name} TEXT NULL")
+    # the database copy of the streams' candle history (cache_load / cache_save): optional, so a problem here never
+    # stops the signal tables above
+    try:
+        with _Cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS candle_cache (
+                    symbol VARCHAR(30) NOT NULL,
+                    tf VARCHAR(5) NOT NULL,
+                    depth INT NOT NULL,
+                    n INT NOT NULL,
+                    last_ts DATETIME NOT NULL,
+                    data MEDIUMBLOB NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    PRIMARY KEY (symbol, tf)
+                )
+                """
+            )
+    except Exception as e:
+        print(f"[signal_hub] candle_cache table not created (the history then always comes from the exchange): {e}")
 
 
 def _run_resets(cur):
@@ -295,11 +323,58 @@ def record(symbol, market, tf, a, news=None):
         if "uniq" in str(e).lower() or "duplicate" in str(e).lower() or "constraint" in str(e).lower():
             return None
         raise
-    return {"symbol": symbol, "market": market, "timeframe": tf, "side": a["side"], "bar_time": bar_time,
-            "entry": entry, "stop_loss": stop, "take_profit": float(a["take_profit"]), "targets": tps,
-            "confidence": a.get("confidence"), "grade": grade, "setup": a.get("setup"), "tier": a.get("tier"),
-            "expires_at": expires, "hold_minutes": hold, "news": news,
-            "better_entry": a.get("better_entry"), "better_entry_until": _parse(a.get("better_entry_until"))}
+    ev = {"symbol": symbol, "market": market, "timeframe": tf, "side": a["side"], "bar_time": bar_time,
+          "entry": entry, "stop_loss": stop, "take_profit": float(a["take_profit"]), "targets": tps,
+          "confidence": a.get("confidence"), "grade": grade, "setup": a.get("setup"), "tier": a.get("tier"),
+          "expires_at": expires, "hold_minutes": hold, "news": news,
+          "better_entry": a.get("better_entry"), "better_entry_until": _parse(a.get("better_entry_until"))}
+    same = _same_trade(symbol, market, a["side"], tf)
+    if same:
+        ev["same_as"] = same
+    return ev
+
+
+def _signal_at(row):
+    t = _parse(row.get("bar_time"))
+    return t + timedelta(seconds=markets.TF_SEC.get(row.get("timeframe") or "4h", 0)) if t else None
+
+
+def _same_trade(symbol, market, side, tf):
+    """The newest running signal of ANOTHER stream on the same coin and side, or None. About 6 in 10 15m signals are
+    the trade the 1h stream already gives (the same model): taking both doubles the risk on one coin, so the cards and
+    the alerts say so."""
+    try:
+        with _Cursor() as cur:
+            cur.execute("""SELECT timeframe, bar_time FROM signal_events WHERE symbol=%s AND market=%s AND side=%s
+                           AND status='ACTIVE' AND timeframe<>%s ORDER BY bar_time DESC LIMIT 1""",
+                        (symbol, market, side, tf))
+            o = cur.fetchone()
+    except Exception:
+        return None
+    return {"timeframe": o["timeframe"], "signal_at": _iso(_signal_at(o))} if o else None
+
+
+def mark_same_trades(sigs):
+    """Adds same_as to the running signals of a list (one query) whose coin and side another stream runs too."""
+    act = [s for s in sigs if s.get("status") == "ACTIVE"]
+    if not act:
+        return sigs
+    syms = sorted({s["symbol"] for s in act})
+    try:
+        with _Cursor() as cur:
+            marks = ",".join(["%s"] * len(syms))
+            cur.execute(f"""SELECT symbol, market, side, timeframe, bar_time FROM signal_events
+                            WHERE status='ACTIVE' AND symbol IN ({marks})""", tuple(syms))
+            rows = cur.fetchall() or []
+    except Exception:
+        return sigs
+    for s in act:
+        others = [r for r in rows if r["symbol"] == s["symbol"] and r["side"] == s["side"]
+                  and (r.get("market") or "crypto") == (s.get("market") or "crypto") and r["timeframe"] != s["timeframe"]]
+        if others:
+            o = max(others, key=lambda r: _parse(r["bar_time"]) or datetime.min)
+            s["same_as"] = {"timeframe": o["timeframe"], "signal_at": _iso(_signal_at(o))}
+    return sigs
 
 
 # ===========================================================================
@@ -542,6 +617,98 @@ def track_open(now=None, limit=300):
     return done
 
 
+def _pack(df):
+    t = pd.to_datetime(df["timestamp"])
+    buf = io.BytesIO()
+    # the timestamp resolution is kept too (pandas 3 gives the exchange's candles microseconds), so a copy read back
+    # is exactly the frame the exchange calls would have built
+    np.savez_compressed(buf, ts=t.to_numpy().astype("datetime64[ns]").astype("int64"), unit=np.array(str(t.dtype)),
+                        **{k: df[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume")})
+    return buf.getvalue()
+
+
+def _unpack(blob):
+    z = np.load(io.BytesIO(bytes(blob)))
+    unit = str(z["unit"]) if "unit" in z.files else "datetime64[ns]"
+    ts = pd.Series(z["ts"].astype("datetime64[ns]").astype(unit))
+    return pd.DataFrame({"timestamp": ts, **{k: z[k] for k in ("open", "high", "low", "close", "volume")}})
+
+
+def cache_save(symbol, tf, now=None):
+    """Writes the store's candles of (symbol, tf) to candle_cache. -> True when written."""
+    now = now or _utcnow()
+    df, depth = store().export(symbol, tf)
+    if df is None or not len(df):
+        return False
+    try:
+        with _Cursor() as cur:
+            cur.execute("REPLACE INTO candle_cache (symbol, tf, depth, n, last_ts, data, updated_at) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (symbol, tf, int(depth), int(len(df)), pd.Timestamp(df["timestamp"].iloc[-1]).to_pydatetime(),
+                         _pack(df), now))
+    except Exception as e:
+        print(f"[signal_hub] candle cache of {symbol} {tf} not saved: {str(e)[:160]}")
+        return False
+    finally:
+        _cache_saved[(symbol, tf)] = now      # a failed write is not retried at every pass either
+    return True
+
+
+def cache_load(symbol, tf, bars, now=None):
+    """Puts the database copy of (symbol, tf) into the store when it is deep enough, recent enough and sound; the
+    store then asks the exchange only for the candles after it. -> True when it was used."""
+    now = now or _utcnow()
+    try:
+        with _Cursor() as cur:
+            cur.execute("SELECT depth, last_ts, data FROM candle_cache WHERE symbol=%s AND tf=%s", (symbol, tf))
+            row = cur.fetchone()
+        if not row or int(row["depth"] or 0) < bars:
+            return False
+        last = _parse(row["last_ts"])
+        if last is None or last > now or now - last > timedelta(days=CACHE_MAX_AGE_DAYS):
+            return False
+        df = _unpack(row["data"])
+        ts = df["timestamp"].to_numpy().astype("datetime64[ns]").astype("int64")
+        step = markets.TF_SEC[tf] * 10 ** 9
+        if len(df) < 2 or (np.diff(ts) <= 0).any() or (ts % step).any() or not np.isfinite(
+                df[["open", "high", "low", "close"]].to_numpy()).all():
+            return False                      # not one clean series on the timeframe's grid: load it again
+    except Exception as e:
+        print(f"[signal_hub] candle cache of {symbol} {tf} not used: {str(e)[:160]}")
+        return False
+    store().seed(symbol, tf, df, int(row["depth"]))
+    _cache_saved[(symbol, tf)] = now
+    return True
+
+
+def _refresh_cache(now, limit=None):
+    """Rewrites the database copy of loaded histories whose copy is older than CACHE_REFRESH_SEC, a few per pass."""
+    limit = CACHE_SAVES_PER_PASS if limit is None else limit
+    done = 0
+    for key in enabled_streams():
+        if key == "crypto_4h":
+            continue
+        try:
+            eng = engine(key)
+            need = eng.history_need()
+        except Exception:
+            continue
+        if not need:
+            continue
+        tf, bars = need
+        for sym in eng.history_symbols():
+            if done >= limit:
+                return done
+            if store().depth(sym, tf) < bars:
+                continue
+            t = _cache_saved.get((sym, tf))
+            if t is not None and (now - t).total_seconds() < CACHE_REFRESH_SEC:
+                continue
+            cache_save(sym, tf, now)
+            done += 1
+    return done
+
+
 def _recently_failed(key, sym, now):
     t = _warm_failed.get((key, sym))
     return t is not None and (now - t).total_seconds() < WARM_RETRY_SEC
@@ -583,7 +750,10 @@ def warm(key, now=None, budget=None):
         if st.depth(sym, tf) >= bars or _recently_failed(key, sym, now):
             continue
         try:
+            copied = cache_load(sym, tf, bars, now)          # a restart: the database copy, then only the newest candles
             st.frame(sym, tf, now, bars=bars)
+            if not copied:
+                cache_save(sym, tf, now)
         except Exception as e:
             _warm_failed[(key, sym)] = now
             print(f"[signal_hub] {key}: history of {sym} not loaded: {str(e)[:160]}")
@@ -658,6 +828,13 @@ def step(now=None):
             else:
                 _state["warming"].pop(key, None)
             actions.append(f"warm:{key}")
+        else:
+            try:
+                n = _refresh_cache(now)
+                if n:
+                    actions.append(f"cache:{n}")
+            except Exception:
+                print(f"[signal_hub] candle cache refresh failed:\n{traceback.format_exc()}")
     return actions
 
 
@@ -1137,8 +1314,8 @@ def api_list():
         return jsonify({"ok": False, "error": "Invalid page."}), 400
     rows, total = list_signals(market, tf, symbol, side, None if status == "all" else status, grade, sort, page, per)
     prices = live_prices(rows)
-    return jsonify({"ok": True, "total": total, "page": page, "per_page": per,
-                    "pages": max(1, -(-total // per)), "signals": [signal_json(r, prices.get(r["symbol"])) for r in rows]})
+    return jsonify({"ok": True, "total": total, "page": page, "per_page": per, "pages": max(1, -(-total // per)),
+                    "signals": mark_same_trades([signal_json(r, prices.get(r["symbol"])) for r in rows])})
 
 
 @hub_bp.route("/api/signals/stats", methods=["GET"])

@@ -1,0 +1,50 @@
+# Runs every test file (tests/test_*.py, which also runs the browser-side test with Node) on each push and pull request,
+# so a broken change is seen before it is merged. The tests need no network, no MySQL (tests/dbshim.py is a SQLite
+# stand-in) and no exchange keys.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install the packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run every test file
+        run: |
+          failed=""
+          for t in tests/test_*.py; do
+            echo "::group::$t"
+            if ! python "$t"; then failed="$failed $t"; fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::Failed:$failed"
+            exit 1
+          fi
+          echo "All test files passed."
