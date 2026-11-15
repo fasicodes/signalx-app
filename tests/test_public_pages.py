@@ -170,6 +170,10 @@ check("69.8%" in html and "437" in html and "+0.05R" in html, "landing: tested n
 check("19-channel" not in html.lower() and "Four independent" not in html and "Day Traders" not in html, "landing copy matches the current engine")
 hero = html[html.index('class="ex"'):html.index('class="live"')]
 check("Example" in hero and "An example of how a signal looks" in hero, "landing: the sample signal is labelled as an example")
+# the example follows a live plan: a 1-hour signal, one target at 0.5R (it showed engine 3.2's single 1R target on a 4h signal)
+nums = [float(x.replace(",", "")) for x in re.findall(r"<dd[^>]*>([\d,]+)</dd>", hero)]
+check(len(nums) == 3 and "1h signal" in hero and abs((nums[2] - nums[0]) - 0.5 * (nums[0] - nums[1])) < 1
+      and f"{nums[2]:,.0f}" in hero[hero.index('class="ex-plain"'):], "landing: the example's target is half the stop distance, as on 1h signals")
 LANDING.update(tested={"signals": 2426, "per_day": 6.5, "win_rate": 72.9, "avg_r": 0.09, "coins": 62,
                        "streams": [{"timeframe": "1h", "period": "Oct 2025 to Oct 2026", "signals": 1691, "per_day": 4.51, "win_rate": 72.6, "avg_r": 0.083},
                                    {"timeframe": "4h", "period": "Oct 2025 to Oct 2026", "signals": 735, "per_day": 1.97, "win_rate": 73.6, "avg_r": 0.105}]})
