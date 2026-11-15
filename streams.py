@@ -967,6 +967,21 @@ class CandleStore:
         with self._lock:
             return int(self._depth.get((symbol, tf), 0))
 
+    def export(self, symbol, tf):
+        """(candles, depth) cached for (symbol, tf), or (None, 0): what signal_hub keeps a database copy of."""
+        with self._lock:
+            return self._data.get((symbol, tf)), int(self._depth.get((symbol, tf), 0))
+
+    def seed(self, symbol, tf, df, depth):
+        """Puts candles loaded elsewhere (signal_hub's database copy) into the cache, as if they had been fetched
+        `depth` candles deep: the next frame() call then only asks the exchange for the candles after them."""
+        d = df[["timestamp", "open", "high", "low", "close", "volume"]].copy()
+        d["timestamp"] = pd.to_datetime(d["timestamp"])
+        d = d.drop_duplicates(subset=["timestamp"], keep="last").sort_values("timestamp").reset_index(drop=True)
+        with self._lock:
+            self._data[(symbol, tf)] = d
+            self._depth[(symbol, tf)] = max(self._depth.get((symbol, tf), 0), int(depth))
+
     def _call(self, symbol, tf, limit, since):
         df = self.get_candles(symbol=symbol, timeframe=tf, limit=limit, since=since)
         if df is None or not len(df):

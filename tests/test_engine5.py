@@ -548,6 +548,71 @@ hub._store, engines, hub._FORCE_STREAMS, hub.scan_stream, hub.WARM_SLICE_SEC = s
 hub._engines.clear()
 hub._engines.update(engines)
 
+print("\n[5c] a copy of the long history in the database: a restart loads it in seconds")
+saved = (hub._store, dict(hub._engines), hub._FORCE_STREAMS)
+st1 = streams.CandleStore(counting, sleep=0)
+hub._store = st1
+hub._engines.clear()
+hub._engines["crypto_15m"] = streams.StreamEngine("crypto", "15m", st1, SYMS)
+hub._FORCE_STREAMS = ["crypto_15m", "crypto_4h"]
+hub._warm_failed.clear()
+hub._cache_saved.clear()
+with hub._Cursor() as cur:
+    cur.execute("DELETE FROM candle_cache")
+T = datetime(2026, 10, 10, 14, 0, 50)
+need = hub.engine("crypto_15m").history_need()[1]
+CALLS.clear()
+hub.warm("crypto_15m", T, budget=10 ** 6)
+first_calls = len(CALLS)
+with hub._Cursor() as cur:
+    cur.execute("SELECT symbol, depth, n FROM candle_cache WHERE tf='15m'")
+    rows = cur.fetchall()
+check(hub.warming("crypto_15m", T) is None and sorted(r["symbol"] for r in rows) == sorted(SYMS)
+      and all(r["depth"] >= need and r["n"] >= need for r in rows) and first_calls >= 50 * len(SYMS),
+      f"the first load asks the exchange ({first_calls} calls) and writes one copy per coin")
+
+
+def restart(at):
+    st = streams.CandleStore(counting, sleep=0)
+    hub._store = st
+    hub._engines["crypto_15m"] = streams.StreamEngine("crypto", "15m", st, SYMS)
+    hub._cache_saved.clear()
+    CALLS.clear()
+    hub.warm("crypto_15m", at, budget=10 ** 6)
+    return st
+
+
+T2 = T + timedelta(days=1, hours=3)
+st2 = restart(T2)
+check(hub.warming("crypto_15m", T2) is None and len(CALLS) <= 2 * len(SYMS),
+      f"a restart a day later reads the copy: {len(CALLS)} exchange calls instead of {first_calls}")
+fresh = streams.CandleStore(candles, sleep=0)
+check(all(st2.frame(s_, "15m", T2, bars=need).equals(fresh.frame(s_, "15m", T2, bars=need)) for s_ in SYMS),
+      "the copy plus the newest candles is exactly the frame a full load gives")
+with hub._Cursor() as cur:
+    cur.execute("UPDATE candle_cache SET data=%s WHERE symbol=%s AND tf='15m'", (b"not a copy", "BTC/USDT"))
+st3 = restart(T2)
+check(sum(1 for c_ in CALLS if c_[0] == "BTC/USDT") >= 50 and sum(1 for c_ in CALLS if c_[0] == "ETH/USDT") <= 2,
+      "a damaged copy is not used: that coin loads from the exchange again, the others from their copies")
+with hub._Cursor() as cur:
+    cur.execute("SELECT n FROM candle_cache WHERE symbol='BTC/USDT' AND tf='15m'")
+    check((cur.fetchone() or {}).get("n", 0) >= need, "and its copy is written again")
+T_OLD = T + timedelta(days=hub.CACHE_MAX_AGE_DAYS + 1)
+st4 = restart(T_OLD)
+with hub._Cursor() as cur:
+    cur.execute("SELECT updated_at FROM candle_cache WHERE symbol='ETH/USDT' AND tf='15m'")
+    upd = hub._parse((cur.fetchone() or {}).get("updated_at"))
+check(sum(1 for c_ in CALLS if c_[0] == "ETH/USDT") >= 20 and upd == T_OLD,
+      f"a copy older than {hub.CACHE_MAX_AGE_DAYS} days is not used: the full history is loaded again and copied anew")
+st5 = restart(T2)
+check(hub._refresh_cache(T2 + timedelta(hours=1)) == 0
+      and hub._refresh_cache(T2 + timedelta(seconds=hub.CACHE_REFRESH_SEC + 60), limit=2) == 2
+      and hub._refresh_cache(T2 + timedelta(seconds=hub.CACHE_REFRESH_SEC + 120), limit=99) == len(SYMS) - 2,
+      "the copies are rewritten once a day, a few coins per scanner pass")
+hub._store, engines, hub._FORCE_STREAMS = saved
+hub._engines.clear()
+hub._engines.update(engines)
+
 print()
 print(f"{len(FAILS)} failed" if FAILS else "ALL PASSED")
 sys.exit(1 if FAILS else 0)
