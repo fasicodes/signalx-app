@@ -55,7 +55,13 @@ SORTS = {"newest": "bar_time DESC, id DESC", "oldest": "bar_time ASC, id ASC",
 
 _hooks = {"get_candles": None, "notify": None, "crypto_prices": None, "forex_price": None, "blocked": None,
           "news_for": None, "is_admin": None}
-_state = {"scanned": {}, "tracked": {}, "errors": {}, "last_scan": {}}
+_state = {"scanned": {}, "tracked": {}, "errors": {}, "last_scan": {}, "warming": {}}
+# a stream whose model reads 4-hour candles built from its own needs months of them at its first scan (the 15m
+# stream about 16,000 candles per coin, roughly two hours of exchange calls): that history is loaded in slices of
+# this many seconds per scanner pass, after the due scans, so it never holds up the other streams
+WARM_SLICE_SEC = 40
+WARM_RETRY_SEC = 1800      # a coin whose history could not be loaded is tried again after this long
+_warm_failed = {}          # (stream, symbol) -> when its history load failed
 _engines = {}
 _store = None
 _lock = threading.Lock()
@@ -536,20 +542,90 @@ def track_open(now=None, limit=300):
     return done
 
 
+def _recently_failed(key, sym, now):
+    t = _warm_failed.get((key, sym))
+    return t is not None and (now - t).total_seconds() < WARM_RETRY_SEC
+
+
+def warming(key, now=None):
+    """None when the stream has the candle history its scans read; else {"loaded": n, "total": m} while that history
+    is still being loaded (see WARM_SLICE_SEC)."""
+    if key == "crypto_4h":
+        return None
+    now = now or _utcnow()
+    try:
+        eng = engine(key)
+        need = eng.history_need()
+    except Exception:
+        return None
+    if need is None:
+        return None
+    tf, bars = need
+    st = store()
+    syms = eng.history_symbols()
+    done = sum(1 for s in syms if st.depth(s, tf) >= bars or _recently_failed(key, s, now))
+    return None if done >= len(syms) else {"loaded": done, "total": len(syms)}
+
+
+def warm(key, now=None, budget=None):
+    """Loads the history of a warming stream coin after coin for about `budget` seconds (at least one coin).
+    -> warming(key) afterwards (None = ready)."""
+    now = now or _utcnow()
+    budget = WARM_SLICE_SEC if budget is None else budget
+    eng = engine(key)
+    need = eng.history_need()
+    if need is None:
+        return None
+    tf, bars = need
+    st = store()
+    t0 = time.monotonic()
+    for sym in eng.history_symbols():
+        if st.depth(sym, tf) >= bars or _recently_failed(key, sym, now):
+            continue
+        try:
+            st.frame(sym, tf, now, bars=bars)
+        except Exception as e:
+            _warm_failed[(key, sym)] = now
+            print(f"[signal_hub] {key}: history of {sym} not loaded: {str(e)[:160]}")
+        if time.monotonic() - t0 >= budget:
+            break
+    return warming(key, now)
+
+
+def _scan(key, bar, now, new, actions):
+    try:
+        evs = scan_stream(key, now)
+        new.extend(evs)
+        actions.append(f"scan:{key}:{len(evs)}")
+    except Exception as e:
+        _state["errors"][key] = str(e)[:200]
+        print(f"[signal_hub] {key} scan failed:\n{traceback.format_exc()}")
+    _state["scanned"][key] = bar
+
+
 def step(now=None):
-    """One background pass: scan due streams, notify, track open signals."""
+    """One background pass: scan due streams, notify, track open signals, then load history for a warming stream."""
     now = now or _utcnow()
     actions = []
     new = []
+    later = []
     for key, bar in due_streams(now):
-        try:
-            evs = scan_stream(key, now)
-            new.extend(evs)
-            actions.append(f"scan:{key}:{len(evs)}")
-        except Exception as e:
-            _state["errors"][key] = str(e)[:200]
-            print(f"[signal_hub] {key} scan failed:\n{traceback.format_exc()}")
-        _state["scanned"][key] = bar
+        if warming(key, now):
+            later.append((key, bar))          # the streams that are ready scan first
+            continue
+        _scan(key, bar, now, new, actions)
+    warmed = False
+    for key, bar in later:
+        w = None if warmed else warm(key, now)        # one slice per pass (a short history loads at once)
+        warmed = True
+        if w is None and warming(key, now) is None:
+            _state["warming"].pop(key, None)
+            _scan(key, bar, now, new, actions)
+            continue
+        w = w or warming(key, now)
+        _state["warming"][key] = w
+        _state["scanned"][key] = bar         # no signals before the history is there (they could not be scored)
+        actions.append(f"warming:{key}:{w['loaded']}/{w['total']}")
     if new and _hooks.get("notify"):
         try:
             _hooks["notify"](new)
@@ -564,6 +640,24 @@ def step(now=None):
         except Exception:
             print(f"[signal_hub] tracker failed:\n{traceback.format_exc()}")
         _state["tracked"]["bar"] = tick
+    # between candle closes: one slice of history for a stream that is still warming (the shortest history first)
+    if not warmed:
+        pending = []
+        for key in enabled_streams():
+            if key != "crypto_4h" and warming(key, now):
+                pending.append((engine(key).history_need()[1], key))
+        if pending:
+            key = min(pending)[1]
+            try:
+                w = warm(key, now)
+            except Exception:
+                w = warming(key, now)
+                print(f"[signal_hub] {key} history load failed:\n{traceback.format_exc()}")
+            if w:
+                _state["warming"][key] = w
+            else:
+                _state["warming"].pop(key, None)
+            actions.append(f"warm:{key}")
     return actions
 
 
@@ -999,7 +1093,7 @@ def stream_info():
                     "engine": label, "engine_kind": kind, "hold": streams.hold_text(key), "max_bars": plan["max_bars"],
                     "targets_r": plan["targets_r"], "symbols": len(markets.stream_coins(cfg["market"], cfg["tf"])),
                     "last_scan": {k: _iso(v) for k, v in last.items()} if last else None,
-                    "error": _state["errors"].get(key)})
+                    "warming": _state["warming"].get(key), "error": _state["errors"].get(key)})
     return out
 
 
@@ -1123,7 +1217,8 @@ def coins_status(now=None):
     """One line per signal coin, from the tested crypto streams only (beginners see the signals that passed the test):
     an active signal (buy / sell), a setup a tested model is close to (getting close), or nothing to do (wait).
     Nothing is computed here: it reads the stored signals and the stream boards made at the last candle close
-    (the 1h board of this hub, the 4h board of signalboard.py). A coin no stream could get candles for is left out."""
+    (the 15m and 1h boards of this hub, the 4h board of signalboard.py). A coin no stream could get candles for is left
+    out."""
     now = now or _utcnow()
     tested = [k for k in enabled_streams() if streams.STREAMS[k]["market"] == "crypto" and streams.validated(k)]
     tfs = [streams.STREAMS[k]["tf"] for k in tested]
@@ -1191,8 +1286,8 @@ def coins_status(now=None):
     rest = sorted([x for x in out if x["status"] not in ("buy", "sell")],
                   key=lambda x: (0 if x["status"] == "forming" else 1, -(x.get("strength") or 0)))
     out = sigs + rest
-    sec = min((markets.TF_SEC[t] for t in tfs), default=3600)
-    nxt = streams.last_closed_bar("1h" if sec <= 3600 else "4h", now) + timedelta(seconds=2 * sec)
+    tmin = min(tfs, key=lambda t: markets.TF_SEC[t]) if tfs else "1h"      # the next close of the shortest stream
+    nxt = streams.last_closed_bar(tmin, now) + timedelta(seconds=2 * markets.TF_SEC[tmin])
     counts = {k: sum(1 for x in out if x["status"] == k) for k in ("buy", "sell", "forming", "wait")}
     counts["strong"] = sum(1 for x in out if x["status"] in ("buy", "sell") and x["signal"].get("strong"))
     return {"coins": out, "counts": counts, "timeframes": tfs, "updated_at": _iso(now), "next_check": _iso(nxt),

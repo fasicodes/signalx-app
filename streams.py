@@ -962,6 +962,11 @@ class CandleStore:
         self._depth = {}          # (symbol, tf) -> most candles any caller asked for (kept from then on)
         self._lock = threading.Lock()
 
+    def depth(self, symbol, tf):
+        """Most candles of (symbol, tf) loaded so far (0 = never loaded)."""
+        with self._lock:
+            return int(self._depth.get((symbol, tf), 0))
+
     def _call(self, symbol, tf, limit, since):
         df = self.get_candles(symbol=symbol, timeframe=tf, limit=limit, since=since)
         if df is None or not len(df):
@@ -1073,6 +1078,23 @@ class StreamEngine:
     @property
     def model(self):
         return load_model(self.key)
+
+    def history_need(self):
+        """(timeframe, candles) of history the stream reads at every scan when its model reads longer candles built
+        from the stream's own (the 1h and 15m streams read 4-hour candles), else None. A first load this long takes a
+        while (the 15m stream: about 16,000 candles per coin), so signal_hub loads it in slices (warm)."""
+        m = self.model
+        if m is None or not m.read_tf:
+            return None
+        import features as FE
+        k = markets.TF_SEC[m.read_tf] // markets.TF_SEC[self.tf]
+        return self.tf, FE.HISTORY[m.read_tf] * k + 2 * k
+
+    def history_symbols(self):
+        """The symbols the stream loads: its own, plus the coins its model was trained on (the market inputs)."""
+        m = self.model
+        trained = list(m.meta.get("trained_symbols") or []) if m is not None else []
+        return list(dict.fromkeys(list(self.symbols) + trained))
 
     def board(self, now=None, force=False):
         now = now or _utcnow()
@@ -1209,18 +1231,17 @@ class StreamEngine:
         return out
 
     def _reading_board(self, m, now):
-        """The model's inputs are candles of m.read_tf (4h) built from the stream's own candles (1h) on every grid
-        that ends at a stream candle: one series per offset (the usual 4-hour grid and the grids shifted by 1, 2
-        and 3 hours). Each stream candle gets the score, the ATR and the stop distance of the long candle that
-        ends with it - the same construction as research/v5/rolling.py. Only the grid whose long candle has just
-        closed is computed again at each scan; the other grids are kept from the scans before."""
-        import features as FE
+        """The model's inputs are candles of m.read_tf (4h) built from the stream's own candles (1h or 15m) on every
+        grid that ends at a stream candle: one series per offset (the usual 4-hour grid and the grids shifted by one
+        stream candle at a time: 4 grids for the 1h stream, 16 for the 15m stream). Each stream candle gets the
+        score, the ATR and the stop distance of the long candle that ends with it - the same construction as
+        research/v5/rolling.py and rolling15.py. Only the grid whose long candle has just closed is computed again at
+        each scan; the other grids are kept from the scans before."""
         sec, rsec = markets.TF_SEC[self.tf], markets.TF_SEC[m.read_tf]
         k = rsec // sec
-        hist = FE.HISTORY[m.read_tf] * k + 2 * k
-        trained = list(m.meta.get("trained_symbols") or [])
+        _, hist = self.history_need()
         raw, errors = {}, {}
-        for sym in dict.fromkeys(list(self.symbols) + trained):
+        for sym in self.history_symbols():
             try:
                 df = self.store.frame(sym, self.tf, now, bars=hist)
                 if len(df) < 260 * k:

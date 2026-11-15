@@ -522,9 +522,9 @@ hub._FORCE_STREAMS = None
 # ---------------------------------------------------------------------------
 c4, c1 = markets.stream_coins("crypto", "4h"), markets.stream_coins("crypto", "1h")
 c15 = markets.stream_coins("crypto", "15m")
-check(set(markets.CRYPTO_4H_ONLY) <= set(c4) and c1 == c4 == markets.CRYPTO_COINS and not (set(markets.CRYPTO_4H_ONLY) & set(c15))
+check(set(markets.CRYPTO_4H_ONLY) <= set(c4) and c1 == c4 == c15 == markets.CRYPTO_COINS
       and markets.stream_coins("forex", "1h") == markets.forex_signal_pairs(),
-      "coins per stream: 4h and 1h every coin (both read 4-hour candles), 15m without the added coins, forex the signal pairs")
+      "coins per stream: 4h, 1h and 15m every coin (all read 4-hour candles of the tested model), forex the signal pairs")
 check(len(markets.CRYPTO_COINS) == len(set(markets.CRYPTO_COINS)) == 62 + len(markets.CRYPTO_4H_ONLY),
       "coin list: the 62 coins plus the added 4h coins, none twice")
 _had = hub._hooks.get("get_candles")
