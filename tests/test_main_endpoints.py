@@ -394,6 +394,14 @@ check("<title>Trading signals 4h | Signals FM</title>" in html and "for 4-hour c
       "only the 4-hour stream on: title and intro follow")
 _hub.stream_info = _orig_info
 
+print("\n[10b] the Pro terminal names the engine version that runs (it said 'signal engine v3' after engine 5)")
+import signal_engine as _se  # noqa: E402
+adv = member.get("/advanced").get_data(as_text=True)
+check(f"Signal engine v{_se.ENGINE_VERSION}:" in adv and f"signal engine v{_se.ENGINE_VERSION} (4-hour candles)" in adv
+      and "engine v3" not in adv, "/advanced: engine note and disclaimer show the running version")
+js = open(os.path.join(ROOT, "static", "script.js"), encoding="utf-8").read()
+check('"signal engine v3' not in js and "eng.engine_version" in js, "Pro terminal card label comes from the engine's version")
+
 print("\n[11] while the track record is private, visitors get no link to it (it would only open the login page)")
 for path in ("/about", "/risk-disclosure"):
     g, m = guest.get(path).get_data(as_text=True), member.get(path).get_data(as_text=True)

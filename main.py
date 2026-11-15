@@ -2159,9 +2159,9 @@ def generate_signal(df, symbol="BTC/USDT", include_orderbook=True):
 
         "engine": engine,
         "engine_test": signal_engine.test_stats(),
-        "disclaimer": ("Not financial advice. The verdict comes from signal engine v3 (4-hour candles); "
-                        "confidence is how often similar setups reached target 1 before the stop, measured on data "
-                        "the model never saw, after fees. All other panels are display-only."),
+        "disclaimer": (f"Not financial advice. The verdict comes from signal engine v{signal_engine.ENGINE_VERSION} "
+                        "(4-hour candles); confidence is how often similar setups reached target 1 before the stop, "
+                        "measured on data the model never saw, after fees. All other panels are display-only."),
     }
     result.update(volatility_data)
     return result
@@ -2266,6 +2266,7 @@ def advanced_dashboard():
         user_avatar=session.get("avatar_url"),
         coins=AVAILABLE_COINS,
         forex_pairs=FOREX_PAIRS,
+        engine_version=signal_engine.ENGINE_VERSION,
     )
 
 

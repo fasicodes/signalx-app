@@ -393,6 +393,8 @@ a = ask("which settings should I use for safe trading")
 check("Risk per trade" in a["reply"] and "0.5%" in a["reply"], "settings advice")
 a = ask("what is the price of BTC")
 check("BTC/USDT" in a["reply"] and "60,000" in a["reply"], "coin price answer")
+check("4-hour signal engine: LONG" in a["reply"] and "engine v3" not in a["reply"],
+      "coin answer names the 4-hour engine without an old version number")
 a = ask("difference between site demo and live")
 check("Site demo" in a["reply"] and "Live" in a["reply"], "accounts explained")
 a = ask("asdfgh qwerty")
