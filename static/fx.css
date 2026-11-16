@@ -141,8 +141,9 @@ html[data-theme="dark"] :is(.chip, .bdg, .d-pill, .st, .badge, .an-gpill, .trade
 html[data-theme="dark"] :is(.st.buy, .side.buy, .c-long, .pos) { text-shadow: 0 0 12px color-mix(in srgb, var(--ds-up) 45%, transparent); }
 html[data-theme="dark"] :is(.st.sell, .c-short, .neg) { text-shadow: 0 0 12px color-mix(in srgb, var(--ds-down) 40%, transparent); }
 
-/* alerts and warnings: a lit edge */
-html[data-theme="dark"] :is(.alert, .warn, .warnc, .d-warn, .truth, .risk, .note.warn) { box-shadow: inset 3px 0 0 var(--ds-warn), 0 0 30px -18px var(--ds-warn); }
+/* alerts and warnings: a lit edge, on boxes only. On a word or a pill ("Not tested", "not emailed") the inset edge
+   showed as a stray yellow crescent; .warnc and .value.risk are text colours, not boxes. */
+html[data-theme="dark"] :is(.alert, .warn, .d-warn, .truth, .note.warn):not(span, small, b, strong, em, i, a, label, td, th, button, .msg, .bdg, .flag, .chip, .badge) { box-shadow: inset 3px 0 0 var(--ds-warn), 0 0 30px -18px var(--ds-warn); }
 
 /* skeleton loaders: a scanning shimmer */
 html[data-theme="dark"] :is(.sk, .skeleton-box) { background: linear-gradient(90deg, rgba(0, 255, 136, .04) 0%, rgba(0, 255, 136, .14) 50%, rgba(0, 255, 136, .04) 100%) !important;

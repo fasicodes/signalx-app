@@ -11,12 +11,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="{{ url_for('static', filename='premium-ui.css') }}?v=20261028b">
+<link rel="stylesheet" href="{{ url_for('static', filename='premium-ui.css') }}">
 {% include '_analytics.html' ignore missing %}
 <link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
 <script src="{{ url_for('static', filename='ds.js') }}" defer></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}?v=20261105a">
-<script src="{{ url_for('static', filename='fx.js') }}?v=20261105a" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}">
+<script src="{{ url_for('static', filename='fx.js') }}" defer></script>
 <script src="{{ url_for('static', filename='scene3d.js') }}" defer></script>
 <script src="{{ url_for('static', filename='market_strip.js') }}" defer></script>
 </head>
@@ -2778,7 +2778,7 @@ document.querySelectorAll(".panel-tab-link").forEach(function (a) {
 })();
 </script>
 
-<script src="{{ url_for('static', filename='premium-ui.js') }}?v=20260814-premium-2"></script>
+<script src="{{ url_for('static', filename='premium-ui.js') }}-premium-2"></script>
 <script>
 /* Opens the analysis on arrival, and deep links from the app menu: /advanced?coin=ETH/USDT#livechart opens that coin on that tab.
    Tabs: microstructure, extended, liquidity, livechart. Side-menu sections: watchlist, alerts, risk-calc,
@@ -2812,6 +2812,6 @@ document.querySelectorAll(".panel-tab-link").forEach(function (a) {
   window.addEventListener("hashchange", function () { ran = true; go(); });
 })();
 </script>
-<script src="{{ url_for('static', filename='assistant-widget.js') }}?v=20261014a" defer></script>
+<script src="{{ url_for('static', filename='assistant-widget.js') }}" defer></script>
 </body>
 </html>

@@ -11,8 +11,8 @@
 {% include '_seo.html' ignore missing %}
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
 <style>
   /* Calculators. Colours, type and shapes come from ds.css; numeric fields are built by ds.js. */
   .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
@@ -80,8 +80,8 @@
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
 <script src="{{ url_for('static', filename='ds.js') }}" defer></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}?v=20261105a">
-<script src="{{ url_for('static', filename='fx.js') }}?v=20261105a" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}">
+<script src="{{ url_for('static', filename='fx.js') }}" defer></script>
 <script src="{{ url_for('static', filename='scene3d.js') }}" defer></script>
 </head>
 <body class="{% if session.get('user_id') %}an-shell in-app{% endif %}">
@@ -217,7 +217,7 @@
 </main>
 
 {% include '_public_footer.html' %}
-{% if not session.get('user_id') %}<script src="{{ url_for('static', filename='shell.js') }}?v=20261009a" defer></script>{% endif %}
+{% if not session.get('user_id') %}<script src="{{ url_for('static', filename='shell.js') }}" defer></script>{% endif %}
 
 <script>
 (() => {

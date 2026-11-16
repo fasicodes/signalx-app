@@ -353,6 +353,20 @@ for name in ("/advanced", "/demo-trading", "/auto-trading"):
           f"{name}: its big css/js files are versioned too")
 check(not _re.search(r'/static/[a-z\-]+\.(?:css|js)\?v=20\d{6}', "".join(member.get(n).get_data(as_text=True) for n in ("/advanced", "/demo-trading", "/auto-trading"))),
       "no hand-written version tags left in the big templates")
+# url_for already adds ?v=<hash>: a hand-written "?v=2026..." after it made "fx.css?v=<hash>?v=20261105a", a URL that
+# never matched the hash, so fx.css, fx.js, shell.css ... were never cached on 20 pages
+import glob as _glob  # noqa: E402
+left = [os.path.basename(p) for p in _glob.glob(os.path.join(ROOT, "templates", "*.html"))
+        if _re.search(r"url_for\('static', filename='[^']*'\) \}\}\?v=", open(p, encoding="utf-8").read())]
+check(not left, f"no template adds its own ?v= after url_for('static') {left}")
+twice = []
+for name in ("/", "/signals", "/demo-trading", "/strategies", "/tools", "/track-record", "/pro-insights", "/chart"):
+    twice += [(name, u) for u in _re.findall(r'(?:href|src)="(/static/[^"]+)"', member.get(name).get_data(as_text=True)) if u.count("?v=") > 1]
+check(not twice, f"no static link carries two version tags {twice[:3]}")
+fxcss = open(os.path.join(ROOT, "static", "fx.css"), encoding="utf-8").read()
+rule = [ln for ln in fxcss.splitlines() if "inset 3px 0 0 var(--ds-warn)" in ln]
+check(len(rule) == 1 and ":not(span, small" in rule[0] and ".bdg" in rule[0].split(":not(", 1)[1] and ".warnc" not in rule[0],
+      "dark theme: the warning edge is for boxes only, not for pills or words (no stray crescent on 'Not tested')")
 
 print("\n[8] Strategies page (strategies.py) is part of the site")
 r = guest.get("/strategies")

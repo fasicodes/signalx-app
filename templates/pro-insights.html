@@ -8,9 +8,9 @@
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 <style>
   .sec { margin: 34px 0 0; }
   .sec > h2 { font-family: var(--display); font-size: 24px; margin: 0 0 4px; }
@@ -69,8 +69,8 @@
 {% include '_analytics.html' ignore missing %}
 <link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
 <script src="{{ url_for('static', filename='ds.js') }}" defer></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}?v=20261105a">
-<script src="{{ url_for('static', filename='fx.js') }}?v=20261105a" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}">
+<script src="{{ url_for('static', filename='fx.js') }}" defer></script>
 <script src="{{ url_for('static', filename='scene3d.js') }}" defer></script>
 </head>
 <body class="app an-shell">
@@ -172,6 +172,6 @@
     </div>
   </section>
 </main>
-<script src="{{ url_for('static', filename='insights.js') }}?v=20261028a"></script>
+<script src="{{ url_for('static', filename='insights.js') }}"></script>
 </body>
 </html>
