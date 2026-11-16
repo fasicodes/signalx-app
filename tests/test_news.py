@@ -145,6 +145,67 @@ with news._Cursor() as cur:
     act = cur.fetchone()["actual"]
 check(cnt == 3 and act == "0.4", "calendar refresh updates the actual value instead of duplicating")
 
+# a source whose plan does not include the calendar (live: FMP's free key, HTTP 402) -> the next source is used,
+# and the reason reaches the admin without the key (requests puts the whole URL, key included, into its errors)
+import requests  # noqa: E402
+
+
+def refused(url, code, body, ctype="application/json"):
+    r = requests.models.Response()
+    r.status_code, r.reason, r.url = code, {402: "Payment Required", 403: "Forbidden"}.get(code, ""), url
+    r._content, r.headers["Content-Type"] = body.encode(), ctype
+    return requests.HTTPError(f"{code} Client Error: {r.reason} for url: {url}", response=r)
+
+
+FMP_URL = "https://financialmodelingprep.com/stable/economic-calendar?from=2026-10-11&to=2026-10-26&apikey=SECRETKEY123"
+FH_URL = "https://finnhub.io/api/v1/calendar/economic?from=2026-10-11&to=2026-10-26&token=SECRETTOKEN456"
+plan = {"fmp": "402", "finnhub": "403", "te": "ok"}
+
+
+def fake_get3(url, params, timeout=15):
+    if "financialmodelingprep" in url and plan["fmp"] == "402":
+        raise refused(FMP_URL, 402, '"Restricted Endpoint: This endpoint is not available under your current subscription"')
+    if "finnhub" in url and plan["finnhub"] == "403":
+        raise refused(FH_URL, 403, '{"error": "You don\'t have access to this resource."}')
+    if "tradingeconomics" in url and plan["te"] != "ok":
+        raise requests.ConnectionError("Max retries exceeded with url: /calendar?c=SECRETTE789 (timed out)")
+    return orig(url, params, timeout)
+
+
+news._get_json = fake_get3
+check(news.safe_error(refused(FMP_URL, 402, '"Restricted Endpoint"'), "fmp") ==
+      "HTTP 402 Payment Required: Restricted Endpoint. Your FMP plan does not include the economic calendar "
+      "(it needs a paid FMP plan).", "FMP 402: the reason and what it means, in plain words")
+txt = news.safe_error(requests.HTTPError(f"500 Server Error for url: {FMP_URL}"), "fmp")
+check("SECRETKEY123" not in txt and "apikey" not in txt and "economic-calendar" in txt, "an error text never shows the API key")
+check(news.safe_error(refused(FH_URL, 403, "<html>Forbidden</html>", "text/html"), "finnhub").startswith("HTTP 403 Forbidden. Finnhub"),
+      "an HTML error page is not copied into the message")
+os.environ["FINNHUB_API_KEY"] = "f"
+os.environ["TRADING_ECONOMICS_KEY"] = "t"
+check(news.calendar_providers() == ["fmp", "finnhub", "tradingeconomics"], "calendar sources in their order")
+n = news.refresh_calendar(NOW)
+st = news.status()["calendar"]
+with news._Cursor() as cur:
+    cur.execute("SELECT provider, COUNT(*) AS n FROM calendar_events GROUP BY provider")
+    by = {r["provider"]: r["n"] for r in cur.fetchall()}
+check(n == 1 and st["ok"] and st["provider"] == "tradingeconomics" and len(st["notes"]) == 2
+      and "paid FMP plan" in st["notes"][0] and "paid Finnhub plan" in st["notes"][1],
+      "FMP and Finnhub refuse the calendar: Trading Economics is used and the admin sees why the others were skipped")
+check(by == {"tradingeconomics": 1}, "a change of source removes the old source's events for the period (no double listing)")
+plan["te"] = "down"
+check(news.refresh_calendar(NOW) == 0 and news.status()["calendar"]["ok"] is False, "every source fails: the status says so")
+err = news.status()["calendar"]["error"]
+check("FMP: HTTP 402" in err and "Finnhub: HTTP 403" in err and "Trading Economics:" in err
+      and not any(k in err for k in ("SECRETKEY123", "SECRETTOKEN456", "SECRETTE789")),
+      "every source's reason is kept, and no key appears in them")
+os.environ.pop("FINNHUB_API_KEY")
+os.environ.pop("TRADING_ECONOMICS_KEY")
+plan.update(fmp="ok", te="ok")
+news.refresh_calendar(NOW)
+st = news.status()["calendar"]
+check(st["ok"] and st["provider"] == "fmp" and st["events"] == 3 and "notes" not in st, "back on FMP once it answers again")
+news._get_json = fake_get2
+
 # ---------------------------------------------------------------------------
 # news blackout for signals
 # ---------------------------------------------------------------------------
@@ -212,8 +273,18 @@ check([e["title"] for e in d["events"]] == ["CPI m/m"], "calendar impact filter"
 d = cl.get("/api/calendar?from=2026-10-13T00:00:00&to=2026-10-20T00:00:00&currency=EUR").get_json()
 check([e["currency"] for e in d["events"]] == ["EUR"], "calendar currency filter")
 check(cl.get("/api/calendar?from=2026-01-01&to=2026-06-01").status_code == 400, "calendar range limited to 31 days")
+# every source failed at the last refresh: visitors are told the calendar is not available (not "loaded soon"),
+# without the reason, which is for the admin page
+news._status["calendar"] = {"configured": True, "provider": "fmp", "ok": False, "error": "FMP: HTTP 402 Payment Required."}
+d = cl.get("/api/calendar?from=2026-11-01T00:00:00&to=2026-11-08T00:00:00").get_json()
+check(d["ok"] and d["events"] == [] and d["available"] is False and "402" not in json.dumps(d),
+      "calendar API: available=false when every source failed, and no reason for visitors")
+news._status["calendar"] = {"configured": True, "provider": "fmp", "ok": True, "events": 3}
+check(cl.get("/api/calendar").get_json()["available"] is True, "calendar API: available=true after a good refresh")
 r = cl.get("/news")
 check(r.status_code == 200 and "Economic calendar" in r.get_data(as_text=True), "news page renders for visitors")
+check("CAL.available === false ? \"The economic calendar is not available right now." in r.get_data(as_text=True),
+      "news page: its own message when the calendar is not available")
 # the page names a news pause only when a running stream really pauses (engine 5: crypto only, no crypto blackout)
 import signal_hub  # noqa: E402
 page = r.get_data(as_text=True)
@@ -242,6 +313,16 @@ check(cl.post("/api/admin/articles", json={}).status_code == 403, "admin API: ad
 check(cl.get("/admin/news").status_code == 404, "admin page hidden from non-admins")
 ADMIN["on"] = True
 check(cl.get("/admin/news").status_code == 200, "admin page for the admin")
+news._status["calendar"] = {"configured": True, "provider": "fmp", "ok": False,
+                            "error": "FMP: HTTP 402 Payment Required. Your FMP plan does not include the economic calendar."}
+news._status["news"] = {"finnhub": {"ok": True, "items": 9}, "fmp": {"ok": False, "error": "HTTP 402 Payment Required."}}
+html = cl.get("/admin/news").get_data(as_text=True)
+blob = html.split('id="src-status">', 1)[1].split("</script>", 1)[0]
+st = json.loads(blob)
+check(st["calendar"]["ok"] is False and "does not include the economic calendar" in st["calendar"]["error"]
+      and st["news"]["fmp"]["ok"] is False and "renderSources(JSON.parse(" in html,
+      "admin page: why the calendar is empty is shown as soon as the page opens")
+news._status["news"] = {}
 r = cl.post("/api/admin/articles", json={"title": "Hi", "body_md": "short"})
 check(r.status_code == 400, "validation: title and body length")
 body = "## What happened\n\nThe dollar **rose** after CPI. <script>x</script>\n\n- point one\n- point two"

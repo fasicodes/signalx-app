@@ -148,7 +148,7 @@
   const zones = ZONES.includes(tz) ? ZONES : [tz].concat(ZONES);
   $("tz").innerHTML = zones.map((z) => `<option value="${esc(z)}">${esc(z.replace("_", " "))}</option>`).join("");
   $("tz").value = tz;
-  let view = "today", imps = new Set(["high", "medium", "low"]), ccys = new Set(), EVENTS = [], NEXT = null;
+  let view = "today", imps = new Set(["high", "medium", "low"]), ccys = new Set(), EVENTS = [], NEXT = null, CAL = {};
 
   // ---- tabs (remember via the URL hash)
   function showTab(t) {
@@ -215,28 +215,35 @@
       const r = await fetch(`/api/calendar?from=${from}&to=${to}`, { credentials: "same-origin" });
       const d = await r.json();
       if (!r.ok || !d.ok) throw new Error(d.error || "failed");
-      EVENTS = d.events; NEXT = d.next_high;
+      EVENTS = d.events; NEXT = d.next_high; CAL = d;
       if (d.blackout && $("bo-before")) { $("bo-before").textContent = d.blackout.before_min; $("bo-after").textContent = d.blackout.after_min; }
-      renderCal(); countdown();
-      const shown = $("cal").innerHTML !== "";
-      $("cal-state").hidden = shown;
-      if (!shown) $("cal-state").textContent = !d.configured ? "The economic calendar is not connected yet. Please check back soon."
-        : (EVENTS.length ? "No events match these filters for this day." : "No events loaded yet. The calendar refreshes every 30 minutes.");
+      renderCal(); countdown(); showEmpty();
     } catch (e) {
       $("cal-state").hidden = false; $("cal-state").textContent = "The calendar could not be loaded right now. It will retry automatically.";
     }
   }
+  // the message when the table is empty: no source, a source that gave nothing (the reason is on the admin page),
+  // or filters / a day without events
+  function showEmpty() {
+    const shown = $("cal").innerHTML !== "";
+    $("cal-state").hidden = shown;
+    if (shown) return;
+    $("cal-state").textContent = !CAL.configured ? "The economic calendar is not connected yet. Please check back soon."
+      : EVENTS.length ? `No events match these filters for ${view === "week" ? "this week" : view === "tomorrow" ? "tomorrow" : "today"}.`
+      : CAL.available === false ? "The economic calendar is not available right now. Please check back later."
+      : "No events loaded yet. The calendar refreshes every 30 minutes.";
+  }
   document.querySelectorAll(".seg [data-view]").forEach((b) => b.addEventListener("click", () => {
     view = b.dataset.view;
     document.querySelectorAll(".seg [data-view]").forEach((x) => x.setAttribute("aria-pressed", x === b));
-    renderCal(); $("cal-state").hidden = $("cal").innerHTML !== ""; if (!$("cal-state").hidden) $("cal-state").textContent = "No events match these filters for this period.";
+    renderCal(); showEmpty();
   }));
   $("tz").addEventListener("change", () => { tz = $("tz").value; try { localStorage.setItem("sfm-cal-tz", tz); } catch (e) {} renderCal(); countdown(); });
   function chipToggle(id, set) {
     $(id).addEventListener("click", (e) => {
       const b = e.target.closest(".chip"); if (!b) return;
       const v = b.dataset.v; set.has(v) ? set.delete(v) : set.add(v); b.setAttribute("aria-pressed", set.has(v));
-      renderCal(); $("cal-state").hidden = $("cal").innerHTML !== ""; if (!$("cal-state").hidden) $("cal-state").textContent = "No events match these filters for this period.";
+      renderCal(); showEmpty();
     });
   }
   chipToggle("imp-chips", imps); chipToggle("ccy-chips", ccys);
