@@ -341,6 +341,13 @@ def _note(ok, prov, error=None):
         _last.update(at=_now(), ok=ok, provider=prov, error=error)
 
 
+def last_failed():
+    """True when the last email the site tried to send failed (blocked SMTP, a Gmail permission Google ended ...):
+    a password-reset link would probably not arrive either. The next email that goes out clears it."""
+    with _lock:
+        return _last.get("ok") is False
+
+
 def status():
     """What the admin page shows: the service in use, the sender, the connected Gmail and the last send (never a key,
     password or token)."""

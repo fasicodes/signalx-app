@@ -210,6 +210,18 @@ def _mail_ready():
 
 NO_MAIL_ERROR = ("Email is not set up on this site yet, so we cannot send you a link right now. "
                  "Please try again later or contact us.")
+MAIL_TROUBLE = ("If an account with that email exists, we tried to send a reset link, but the site's email had a "
+                "problem recently, so it may not arrive. If nothing comes within a few minutes (check spam too), "
+                "please write to us from the Contact page.")
+
+
+def _mail_failing():
+    """True when the last email the site tried to send failed (mailer.last_failed): the reset page then says the link
+    may not arrive, instead of promising it."""
+    try:
+        return bool(getattr(_mailer, "last_failed", lambda: False)())
+    except Exception:
+        return False
 
 
 @auth_bp.route("/api/register", methods=["POST"])
@@ -389,6 +401,10 @@ def forgot_password():
         return generic_response
     if not _mail_ready():   # the same answer for every address, so it tells nobody whether an account exists
         return jsonify({"error": NO_MAIL_ERROR}), 503
+    if _mail_failing():
+        # decided before this request's own email, so every address still gets the same answer; the email is sent
+        # anyway (it may work again, and a sent email clears the warning for the next request)
+        generic_response = jsonify({"message": MAIL_TROUBLE, "warning": True}), 200
 
     token = secrets.token_urlsafe(32)
     expires = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_MINUTES)

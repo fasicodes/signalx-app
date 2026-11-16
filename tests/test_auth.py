@@ -397,4 +397,20 @@ try:
 finally:
     auth.send_email = _orig_send
 
+print("\n[9b] the last email failed (blocked SMTP, an ended Gmail permission): the reset answer does not promise a link")
+MAIL.clear()
+mailer.last_failed = lambda: True
+try:
+    answers = [post("/api/forgot-password", {"email": e}) for e in ("sara@example.com", "nobody-here@example.com")]
+    check(all(code == 200 and d.get("warning") is True and "may not arrive" in d.get("message", "") and "Contact page" in d["message"]
+              for code, d in answers) and answers[0] == answers[1],
+          "email trouble: the same honest answer for every address (reveals no account)")
+    check(len(MAIL) == 1 and MAIL[0]["to"] == "sara@example.com", "email trouble: the link is still sent to a real account")
+finally:
+    del mailer.last_failed
+code, d = post("/api/forgot-password", {"email": "nobody-here@example.com"})
+check(code == 200 and not d.get("warning") and "we sent a reset link" in d.get("message", ""), "email working: the normal answer")
+check("data.warning ? 'warn' : 'ok'" in open(os.path.join(ROOT, "templates", "login.html"), encoding="utf-8").read(),
+      "login page shows that answer as a warning, not as a success")
+
 print(f"\nALL {passed} CHECKS PASSED")

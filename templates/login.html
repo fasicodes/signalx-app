@@ -166,6 +166,7 @@ body::before {
 .auth-msg{font-family:var(--mono);font-size:12px;text-align:center;min-height:18px;margin-top:12px;position:relative;z-index:1;line-height:1.5;}
 .auth-msg.error{color:var(--red);}
 .auth-msg.ok{color:var(--green);}
+.auth-msg.warn{color:#f59e0b;}
 
 /* ── Disclaimer ──────────────────────────────────────── */
 .auth-disclaimer{
@@ -347,7 +348,7 @@ forgotForm.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     msg.textContent = data.message || data.error || 'Something went wrong';
-    msg.classList.add(res.ok ? 'ok' : 'error');
+    msg.classList.add(res.ok ? (data.warning ? 'warn' : 'ok') : 'error');
   } catch (err) {
     msg.textContent = 'Could not connect to the server';
     msg.classList.add('error');

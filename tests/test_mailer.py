@@ -108,6 +108,7 @@ check(p.get("timeout") == mailer.TIMEOUT_SEC, "request has a timeout")
 st = mailer.status()
 check(st["provider_name"] == "Brevo" and st["sender"] == "Signals FM <owner@gmail.com>" and st["last"]["ok"] is True
       and not st["notes"], "status: Brevo, the sender, last send OK, no warnings")
+check(mailer.last_failed() is False, "last_failed(): False after an email went out")
 check("brevo-key-123" not in repr(st), "status never contains the key")
 
 POSTS.clear()
@@ -123,6 +124,7 @@ check(ok is False and st["last"]["ok"] is False and "HTTP 401" in st["last"]["er
 ANSWER["resp"] = requests.exceptions.ConnectTimeout("connect timeout")
 ok = mailer.send_email("member@example.com", "Hi", HTML)
 check(ok is False and "connect timeout" in mailer.status()["last"]["error"], "a network error never raises")
+check(mailer.last_failed() is True, "last_failed(): the last email failed (forgot password then warns the link may not arrive)")
 
 env(BREVO_API_KEY="k", MAIL_SENDER_NAME="Signals FM")
 ok = mailer.send_email("member@example.com", "Hi", HTML)
