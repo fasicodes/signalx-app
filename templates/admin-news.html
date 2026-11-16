@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Articles admin | Signals FM</title>
+<title>Site admin | Signals FM</title>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 <style>
   .adm { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px; align-items: start; }
   @media (max-width: 960px) { .adm { grid-template-columns: 1fr; } }
@@ -33,11 +33,17 @@
   .msg { font-size: 13.5px; } .msg.ok { color: #22c55e; } .msg.bad { color: #e5484d; } .msg.warn { color: #f59e0b; }
   .stat { font-size: 13px; color: var(--text-dim); line-height: 1.7; }
   .stat code { font-size: 12.5px; }
+  .cm-list { display: flex; flex-direction: column; }
+  .cm { border-top: 1px solid var(--line); padding: 11px 0; }
+  .cm:first-child { border-top: 0; }
+  .cm .hd { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13.5px; }
+  .cm .hd small { color: var(--text-faint); }
+  .cm p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; font-size: 14px; }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
 <script src="{{ url_for('static', filename='ds.js') }}" defer></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}?v=20261105a">
-<script src="{{ url_for('static', filename='fx.js') }}?v=20261105a" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}">
+<script src="{{ url_for('static', filename='fx.js') }}" defer></script>
 <script src="{{ url_for('static', filename='scene3d.js') }}" defer></script>
 </head>
 <body class="app an-shell">
@@ -45,8 +51,8 @@
 {% include '_app_nav.html' %}
 <main class="wrap">
   <div class="phead">
-    <h1>Articles and news feeds</h1>
-    <p>Write, schedule and publish your own articles (Markdown), and check the news and calendar sources and email delivery. Only admins see this page.</p>
+    <h1>Site admin</h1>
+    <p>Write, schedule and publish your own articles (Markdown), check the news and calendar sources and email delivery, and read the messages from the Contact page. Only admins see this page.</p>
   </div>
   <div class="adm">
     <div>
@@ -122,6 +128,16 @@
           <span class="msg" id="msg" role="status"></span>
         </div>
       </form>
+    </div>
+  </div>
+  <div class="box" style="margin-top:18px" id="cm-box">
+    <div class="row" style="justify-content:space-between"><b>Contact messages</b><span class="stat" id="cm-count"></span></div>
+    <p class="stat" style="margin:4px 0 8px">Every message from the Contact page, newest first. "Not emailed" means it never reached
+      your inbox (it came while the site's email was not working): answer it from here with Reply.</p>
+    <div class="cm-list" id="cm-list"><p class="dim">Loading…</p></div>
+    <div class="row" id="cm-pager" hidden style="margin-top:10px;justify-content:space-between">
+      <button class="pbtn" type="button" id="cm-prev">Newer</button><span class="stat" id="cm-info"></span>
+      <button class="pbtn" type="button" id="cm-next">Older</button>
     </div>
   </div>
 </main>
@@ -295,9 +311,31 @@
     $("mail-test").disabled = false;
     loadMail();
   });
+  // Contact messages: stored before they are emailed, so the ones sent while email was down are not lost
+  let cmPage = 1;
+  async function loadContact() {
+    try {
+      const d = await api(`/api/admin/contact-messages?page=${cmPage}`);
+      $("cm-count").innerHTML = d.total ? `${d.total} in all` + (d.not_emailed ? ` · <span class="msg warn">${d.not_emailed} not emailed</span>` : "") : "";
+      $("cm-list").innerHTML = d.messages.length ? d.messages.map((m) => {
+        const subject = encodeURIComponent(`Re: ${m.topic} (Signals FM)`);
+        return `<div class="cm"><div class="hd"><b>${esc(m.name)}</b><a href="mailto:${esc(m.email)}?subject=${subject}">${esc(m.email)}</a>` +
+          `<small>${esc(m.topic)} · ${esc(when(m.at))}${m.member ? " · member" : ""}</small>` +
+          (m.emailed ? `<small class="msg ok">emailed</small>` : `<small class="msg warn">not emailed</small>`) +
+          `<a class="pbtn" style="margin-left:auto;padding:4px 10px;font-size:13px" href="mailto:${esc(m.email)}?subject=${subject}">Reply</a></div>` +
+          `<p>${esc(m.message)}</p></div>`;
+      }).join("") : '<p class="dim">No messages yet.</p>';
+      $("cm-pager").hidden = d.pages <= 1;
+      $("cm-info").textContent = `Page ${d.page} of ${d.pages}`;
+      $("cm-prev").disabled = d.page <= 1; $("cm-next").disabled = d.page >= d.pages;
+    } catch (e) { $("cm-list").innerHTML = `<p class="msg bad">${esc(e.message)}</p>`; }
+  }
+  $("cm-prev").addEventListener("click", () => { if (cmPage > 1) { cmPage--; loadContact(); } });
+  $("cm-next").addEventListener("click", () => { cmPage++; loadContact(); });
   fill(null);
   loadList();
   loadMail();
+  loadContact();
 })();
 </script>
 </body>

@@ -3119,7 +3119,7 @@ from pages import pages_bp, init_pages
 from mailer import send_email as _pages_send_email
 app.register_blueprint(pages_bp)
 limiter.limit("5 per hour", methods=["POST"])(pages_bp)     # the contact form
-init_pages(app, send_email=_pages_send_email)
+init_pages(app, send_email=_pages_send_email, is_admin=lambda: _is_admin())
 
 # Live chart + Liquidity scanner as their own pages (coin switcher on each page; they no longer open
 # the Pro terminal and run its full analysis first), plus the data behind them - market_tools.py

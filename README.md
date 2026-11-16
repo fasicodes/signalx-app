@@ -141,6 +141,10 @@ Check it on `/admin/news` (admins): the "Email delivery" box shows the service i
 email's result or error, and sends a test email to your own address. Failures are also printed to the Railway logs
 as `[mailer] ERROR`.
 
+Contact form (`pages.py`): every message is stored in `contact_messages` before it is emailed to the support
+address, and the "Contact messages" box on `/admin/news` lists them all, newest first, marking the ones that were
+never emailed (sent while email was not working) with a Reply link.
+
 ## Tests
 
 ```bash
