@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% block subheading %}Visitors, registrations, purchases, revenue and member activity from your database.{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div class="seg" id="a-range" role="group" aria-label="Period">
+    <button type="button" data-r="7" aria-pressed="false">7 Days</button><button type="button" data-r="30" aria-pressed="true">30 Days</button>
+    <button type="button" data-r="90" aria-pressed="false">90 Days</button><button type="button" data-r="365" aria-pressed="false">1 Year</button>
+  </div>
+  <span class="dim" id="a-note" style="font-size:13px"></span>
+</div>
+<section class="mini-tot" id="a-tot" aria-label="Totals for the period"></section>
+
+<section class="grid g-half">
+  <article class="card"><div class="card-h"><h3>Daily visitors</h3><span class="spacer"></span><span class="faint" style="font-size:12.5px">unique per day</span></div>
+    <div class="chart" id="c-visitors"><span class="sk block"></span></div></article>
+  <article class="card"><div class="card-h"><h3>New registrations</h3></div><div class="chart" id="c-reg"><span class="sk block"></span></div></article>
+  <article class="card"><div class="card-h"><h3>Weekly visitors</h3><span class="spacer"></span><span class="faint" style="font-size:12.5px">unique per week (Mon–Sun)</span></div>
+    <div class="chart sm" id="c-weekly"><span class="sk block"></span></div></article>
+  <article class="card"><div class="card-h"><h3>Monthly visitors</h3><span class="spacer"></span><span class="faint" style="font-size:12.5px">unique per month</span></div>
+    <div class="chart sm" id="c-monthly"><span class="sk block"></span></div></article>
+  <article class="card"><div class="card-h"><h3>Subscription purchases</h3></div><div class="chart" id="c-subs"><span class="sk block"></span></div></article>
+  <article class="card"><div class="card-h"><h3>Revenue <span class="faint" id="rev-cur" style="font:600 13px var(--body)"></span></h3><span class="spacer"></span>
+    <span class="faint" style="font-size:12.5px">verified payments only</span></div><div class="chart" id="c-rev"><span class="sk block"></span></div></article>
+</section>
+<article class="card"><div class="card-h"><h3>Member activity</h3><span class="spacer"></span>
+  <span class="faint" style="font-size:12.5px">active members, logins and Pro terminal analyses per day</span></div>
+  <div class="chart" id="c-activity"><span class="sk block"></span></div></article>
+{% endblock %}

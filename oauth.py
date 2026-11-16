@@ -43,15 +43,28 @@ def init_oauth(app):
         print("[oauth] WARNING: GOOGLE_CLIENT_ID/SECRET not set - Google login disabled")
 
 
-def _find_or_create_oauth_user(email, provider, avatar_url=None):
+def _track(fn, *args):
+    """Records an event for the admin panel (admin_tracking.py). Never breaks a Google login."""
+    try:
+        import admin_tracking
+        getattr(admin_tracking, fn)(*args)
+    except Exception as e:
+        print(f"[oauth] activity record skipped ({fn}): {type(e).__name__}")
+
+
+def _find_or_create_oauth_user(email, provider, avatar_url=None, full_name=None):
     """Email se user dhoondta hai; agar nahi milta to naya OAuth user bana
     deta hai (password_hash NULL rehta hai). Google apni taraf se email
     already verify kar chuka hota hai, isliye email_verified = 1 rakhte hain.
-    Google profile picture (avatar_url) bhi save/update karte hain."""
+    Google profile picture (avatar_url) aur naam (full_name, admin panel ke liye) bhi save/update karte hain."""
+    full_name = (str(full_name or "").strip()[:120]) or None
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, email, email_verified FROM users WHERE email = %s", (email,))
+            try:            # account_status: a suspended account may not log in (admin panel)
+                cursor.execute("SELECT id, email, email_verified, account_status FROM users WHERE email = %s", (email,))
+            except Exception:
+                cursor.execute("SELECT id, email, email_verified FROM users WHERE email = %s", (email,))
             user = cursor.fetchone()
             if user:
                 if not user.get("email_verified"):
@@ -70,12 +83,23 @@ def _find_or_create_oauth_user(email, provider, avatar_url=None):
                         "UPDATE users SET avatar_url = %s WHERE id = %s",
                         (avatar_url, user["id"]),
                     )
+                if full_name:
+                    try:
+                        cursor.execute("UPDATE users SET full_name = %s WHERE id = %s", (full_name, user["id"]))
+                    except Exception:
+                        pass        # column not added yet
                 return user
             cursor.execute(
                 "INSERT INTO users (email, password_hash, auth_provider, email_verified, avatar_url) VALUES (%s, NULL, %s, 1, %s)",
                 (email, provider, avatar_url),
             )
             new_id = cursor.lastrowid
+            if full_name:
+                try:
+                    cursor.execute("UPDATE users SET full_name = %s WHERE id = %s", (full_name, new_id))
+                except Exception:
+                    pass
+            _track("note_register", new_id, email, provider)
             return {"id": new_id, "email": email, "sv": 0}
     finally:
         conn.close()
@@ -115,12 +139,16 @@ def google_callback():
         # Only an address Google has verified may open (or create) an account with that email.
         return redirect("/login?error=google_email_unverified")
 
-    user = _find_or_create_oauth_user(email, "google", avatar_url)
+    user = _find_or_create_oauth_user(email, "google", avatar_url, userinfo.get("name"))
+    if (user.get("account_status") or "active") == "blocked":       # suspended by the admin
+        return redirect("/login?error=account_suspended")
     session.permanent = True
     session["user_id"] = user["id"]
     session["email"] = user["email"]
     session["avatar_url"] = avatar_url
     session["sv"] = user.get("sv", 0)
+    session["login_method"] = "google"
+    _track("note_login", user["id"], user["email"], "google")
     return redirect("/")
 
 

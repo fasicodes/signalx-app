@@ -1,0 +1,29 @@
+{% extends "admin/base.html" %}
+{% block subheading %}Every account, who is online now, and each member's subscription and activity.{% endblock %}
+{% block content %}
+<article class="card" id="online">
+  <div class="card-h">
+    <h2><span class="live-dot" aria-hidden="true"></span>Currently online <span class="badge b-green" id="online-count">…</span></h2>
+    <span class="spacer"></span><span class="dim" id="online-note" style="font-size:13px"></span>
+  </div>
+  <div id="online-table"><span class="sk line"></span><span class="sk line"></span></div>
+</article>
+
+<article class="card">
+  <div class="card-h">
+    <h2><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A5 5 0 0121.5 19"/></svg>All members <span class="badge b-grey" id="u-total">…</span></h2>
+    <span class="spacer"></span>
+    <a class="btn sm" href="/api/admin/export/users.csv" download><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Export CSV</a>
+  </div>
+  <div class="toolbar" style="margin-bottom:14px">
+    <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input class="input" id="u-q" type="search" placeholder="Search by email or name…" aria-label="Search members" maxlength="120"></div>
+    <div class="seg" id="u-status" role="group" aria-label="Account status">
+      <button type="button" data-v="" aria-pressed="true">All</button><button type="button" data-v="active" aria-pressed="false">Active</button>
+      <button type="button" data-v="blocked" aria-pressed="false">Suspended</button>
+    </div>
+  </div>
+  <div id="u-table"><span class="sk line"></span><span class="sk line"></span><span class="sk line"></span></div>
+  <div class="pager" id="u-pager" hidden></div>
+</article>
+{% endblock %}

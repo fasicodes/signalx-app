@@ -1,0 +1,22 @@
+{% extends "admin/base.html" %}
+{% block subheading %}What members trade with the site's signals. Read only: nothing here changes a trade or the trading engine.{% endblock %}
+{% block content %}
+<article class="card">
+  <div class="toolbar" style="margin-bottom:14px">
+    <div class="seg" id="t-source" role="group" aria-label="Source">
+      <button type="button" data-v="tracked" aria-pressed="true">Tracked trades <span class="n" data-c="tracked"></span></button>
+      <button type="button" data-v="bot" aria-pressed="false">Auto-trade bot <span class="n" data-c="bot"></span></button>
+      <button type="button" data-v="demo" aria-pressed="false">Demo trading <span class="n" data-c="demo"></span></button>
+    </div>
+    <div class="seg" id="t-status" role="group" aria-label="Status">
+      <button type="button" data-v="" aria-pressed="true">All</button><button type="button" data-v="open" aria-pressed="false">Open</button>
+      <button type="button" data-v="closed" aria-pressed="false">Closed</button>
+    </div>
+    <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input class="input" id="t-q" type="search" placeholder="Search by email or coin…" aria-label="Search trades" maxlength="120"></div>
+  </div>
+  <p class="card-note" id="t-note"></p>
+  <div id="t-table"><span class="sk line"></span><span class="sk line"></span><span class="sk line"></span></div>
+  <div class="pager" id="t-pager" hidden></div>
+</article>
+{% endblock %}

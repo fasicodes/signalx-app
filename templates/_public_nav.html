@@ -60,3 +60,4 @@
   })();
 </script>
 {% if active != 'bot' %}<script src="{{ url_for('static', filename='assistant-widget.js') }}" defer></script>{% endif %}
+{% if session.get('user_id') %}<script src="{{ url_for('static', filename='presence.js') }}" defer></script>{% endif %}

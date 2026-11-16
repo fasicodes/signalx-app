@@ -49,7 +49,7 @@
           <a href="/advanced#alerts">Price alerts</a>
           <a href="/advanced#pnl-dashboard">P&amp;L dashboard</a>
           <a href="/faq" data-guide-open>Getting started guide</a>
-          {% if is_admin %}<a href="/admin/news">Site admin</a>{% endif %}
+          {% if is_admin %}<a href="/admin">Admin panel</a>{% endif %}
           <button type="button" class="an-logout" id="an-logout">Log out</button>
         </div>
       </div>
@@ -178,4 +178,5 @@
   </div>
 </div>
 <script src="{{ url_for('static', filename='shell.js') }}" defer></script>
+<script src="{{ url_for('static', filename='presence.js') }}" defer></script>
 {% if active != 'bot' %}<script src="{{ url_for('static', filename='assistant-widget.js') }}" defer></script>{% endif %}

@@ -90,6 +90,16 @@ def init_auth():
 
 _sv_cache = {}
 _sv_lock = threading.Lock()
+SUSPENDED_ERROR = "This account has been suspended. Please contact us from the Contact page."
+
+
+def _track(fn, *args):
+    """Records an event for the admin panel (admin_tracking.py). Never breaks a login, sign-up or logout."""
+    try:
+        import admin_tracking
+        getattr(admin_tracking, fn)(*args)
+    except Exception as e:
+        print(f"[auth] activity record skipped ({fn}): {type(e).__name__}")
 
 
 def _session_version(cursor, user_id):
@@ -106,6 +116,7 @@ def _start_session(user, cursor):
     session["user_id"] = user["id"]
     session["email"] = user["email"]
     session["avatar_url"] = user.get("avatar_url")
+    session["login_method"] = "password"
     sv = user.get("session_version")
     session["sv"] = int(sv) if sv is not None else _session_version(cursor, user["id"])
 
@@ -121,19 +132,23 @@ def _bump_session_version(cursor, user_id):
 
 
 def session_still_valid(user_id, sv):
-    """False when the account's password was reset (or the account is gone) after this session started.
-    Cached for a minute per user; any database problem counts as valid, so an outage never logs people out."""
+    """False when the account's password was reset, the admin suspended the account (or it is gone) after this
+    session started. Cached for a minute per user; any database problem counts as valid, so an outage never logs
+    people out."""
     now = time.time()
     with _sv_lock:
         hit = _sv_cache.get(user_id)
     if hit and now - hit[1] < SESSION_CHECK_SEC:
-        current = hit[0]
+        current, blocked = hit[0], hit[2]
     else:
         try:
             conn = get_db_connection()
             try:
                 with conn.cursor() as cursor:
-                    cursor.execute("SELECT session_version FROM users WHERE id = %s", (user_id,))
+                    try:
+                        cursor.execute("SELECT session_version, account_status FROM users WHERE id = %s", (user_id,))
+                    except Exception:       # account_status not added yet
+                        cursor.execute("SELECT session_version FROM users WHERE id = %s", (user_id,))
                     row = cursor.fetchone()
             finally:
                 conn.close()
@@ -142,9 +157,10 @@ def session_still_valid(user_id, sv):
         if row is None:
             return False
         current = int(row.get("session_version") or 0)
+        blocked = (row.get("account_status") or "active") == "blocked"
         with _sv_lock:
-            _sv_cache[user_id] = (current, now)
-    return int(sv or 0) >= current
+            _sv_cache[user_id] = (current, now, blocked)
+    return not blocked and int(sv or 0) >= current
 
 
 def _hash_token(token):
@@ -271,6 +287,7 @@ def register():
                    VALUES (%s, %s, 'password', 0, %s, %s)""",
                 (email, password_hash, _hash_token(token), expires),
             )
+            _track("note_register", cursor.lastrowid, email, "password")
         verify_link = f"{_base_url()}/api/verify-email?token={token}"
         sent = send_email(
             email,
@@ -338,14 +355,21 @@ def login():
     try:
         with conn.cursor() as cursor:
             cols = "id, email, password_hash, email_verified, avatar_url, verify_token, verify_token_expires"
-            try:        # session_version is read with the password, so a reset during this login still ends it
-                cursor.execute(f"SELECT {cols}, session_version FROM users WHERE email = %s", (email,))
-            except Exception:   # column not added yet (database was busy at startup)
-                cursor.execute(f"SELECT {cols} FROM users WHERE email = %s", (email,))
-            user = cursor.fetchone()
+            user = None
+            # session_version is read with the password, so a reset during this login still ends it; a column that is
+            # not added yet (database was busy at startup) is simply left out
+            for extra in (", session_version, account_status", ", session_version", ""):
+                try:
+                    cursor.execute(f"SELECT {cols}{extra} FROM users WHERE email = %s", (email,))
+                    user = cursor.fetchone()
+                    break
+                except Exception:
+                    continue
 
             if not user or not user.get("password_hash") or not check_password_hash(user["password_hash"], password):
                 return jsonify({"error": "Incorrect email or password"}), 401
+            if (user.get("account_status") or "active") == "blocked":      # suspended by the admin
+                return jsonify({"error": SUSPENDED_ERROR}), 403
 
             verified_now = False
             if not user.get("email_verified"):
@@ -372,12 +396,15 @@ def login():
             _start_session(user, cursor)
     finally:
         conn.close()
+    _track("note_login", user["id"], user["email"], "password")
     return jsonify({"message": "Email confirmed. Welcome to Signals FM!" if verified_now else "Login successful",
                     "email": user["email"]}), 200
 
 
 @auth_bp.route("/api/logout", methods=["POST"])
 def logout():
+    if session.get("user_id"):
+        _track("note_logout", session.get("user_id"), session.get("email"))
     session.clear()
     return jsonify({"message": "Logged out successfully"}), 200
 
@@ -463,7 +490,7 @@ def reset_password():
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT id, reset_token_expires FROM users WHERE reset_token = %s",
+                "SELECT id, email, reset_token_expires FROM users WHERE reset_token = %s",
                 (_hash_token(token),),
             )
             user = cursor.fetchone()
@@ -482,6 +509,7 @@ def reset_password():
             )
             # A new password logs out every other device (someone else may have had the old one).
             _bump_session_version(cursor, user["id"])
+        _track("note_password_reset", user["id"], user.get("email"))
         return jsonify({"message": "Password saved. You can now log in. For your safety, every device was logged out."}), 200
     finally:
         conn.close()

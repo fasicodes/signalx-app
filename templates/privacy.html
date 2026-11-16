@@ -21,7 +21,13 @@
     <li><b>Alert settings:</b> which coins you want signal alerts for and how (in the app, by email or by Telegram). If you
       connect Telegram, we store your Telegram chat ID and username so the bot can send you alerts.</li>
     <li><b>Messages you send us</b> through the contact form: your name, email address, topic and message.</li>
-    <li><b>Technical data:</b> your IP address and browser information, used for security and rate limiting.</li>
+    <li><b>Account activity:</b> when you sign up, log in and log out; while you are logged in and a page of the site is open,
+      a short signal every 45 seconds with the page you are on and whether the tab is visible (so we know who is online);
+      how many analyses you run in the Pro terminal; and your subscription and payment records.</li>
+    <li><b>Visit counts:</b> a random visitor ID in a first-party cookie, so each visitor is counted once a day. It contains no
+      personal data and is not set when your browser sends Do Not Track or Global Privacy Control.</li>
+    <li><b>Technical data:</b> your IP address and browser information, used for security and rate limiting. With activity
+      records we keep only a scrambled (hashed) form of the IP address and a short description of the browser.</li>
   </ul>
 
   <h2>How we use it</h2>
@@ -29,7 +35,8 @@
     <li>To sign you in and keep your session active.</li>
     <li>To run the features you use: signals, Demo Trading, the Auto-Trade bot, alerts and your saved preferences.</li>
     <li>To send account emails such as verification and password reset.</li>
-    <li>To keep the service secure and to improve it.</li>
+    <li>To keep the service secure and to improve it: the site's owner sees the activity, visit and subscription records
+      above in a private admin panel, to run the service, answer support questions and count visitors.</li>
   </ul>
 
   <h2>How we protect it</h2>
@@ -50,9 +57,10 @@
   </ul>
 
   <h2>Cookies and local storage</h2>
-  <p>We use a session cookie to keep you logged in. Your browser's local storage keeps interface preferences such as the
+  <p>We use a session cookie to keep you logged in, and a first-party cookie (<code>sfm_vid</code>) with a random ID to count
+    unique visitors to our own pages; it is never shared. Your browser's local storage keeps interface preferences such as the
     theme, chart timeframe and favorite coins. {% if ga_measurement_id %}Google Analytics sets cookies to count visits.{% else %}We
-    don't use advertising or tracking cookies.{% endif %}</p>
+    don't use advertising or third-party tracking cookies.{% endif %}</p>
 
   <h2>How long we keep it</h2>
   <p>Account data is kept until you delete your account. Auto-Trade activity logs are deleted after 14 days. Demo Trading

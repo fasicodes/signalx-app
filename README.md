@@ -102,6 +102,41 @@ APIs and RSS only, nothing scraped; third-party items keep only headline, summar
 (Markdown, draft / scheduled / published, cover image). High-impact events pause new forex signals for that
 currency (`NEWS_BLACKOUT_BEFORE_MIN` / `NEWS_BLACKOUT_AFTER_MIN`).
 
+## Admin panel (`/admin`)
+
+`admin_panel.py` (pages + JSON API under `/api/admin/`), `admin_tracking.py` (what the site records),
+`templates/admin/*`, `static/admin.css`, `static/admin.js` (no library; the charts are small SVG drawings) and
+`static/presence.js` (the heartbeat on member pages).
+
+* **Who can open it:** the session's email is in `ADMIN_EMAILS`, the account exists with that email, its email is
+  confirmed and it is not suspended; with `ADMIN_REQUIRE_GOOGLE=on` the session must also come from "Continue with
+  Google". This is checked on the server for every page and API call. Everyone else gets "Page not found" (pages) or a
+  404 JSON answer (API). Every change (POST) needs the page's CSRF token (`X-CSRF-Token`), and is written to
+  `activity_log` with the admin's email. `/admin` is in robots.txt's Disallow list.
+* **Pages:** Dashboard (registered users, active / expired / never-used subscriptions, members online now, visitors,
+  verified revenue, a 7D / 30D / 90D / 1Y chart, user search by email, recent activity, quick actions), Users (online now,
+  search, profile with account, subscription, analyses, last active, trades; suspend / re-activate, sign out everywhere,
+  edit the name, add a subscription), Subscriptions (filters, details, activate / cancel / expire / extend, payments),
+  Analytics (daily, weekly and monthly visitors, registrations, purchases, revenue, member activity), Trade history (read
+  only: tracked trades, auto-trade bot, demo trading), Activity logs, Settings (access, plans, recording).
+* **Exports:** `/api/admin/export/users.csv`, `subscriptions.csv`, `activity.csv` (cells that start with `=`, `+`, `-` or
+  `@` are made safe for spreadsheets).
+* **Tables** (created at startup like every other table here, additive only): `activity_log`, `user_presence`,
+  `visitor_days`, `user_daily`, `subscription_plans`, `subscriptions`, `payments`; columns `users.full_name` (filled
+  from Google at login, or by the admin) and `users.account_status` (`active` / `blocked`).
+* **What the numbers mean:** online = a heartbeat within `ADMIN_ONLINE_WINDOW_SEC` (120 s; pages ping every 45 s while
+  open), not "logged in". Visitors = distinct first-party `sfm_vid` cookie ids per day / week / month (bots, Do-Not-Track
+  and GPC are skipped; `VISITOR_TRACKING=off` stops it). Analyses = Pro terminal runs (`/signal?...&run=1`; its
+  30-second refresh is not counted). A subscription counts as used once its member opens a member page or feature while
+  it is active (at most one use per 10 minutes). Revenue = payments with status `verified` only, per currency
+  (`ADMIN_CURRENCY` is the main one). An expired subscription is logged at its real expiry time. Records start when the
+  panel is installed; nothing before that is invented.
+* **Subscriptions and payments:** there is no payment gateway; the admin creates plans (Settings) and records each
+  subscription and its payment (method, reference, verified or pending). A future gateway would insert `verified`
+  payments the same way. A suspended account cannot log in (password or Google) and its sessions end at once.
+* Tests: `tests/test_admin_panel.py` (permissions for visitors, members and the admin on every page and API, CSRF, the
+  data, subscriptions, suspend, exports, and that the normal site still works).
+
 ## Auto-trade bot
 
 `autotrade.py` + `fxbroker.py`. Accounts: Site demo (virtual money: crypto via the demo exchange, forex via a
