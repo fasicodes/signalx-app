@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Articles admin | Signals FM</title>
+<title>Site admin | Signals FM</title>
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
+<link rel="stylesheet" href="{{ url_for('static', filename='public.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 <style>
   .adm { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px; align-items: start; }
   @media (max-width: 960px) { .adm { grid-template-columns: 1fr; } }
@@ -33,11 +33,17 @@
   .msg { font-size: 13.5px; } .msg.ok { color: #22c55e; } .msg.bad { color: #e5484d; } .msg.warn { color: #f59e0b; }
   .stat { font-size: 13px; color: var(--text-dim); line-height: 1.7; }
   .stat code { font-size: 12.5px; }
+  .cm-list { display: flex; flex-direction: column; }
+  .cm { border-top: 1px solid var(--line); padding: 11px 0; }
+  .cm:first-child { border-top: 0; }
+  .cm .hd { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13.5px; }
+  .cm .hd small { color: var(--text-faint); }
+  .cm p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; font-size: 14px; }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
 <script src="{{ url_for('static', filename='ds.js') }}" defer></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}?v=20261105a">
-<script src="{{ url_for('static', filename='fx.js') }}?v=20261105a" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}">
+<script src="{{ url_for('static', filename='fx.js') }}" defer></script>
 <script src="{{ url_for('static', filename='scene3d.js') }}" defer></script>
 </head>
 <body class="app an-shell">
@@ -45,8 +51,8 @@
 {% include '_app_nav.html' %}
 <main class="wrap">
   <div class="phead">
-    <h1>Articles and news feeds</h1>
-    <p>Write, schedule and publish your own articles (Markdown), and check the news and calendar sources and email delivery. Only admins see this page.</p>
+    <h1>Site admin</h1>
+    <p>Write, schedule and publish your own articles (Markdown), check the news and calendar sources and email delivery, and read the messages from the Contact page. Only admins see this page.</p>
   </div>
   <div class="adm">
     <div>
@@ -68,7 +74,9 @@
           RSS feeds: {{ status.news_sources.rss_feeds }}<br>
           Last news refresh: <span id="ln">{{ status.last_news or 'not yet' }}</span><br>
           Last calendar refresh: <span id="lc">{{ status.last_calendar or 'not yet' }}</span>
+          <span id="src-problems"></span>
         </div>
+        <script type="application/json" id="src-status">{{ status | tojson }}</script>
         <div class="row" style="margin-top:10px"><button class="pbtn" type="button" id="refresh">Refresh feeds now</button><span class="msg" id="rmsg"></span></div>
       </div>
       <div class="box" style="margin-top:14px" id="mail-box">
@@ -120,6 +128,16 @@
           <span class="msg" id="msg" role="status"></span>
         </div>
       </form>
+    </div>
+  </div>
+  <div class="box" style="margin-top:18px" id="cm-box">
+    <div class="row" style="justify-content:space-between"><b>Contact messages</b><span class="stat" id="cm-count"></span></div>
+    <p class="stat" style="margin:4px 0 8px">Every message from the Contact page, newest first. "Not emailed" means it never reached
+      your inbox (it came while the site's email was not working): answer it from here with Reply.</p>
+    <div class="cm-list" id="cm-list"><p class="dim">Loading…</p></div>
+    <div class="row" id="cm-pager" hidden style="margin-top:10px;justify-content:space-between">
+      <button class="pbtn" type="button" id="cm-prev">Newer</button><span class="stat" id="cm-info"></span>
+      <button class="pbtn" type="button" id="cm-next">Older</button>
     </div>
   </div>
 </main>
@@ -236,12 +254,24 @@
       const d = await jpost("/api/admin/news/refresh");
       $("rmsg").textContent = `${d.news_added} new items, ${d.calendar_events} calendar events.`; $("rmsg").className = "msg ok";
       $("ln").textContent = d.status.last_news || "not yet"; $("lc").textContent = d.status.last_calendar || "not yet";
-      const errs = Object.entries(d.status.news || {}).filter(([k, v]) => !v.ok).map(([k, v]) => `${k}: ${v.error}`);
-      if (d.status.calendar && d.status.calendar.ok === false) errs.push("calendar: " + d.status.calendar.error);
-      if (errs.length) { $("rmsg").textContent += " Problems: " + errs.join(" · "); $("rmsg").className = "msg bad"; }
+      if (renderSources(d.status)) { $("rmsg").textContent += " Some sources failed (see above)."; $("rmsg").className = "msg bad"; }
     } catch (e) { $("rmsg").textContent = e.message; $("rmsg").className = "msg bad"; }
     $("refresh").disabled = false;
   });
+  // how the last refresh of each source went, shown as soon as the page opens (an empty calendar has a reason here)
+  function renderSources(st) {
+    const cal = (st && st.calendar) || {}, lines = [];
+    if (cal.ok === false) lines.push(`<span class="msg bad">Calendar: nothing loaded. ${esc(cal.error)}</span>`);
+    else if (cal.ok) {
+      lines.push(`Calendar: ${esc(cal.events)} events from ${esc(cal.provider)}`);
+      (cal.notes || []).forEach((n) => lines.push(`<span class="msg warn">${esc(n)}</span>`));
+    }
+    const bad = Object.entries((st && st.news) || {}).filter(([k, v]) => v && v.ok === false);
+    bad.forEach(([k, v]) => lines.push(`<span class="msg bad">News ${esc(k)}: ${esc(v.error)}</span>`));
+    $("src-problems").innerHTML = lines.map((l) => "<br>" + l).join("");
+    return cal.ok === false || bad.length > 0;
+  }
+  try { renderSources(JSON.parse($("src-status").textContent)); } catch (e) {}
   // Email delivery: the service in use, the last email the site sent, and a test email to the admin's own address.
   function renderMail(d) {
     const last = d.last || {}, g = d.gmail || {};
@@ -281,9 +311,31 @@
     $("mail-test").disabled = false;
     loadMail();
   });
+  // Contact messages: stored before they are emailed, so the ones sent while email was down are not lost
+  let cmPage = 1;
+  async function loadContact() {
+    try {
+      const d = await api(`/api/admin/contact-messages?page=${cmPage}`);
+      $("cm-count").innerHTML = d.total ? `${d.total} in all` + (d.not_emailed ? ` · <span class="msg warn">${d.not_emailed} not emailed</span>` : "") : "";
+      $("cm-list").innerHTML = d.messages.length ? d.messages.map((m) => {
+        const subject = encodeURIComponent(`Re: ${m.topic} (Signals FM)`);
+        return `<div class="cm"><div class="hd"><b>${esc(m.name)}</b><a href="mailto:${esc(m.email)}?subject=${subject}">${esc(m.email)}</a>` +
+          `<small>${esc(m.topic)} · ${esc(when(m.at))}${m.member ? " · member" : ""}</small>` +
+          (m.emailed ? `<small class="msg ok">emailed</small>` : `<small class="msg warn">not emailed</small>`) +
+          `<a class="pbtn" style="margin-left:auto;padding:4px 10px;font-size:13px" href="mailto:${esc(m.email)}?subject=${subject}">Reply</a></div>` +
+          `<p>${esc(m.message)}</p></div>`;
+      }).join("") : '<p class="dim">No messages yet.</p>';
+      $("cm-pager").hidden = d.pages <= 1;
+      $("cm-info").textContent = `Page ${d.page} of ${d.pages}`;
+      $("cm-prev").disabled = d.page <= 1; $("cm-next").disabled = d.page >= d.pages;
+    } catch (e) { $("cm-list").innerHTML = `<p class="msg bad">${esc(e.message)}</p>`; }
+  }
+  $("cm-prev").addEventListener("click", () => { if (cmPage > 1) { cmPage--; loadContact(); } });
+  $("cm-next").addEventListener("click", () => { cmPage++; loadContact(); });
   fill(null);
   loadList();
   loadMail();
+  loadContact();
 })();
 </script>
 </body>

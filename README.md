@@ -94,9 +94,11 @@ Node in `tests/test_premium_chart_core.js`):
 
 ## News and economic calendar
 
-`news.py`: calendar from Financial Modeling Prep, Finnhub or Trading Economics; news from Finnhub, FMP and
-central-bank RSS feeds (licensed APIs and RSS only, nothing scraped; third-party items keep only headline,
-summary, source and link). Admins (`ADMIN_EMAILS`) write their own articles at `/admin/news`
+`news.py`: calendar from the first of Financial Modeling Prep, Finnhub and Trading Economics (in that order, each
+with its key) that answers with events. Each needs a plan that includes the economic calendar (FMP's and Finnhub's
+free plans do not): `/admin/news` shows why a source gave nothing, without the key, and the News page says the
+calendar is not available instead of waiting for it. News from Finnhub, FMP and central-bank RSS feeds (licensed
+APIs and RSS only, nothing scraped; third-party items keep only headline, summary, source and link). Admins (`ADMIN_EMAILS`) write their own articles at `/admin/news`
 (Markdown, draft / scheduled / published, cover image). High-impact events pause new forex signals for that
 currency (`NEWS_BLACKOUT_BEFORE_MIN` / `NEWS_BLACKOUT_AFTER_MIN`).
 
@@ -138,6 +140,10 @@ reset links never arrive. These ways send over HTTPS instead (the first one set 
 Check it on `/admin/news` (admins): the "Email delivery" box shows the service in use, the connected Gmail, the last
 email's result or error, and sends a test email to your own address. Failures are also printed to the Railway logs
 as `[mailer] ERROR`.
+
+Contact form (`pages.py`): every message is stored in `contact_messages` before it is emailed to the support
+address, and the "Contact messages" box on `/admin/news` lists them all, newest first, marking the ones that were
+never emailed (sent while email was not working) with a Reply link.
 
 ## Tests
 

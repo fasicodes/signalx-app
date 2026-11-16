@@ -714,6 +714,7 @@ html[data-theme] .ds-results .perf-metric-card:nth-child(2) { background: var(--
 .auth-page .auth-msg:empty, .auth-page .msg:empty { display: none; }
 .auth-page .auth-msg.error, .auth-page .msg.error { color: var(--ds-down); background: var(--ds-down-soft); border-radius: var(--ds-r-sm); padding: 10px 12px; }
 .auth-page .auth-msg.ok, .auth-page .msg.ok { color: var(--ds-up); background: var(--ds-up-soft); border-radius: var(--ds-r-sm); padding: 10px 12px; }
+.auth-page .auth-msg.warn, .auth-page .msg.warn { color: var(--ds-warn); background: var(--ds-warn-soft); border-radius: var(--ds-r-sm); padding: 10px 12px; }
 .auth-page .auth-disclaimer { font: 400 12.5px/1.6 var(--ds-font-body); color: var(--ds-text-faint); margin-top: 22px; }
 .auth-page .auth-disclaimer a { color: var(--ds-text-dim); text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 480px) { .auth-page { padding: 14px; align-items: flex-start; } .auth-page .auth-card, .auth-page .card { padding: 26px 20px 22px; margin-top: 52px; } }

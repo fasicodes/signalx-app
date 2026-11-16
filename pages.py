@@ -9,6 +9,7 @@ Public pages (logged-in users see them inside the app menu, visitors with the pu
     GET  /contact         contact form, email and social links
     GET  /glossary.json   the "?" explanations used all over the site (glossary.py)
     POST /api/contact     contact form -> stored in `contact_messages` and emailed to the support address
+    GET  /api/admin/contact-messages   the stored messages for the admin (/admin/news), also those never emailed
 """
 import hashlib
 import os
@@ -32,7 +33,7 @@ SOCIAL = [
 CONTACT_TOPICS = ["General question", "Signals", "Alerts and Telegram", "Demo trading", "Auto-trade bot",
                   "Account and login", "Business or partnership", "Report a problem"]
 EMAIL_RE = re.compile(r"^[^@\s<>\"']{1,64}@[^@\s<>\"']{1,190}\.[A-Za-z]{2,24}$")
-_hooks = {"send_email": None}
+_hooks = {"send_email": None, "is_admin": None}
 
 # Every feature, as shown on the pricing page. Edit here when plans change.
 PLAN_FEATURES = [
@@ -255,9 +256,11 @@ def init_tables():
         )
 
 
-def init_pages(app=None, *, send_email=None):
+def init_pages(app=None, *, send_email=None, is_admin=None):
     if send_email:
         _hooks["send_email"] = send_email
+    if is_admin:
+        _hooks["is_admin"] = is_admin
     try:
         init_tables()
     except Exception as e:
@@ -385,3 +388,52 @@ def api_contact():
     if not sent and not stored:
         return jsonify({"ok": False, "error": f"Your message could not be sent right now. Please email us at {public_email()}."}), 503
     return jsonify({"ok": True, "message": "Thanks, your message was sent. We aim to reply within 24 to 48 hours, Monday to Friday."})
+
+
+def _is_admin():
+    fn = _hooks.get("is_admin")
+    try:
+        return bool(fn and fn())
+    except Exception:
+        return False
+
+
+def _iso(v):
+    if isinstance(v, str):
+        v = v.replace("T", " ")[:19]
+        try:
+            v = datetime.strptime(v, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return None
+    return v.strftime("%Y-%m-%dT%H:%M:%SZ") if v else None
+
+
+@pages_bp.route("/api/admin/contact-messages", methods=["GET"])
+def admin_contact_messages():
+    """The contact form's messages, newest first, for the admin page. Every message is stored before it is emailed,
+    so the ones sent while email was not working (emailed = 0) can still be read and answered here."""
+    if not session.get("user_id"):
+        return jsonify({"ok": False, "error": "Please log in."}), 401
+    if not _is_admin():
+        return jsonify({"ok": False, "error": "Only the site admin can do this."}), 403
+    try:
+        page = max(1, min(int(request.args.get("page", 1)), 10000))
+    except (TypeError, ValueError):
+        page = 1
+    per = 20
+    try:
+        with _Cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS n, SUM(CASE WHEN emailed = 0 THEN 1 ELSE 0 END) AS missed FROM contact_messages")
+            row = cur.fetchone() or {}
+            cur.execute("""SELECT id, user_id, name, email, topic, message, emailed, created_at FROM contact_messages
+                           ORDER BY id DESC LIMIT %s OFFSET %s""", (per, (page - 1) * per))
+            rows = cur.fetchall() or []
+    except Exception as e:
+        print(f"[pages] could not read contact messages: {e}")
+        return jsonify({"ok": False, "error": "The messages could not be loaded right now."}), 500
+    total = int(row.get("n") or 0)
+    return jsonify({"ok": True, "total": total, "not_emailed": int(row.get("missed") or 0), "page": page,
+                    "pages": max(1, -(-total // per)),
+                    "messages": [{"id": r["id"], "name": r["name"], "email": r["email"], "topic": r["topic"],
+                                  "message": r["message"], "member": bool(r.get("user_id")), "emailed": bool(r.get("emailed")),
+                                  "at": _iso(r.get("created_at"))} for r in rows]})

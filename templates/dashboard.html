@@ -10,18 +10,18 @@
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}?v=20261009a">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=20261012a">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='premium-access.css') }}">
 <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
 {% include '_analytics.html' ignore missing %}
 <link rel="stylesheet" href="{{ url_for('static', filename='ds.css') }}">
 <script src="{{ url_for('static', filename='ds.js') }}" defer></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}?v=20261105a">
-<script src="{{ url_for('static', filename='fx.js') }}?v=20261105a" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='fx.css') }}">
+<script src="{{ url_for('static', filename='fx.js') }}" defer></script>
 <script src="{{ url_for('static', filename='scene3d.js') }}" defer></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='agents.css') }}?v=20261105a">
-<script src="{{ url_for('static', filename='bg-candle.js') }}?v=20261105a" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='agents.css') }}">
+<script src="{{ url_for('static', filename='bg-candle.js') }}" defer></script>
 </head>
 <body class="app an-shell">
 {% from '_tip.html' import tip %}
@@ -251,9 +251,9 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='chart-history.js') }}?v=20261011a" defer></script>
-<script src="{{ url_for('static', filename='app.js') }}?v=20261105a" defer></script>
-<script src="{{ url_for('static', filename='agents.js') }}?v=20261105a" defer></script>
+<script src="{{ url_for('static', filename='chart-history.js') }}" defer></script>
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+<script src="{{ url_for('static', filename='agents.js') }}" defer></script>
 <script src="{{ url_for('static', filename='premium-access.js') }}" defer></script>
 </body>
 </html>

@@ -686,6 +686,10 @@ def _events(rows, now):
         ev = fn(now, now + timedelta(hours=48), None, ("high",)) or []
     except Exception:
         return {"available": False, "reason": "The calendar could not be read."}
+    if not ev and status.get("ok") is False:
+        # every calendar source failed at the last refresh: an empty list here would wrongly say "no events"
+        return {"available": False, "reason": "The economic calendar is not available right now, so upcoming events "
+                                              "cannot be checked. Check the release times elsewhere before you trade."}
     ev = [e for e in ev if (e.get("currency") or "").upper() in ccys]
     return {"available": True, "events": ev[:12], "currencies": sorted(ccys), "ok": status.get("ok", True)}
 

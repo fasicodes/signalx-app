@@ -224,6 +224,41 @@ DB["down"] = False
 MAIL["ok"] = True
 os.environ.pop("MAIL_USERNAME")
 
+print("\n[5b] contact messages for the admin (also the ones never emailed)")
+ADMIN = {"on": False}
+pages._hooks["is_admin"] = lambda: ADMIN["on"]
+c2 = app.test_client()
+check(c2.get("/api/admin/contact-messages").status_code == 401, "contact messages: visitors get 401")
+with c2.session_transaction() as s:
+    s["user_id"] = 7
+check(c2.get("/api/admin/contact-messages").status_code == 403, "contact messages: members who are not the admin get 403")
+ADMIN["on"] = True
+d = c2.get("/api/admin/contact-messages").get_json()
+cur = Conn().cursor(); cur.execute("SELECT COUNT(*) AS n, SUM(emailed = 0) AS m FROM contact_messages"); cnt = cur.fetchone()
+check(d["ok"] and d["total"] == cnt["n"] and d["not_emailed"] == cnt["m"] == 1 and d["pages"] == 1,
+      "contact messages: count and how many never reached the inbox")
+newest = d["messages"][0]
+check(newest["emailed"] is False and newest["email"] == "ali@example.com" and newest["message"] == good["message"]
+      and newest["at"].endswith("Z") and newest["member"] is False and "ip_hash" not in newest,
+      "contact messages: newest first, the one sent while email was down is marked, no IP data")
+check(any("<script>" in m["message"] for m in d["messages"]), "contact messages: the text comes back as written (the page escapes it)")
+cur = Conn().cursor()
+for i in range(25):
+    cur.execute("INSERT INTO contact_messages (user_id, name, email, topic, message, ip_hash, emailed, created_at) "
+                "VALUES (NULL, 'P', 'p@example.com', 'Signals', ?, NULL, 1, '2026-11-16 10:00:00')", (f"message number {i} here",))
+d1 = c2.get("/api/admin/contact-messages?page=1").get_json()
+d2 = c2.get("/api/admin/contact-messages?page=2").get_json()
+check(len(d1["messages"]) == 20 and d1["pages"] == 2 and d2["page"] == 2 and len(d2["messages"]) == d1["total"] - 20
+      and d1["messages"][0]["message"] == "message number 24 here", "contact messages: 20 per page, newest first")
+check(c2.get("/api/admin/contact-messages?page=abc").get_json()["page"] == 1, "contact messages: a bad page number -> page 1")
+DB["down"] = True
+r = c2.get("/api/admin/contact-messages")
+check(r.status_code == 500 and r.get_json()["ok"] is False, "contact messages: database down -> clear error")
+DB["down"] = False
+admin_html = open(os.path.join(ROOT, "templates", "admin-news.html"), encoding="utf-8").read()
+check('id="cm-list"' in admin_html and "/api/admin/contact-messages?page=" in admin_html and "esc(m.message)" in admin_html,
+      "admin page: Contact messages box, message text escaped")
+
 print("\n[6] app pages: shell, ? tips, guide, Telegram block")
 login()
 st, html = get("/dash")

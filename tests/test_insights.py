@@ -239,6 +239,17 @@ check(lv2["events"]["available"] is False, "failing calendar -> not available")
 I._cache.clear()
 I._hooks.update(calendar=lambda *a: [], calendar_status=lambda: {"configured": False})
 check("FMP_API_KEY" in I.live_view()["events"]["reason"], "no calendar key -> tells what to set")
+# a key whose plan does not include the calendar (live in Nov 2026: FMP answers 402): nothing is stored, and the
+# page must not say "no high-impact events in the next 48 hours"
+I._cache.clear()
+I._hooks.update(calendar=lambda *a: [], calendar_status=lambda: {"configured": True, "ok": False, "error": "FMP: HTTP 402"})
+ev = I.live_view()["events"]
+check(ev["available"] is False and "not available right now" in ev["reason"] and "402" not in ev["reason"],
+      "every calendar source failed -> 'not available', never 'no events'")
+I._cache.clear()
+I._hooks.update(calendar=lambda *a: [], calendar_status=lambda: {"configured": True, "ok": True})
+ev = I.live_view()["events"]
+check(ev["available"] and ev["events"] == [], "a working calendar with no events -> the normal 'no events' answer")
 
 # --------------------------------------------------------------------------- routes
 from flask import Flask  # noqa: E402

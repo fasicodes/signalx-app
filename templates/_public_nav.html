@@ -59,4 +59,4 @@
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
   })();
 </script>
-{% if active != 'bot' %}<script src="{{ url_for('static', filename='assistant-widget.js') }}?v=20261014a" defer></script>{% endif %}
+{% if active != 'bot' %}<script src="{{ url_for('static', filename='assistant-widget.js') }}" defer></script>{% endif %}

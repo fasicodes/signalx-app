@@ -280,14 +280,58 @@ def _num(v):
     return str(v)[:40]
 
 
-def calendar_provider():
+PROVIDER_NAMES = {"fmp": "FMP", "finnhub": "Finnhub", "tradingeconomics": "Trading Economics"}
+# what a refused request (HTTP 401 / 402 / 403) usually means, per source
+_REFUSED_HINT = {
+    ("fmp", "calendar"): "Your FMP plan does not include the economic calendar (it needs a paid FMP plan).",
+    ("fmp", "news"): "Your FMP plan does not include news; FMP_NEWS=off stops asking FMP for news.",
+    ("finnhub", "calendar"): "Finnhub's economic calendar needs a paid Finnhub plan; FINNHUB_CALENDAR=off uses Finnhub for news only.",
+    ("finnhub", "news"): "Finnhub did not accept FINNHUB_API_KEY.",
+    ("tradingeconomics", "calendar"): "Trading Economics did not accept TRADING_ECONOMICS_KEY.",
+}
+
+
+def safe_error(e, provider=None, what="calendar"):
+    """A provider error as a short text for the admin page, without the API key: requests puts the whole URL, key
+    included, into its HTTP errors. A refused request (401 / 402 / 403) gets the usual reason."""
+    resp = getattr(e, "response", None)
+    code = getattr(resp, "status_code", None)
+    if code:
+        detail = ""
+        try:
+            body = resp.json()
+            detail = body if isinstance(body, str) else str((body or {}).get("Error Message") or (body or {}).get("message")
+                                                            or (body or {}).get("error") or "")
+        except Exception:
+            detail = "" if "html" in (resp.headers.get("Content-Type") or "").lower() else (resp.text or "")
+        detail = strip_tags(str(detail)).strip().rstrip(".")
+        text = f"HTTP {code} {getattr(resp, 'reason', '') or ''}".strip() + (f": {detail[:160]}" if detail else "") + "."
+        hint = _REFUSED_HINT.get((provider, what)) if code in (401, 402, 403) else None
+        if hint:
+            text += " " + hint
+    else:
+        text = str(e) or e.__class__.__name__
+    text = re.sub(r"(https?://[^\s?#]+)[?#][^\s]*", r"\1", text)                     # no query strings (keys)
+    text = re.sub(r"(?i)\b(api_?key|token|key|c)=[^&\s]+", r"\1=…", text)
+    return text[:400]
+
+
+def calendar_providers():
+    """Every calendar source that has a key, in the order they are tried: the first one that answers is used, so a
+    source whose plan does not include the calendar does not leave the calendar empty when another one works."""
+    out = []
     if (os.environ.get("FMP_API_KEY") or "").strip():
-        return "fmp"
+        out.append("fmp")
     if (os.environ.get("FINNHUB_API_KEY") or "").strip() and (os.environ.get("FINNHUB_CALENDAR", "on").lower() != "off"):
-        return "finnhub"
+        out.append("finnhub")
     if (os.environ.get("TRADING_ECONOMICS_KEY") or "").strip():
-        return "tradingeconomics"
-    return None
+        out.append("tradingeconomics")
+    return out
+
+
+def calendar_provider():
+    p = calendar_providers()
+    return p[0] if p else None
 
 
 def fetch_calendar(start, end, provider=None):
@@ -430,7 +474,7 @@ def fetch_news():
                     n += 1
             status["finnhub"] = {"ok": True, "items": n}
         except Exception as e:
-            status["finnhub"] = {"ok": False, "error": str(e)[:200]}
+            status["finnhub"] = {"ok": False, "error": safe_error(e, "finnhub", "news")}
     mk = (os.environ.get("FMP_API_KEY") or "").strip()
     if mk and (os.environ.get("FMP_NEWS", "on").lower() != "off"):
         try:
@@ -453,7 +497,7 @@ def fetch_news():
                     n += 1
             status["fmp"] = {"ok": True, "items": n}
         except Exception as e:
-            status["fmp"] = {"ok": False, "error": str(e)[:200]}
+            status["fmp"] = {"ok": False, "error": safe_error(e, "fmp", "news")}
     for name, url, cat, tags in feeds():
         try:
             r = requests.get(url, timeout=15, headers={"User-Agent": "SignalX/1.0 (+news reader)"})
@@ -462,7 +506,7 @@ def fetch_news():
             items.extend(got)
             status[f"rss:{name}"] = {"ok": True, "items": len(got)}
         except Exception as e:
-            status[f"rss:{name}"] = {"ok": False, "error": str(e)[:200]}
+            status[f"rss:{name}"] = {"ok": False, "error": safe_error(e, None, "news")}
     return items, status
 
 
@@ -491,10 +535,14 @@ def store_news(items):
     return added
 
 
-def store_events(events):
+def store_events(events, window=None):
+    """Upserts the events. window=(provider, start, end): the events another source stored for that period are
+    removed, so a change of source never lists the same release twice."""
     n = 0
     now = _utcnow()
     with _Cursor() as cur:
+        if window:
+            cur.execute("DELETE FROM calendar_events WHERE provider<>%s AND event_time >= %s AND event_time < %s", window)
         for e in events:
             cur.execute("SELECT id FROM calendar_events WHERE provider=%s AND ext_id=%s", (e["provider"], e["ext_id"]))
             row = cur.fetchone()
@@ -522,20 +570,31 @@ def refresh_news():
 
 
 def refresh_calendar(now=None):
+    """Loads this week and next week from the first calendar source that answers with events (calendar_providers).
+    The status keeps why the others failed (key-free text), for the admin page."""
     now = now or _utcnow()
-    p = calendar_provider()
-    if not p:
+    providers = calendar_providers()
+    if not providers:
         _status["calendar"] = {"configured": False}
         return 0
     start = now - timedelta(days=now.weekday() + 1)
     end = start + timedelta(days=15)
-    try:
-        ev = fetch_calendar(start, end, p)
-        n = store_events(ev)
-        _status["calendar"] = {"configured": True, "provider": p, "ok": True, "events": n}
-    except Exception as e:
-        _status["calendar"] = {"configured": True, "provider": p, "ok": False, "error": str(e)[:200]}
-        n = 0
+    errors, n, used = [], 0, None
+    for p in providers:
+        try:
+            ev = fetch_calendar(start, end, p)
+            if not ev:
+                errors.append(f"{PROVIDER_NAMES.get(p, p)}: no events for {start:%d %b} to {end:%d %b}")
+                continue
+            n, used = store_events(ev, window=(p, start, end)), p
+            break
+        except Exception as e:
+            errors.append(f"{PROVIDER_NAMES.get(p, p)}: {safe_error(e, p)}")
+    if used:
+        _status["calendar"] = {"configured": True, "provider": used, "ok": True, "events": n,
+                               **({"notes": errors} if errors else {})}
+    else:
+        _status["calendar"] = {"configured": True, "provider": providers[0], "ok": False, "error": " · ".join(errors)[:900]}
     _status["last_calendar"] = _utcnow()
     return n
 
@@ -852,9 +911,10 @@ def api_calendar():
     except Exception:
         return jsonify({"ok": False, "error": "The calendar could not be loaded right now."}), 500
     st = status()
+    # available=False: the last refresh got nothing from any source (the reason is on the admin page only)
     return jsonify({"ok": True, "events": events, "next_high": nxt, "now": _iso(now),
                     "configured": st["calendar_provider"] is not None, "provider": st["calendar_provider"],
-                    "blackout": st["blackout"]})
+                    "available": (st.get("calendar") or {}).get("ok") is not False, "blackout": st["blackout"]})
 
 
 def _published_article(slug):
