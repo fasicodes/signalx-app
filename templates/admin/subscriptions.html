@@ -1,0 +1,32 @@
+{% extends "admin/base.html" %}
+{% block subheading %}Active, expired, pending and cancelled subscriptions, their use and their verified payments.{% endblock %}
+{% block content %}
+<section class="mini-tot" id="sub-summary" aria-label="Subscription summary">
+  {% for k, label in [("active", "Active"), ("expired", "Expired"), ("pending", "Pending"), ("cancelled", "Cancelled"),
+                      ("unused", "Purchased, never used"), ("usage_rate", "Used at least once"), ("uses", "Uses recorded")] %}
+  <div data-k="{{ k }}"><span>{{ label }}</span><b><span class="sk line" style="width:50%"></span></b></div>
+  {% endfor %}
+</section>
+
+<article class="card">
+  <div class="card-h">
+    <h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-2 10H5z"/></svg>Subscriptions <span class="badge b-grey" id="s-total">…</span></h2>
+    <span class="spacer"></span>
+    <a class="btn sm" href="/api/admin/export/subscriptions.csv" download><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Export CSV</a>
+    <button class="btn sm primary" type="button" id="s-new"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New subscription</button>
+  </div>
+  <div class="toolbar" style="margin-bottom:14px">
+    <div class="seg" id="s-status" role="group" aria-label="Status">
+      <button type="button" data-v="" aria-pressed="true">All</button><button type="button" data-v="active" aria-pressed="false">Active</button>
+      <button type="button" data-v="expired" aria-pressed="false">Expired</button><button type="button" data-v="pending" aria-pressed="false">Pending</button>
+      <button type="button" data-v="cancelled" aria-pressed="false">Cancelled</button><button type="button" data-v="unused" aria-pressed="false">Never used</button>
+    </div>
+    <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input class="input" id="s-q" type="search" placeholder="Search by email or plan…" aria-label="Search subscriptions" maxlength="120"></div>
+  </div>
+  <div id="s-table"><span class="sk line"></span><span class="sk line"></span><span class="sk line"></span></div>
+  <div class="pager" id="s-pager" hidden></div>
+</article>
+<p class="faint" style="font-size:13px;margin:0">Revenue counts only payments marked <b>verified</b>. A subscription counts as used once its member opens
+  a member page or feature while it is active (recorded at most every 10 minutes).</p>
+{% endblock %}

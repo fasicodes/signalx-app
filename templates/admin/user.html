@@ -1,0 +1,7 @@
+{% extends "admin/base.html" %}
+{% block body_data %} data-user-id="{{ user_id }}"{% endblock %}
+{% block heading %}Member profile{% endblock %}
+{% block subheading %}<a href="/admin/users">← All members</a>{% endblock %}
+{% block content %}
+<div id="profile"><article class="card"><span class="sk big"></span><span class="sk line"></span><span class="sk line"></span></article></div>
+{% endblock %}

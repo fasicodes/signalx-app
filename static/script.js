@@ -2829,7 +2829,8 @@ async function runAnalysis(forceAnalyze) {
   currentCoin = coin;
 
   try {
-    const res = await fetch(`/signal?coin=${encodeURIComponent(coin)}&timeframe=1h`);
+    // run=1: counted as one analysis on the admin panel (the 30-second refresh below is not)
+    const res = await fetch(`/signal?coin=${encodeURIComponent(coin)}&timeframe=1h&run=1`);
     const data = await res.json();
 
     if (!res.ok || data.error) {

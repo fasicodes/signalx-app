@@ -1,0 +1,19 @@
+{% extends "admin/base.html" %}
+{% block subheading %}Registrations, logins, subscriptions, payments and every admin action, newest first.{% endblock %}
+{% block content %}
+<article class="card">
+  <div class="toolbar" style="margin-bottom:14px">
+    <div class="seg" id="l-group" role="group" aria-label="Type">
+      <button type="button" data-v="" aria-pressed="true">All</button><button type="button" data-v="registrations" aria-pressed="false">Registrations</button>
+      <button type="button" data-v="logins" aria-pressed="false">Logins</button><button type="button" data-v="subscriptions" aria-pressed="false">Subscriptions</button>
+      <button type="button" data-v="payments" aria-pressed="false">Payments</button><button type="button" data-v="account" aria-pressed="false">Account</button>
+      <button type="button" data-v="admin" aria-pressed="false">Admin actions</button>
+    </div>
+    <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input class="input" id="l-q" type="search" placeholder="Search by email or text…" aria-label="Search the log" maxlength="120"></div>
+    <a class="btn sm" href="/api/admin/export/activity.csv" download><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Export CSV</a>
+  </div>
+  <div id="l-table"><span class="sk line"></span><span class="sk line"></span><span class="sk line"></span></div>
+  <div class="pager" id="l-pager" hidden></div>
+</article>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "admin/base.html" %}
+{% block subheading %}Who can open this panel, the subscription plans you sell and how activity is recorded.{% endblock %}
+{% block content %}
+<section class="grid g-half">
+  <article class="card">
+    <div class="card-h"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z"/></svg>Admin access</h2></div>
+    <div id="access"><span class="sk line"></span><span class="sk line"></span></div>
+    <p class="faint" style="font-size:13px;margin:14px 0 0">Change who can open this panel in Railway → your service → <b>Variables</b>:
+      <code>ADMIN_EMAILS</code> (your Gmail address; several separated by commas). <code>ADMIN_REQUIRE_GOOGLE=on</code> lets in only a session
+      started with "Continue with Google". Nobody else can see these pages or their data: the server checks every request.</p>
+  </article>
+  <article class="card">
+    <div class="card-h"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Recording</h2></div>
+    <div id="recording"><span class="sk line"></span><span class="sk line"></span></div>
+  </article>
+</section>
+
+<article class="card">
+  <div class="card-h">
+    <h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 3.5L12 5l4.5 6.5L21 8l-2 10H5z"/></svg>Subscription plans</h2>
+    <span class="spacer"></span>
+    <button class="btn sm primary" type="button" id="p-new"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New plan</button>
+  </div>
+  <p class="card-note">The plans you can give or sell to a member on the Subscriptions page. Changing a plan does not change subscriptions
+    that already exist (each keeps its own copy of the name, price and days).</p>
+  <div id="plans"><span class="sk line"></span><span class="sk line"></span></div>
+</article>
+
+<article class="card">
+  <div class="card-h"><h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h6M9 15h6"/></svg>Content and email</h2></div>
+  <p class="card-note" style="margin:0 0 12px">Articles, news and calendar sources, email delivery (Connect Gmail) and the messages from the Contact page are on
+    the older site admin page.</p>
+  <a class="btn wrap" href="/admin/news">Open articles, sources, email and contact messages →</a>
+</article>
+{% endblock %}

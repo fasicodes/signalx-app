@@ -2329,6 +2329,8 @@ def signal_endpoint():
     timeframe = _clean_timeframe(request.args.get("timeframe"))
     if not coin or not timeframe:
         return jsonify({"error": "Unknown coin or timeframe."}), 400
+    if request.args.get("run") == "1":      # the Pro terminal's analysis (opening it or "Run analysis"), for the admin panel
+        _admin_tracking.count_analysis(session.get("user_id"))
     orderbook = request.args.get("orderbook", "true").lower() != "false"
 
     # Forex pairs have no free order-book/funding/OI source (that's
@@ -2946,6 +2948,19 @@ _autotrade._hooks.update({"signal_feed": signal_hub.bot_feed, "signal_get": sign
                           "forex_price": _hub_forex_price})
 
 
+# Admin panel (/admin, admin_panel.py) and the records it shows (admin_tracking.py): activity log, online members
+# (heartbeat from static/presence.js), visitors, analyses, subscriptions and verified payments. Only the emails in
+# ADMIN_EMAILS can open it (checked on the server for every page and API call).
+import admin_tracking as _admin_tracking
+_admin_tracking.init_tables()
+app.register_blueprint(_admin_tracking.tracking_bp)
+limiter.limit("20 per minute", key_func=_rate_key)(_admin_tracking.tracking_bp)
+app.after_request(_admin_tracking.after_request)
+import admin_panel as _admin_panel
+app.register_blueprint(_admin_panel.admin_bp)
+limiter.limit("240 per minute", key_func=_rate_key)(_admin_panel.admin_bp)
+
+
 # ============================================================
 # TRACK RECORD + PUBLIC PAGES + SEO
 # trackrecord.py records every LONG/SHORT the engine gives on a fixed
@@ -3153,6 +3168,7 @@ def robots_txt():
         "Disallow: /auto-trading",
         "Disallow: /demo-trading",
         "Disallow: /reset-password",
+        "Disallow: /admin",
         f"Sitemap: {_site_base()}/sitemap.xml",
     ]
     return app.response_class("\n".join(lines) + "\n", mimetype="text/plain")
